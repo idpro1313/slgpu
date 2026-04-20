@@ -352,6 +352,7 @@ slgpu/
 ├── docker-compose.both.yml     # overlay: split GPU, co-run
 ├── .env.example
 ├── README.md                   # этот файл
+├── HISTORY.md                  # хронология проекта и коммитов
 ├── configs/
 │   ├── vllm/args.env           # доп. переменные vLLM (например CUDA graph profiler)
 │   ├── sglang/args.env
