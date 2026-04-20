@@ -34,8 +34,9 @@ services:
       VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS: ${VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS:-1}
     volumes:
       - ${MODELS_DIR:-/opt/models}:/models:ro
+    # Образ vllm-openai уже запускает `vllm serve`; не дублируйте подкоманду `serve` (иначе ошибка
+    # «unrecognized arguments: /models/...»). Путь к модели — первый аргумент после ENTRYPOINT.
     command:
-      - serve
       - /models/${MODEL_ID}
       - --served-model-name
       - ${MODEL_ID}
