@@ -77,6 +77,10 @@ ls configs/models/
 # qwen3-next-80b-thinking.env
 # llama-3.1-70b-instruct.env
 # deepseek-r1-distill-qwen-32b.env
+# gpt-oss-120b.env
+# kimi-k2.5.env
+# glm-5.1.env
+# minimax-m2.7.env
 ```
 
 Примеры:

@@ -52,7 +52,7 @@ services:
       - --enable-chunked-prefill
       - --enable-prefix-caching
       - --tool-call-parser
-      - hermes
+      - "${TOOL_CALL_PARSER:-hermes}"
       - --enable-auto-tool-choice
       - --reasoning-parser
       - "${REASONING_PARSER:-qwen3}"
