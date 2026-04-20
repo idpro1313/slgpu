@@ -3,21 +3,42 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+# shellcheck disable=SC1091
+source "${ROOT}/scripts/_lib.sh"
 
-MODE="${1:?Использование: $0 vllm|sglang|both}"
+usage() {
+  cat <<EOF
+Использование:
+  $0 <vllm|sglang|both> [-m|--model <preset>] [-h|--help]
 
-case "${MODE}" in
-  vllm|sglang|both) ;;
-  *)
-    echo "Неизвестный режим: ${MODE} (ожидается vllm | sglang | both)" >&2
-    exit 1
-    ;;
-esac
+Примеры:
+  $0 vllm                          # TP=4, все GPU; модель из .env
+  $0 sglang -m qwen3-30b-a3b       # пресет переопределяет MODEL_ID, MAX_MODEL_LEN и т.д.
+  MODEL=llama-3.1-70b-instruct $0 both
 
-if [[ ! -f .env ]]; then
-  echo "Нет файла .env — скопируйте: cp .env.example .env" >&2
+Доступные пресеты (configs/models/<name>.env):
+$(slgpu_list_presets | sed 's/^/  /')
+EOF
+}
+
+MODE=""
+MODEL_SLUG="${MODEL:-}"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    vllm|sglang|both) MODE="$1"; shift ;;
+    -m|--model) MODEL_SLUG="${2:?}"; shift 2 ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "Неизвестный аргумент: $1" >&2; usage >&2; exit 1 ;;
+  esac
+done
+
+if [[ -z "${MODE}" ]]; then
+  usage >&2
   exit 1
 fi
+
+slgpu_load_env "${MODEL_SLUG}"
+echo "Модель: ${MODEL_ID}  (MAX_MODEL_LEN=${MAX_MODEL_LEN:-<default>}, KV=${KV_CACHE_DTYPE:-<default>}, reasoning=${REASONING_PARSER:-<off>})"
 
 echo "Останавливаю vllm/sglang (если были)…"
 docker compose stop vllm sglang 2>/dev/null || true
@@ -38,7 +59,7 @@ case "${MODE}" in
     PORTS=(8222)
     ;;
   both)
-    export TP="${TP:-2}"
+    export TP="${TP_BOTH:-2}"
     echo "Co-run: vLLM (GPU 0,1) + SGLang (GPU 2,3), TP=${TP}…"
     docker compose \
       -f docker-compose.yml \

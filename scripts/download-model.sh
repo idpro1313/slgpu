@@ -4,21 +4,35 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
-
-if [[ ! -f .env ]]; then
-  echo "Создайте .env из .env.example: cp .env.example .env" >&2
-  exit 1
-fi
-
-set -a
 # shellcheck disable=SC1091
-source .env
-set +a
+source "${ROOT}/scripts/_lib.sh"
 
-: "${MODEL_ID:?Задайте MODEL_ID в .env}"
+usage() {
+  cat <<EOF
+Использование:
+  $0 [-m|--model <preset>] [-h|--help]
+
+Скачивает модель, указанную в пресете configs/models/<preset>.env,
+либо (если -m не задан) в .env.
+
+Пресеты:
+$(slgpu_list_presets | sed 's/^/  /')
+EOF
+}
+
+MODEL_SLUG="${MODEL:-}"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -m|--model) MODEL_SLUG="${2:?}"; shift 2 ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "Неизвестный аргумент: $1" >&2; usage >&2; exit 1 ;;
+  esac
+done
+
+slgpu_load_env "${MODEL_SLUG}"
+
 MODELS_DIR="${MODELS_DIR:-/opt/models}"
 
-# Hub принимает оба имени; в .env у нас HF_TOKEN
 if [[ -n "${HF_TOKEN:-}" ]]; then
   export HUGGING_FACE_HUB_TOKEN="${HF_TOKEN}"
   export HF_TOKEN="${HF_TOKEN}"
@@ -43,7 +57,6 @@ export HF_HUB_ENABLE_HF_TRANSFER=1
 
 run_hf() {
   echo "Используется: hf download (актуальный Hugging Face CLI)"
-  # С --local-dir служебные метаданные Hub лежат внутри TARGET (см. доку hf download), а не в ~/.cache.
   local extra=()
   if hf download --help 2>/dev/null | grep -q 'local-dir-use-symlinks'; then
     extra=(--local-dir-use-symlinks false)
@@ -72,7 +85,6 @@ else
 
 Установите актуальный CLI:
   pip install -U "huggingface_hub[cli]"
-  # или в venv проекта; после установки доступна команда: hf
 
 Проверка: hf download --help
 EOF

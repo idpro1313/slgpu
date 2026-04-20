@@ -48,23 +48,54 @@ chmod +x scripts/*.sh
 
 ```bash
 cp .env.example .env
-# Отредактируйте .env: HF_TOKEN, MODEL_ID, MODEL_REVISION, MAX_MODEL_LEN и т.д.
+# В .env — только серверное: HF_TOKEN, пути, Grafana/биндинги.
+# Модель выбираем ПРЕСЕТОМ: configs/models/<name>.env (или fallback-дефолт в .env).
 
 # Актуальный Hugging Face CLI (команда hf):
 #   pip install -U "huggingface_hub[cli]"
-./scripts/download-model.sh
+./scripts/download-model.sh -m qwen3-30b-a3b
 
-# Только инференс + мониторинг (профиль vllm или sglang, TP=4)
-./scripts/up.sh vllm
-# или
-./scripts/up.sh sglang
+# Инференс + мониторинг (TP=4, все GPU)
+./scripts/up.sh vllm  -m qwen3-30b-a3b
+./scripts/up.sh sglang -m qwen3-30b-a3b
 
 # Co-run: оба движка параллельно, по 2 GPU каждому (TP=2)
-./scripts/up.sh both
+./scripts/up.sh both -m qwen3-30b-a3b
 
 curl -s http://127.0.0.1:8111/v1/models   # vLLM
 curl -s http://127.0.0.1:8222/v1/models   # SGLang
 ```
+
+### Пресеты моделей
+
+Всё, что специфично для **модели** (ID, окно, KV-dtype, reasoning-парсер, TP), живёт в `configs/models/<preset>.env`. В `.env` — только серверные вещи. Переключение между моделями — без правки `.env`.
+
+```bash
+ls configs/models/
+# qwen3-30b-a3b.env
+# qwen3.6-35b-a3b.env
+# qwen3-next-80b-thinking.env
+# llama-3.1-70b-instruct.env
+# deepseek-r1-distill-qwen-32b.env
+```
+
+Примеры:
+
+```bash
+# Скачать и запустить Llama 3.1 70B
+./scripts/download-model.sh -m llama-3.1-70b-instruct
+./scripts/up.sh vllm -m llama-3.1-70b-instruct
+
+# Сменить модель «на лету» — просто другой пресет
+./scripts/up.sh vllm -m qwen3.6-35b-a3b
+
+# Через переменную окружения (удобно в systemd / CI)
+MODEL=deepseek-r1-distill-qwen-32b ./scripts/up.sh sglang
+```
+
+Добавить свой: `cp configs/models/qwen3-30b-a3b.env configs/models/my-model.env` и отредактировать. Подробнее — [configs/models/README.md](configs/models/README.md).
+
+Если `-m` не задан, скрипты берут `MODEL_ID`/`MAX_MODEL_LEN`/… из `.env` (fallback).
 
 ### Co-run подробно
 
@@ -93,8 +124,9 @@ VRAM на карту: ~16.5 GiB веса + KV-кэш; при `MAX_MODEL_LEN=2621
 **A/B (TP=4 по очереди):**
 
 ```bash
-./scripts/up.sh vllm   && ./scripts/bench.sh vllm
-./scripts/up.sh sglang && ./scripts/bench.sh sglang
+M=qwen3-30b-a3b
+./scripts/up.sh vllm   -m $M && ./scripts/bench.sh vllm   -m $M
+./scripts/up.sh sglang -m $M && ./scripts/bench.sh sglang -m $M
 
 python3 scripts/compare.py   # → bench/report.md
 ```
@@ -102,9 +134,10 @@ python3 scripts/compare.py   # → bench/report.md
 **Co-run (TP=2 одновременно):**
 
 ```bash
-./scripts/up.sh both
-./scripts/bench.sh vllm &    # параллельно
-./scripts/bench.sh sglang &
+M=qwen3-30b-a3b
+./scripts/up.sh both -m $M
+./scripts/bench.sh vllm   -m $M &
+./scripts/bench.sh sglang -m $M &
 wait
 
 python3 scripts/compare.py
@@ -130,12 +163,13 @@ python3 scripts/compare.py
 
 Пример юнита: [systemd/slgpu.service](systemd/slgpu.service). Скопируйте проект в `/opt/slgpu` (или поправьте пути), задайте пользователя с правами на Docker.
 
-Переопределение профиля (vllm/sglang):
+Переопределение режима и модели:
 
 ```bash
 sudo systemctl edit slgpu.service
 # [Service]
-# Environment=SLGPU_PROFILE=sglang
+# Environment=SLGPU_MODE=both          # vllm | sglang | both
+# Environment=MODEL=qwen3-30b-a3b      # пресет из configs/models/
 ```
 
 `ExecStop` в юните останавливает только `vllm`/`sglang`, чтобы **Prometheus/Grafana** продолжали работать.
@@ -195,11 +229,25 @@ print("answer:", r.choices[0].message.content)
 ## Структура
 
 ```
-docker-compose.yml
-.env.example
-configs/vllm/args.env
-configs/sglang/args.env
+docker-compose.yml          # A/B (TP=4)
+docker-compose.both.yml     # overlay для co-run (TP=2, split GPU)
+.env.example                # серверные настройки + fallback для модели
+configs/
+├── vllm/args.env
+├── sglang/args.env
+└── models/                 # пресеты моделей (MODEL_ID, MAX_MODEL_LEN, ...)
+    ├── README.md
+    ├── qwen3-30b-a3b.env
+    ├── qwen3.6-35b-a3b.env
+    ├── qwen3-next-80b-thinking.env
+    ├── llama-3.1-70b-instruct.env
+    └── deepseek-r1-distill-qwen-32b.env
 scripts/
+├── _lib.sh                 # общий загрузчик .env + пресета
+├── up.sh                   # [-m <preset>]
+├── bench.sh                # [-m <preset>]
+├── download-model.sh       # [-m <preset>]
+└── ...
 monitoring/
 bench/results/
 systemd/
