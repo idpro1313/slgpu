@@ -28,7 +28,8 @@ scrape_configs:
     static_configs:
       - targets: ["dcgm-exporter:9400"]
 
-  - job_name: node
+  # Имя job совпадает с типичными фильтрами Grafana «Node Exporter Full» (ID 1860): выберите job = node-exporter.
+  - job_name: node-exporter
     static_configs:
       - targets: ["node-exporter:9100"]
         labels:

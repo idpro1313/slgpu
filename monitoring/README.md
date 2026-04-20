@@ -1,6 +1,6 @@
 # Мониторинг
 
-- **Prometheus** (`127.0.0.1:9090`): скрейп `vllm:8111/metrics`, `sglang:8222/metrics`, `dcgm-exporter:9400`, **`node-exporter:9100`** (job `node` — метрики хоста).
+- **Prometheus** (`127.0.0.1:9090`): скрейп `vllm:8111/metrics`, `sglang:8222/metrics`, `dcgm-exporter:9400`, **`node-exporter:9100`** (job **`node-exporter`** — метрики хоста).
   - Когда контейнер vLLM или SGLang **не создан** (другой профиль compose), DNS-имя `vllm`/`sglang` отсутствует — target будет **DOWN** или с ошибкой lookup. Это ожидаемо для A/B; смотрите метрики активного движка.
 - **Grafana** (`127.0.0.1:3000`): datasource Prometheus подключён автоматически.
 - **Алерты**: [prometheus-alerts.yml](prometheus-alerts.yml) (пороги при необходимости ослабьте, если метрики в вашей версии vLLM называются иначе).
@@ -12,8 +12,19 @@
    - **Dashboards → Import →** вставьте `1860` → Load.  
    - Datasource: **Prometheus** (как в provisioning, uid `prometheus`).  
    - Убедитесь, что контейнер **`node-exporter`** запущен (`docker compose up -d node-exporter` или через `scripts/up.sh`).  
-   - В переменных дашборда выберите **job = `node`** и **instance**, который показывает Prometheus (часто `host` из label или `node-exporter:9100` — зависит от версии дашборда).
+   - В выпадающих списках вверху дашборда выберите **Datasource: Prometheus**, **job = `node-exporter`**, **instance** — обычно **`host`** (так задан label в [`prometheus.yml`](prometheus.yml)); в других ревизиях дашборда может быть `node-exporter:9100`.
 3. **vLLM** — поиск на grafana.com по `vllm` (ID зависят от версии; импорт через **Dashboards → Import**).
+
+### Node Exporter Full «не работает» / пустые графики
+
+1. **Цель Prometheus в состоянии UP.** Откройте `http://127.0.0.1:9090/targets` (или ваш `PROMETHEUS_BIND`). Строка **`node-exporter`** должна быть **UP**. Если **DOWN** — контейнер не запущен (`docker compose ps node-exporter`), нет сети с Prometheus или порт `9100` недоступен из контейнера `prometheus`.
+2. **Метрики реально есть.** В Prometheus → **Graph**: запрос `up{job="node-exporter"}` должен вернуть **1**. Если пусто — скрейп не доходит до дашборда Grafana.
+3. **Переменные дашборда.** У импортированного **1860** вверху страницы выберите **job = `node-exporter`** и подходящий **instance** (в этом репозитории по умолчанию **`host`**). Если оставить другой job (например случайно `prometheus`), почти все панели будут пустыми.
+4. **Datasource при импорте.** При импорте укажите **Prometheus** (в provisioning он уже есть, uid **`prometheus`**). Если выбрать «не тот» источник или отключённый — данных не будет.
+5. **Время на графике.** Установите диапазон **Last 15 minutes** (или больше), если только что подняли стек.
+6. **Версия дашборда.** На grafana.com у **1860** несколько ревизий; при полном «No data» попробуйте импортировать **последнюю ревизию** или дропдаун **job** переключите на все доступные значения по очереди.
+
+После смены [`prometheus.yml`](prometheus.yml) перезагрузите конфиг (см. ниже) или `docker compose up -d prometheus`.
 
 ## Перезагрузка конфигурации Prometheus
 
