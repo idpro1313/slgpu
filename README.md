@@ -135,6 +135,7 @@ docker compose exec sglang nvidia-smi -L
 
 - `MODEL_ID`, `MODEL_REVISION`, `MAX_MODEL_LEN`, `KV_CACHE_DTYPE`
 - `GPU_MEM_UTIL`, `SGLANG_MEM_FRACTION_STATIC`, `TP`
+- `VLLM_MAX_NUM_BATCHED_TOKENS` (vLLM, пропускная способность chunked prefill)
 - `REASONING_PARSER`, `TOOL_CALL_PARSER` (vLLM)
 - `BENCH_MODEL_NAME` (опционально)
 
@@ -168,6 +169,7 @@ MODEL=gpt-oss-120b ./scripts/up.sh sglang
 | `MAX_MODEL_LEN` | пресет / `.env` | Окно контекста (prompt + max_tokens ≤ этого значения) |
 | `TP` | пресет / `.env` | Tensor parallel size |
 | `GPU_MEM_UTIL` | пресет / `.env` | `--gpu-memory-utilization` (vLLM) |
+| `VLLM_MAX_NUM_BATCHED_TOKENS` | пресет / `.env` | `--max-num-batched-tokens` (vLLM; throughput vs TTFT) |
 | `SGLANG_MEM_FRACTION_STATIC` | пресет / `.env` | `--mem-fraction-static` (SGLang) |
 | `KV_CACHE_DTYPE` | пресет / `.env` | Тип KV (важно для Qwen3 Next / Qwen3.6) |
 | `REASONING_PARSER` | пресет / `.env` | `--reasoning-parser` (vLLM и SGLang) |

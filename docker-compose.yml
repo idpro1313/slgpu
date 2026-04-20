@@ -50,6 +50,8 @@ services:
       - --kv-cache-dtype
       - "${KV_CACHE_DTYPE:-fp8_e4m3}"
       - --enable-chunked-prefill
+      - --max-num-batched-tokens
+      - "${VLLM_MAX_NUM_BATCHED_TOKENS:-8192}"
       - --enable-prefix-caching
       - --tool-call-parser
       - "${TOOL_CALL_PARSER:-hermes}"
