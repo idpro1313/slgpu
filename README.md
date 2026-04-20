@@ -1,262 +1,381 @@
-# slgpu — A/B инференс vLLM vs SGLang (4×GPU)
+# slgpu
 
-Стенд для сравнения **vLLM** и **SGLang** на одной локальной модели в `/opt/models`. OpenAI-совместимый API:
+Репозиторий **стенда для сравнения LLM-инференса** на выделенном Linux-сервере с несколькими GPU: два движка (**vLLM** и **SGLang**) в Docker, общий локальный кэш моделей, OpenAI-совместимый HTTP API, нагрузочный бенчмарк, **Prometheus + Grafana + NVIDIA DCGM Exporter**, опциональный автозапуск через **systemd**.
 
-| Движок | Порт | URL |
-|--------|------|-----|
-| vLLM   | 8111 | `http://<host>:8111/v1` |
-| SGLang | 8222 | `http://<host>:8222/v1` |
+Целевая конфигурация при разработке: **4× NVIDIA H200**, **96 vCPU**, **~640 GB RAM**, модели на диске в **`/opt/models`**. Проект рассчитан на один хост без Kubernetes.
 
-Поддерживаются два режима запуска:
+---
 
-- **Последовательный A/B** (по умолчанию): один движок на все 4 GPU, **TP=4**. Максимальная производительность на запрос, движки бенчатся по очереди.
-- **Параллельный co-run**: оба движка одновременно, по 2 GPU каждому (**TP=2**). vLLM прибивается к GPU `0,1`, SGLang — к `2,3`. Удобно для стриминговых сравнений «вживую» на одинаковых входах.
+## Содержание
 
-Prometheus / Grafana / DCGM работают постоянно в любом режиме.
+1. [Назначение и сценарии использования](#1-назначение-и-сценарии-использования)
+2. [Архитектура](#2-архитектура)
+3. [Сервисы, порты и образы](#3-сервисы-порты-и-образы)
+4. [Режимы запуска инференса](#4-режимы-запуска-инференса)
+5. [Конфигурация: слои `.env` и пресеты](#5-конфигурация-слои-env-и-пресеты)
+6. [Переменные окружения (справочник)](#6-переменные-окружения-справочник)
+7. [Подготовка хоста](#7-подготовка-хоста)
+8. [Быстрый старт](#8-быстрый-старт)
+9. [Скрипты](#9-скрипты)
+10. [Бенчмарк и отчёт A/B](#10-бенчмарк-и-отчёт-ab)
+11. [Мониторинг и безопасность](#11-мониторинг-и-безопасность)
+12. [Reasoning / thinking и парсеры](#12-reasoning--thinking-и-парсеры)
+13. [Автозапуск (systemd)](#13-автозапуск-systemd)
+14. [Устранение неполадок](#14-устранение-неполадок)
+15. [Ограничения и версии](#15-ограничения-и-версии)
+16. [Структура репозитория](#16-структура-репозитория)
+17. [Лицензии образов](#17-лицензии-образов)
 
-## 1. Подготовка хоста (чек-лист)
+---
 
-Выполняется на **Linux-сервере** с NVIDIA (целевая конфигурация: 4×H200, Ubuntu 22.04/24.04).
+## 1. Назначение и сценарии использования
 
-Автоматизация (Ubuntu/Debian, от **root** или через **sudo**):
+- **Сравнение vLLM и SGLang** на одной и той же модели и одинаковых сценариях нагрузки (латентность TTFT, длительность ответа, RPS).
+- **Локальные веса** на хосте (`MODELS_DIR`, по умолчанию `/opt/models`), без повторной загрузки при переключении движка.
+- **Два режима GPU**: либо весь кластер на один движок (**TP=4**), либо **два движка параллельно** по две карты (**TP=2**, overlay `docker-compose.both.yml`).
+- **Пресеты моделей** — не править `.env` под каждую модель: параметры в `configs/models/<slug>.env`, выбор флагом `-m` или `MODEL=...`.
+- **Наблюдаемость**: метрики движков и GPU в Grafana; алерты GPU в Prometheus.
 
-```bash
-chmod +x scripts/prepare-host.sh
-sudo ./scripts/prepare-host.sh        # шаги 1–6, где возможно
-sudo ./scripts/prepare-host.sh 1      # только п.1: проверка драйвера NVIDIA
-sudo STEPS=2,4 ./scripts/prepare-host.sh   # выборочно (через запятую)
+Не входит в объём: reverse-proxy с TLS, LiteLLM-фронт, Kubernetes — при необходимости добавляются снаружи.
+
+---
+
+## 2. Архитектура
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Linux host                               │
+│  /opt/models  ──bind mount──►  /models (ro) в контейнерах vLLM/SGLang │
+└─────────────────────────────────────────────────────────────────┘
+         │                    │
+         ▼                    ▼
+   ┌──────────┐         ┌──────────┐
+   │  vLLM    │         │ SGLang   │   profiles: vllm | sglang (или оба в both)
+   │ :8111    │         │ :8222    │   OpenAI API: /v1/chat/completions, /v1/models, /metrics
+   └────┬─────┘         └────┬─────┘
+        │                    │
+        └────────┬───────────┘
+                 ▼
+         ┌───────────────┐
+         │  Prometheus   │  :9090 (по умолчанию 127.0.0.1)
+         └───────┬───────┘
+                 ▼
+         ┌───────────────┐
+         │   Grafana     │  :3000 (bind настраивается)
+         └───────────────┘
+                 ▲
+         ┌───────┴───────┐
+         │ dcgm-exporter │  :9400 (GPU metrics)
+         └───────────────┘
 ```
 
-Скрипт: [scripts/prepare-host.sh](scripts/prepare-host.sh). Установку самого драйвера (п.1) скрипт **не выполняет** — только проверка версии и подсказки; остальное (Docker, toolkit, каталог, sysctl, limits) ставит/настраивает по возможности.
+- **Compose-проект** `slgpu`: сервисы описаны в `docker-compose.yml`; для co-run подключается второй файл `docker-compose.both.yml`.
+- **Профили** Docker Compose: `vllm`, `sglang` — поднимается только выбранный LLM-сервис (или оба в режиме `both`).
+- **GPU**: в базовом compose для vLLM/SGLang заданы `device_ids` 0–3; overlay `both` переопределяет на `0,1` и `2,3`.
 
-1. **Драйвер NVIDIA** ≥ 560 (Hopper/H200 + FP8). Проверка: `nvidia-smi`.
-2. **Docker Engine** + **Compose v2** + [**NVIDIA Container Toolkit**](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).
-   - В `/etc/docker/daemon.json` при необходимости: `"default-runtime": "nvidia"`, `"exec-opts": ["native.cgroupdriver=systemd"]`, перезапуск Docker.
-3. **Persistence mode** (опционально): `sudo nvidia-smi -pm 1`.
-4. **Локальные модели**: каталог **`/opt/models`** (желательно отдельный раздел ext4, `noatime`), права на чтение для пользователя, от которого крутится Docker.
-5. **Sysctl** (рекомендации): `vm.swappiness=10`, достаточный `ulimit -n` (например 1048576).
-6. **Firewall**: наружу при необходимости только нужные порты; служебные (Prometheus 9090, Grafana 3000) лучше оставить на `127.0.0.1` (см. compose).
+---
 
-Скопируйте репозиторий на сервер (или клонируйте), перейдите в каталог проекта.
+## 3. Сервисы, порты и образы
 
-```bash
-chmod +x scripts/*.sh
-# при необходимости: sudo ./scripts/prepare-host.sh
-```
+| Сервис | Образ (типично) | Порт на хосте | Назначение |
+|--------|------------------|---------------|------------|
+| **vLLM** | `vllm/vllm-openai:latest` | **8111** | OpenAI API, `/metrics` |
+| **SGLang** | `lmsysorg/sglang:latest` | **8222** | OpenAI API, `/metrics` |
+| **Prometheus** | `prom/prometheus:v2.53.3` | **9090** (`PROMETHEUS_BIND`) | Сбор метрик |
+| **Grafana** | `grafana/grafana:11.4.0` | **3000** (`GRAFANA_BIND`/`GRAFANA_PORT`) | Дашборды |
+| **dcgm-exporter** | `nvidia/dcgm-exporter:latest` | **9400** (`DCGM_BIND`) | Метрики GPU |
 
-## 2. Быстрый старт
+Базовые URL API: `http://<host>:8111/v1`, `http://<host>:8222/v1`.
 
-```bash
-cp .env.example .env
-# В .env — только серверное: HF_TOKEN, пути, Grafana/биндинги.
-# Модель выбираем ПРЕСЕТОМ: configs/models/<name>.env (или fallback-дефолт в .env).
+---
 
-# Актуальный Hugging Face CLI (команда hf):
-#   pip install -U "huggingface_hub[cli]"
-./scripts/download-model.sh -m qwen3-30b-a3b
+## 4. Режимы запуска инференса
 
-# Инференс + мониторинг (TP=4, все GPU)
-./scripts/up.sh vllm  -m qwen3-30b-a3b
-./scripts/up.sh sglang -m qwen3-30b-a3b
+### 4.1. Последовательный A/B (по умолчанию)
 
-# Co-run: оба движка параллельно, по 2 GPU каждому (TP=2)
-./scripts/up.sh both -m qwen3-30b-a3b
+- Поднимается **один** из движков: `./scripts/up.sh vllm` или `./scripts/up.sh sglang`.
+- **TP** по умолчанию **4** (все карты), переменная `TP` в окружении/пресете.
+- Сравнение производительности: сначала бенч одного, затем переключение и бенч второго (`compare.py`).
 
-curl -s http://127.0.0.1:8111/v1/models   # vLLM
-curl -s http://127.0.0.1:8222/v1/models   # SGLang
-```
+### 4.2. Параллельный co-run
 
-### Пресеты моделей
+- `./scripts/up.sh both` — **оба** движка; внутри скрипт выставляет **`TP=2`** (или `TP_BOTH`, по умолчанию 2) и подключает **`docker-compose.both.yml`**.
+- **vLLM** видит GPU **0,1**, **SGLang** — **2,3** (правится в overlay).
+- Цифры с TP=2 **не сравнимы напрямую** с TP=4; режим удобен для одновременного ответа двух API на одинаковых запросах.
 
-Всё, что специфично для **модели** (ID, окно, KV-dtype, reasoning-парсер, TP), живёт в `configs/models/<preset>.env`. В `.env` — только серверные вещи. Переключение между моделями — без правки `.env`.
+Под капотом:
 
 ```bash
-ls configs/models/
-# qwen3-30b-a3b.env
-# qwen3.6-35b-a3b.env
-# qwen3-next-80b-thinking.env
-# llama-3.1-70b-instruct.env
-# deepseek-r1-distill-qwen-32b.env
-# gpt-oss-120b.env
-# kimi-k2.5.env
-# glm-5.1.env
-# minimax-m2.7.env
-```
-
-Примеры:
-
-```bash
-# Скачать и запустить Llama 3.1 70B
-./scripts/download-model.sh -m llama-3.1-70b-instruct
-./scripts/up.sh vllm -m llama-3.1-70b-instruct
-
-# Сменить модель «на лету» — просто другой пресет
-./scripts/up.sh vllm -m qwen3.6-35b-a3b
-
-# Через переменную окружения (удобно в systemd / CI)
-MODEL=deepseek-r1-distill-qwen-32b ./scripts/up.sh sglang
-```
-
-Добавить свой: `cp configs/models/qwen3-30b-a3b.env configs/models/my-model.env` и отредактировать. Подробнее — [configs/models/README.md](configs/models/README.md).
-
-Если `-m` не задан, скрипты берут `MODEL_ID`/`MAX_MODEL_LEN`/… из `.env` (fallback).
-
-### Co-run подробно
-
-`scripts/up.sh both` под капотом выполняет:
-
-```bash
-TP=2 docker compose \
-  -f docker-compose.yml \
-  -f docker-compose.both.yml \
+TP=2 docker compose -f docker-compose.yml -f docker-compose.both.yml \
   --profile vllm --profile sglang up -d
 ```
 
-Распределение GPU задано в [`docker-compose.both.yml`](docker-compose.both.yml) через `deploy.resources.reservations.devices.device_ids`. Чтобы поменять, например, на `0,2` / `1,3` — отредактируйте этот overlay.
-
-Проверка, что контейнеры видят только свою пару карт:
+Проверка видимых GPU:
 
 ```bash
 docker compose exec vllm nvidia-smi -L
 docker compose exec sglang nvidia-smi -L
 ```
 
-VRAM на карту: ~16.5 GiB веса + KV-кэш; при `MAX_MODEL_LEN=262144` запас по KV остаётся огромным (десятки миллионов токенов совокупно на пару).
+---
 
-## 3. Бенчмарк и сравнение
+## 5. Конфигурация: слои `.env` и пресеты
 
-**A/B (TP=4 по очереди):**
+### 5.1. Корневой `.env` (сервер)
+
+Копируется из [`.env.example`](.env.example). Здесь хранятся **секреты и инфраструктура**:
+
+- `HF_TOKEN` — доступ к Hugging Face Hub (не коммитить).
+- `MODELS_DIR` — каталог весов на хосте.
+- Биндинги Grafana/Prometheus/DCGM, пароль Grafana и т.д.
+
+### 5.2. Пресеты моделей `configs/models/<slug>.env`
+
+Переопределяют параметры, зависящие от модели, **поверх** `.env`:
+
+- `MODEL_ID`, `MODEL_REVISION`, `MAX_MODEL_LEN`, `KV_CACHE_DTYPE`
+- `GPU_MEM_UTIL`, `SGLANG_MEM_FRACTION_STATIC`, `TP`
+- `REASONING_PARSER`, `TOOL_CALL_PARSER` (vLLM)
+- `BENCH_MODEL_NAME` (опционально)
+
+Выбор пресета:
+
+```bash
+./scripts/up.sh vllm -m qwen3-30b-a3b
+MODEL=gpt-oss-120b ./scripts/up.sh sglang
+```
+
+Без `-m` скрипты используют значения из `.env` (fallback для обратной совместимости).
+
+Справка по парсерам и добавлению своих пресетов: [`configs/models/README.md`](configs/models/README.md).
+
+### 5.3. Доп. env для движков
+
+- [`configs/vllm/args.env`](configs/vllm/args.env) — например `VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1`.
+- [`configs/sglang/args.env`](configs/sglang/args.env) — дополнительные переменные SGLang.
+
+Они подключены как `env_file` в compose и не заменяют пресеты; приоритет при конфликте — порядок и то, что экспортирует shell перед `docker compose` (пресет грузится в `up.sh`/`bench.sh` через `set -a`).
+
+---
+
+## 6. Переменные окружения (справочник)
+
+| Переменная | Где задаётся | Назначение |
+|------------|--------------|------------|
+| `HF_TOKEN` | `.env` | Токен Hugging Face |
+| `MODELS_DIR` | `.env` | Путь к моделям на хосте → `/models` в контейнере |
+| `MODEL_ID`, `MODEL_REVISION` | пресет / `.env` | Репозиторий и ревизия на Hub |
+| `MAX_MODEL_LEN` | пресет / `.env` | Окно контекста (prompt + max_tokens ≤ этого значения) |
+| `TP` | пресет / `.env` | Tensor parallel size |
+| `GPU_MEM_UTIL` | пресет / `.env` | `--gpu-memory-utilization` (vLLM) |
+| `SGLANG_MEM_FRACTION_STATIC` | пресет / `.env` | `--mem-fraction-static` (SGLang) |
+| `KV_CACHE_DTYPE` | пресет / `.env` | Тип KV (важно для Qwen3 Next / Qwen3.6) |
+| `REASONING_PARSER` | пресет / `.env` | `--reasoning-parser` (vLLM и SGLang) |
+| `TOOL_CALL_PARSER` | пресет / `.env` | `--tool-call-parser` (**только vLLM**) |
+| `GRAFANA_*`, `PROMETHEUS_BIND`, `DCGM_BIND`, `GF_SERVER_ROOT_URL` | `.env` | Мониторинг и сеть |
+
+В режиме `both` скрипт задаёт **`TP=2`** (переменная окружения при вызове compose), если не переопределено `TP_BOTH`.
+
+---
+
+## 7. Подготовка хоста
+
+Целевая ОС: **Ubuntu 22.04/24.04** (или совместимый Debian) с **NVIDIA**.
+
+```bash
+chmod +x scripts/prepare-host.sh
+sudo ./scripts/prepare-host.sh        # шаги 1–6, где возможно
+sudo ./scripts/prepare-host.sh 1      # только проверка драйвера
+sudo STEPS=2,4 ./scripts/prepare-host.sh
+```
+
+Скрипт [`scripts/prepare-host.sh`](scripts/prepare-host.sh): Docker, NVIDIA Container Toolkit, каталог моделей, sysctl, limits; **драйвер не устанавливает** — только проверка.
+
+Краткий чек-лист:
+
+1. Драйвер **≥ 560** (`nvidia-smi`).
+2. **Docker** + **Compose v2** + [**NVIDIA Container Toolkit**](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).
+3. По желанию: `sudo nvidia-smi -pm 1`.
+4. Каталог **`/opt/models`** (желательно отдельный раздел, `noatime`).
+5. `vm.swappiness=10`, большой `ulimit -n`.
+6. Firewall: наружу только нужные порты; Prometheus/DCGM лучше на `127.0.0.1`.
+
+---
+
+## 8. Быстрый старт
+
+```bash
+git clone <repo-url> /opt/slgpu   # или скопируйте каталог
+cd /opt/slgpu
+chmod +x scripts/*.sh
+
+cp .env.example .env
+# Заполните HF_TOKEN, при необходимости MODELS_DIR и Grafana.
+
+# CLI Hugging Face (рекомендуется hf, не huggingface-cli):
+pip install -U "huggingface_hub[cli]"
+
+./scripts/download-model.sh -m qwen3-30b-a3b
+./scripts/up.sh vllm -m qwen3-30b-a3b
+
+curl -s http://127.0.0.1:8111/v1/models
+```
+
+Список готовых пресетов: `ls configs/models/*.env` (имена без `.env` — аргумент `-m`).
+
+---
+
+## 9. Скрипты
+
+| Скрипт | Назначение |
+|--------|------------|
+| [`scripts/_lib.sh`](scripts/_lib.sh) | Общая загрузка `.env` + опционального пресета (`slgpu_load_env`) |
+| [`scripts/up.sh`](scripts/up.sh) | `vllm` \| `sglang` \| `both` + `-m <preset>`; поднимает мониторинг и LLM; ждёт `/v1/models` |
+| [`scripts/download-model.sh`](scripts/download-model.sh) | Скачивание модели в `${MODELS_DIR}/${MODEL_ID}` через `hf download` |
+| [`scripts/bench.sh`](scripts/bench.sh) | Запуск [`scripts/bench_openai.py`](scripts/bench_openai.py) против `8111` или `8222` |
+| [`scripts/bench_openai.py`](scripts/bench_openai.py) | Streaming-нагрузка, сценарии concurrency × длины; учёт `MAX_MODEL_LEN` |
+| [`scripts/compare.py`](scripts/compare.py) | Сводка двух последних `summary.json` → `bench/report.md` |
+| [`scripts/healthcheck.sh`](scripts/healthcheck.sh) | `curl` `/v1/models` для vllm/sglang |
+| [`scripts/prepare-host.sh`](scripts/prepare-host.sh) | Автоматизация подготовки хоста (Ubuntu/Debian) |
+
+Общий синтаксис: флаг **`-m <slug>`** или переменная **`MODEL=<slug>`** для `up.sh`, `bench.sh`, `download-model.sh`.
+
+---
+
+## 10. Бенчмарк и отчёт A/B
+
+**По очереди (честное сравнение при TP=4):**
 
 ```bash
 M=qwen3-30b-a3b
 ./scripts/up.sh vllm   -m $M && ./scripts/bench.sh vllm   -m $M
 ./scripts/up.sh sglang -m $M && ./scripts/bench.sh sglang -m $M
-
-python3 scripts/compare.py   # → bench/report.md
+python3 scripts/compare.py    # → bench/report.md
 ```
 
-**Co-run (TP=2 одновременно):**
+**Параллельно в co-run:**
 
 ```bash
 M=qwen3-30b-a3b
 ./scripts/up.sh both -m $M
-./scripts/bench.sh vllm   -m $M &
+./scripts/bench.sh vllm -m $M &
 ./scripts/bench.sh sglang -m $M &
 wait
-
 python3 scripts/compare.py
 ```
 
-> Внимание: цифры из `both` нельзя сравнивать с TP=4 напрямую — у каждого движка вдвое меньше GPU. Режим полезен для параллельного функционального теста и сравнений при идентичной нагрузке.
+Результаты: `bench/results/<engine>/<timestamp>/`, внутри `summary.json` и JSON по сценариям. Сценарии: concurrency `1, 8, 32, 128` и комбинации длин prompt/output; при необходимости `max_tokens` ужимается под `MAX_MODEL_LEN`.
 
-Сценарии: concurrency `1, 8, 32, 128` × длины prompt/output из плана; результаты в `bench/results/<engine>/<timestamp>/`.
+---
 
-## 4. Мониторинг
+## 11. Мониторинг и безопасность
 
-- **Prometheus**: `http://127.0.0.1:9090` (по умолчанию приватный — `PROMETHEUS_BIND=127.0.0.1`).
-- **Grafana**: `http://<host>:3000` (по умолчанию доступна снаружи — `GRAFANA_BIND=0.0.0.0`). Логин/пароль: `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD` из `.env`. **Перед публичным доступом обязательно смените пароль и при необходимости задайте `GF_SERVER_ROOT_URL`.**
-- Если стенд доступен из интернета — закройте порт **3000** firewall’ом и пускайте через reverse-proxy с TLS, либо оставьте `GRAFANA_BIND=127.0.0.1` и ходите по SSH-туннелю: `ssh -L 3000:127.0.0.1:3000 user@host`.
-- Метрики vLLM / SGLang: `/metrics` на том же порту, что и API.
-- **DCGM exporter**: телеметрия GPU.
+- **Prometheus** скрейпит `vllm:8111/metrics`, `sglang:8222/metrics`, `dcgm-exporter:9400` (см. [`monitoring/prometheus.yml`](monitoring/prometheus.yml)).
+- **Grafana**: провижининг датасорса и дашборда в [`monitoring/grafana/provisioning/`](monitoring/grafana/provisioning/).
+- Подробности и типичные сообщения в логах: [`monitoring/README.md`](monitoring/README.md).
 
-Импорт дашбордов вручную в Grafana (опционально): NVIDIA DCGM [ID 12239](https://grafana.com/grafana/dashboards/12239), дашборды vLLM — по поиску в Grafana.com по запросу `vllm`.
+**Безопасность:** смените пароль Grafana перед выставлением наружу; для продакшена — TLS или reverse-proxy, либо `GRAFANA_BIND=127.0.0.1` и SSH-туннель (`ssh -L 3000:127.0.0.1:3000 user@host`). Не коммитьте `.env` с секретами.
 
-Подробности конфигов: [monitoring/README.md](monitoring/README.md).
+---
 
-## 5. Автозапуск (systemd)
+## 12. Reasoning / thinking и парсеры
 
-Пример юнита: [systemd/slgpu.service](systemd/slgpu.service). Скопируйте проект в `/opt/slgpu` (или поправьте пути), задайте пользователя с правами на Docker.
+- В compose для обоих движков передаётся **`--reasoning-parser`** из `REASONING_PARSER` (дефолт в compose для обратной совместимости — `qwen3`; в пресетах задаётся своё).
+- Для **vLLM** дополнительно **`--tool-call-parser`** из `TOOL_CALL_PARSER` и **`--enable-auto-tool-choice`**.
+- У **Qwen3** управление thinking через `chat_template_kwargs.enable_thinking` в запросе; ответ может содержать поле **`reasoning_content`** (см. примеры ниже).
 
-Переопределение режима и модели:
+Пример (подставьте свой `model` из пресета):
+
+```bash
+curl -s http://<host>:8111/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "Qwen/Qwen3-30B-A3B",
+    "messages": [{"role":"user","content":"Сколько будет 17*23?"}],
+    "chat_template_kwargs": {"enable_thinking": true},
+    "max_tokens": 1024
+  }' | jq '.choices[0].message'
+```
+
+Таблица соответствия семейств моделей и парсеров (vLLM): в [`configs/models/README.md`](configs/models/README.md).
+
+Известный нюанс: для **Qwen3-Next-Thinking** в SGLang бывают проблемы с выделением reasoning — см. [sgl-project/sglang#16653](https://github.com/sgl-project/sglang/issues/16653); в пресете можно попробовать `REASONING_PARSER=qwen3-thinking`.
+
+---
+
+## 13. Автозапуск (systemd)
+
+Юнит: [`systemd/slgpu.service`](systemd/slgpu.service). Вызывает **`./scripts/up.sh`**, а не «голый» compose.
 
 ```bash
 sudo systemctl edit slgpu.service
 # [Service]
-# Environment=SLGPU_MODE=both          # vllm | sglang | both
-# Environment=MODEL=qwen3-30b-a3b      # пресет из configs/models/
+# Environment=SLGPU_MODE=both    # vllm | sglang | both
+# Environment=MODEL=qwen3-30b-a3b
 ```
 
-`ExecStop` в юните останавливает только `vllm`/`sglang`, чтобы **Prometheus/Grafana** продолжали работать.
+`ExecStop` останавливает только **`vllm`** и **`sglang`**, мониторинг остаётся работать.
 
-## Thinking-режим Qwen3
+---
 
-Включён по умолчанию: оба движка стартуют с `--reasoning-parser ${REASONING_PARSER:-qwen3}`. Парсер выделяет блок `<think>...</think>` в отдельное поле OpenAI-ответа (`choices[0].message.reasoning_content`), оставляя в `content` только финальный ответ.
+## 14. Устранение неполадок
 
-Управление per-request — стандартный для Qwen3 chat-template:
+| Симптом | Что сделать |
+|---------|-------------|
+| **vLLM + Qwen3 Next / Qwen3.6:** `kv_cache_dtype` / assert на `fp8_e5m2` | В пресете или `.env`: `KV_CACHE_DTYPE=fp8_e4m3` (или `fp8`), пересоздать контейнер |
+| **`ContextOverflowError`** | Увеличить `MAX_MODEL_LEN` или уменьшить `max_tokens` в клиенте; бенч сам поджимает под окно |
+| **OOM при старте** | Уменьшить `MAX_MODEL_LEN`, снизить `GPU_MEM_UTIL` / `SGLANG_MEM_FRACTION_STATIC`, увеличить `TP`, взять квантованный вариант модели |
+| **Grafana недоступна снаружи** | Проверить `GRAFANA_BIND`, firewall, `GF_SERVER_ROOT_URL` |
+| **Unknown reasoning / tool parser** | Обновить образ vLLM; см. команду проверки списка парсеров в `configs/models/README.md` |
+| **Оба движка на одни GPU** | Для co-run обязательно `./scripts/up.sh both` (overlay), не два отдельных `up` без overlay |
 
-```bash
-# C thinking (по умолчанию для Qwen3)
-curl -s http://<host>:8111/v1/chat/completions \
-  -H 'Content-Type: application/json' \
-  -d '{
-        "model": "Qwen/Qwen3-30B-A3B",
-        "messages": [{"role":"user","content":"Сколько будет 17*23? Покажи рассуждение."}],
-        "chat_template_kwargs": {"enable_thinking": true},
-        "max_tokens": 1024
-      }' | jq '.choices[0].message'
+---
 
-# Без thinking (быстрее, без <think> блока)
-curl -s http://<host>:8111/v1/chat/completions \
-  -H 'Content-Type: application/json' \
-  -d '{
-        "model": "Qwen/Qwen3-30B-A3B",
-        "messages": [{"role":"user","content":"/no_think Hi!"}],
-        "chat_template_kwargs": {"enable_thinking": false},
-        "max_tokens": 256
-      }'
-```
+## 15. Ограничения и версии
 
-Совместимый OpenAI Python-клиент:
+- Образы **`latest`** меняются; для воспроизводимости зафиксируйте digest или тег образа в fork.
+- **SGLang** может не поддерживать все те же `--reasoning-parser`, что vLLM; при ошибке старта уберите парсер в пресете для SGLang или используйте только vLLM для экзотических моделей.
+- Крупные MoE (например Kimi K2) могут **не помещаться** в 4×H200 без квантизации — см. комментарии в соответствующих пресетах.
+- Сравнение **TP=4** и **TP=2 (both)** по цифрам бенча — разные условия; для публикации метрик используйте один режим.
 
-```python
-from openai import OpenAI
-c = OpenAI(base_url="http://<host>:8111/v1", api_key="dummy")
-r = c.chat.completions.create(
-    model="Qwen/Qwen3-30B-A3B",
-    messages=[{"role":"user","content":"prove sqrt(2) is irrational"}],
-    extra_body={"chat_template_kwargs": {"enable_thinking": True}},
-)
-print("reasoning:", r.choices[0].message.reasoning_content)
-print("answer:", r.choices[0].message.content)
-```
+---
 
-Изменить парсер (например, `qwen3-thinking` для моделей с суффиксом `-Thinking`, `deepseek_r1` для DeepSeek): задайте `REASONING_PARSER` в `.env` и пересоздайте контейнер.
-
-> Примечание: для **`Qwen3-Next-80B-A3B-Thinking`** в SGLang встречаются известные проблемы выделения reasoning ([sgl-project/sglang#16653](https://github.com/sgl-project/sglang/issues/16653)) — попробуйте `REASONING_PARSER=qwen3-thinking`. У vLLM это работает штатно.
-
-## Устранение неполадок
-
-**vLLM + Qwen3 Next (`qwen3_next`):** `assert self.kv_cache_dtype in {"fp8", "fp8_e4m3"}` / Dynamo при `fp8_e5m2`. В `.env` задайте `KV_CACHE_DTYPE=fp8_e4m3` (или `fp8`), перезапустите контейнер. Дефолт в `docker-compose` и `.env.example` уже `fp8_e4m3`.
-
-**`ContextOverflowError: maximum context length is N`** — сумма `prompt + max_tokens` превышает серверный `--max-model-len`. Поднимите `MAX_MODEL_LEN` в `.env` (по умолчанию `262144` — максимум для Qwen3 Next) и пересоздайте контейнер: `docker compose up -d --force-recreate vllm` (или `sglang`). При OOM уменьшайте окно или `GPU_MEM_UTIL`. В клиенте — уменьшите `max_tokens`. Бенч `scripts/bench.sh` уважает `MAX_MODEL_LEN` из `.env` и сам ужимает `max_tokens` под окно.
-
-## Структура
+## 16. Структура репозитория
 
 ```
-docker-compose.yml          # A/B (TP=4)
-docker-compose.both.yml     # overlay для co-run (TP=2, split GPU)
-.env.example                # серверные настройки + fallback для модели
-configs/
-├── vllm/args.env
-├── sglang/args.env
-└── models/                 # пресеты моделей (MODEL_ID, MAX_MODEL_LEN, ...)
-    ├── README.md
-    ├── qwen3-30b-a3b.env
-    ├── qwen3.6-35b-a3b.env
-    ├── qwen3-next-80b-thinking.env
-    ├── llama-3.1-70b-instruct.env
-    └── deepseek-r1-distill-qwen-32b.env
-scripts/
-├── _lib.sh                 # общий загрузчик .env + пресета
-├── up.sh                   # [-m <preset>]
-├── bench.sh                # [-m <preset>]
-├── download-model.sh       # [-m <preset>]
-└── ...
-monitoring/
-bench/results/
-systemd/
+slgpu/
+├── docker-compose.yml          # сервисы vLLM, SGLang, мониторинг; TP и парсеры из env
+├── docker-compose.both.yml     # overlay: split GPU, co-run
+├── .env.example
+├── README.md                   # этот файл
+├── configs/
+│   ├── vllm/args.env           # доп. переменные vLLM (например CUDA graph profiler)
+│   ├── sglang/args.env
+│   └── models/                 # пресеты: *.env + README.md
+├── scripts/
+│   ├── _lib.sh
+│   ├── up.sh
+│   ├── download-model.sh
+│   ├── bench.sh
+│   ├── bench_openai.py
+│   ├── compare.py
+│   ├── healthcheck.sh
+│   └── prepare-host.sh
+├── monitoring/
+│   ├── prometheus.yml
+│   ├── prometheus-alerts.yml
+│   ├── README.md
+│   └── grafana/provisioning/…
+├── bench/
+│   ├── results/                # артефакты бенчей (не коммитить большие прогоны)
+│   └── report.md               # генерируется compare.py
+└── systemd/slgpu.service
 ```
 
-## Лицензии образов
+Файлы в `configs/models/` (пресеты) дополняются по мере необходимости; актуальный список: `ls configs/models/*.env`.
 
-Используются публичные образы `vllm/vllm-openai`, `lmsysorg/sglang`, `prom/prometheus`, `grafana/grafana`, `nvidia/dcgm-exporter` — ознакомьтесь с их лицензиями для продакшена.
+---
+
+## 17. Лицензии образов
+
+Используются публичные образы **`vllm/vllm-openai`**, **`lmsysorg/sglang`**, **`prom/prometheus`**, **`grafana/grafana`**, **`nvidia/dcgm-exporter`**. Для продакшена ознакомьтесь с лицензиями и политиками поставщиков; веса моделей на Hugging Face имеют отдельные лицензии репозиториев.
