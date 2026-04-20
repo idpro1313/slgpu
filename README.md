@@ -1,13 +1,18 @@
-# slgpu — A/B инференс vLLM vs SGLang (4×GPU, TP=4)
+# slgpu — A/B инференс vLLM vs SGLang (4×GPU)
 
-Стенд для сравнения **vLLM** и **SGLang** на одной локальной модели в `/opt/models`, с **tensor parallel = 4** на все GPU. OpenAI-совместимый API:
+Стенд для сравнения **vLLM** и **SGLang** на одной локальной модели в `/opt/models`. OpenAI-совместимый API:
 
 | Движок | Порт | URL |
 |--------|------|-----|
 | vLLM   | 8111 | `http://<host>:8111/v1` |
 | SGLang | 8222 | `http://<host>:8222/v1` |
 
-Одновременно оба LLM-сервиса не запускаются (каждый занимает все GPU). Prometheus / Grafana / DCGM могут работать постоянно.
+Поддерживаются два режима запуска:
+
+- **Последовательный A/B** (по умолчанию): один движок на все 4 GPU, **TP=4**. Максимальная производительность на запрос, движки бенчатся по очереди.
+- **Параллельный co-run**: оба движка одновременно, по 2 GPU каждому (**TP=2**). vLLM прибивается к GPU `0,1`, SGLang — к `2,3`. Удобно для стриминговых сравнений «вживую» на одинаковых входах.
+
+Prometheus / Grafana / DCGM работают постоянно в любом режиме.
 
 ## 1. Подготовка хоста (чек-лист)
 
@@ -49,27 +54,63 @@ cp .env.example .env
 #   pip install -U "huggingface_hub[cli]"
 ./scripts/download-model.sh
 
-# Только инференс + мониторинг (профиль vllm или sglang)
+# Только инференс + мониторинг (профиль vllm или sglang, TP=4)
 ./scripts/up.sh vllm
 # или
 ./scripts/up.sh sglang
+
+# Co-run: оба движка параллельно, по 2 GPU каждому (TP=2)
+./scripts/up.sh both
 
 curl -s http://127.0.0.1:8111/v1/models   # vLLM
 curl -s http://127.0.0.1:8222/v1/models   # SGLang
 ```
 
-## 3. Бенчмарк и сравнение
+### Co-run подробно
 
-После того как поднят нужный движок:
+`scripts/up.sh both` под капотом выполняет:
 
 ```bash
-./scripts/bench.sh vllm
-./scripts/up.sh sglang
-./scripts/bench.sh sglang
+TP=2 docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.both.yml \
+  --profile vllm --profile sglang up -d
+```
+
+Распределение GPU задано в [`docker-compose.both.yml`](docker-compose.both.yml) через `deploy.resources.reservations.devices.device_ids`. Чтобы поменять, например, на `0,2` / `1,3` — отредактируйте этот overlay.
+
+Проверка, что контейнеры видят только свою пару карт:
+
+```bash
+docker compose exec vllm nvidia-smi -L
+docker compose exec sglang nvidia-smi -L
+```
+
+VRAM на карту: ~16.5 GiB веса + KV-кэш; при `MAX_MODEL_LEN=262144` запас по KV остаётся огромным (десятки миллионов токенов совокупно на пару).
+
+## 3. Бенчмарк и сравнение
+
+**A/B (TP=4 по очереди):**
+
+```bash
+./scripts/up.sh vllm   && ./scripts/bench.sh vllm
+./scripts/up.sh sglang && ./scripts/bench.sh sglang
+
+python3 scripts/compare.py   # → bench/report.md
+```
+
+**Co-run (TP=2 одновременно):**
+
+```bash
+./scripts/up.sh both
+./scripts/bench.sh vllm &    # параллельно
+./scripts/bench.sh sglang &
+wait
 
 python3 scripts/compare.py
-# Отчёт: bench/report.md
 ```
+
+> Внимание: цифры из `both` нельзя сравнивать с TP=4 напрямую — у каждого движка вдвое меньше GPU. Режим полезен для параллельного функционального теста и сравнений при идентичной нагрузке.
 
 Сценарии: concurrency `1, 8, 32, 128` × длины prompt/output из плана; результаты в `bench/results/<engine>/<timestamp>/`.
 

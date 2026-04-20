@@ -1,0 +1,27 @@
+# Overlay для co-run: vLLM и SGLang одновременно, по 2 GPU каждому.
+# Используется так:
+#   TP=2 docker compose -f docker-compose.yml -f docker-compose.both.yml \
+#        --profile vllm --profile sglang up -d
+# или через scripts/up.sh both
+#
+# Переопределяем только device_ids (TP=2 берётся из переменной окружения TP).
+# Разделение по умолчанию: vLLM → GPU 0,1; SGLang → GPU 2,3.
+
+services:
+  vllm:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0", "1"]
+              capabilities: [gpu]
+
+  sglang:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["2", "3"]
+              capabilities: [gpu]

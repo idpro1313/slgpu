@@ -1,6 +1,9 @@
 name: slgpu
 
-# A/B: только один из профилей vllm | sglang одновременно (оба используют все GPU).
+# A/B одиночный: docker compose --profile vllm up -d  (или sglang). TP по умолчанию = 4.
+# Co-run (оба движка параллельно):
+#   TP=2 docker compose -f docker-compose.yml -f docker-compose.both.yml \
+#        --profile vllm --profile sglang up -d
 # Модели на хосте: ${MODELS_DIR:-/opt/models} → /models (read-only)
 
 services:
@@ -8,7 +11,13 @@ services:
     image: vllm/vllm-openai:latest
     profiles: ["vllm"]
     restart: unless-stopped
-    gpus: all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0", "1", "2", "3"]
+              capabilities: [gpu]
     shm_size: "32gb"
     ipc: host
     ports:
@@ -33,7 +42,7 @@ services:
       - --port
       - "8111"
       - --tensor-parallel-size
-      - "4"
+      - "${TP:-4}"
       - --gpu-memory-utilization
       - "${GPU_MEM_UTIL:-0.92}"
       - --max-model-len
@@ -52,7 +61,13 @@ services:
     image: lmsysorg/sglang:latest
     profiles: ["sglang"]
     restart: unless-stopped
-    gpus: all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0", "1", "2", "3"]
+              capabilities: [gpu]
     shm_size: "32gb"
     ipc: host
     ports:
@@ -75,7 +90,7 @@ services:
       - --served-model-name
       - ${MODEL_ID}
       - --tp
-      - "4"
+      - "${TP:-4}"
       - --host
       - 0.0.0.0
       - --port
