@@ -37,7 +37,7 @@ MODEL=qwen3-next-80b-thinking ./scripts/up.sh vllm
 | Qwen3 / Qwen3-Next / 3.6   | `qwen3`            | `hermes`           |
 | Qwen3-*-Thinking           | `qwen3-thinking`   | `hermes`           |
 | DeepSeek R1                | `deepseek_r1`      | `pythonic`         |
-| openai/gpt-oss-*           | `openai_gptoss`    | `hermes` (harmony) |
+| openai/gpt-oss-*           | `openai_gptoss`    | `openai` (Harmony) |
 | zai-org/GLM-4.5 / 4.6 / 5.x| `glm45`            | `glm45`            |
 | MiniMaxAI/MiniMax-M1 / M2  | `minimax_m2`       | `minimax_m2`       |
 | moonshotai/Kimi-K2 / K2.5  | `kimi_k2`          | `kimi_k2`          |

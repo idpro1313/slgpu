@@ -327,6 +327,8 @@ sudo systemctl edit slgpu.service
 | **OOM при старте** | Уменьшить `MAX_MODEL_LEN`, снизить `GPU_MEM_UTIL` / `SGLANG_MEM_FRACTION_STATIC`, увеличить `TP`, взять квантованный вариант модели |
 | **Grafana недоступна снаружи** | Проверить `GRAFANA_BIND`, firewall, `GF_SERVER_ROOT_URL` |
 | **Unknown reasoning / tool parser** | Обновить образ vLLM; см. команду проверки списка парсеров в `configs/models/README.md` |
+| **404: model `gpt-oss-120b` does not exist** | В запросе укажите тот же `id`, что в `/v1/models` — для пресета `gpt-oss-120b` это **`openai/gpt-oss-120b`**, не короткий алиас |
+| **`Hermes2ProToolParser... unexpected keyword argument 'token_ids'`** (gpt-oss) | В пресете задайте **`TOOL_CALL_PARSER=openai`**, не `hermes`; пересоздайте контейнер (`docker compose up -d --force-recreate vllm`) |
 | **Оба движка на одни GPU** | Для co-run обязательно `./scripts/up.sh both` (overlay), не два отдельных `up` без overlay |
 
 ---
