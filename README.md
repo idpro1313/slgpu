@@ -175,7 +175,7 @@ MODEL=gpt-oss-120b ./scripts/up.sh sglang
 | `KV_CACHE_DTYPE` | пресет / `.env` | Тип KV (важно для Qwen3 Next / Qwen3.6) |
 | `REASONING_PARSER` | пресет / `.env` | `--reasoning-parser` (vLLM и SGLang) |
 | `TOOL_CALL_PARSER` | пресет / `.env` | `--tool-call-parser` (**только vLLM**) |
-| `GRAFANA_*`, `PROMETHEUS_BIND`, `DCGM_BIND`, `NODE_EXPORTER_BIND`, `GF_SERVER_ROOT_URL` | `.env` | Мониторинг и сеть |
+| `GRAFANA_*`, `PROMETHEUS_BIND`, `PROMETHEUS_RETENTION_TIME`, `PROMETHEUS_RETENTION_SIZE`, `DCGM_BIND`, `NODE_EXPORTER_BIND`, `GF_SERVER_ROOT_URL` | `.env` | Мониторинг и сеть |
 
 В режиме `both` скрипт задаёт **`TP=2`** (переменная окружения при вызове compose), если не переопределено `TP_BOTH`.
 

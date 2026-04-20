@@ -139,11 +139,15 @@ services:
     ports:
       - "${PROMETHEUS_BIND:-127.0.0.1}:9090:9090"
     volumes:
+      - prometheus-data:/prometheus
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./monitoring/prometheus-alerts.yml:/etc/prometheus/prometheus-alerts.yml:ro
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
+      # Ограничение роста TSDB: время и при необходимости размер (см. .env.example).
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION_TIME:-15d}
+      - --storage.tsdb.retention.size=${PROMETHEUS_RETENTION_SIZE:-0}
       - --web.enable-lifecycle
 
   grafana:
@@ -164,3 +168,4 @@ services:
 
 volumes:
   grafana-data:
+  prometheus-data:

@@ -25,6 +25,18 @@ curl -X POST http://127.0.0.1:9090/-/reload
 
 (в compose включён `--web.enable-lifecycle`).
 
+## Диск заполнился: `no space left on device` / ошибки WAL Prometheus
+
+Сообщения вида `write /prometheus/wal/...: no space left on device` значат, что **на хосте или в разделе Docker закончилось свободное место**. Prometheus не может писать WAL и TSDB — скрейпы и правила падают.
+
+**Что сделать на сервере:**
+
+1. Посмотреть место: `df -h`, `docker system df` (образы, build cache, тома).
+2. Освободить диск: удалить неиспользуемые образы/кэш (`docker system prune` — осторожно), почистить логи, перенести модели/данные на другой раздел.
+3. Ограничить рост TSDB в `.env`: уменьшить **`PROMETHEUS_RETENTION_TIME`** (например `7d`) и/или задать **`PROMETHEUS_RETENTION_SIZE`** (например `20GB`). Перезапустить контейнер Prometheus: `docker compose up -d prometheus`.
+
+Данные Prometheus хранятся в именованном томе **`prometheus-data`** (путь на хосте: `docker volume inspect slgpu_prometheus-data`).
+
 ## Сообщения в логах Grafana (часто безвредны)
 
 | Сообщение | Смысл |
