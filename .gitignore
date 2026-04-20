@@ -1,0 +1,7 @@
+.env
+bench/results/*/*/
+!bench/results/.gitkeep
+__pycache__/
+*.pyc
+.DS_Store
+.env.example

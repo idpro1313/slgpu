@@ -1,0 +1,127 @@
+name: slgpu
+
+# A/B: только один из профилей vllm | sglang одновременно (оба используют все GPU).
+# Модели на хосте: ${MODELS_DIR:-/opt/models} → /models (read-only)
+
+services:
+  vllm:
+    image: vllm/vllm-openai:latest
+    profiles: ["vllm"]
+    restart: unless-stopped
+    gpus: all
+    shm_size: "32gb"
+    ipc: host
+    ports:
+      - "8111:8111"
+    env_file:
+      - .env
+      - configs/vllm/args.env
+    environment:
+      HUGGING_FACE_HUB_TOKEN: ${HF_TOKEN:-}
+      NCCL_P2P_LEVEL: NVL
+      NCCL_IB_DISABLE: "1"
+      VLLM_LOGGING_LEVEL: INFO
+    volumes:
+      - ${MODELS_DIR:-/opt/models}:/models:ro
+    command:
+      - --model
+      - /models/${MODEL_ID}
+      - --served-model-name
+      - ${MODEL_ID}
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8111"
+      - --tensor-parallel-size
+      - "4"
+      - --gpu-memory-utilization
+      - "${GPU_MEM_UTIL:-0.92}"
+      - --max-model-len
+      - "${MAX_MODEL_LEN:-32768}"
+      - --kv-cache-dtype
+      - "${KV_CACHE_DTYPE:-fp8_e5m2}"
+      - --enable-chunked-prefill
+      - --enable-prefix-caching
+      - --tool-call-parser
+      - hermes
+      - --enable-auto-tool-choice
+
+  sglang:
+    image: lmsysorg/sglang:latest
+    profiles: ["sglang"]
+    restart: unless-stopped
+    gpus: all
+    shm_size: "32gb"
+    ipc: host
+    ports:
+      - "8222:8222"
+    env_file:
+      - .env
+      - configs/sglang/args.env
+    environment:
+      HF_TOKEN: ${HF_TOKEN:-}
+      NCCL_P2P_LEVEL: NVL
+    volumes:
+      - ${MODELS_DIR:-/opt/models}:/models:ro
+    entrypoint:
+      - python3
+      - -m
+      - sglang.launch_server
+    command:
+      - --model-path
+      - /models/${MODEL_ID}
+      - --served-model-name
+      - ${MODEL_ID}
+      - --tp
+      - "4"
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8222"
+      - --mem-fraction-static
+      - "${SGLANG_MEM_FRACTION_STATIC:-0.90}"
+      - --context-length
+      - "${MAX_MODEL_LEN:-32768}"
+      - --enable-torch-compile
+      - --kv-cache-dtype
+      - "${KV_CACHE_DTYPE:-fp8_e5m2}"
+
+  dcgm-exporter:
+    image: nvidia/dcgm-exporter:latest
+    restart: unless-stopped
+    gpus: all
+    cap_add:
+      - SYS_ADMIN
+    ports:
+      - "127.0.0.1:9400:9400"
+
+  prometheus:
+    image: prom/prometheus:v2.53.3
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus-alerts.yml:/etc/prometheus/prometheus-alerts.yml:ro
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+
+volumes:
+  grafana-data:

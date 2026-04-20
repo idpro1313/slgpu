@@ -1,0 +1,20 @@
+# Базовые правила (пороги подстройте под SLO). Требуют работающего DCGM exporter и vLLM метрик.
+
+groups:
+  - name: gpu
+    rules:
+      - alert: GpuHighTemperature
+        expr: DCGM_FI_DEV_GPU_TEMP > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "GPU температура > 85°C"
+
+      - alert: GpuHighMemory
+        expr: DCGM_FI_DEV_FB_USED / (DCGM_FI_DEV_FB_USED + DCGM_FI_DEV_FB_FREE) > 0.95
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Использование HBM > 95%"

@@ -1,0 +1,21 @@
+[Unit]
+Description=slgpu — vLLM или SGLang (docker compose)
+Documentation=file:///opt/slgpu/README.md
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/slgpu
+EnvironmentFile=-/opt/slgpu/.env
+# Переопределите в drop-in: Environment=SLGPU_PROFILE=sglang
+Environment=SLGPU_PROFILE=vllm
+ExecStart=/usr/bin/sh -c 'cd /opt/slgpu && exec docker compose --profile "${SLGPU_PROFILE:-vllm}" up -d'
+# Останавливаем только LLM-сервисы; Prometheus/Grafana остаются (см. README).
+ExecStop=/usr/bin/sh -c 'cd /opt/slgpu && docker compose stop vllm sglang || true'
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target
