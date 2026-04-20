@@ -47,6 +47,8 @@ services:
       - "${GPU_MEM_UTIL:-0.92}"
       - --max-model-len
       - "${MAX_MODEL_LEN:-32768}"
+      # Репозитории с custom code на HF (Kimi-K2.x и др.) — иначе падает загрузка токенизатора.
+      - --trust-remote-code
       - --kv-cache-dtype
       - "${KV_CACHE_DTYPE:-fp8_e4m3}"
       - --enable-chunked-prefill
