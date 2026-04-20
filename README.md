@@ -99,6 +99,52 @@ sudo systemctl edit slgpu.service
 
 `ExecStop` в юните останавливает только `vllm`/`sglang`, чтобы **Prometheus/Grafana** продолжали работать.
 
+## Thinking-режим Qwen3
+
+Включён по умолчанию: оба движка стартуют с `--reasoning-parser ${REASONING_PARSER:-qwen3}`. Парсер выделяет блок `<think>...</think>` в отдельное поле OpenAI-ответа (`choices[0].message.reasoning_content`), оставляя в `content` только финальный ответ.
+
+Управление per-request — стандартный для Qwen3 chat-template:
+
+```bash
+# C thinking (по умолчанию для Qwen3)
+curl -s http://<host>:8111/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "model": "Qwen/Qwen3-30B-A3B",
+        "messages": [{"role":"user","content":"Сколько будет 17*23? Покажи рассуждение."}],
+        "chat_template_kwargs": {"enable_thinking": true},
+        "max_tokens": 1024
+      }' | jq '.choices[0].message'
+
+# Без thinking (быстрее, без <think> блока)
+curl -s http://<host>:8111/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "model": "Qwen/Qwen3-30B-A3B",
+        "messages": [{"role":"user","content":"/no_think Hi!"}],
+        "chat_template_kwargs": {"enable_thinking": false},
+        "max_tokens": 256
+      }'
+```
+
+Совместимый OpenAI Python-клиент:
+
+```python
+from openai import OpenAI
+c = OpenAI(base_url="http://<host>:8111/v1", api_key="dummy")
+r = c.chat.completions.create(
+    model="Qwen/Qwen3-30B-A3B",
+    messages=[{"role":"user","content":"prove sqrt(2) is irrational"}],
+    extra_body={"chat_template_kwargs": {"enable_thinking": True}},
+)
+print("reasoning:", r.choices[0].message.reasoning_content)
+print("answer:", r.choices[0].message.content)
+```
+
+Изменить парсер (например, `qwen3-thinking` для моделей с суффиксом `-Thinking`, `deepseek_r1` для DeepSeek): задайте `REASONING_PARSER` в `.env` и пересоздайте контейнер.
+
+> Примечание: для **`Qwen3-Next-80B-A3B-Thinking`** в SGLang встречаются известные проблемы выделения reasoning ([sgl-project/sglang#16653](https://github.com/sgl-project/sglang/issues/16653)) — попробуйте `REASONING_PARSER=qwen3-thinking`. У vLLM это работает штатно.
+
 ## Устранение неполадок
 
 **vLLM + Qwen3 Next (`qwen3_next`):** `assert self.kv_cache_dtype in {"fp8", "fp8_e4m3"}` / Dynamo при `fp8_e5m2`. В `.env` задайте `KV_CACHE_DTYPE=fp8_e4m3` (или `fp8`), перезапустите контейнер. Дефолт в `docker-compose` и `.env.example` уже `fp8_e4m3`.

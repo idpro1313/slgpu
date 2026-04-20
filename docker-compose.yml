@@ -45,6 +45,8 @@ services:
       - --tool-call-parser
       - hermes
       - --enable-auto-tool-choice
+      - --reasoning-parser
+      - "${REASONING_PARSER:-qwen3}"
 
   sglang:
     image: lmsysorg/sglang:latest
@@ -85,6 +87,8 @@ services:
       - --enable-torch-compile
       - --kv-cache-dtype
       - "${KV_CACHE_DTYPE:-fp8_e4m3}"
+      - --reasoning-parser
+      - "${REASONING_PARSER:-qwen3}"
 
   dcgm-exporter:
     image: nvidia/dcgm-exporter:latest
