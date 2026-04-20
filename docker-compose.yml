@@ -39,7 +39,7 @@ services:
       - --max-model-len
       - "${MAX_MODEL_LEN:-32768}"
       - --kv-cache-dtype
-      - "${KV_CACHE_DTYPE:-fp8_e5m2}"
+      - "${KV_CACHE_DTYPE:-fp8_e4m3}"
       - --enable-chunked-prefill
       - --enable-prefix-caching
       - --tool-call-parser
@@ -84,7 +84,7 @@ services:
       - "${MAX_MODEL_LEN:-32768}"
       - --enable-torch-compile
       - --kv-cache-dtype
-      - "${KV_CACHE_DTYPE:-fp8_e5m2}"
+      - "${KV_CACHE_DTYPE:-fp8_e4m3}"
 
   dcgm-exporter:
     image: nvidia/dcgm-exporter:latest

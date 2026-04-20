@@ -98,6 +98,10 @@ sudo systemctl edit slgpu.service
 
 `ExecStop` в юните останавливает только `vllm`/`sglang`, чтобы **Prometheus/Grafana** продолжали работать.
 
+## Устранение неполадок
+
+**vLLM + Qwen3 Next (`qwen3_next`):** `assert self.kv_cache_dtype in {"fp8", "fp8_e4m3"}` / Dynamo при `fp8_e5m2`. В `.env` задайте `KV_CACHE_DTYPE=fp8_e4m3` (или `fp8`), перезапустите контейнер. Дефолт в `docker-compose` и `.env.example` уже `fp8_e4m3`.
+
 ## Структура
 
 ```
