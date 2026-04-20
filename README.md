@@ -13,6 +13,17 @@
 
 Выполняется на **Linux-сервере** с NVIDIA (целевая конфигурация: 4×H200, Ubuntu 22.04/24.04).
 
+Автоматизация (Ubuntu/Debian, от **root** или через **sudo**):
+
+```bash
+chmod +x scripts/prepare-host.sh
+sudo ./scripts/prepare-host.sh        # шаги 1–6, где возможно
+sudo ./scripts/prepare-host.sh 1      # только п.1: проверка драйвера NVIDIA
+sudo STEPS=2,4 ./scripts/prepare-host.sh   # выборочно (через запятую)
+```
+
+Скрипт: [scripts/prepare-host.sh](scripts/prepare-host.sh). Установку самого драйвера (п.1) скрипт **не выполняет** — только проверка версии и подсказки; остальное (Docker, toolkit, каталог, sysctl, limits) ставит/настраивает по возможности.
+
 1. **Драйвер NVIDIA** ≥ 560 (Hopper/H200 + FP8). Проверка: `nvidia-smi`.
 2. **Docker Engine** + **Compose v2** + [**NVIDIA Container Toolkit**](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).
    - В `/etc/docker/daemon.json` при необходимости: `"default-runtime": "nvidia"`, `"exec-opts": ["native.cgroupdriver=systemd"]`, перезапуск Docker.
@@ -25,6 +36,7 @@
 
 ```bash
 chmod +x scripts/*.sh
+# при необходимости: sudo ./scripts/prepare-host.sh
 ```
 
 ## 2. Быстрый старт
