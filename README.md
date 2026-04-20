@@ -102,7 +102,7 @@ sudo systemctl edit slgpu.service
 
 **vLLM + Qwen3 Next (`qwen3_next`):** `assert self.kv_cache_dtype in {"fp8", "fp8_e4m3"}` / Dynamo при `fp8_e5m2`. В `.env` задайте `KV_CACHE_DTYPE=fp8_e4m3` (или `fp8`), перезапустите контейнер. Дефолт в `docker-compose` и `.env.example` уже `fp8_e4m3`.
 
-**`ContextOverflowError: maximum context length is N`** — сумма `prompt + max_tokens` превышает серверный `--max-model-len`. Поднимите `MAX_MODEL_LEN` в `.env` (по умолчанию `65536`; Qwen3 Next поддерживает до `262144`) и пересоздайте контейнер: `docker compose up -d --force-recreate vllm` (или `sglang`). В клиенте — уменьшите `max_tokens`. Бенч `scripts/bench.sh` уважает `MAX_MODEL_LEN` из `.env` и сам ужимает `max_tokens` под окно.
+**`ContextOverflowError: maximum context length is N`** — сумма `prompt + max_tokens` превышает серверный `--max-model-len`. Поднимите `MAX_MODEL_LEN` в `.env` (по умолчанию `262144` — максимум для Qwen3 Next) и пересоздайте контейнер: `docker compose up -d --force-recreate vllm` (или `sglang`). При OOM уменьшайте окно или `GPU_MEM_UTIL`. В клиенте — уменьшите `max_tokens`. Бенч `scripts/bench.sh` уважает `MAX_MODEL_LEN` из `.env` и сам ужимает `max_tokens` под окно.
 
 ## Структура
 
