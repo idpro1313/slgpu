@@ -227,9 +227,9 @@ def main() -> None:
         p = _build_prompt(512)
         _stream_chat(base, model, p, 16)
 
-    scenarios: List[Tuple[str, int, int, int]] = []
+    raw_scenarios: List[Tuple[str, int, int, int]] = []
     for conc in (1, 8, 32, 128):
-        scenarios.extend(
+        raw_scenarios.extend(
             [
                 (f"p512_o256_c{conc}", conc, 512, 256),
                 (f"p2048_o512_c{conc}", conc, 2048, 512),
@@ -238,9 +238,31 @@ def main() -> None:
             ]
         )
 
+    # Уважаем серверный MAX_MODEL_LEN: prompt + max_tokens + safety <= MAX_MODEL_LEN
+    safety = 64
+    max_model_len_env = os.environ.get("MAX_MODEL_LEN", "").strip()
+    try:
+        max_model_len = int(max_model_len_env) if max_model_len_env else 0
+    except ValueError:
+        max_model_len = 0
+
+    scenarios: List[Tuple[str, int, int, int]] = []
+    for name, conc, ptoks, mtoks in raw_scenarios:
+        if max_model_len and (ptoks + mtoks + safety) > max_model_len:
+            new_mtoks = max(64, max_model_len - ptoks - safety)
+            print(
+                f"[skip-resize] {name}: prompt({ptoks})+out({mtoks})+safety({safety}) > MAX_MODEL_LEN({max_model_len}); out → {new_mtoks}",
+                flush=True,
+            )
+            mtoks = new_mtoks
+            if (ptoks + safety) >= max_model_len:
+                print(f"[skip] {name}: prompt сам превышает окно — пропуск", flush=True)
+                continue
+        scenarios.append((name, conc, ptoks, mtoks))
+
     results: List[Dict[str, Any]] = []
     for name, conc, ptoks, mtoks in scenarios:
-        print(f"=== {name} ===", flush=True)
+        print(f"=== {name} (out={mtoks}) ===", flush=True)
         sr = _run_scenario(base, model, name, conc, ptoks, mtoks, rounds=args.rounds)
         results.append(asdict(sr))
         with open(os.path.join(args.output_dir, f"{name}.json"), "w", encoding="utf-8") as f:

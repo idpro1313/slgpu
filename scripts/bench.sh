@@ -6,6 +6,14 @@ cd "$ROOT"
 
 ENGINE="${1:?Использование: $0 vllm|sglang}"
 
+# Если есть .env — экспортируем, чтобы python-бенч видел MAX_MODEL_LEN и т.п.
+if [[ -f "${ROOT}/.env" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "${ROOT}/.env"
+  set +a
+fi
+
 case "${ENGINE}" in
   vllm) BASE="http://127.0.0.1:8111/v1" ;;
   sglang) BASE="http://127.0.0.1:8222/v1" ;;
