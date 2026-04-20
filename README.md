@@ -328,6 +328,7 @@ sudo systemctl edit slgpu.service
 | **vLLM + Qwen3 Next / Qwen3.6:** `kv_cache_dtype` / assert на `fp8_e5m2` | В пресете или `.env`: `KV_CACHE_DTYPE=fp8_e4m3` (или `fp8`), пересоздать контейнер |
 | **`ContextOverflowError`** | Увеличить `MAX_MODEL_LEN` или уменьшить `max_tokens` в клиенте; бенч сам поджимает под окно |
 | **OOM при старте** | Уменьшить `MAX_MODEL_LEN`, снизить `GPU_MEM_UTIL` / `SGLANG_MEM_FRACTION_STATIC`, увеличить `TP`, взять квантованный вариант модели |
+| **vLLM:** `WorkerProc initialization failed` / `Engine core initialization failed` | В логе **выше** этой строки ищите первую причину (часто `CUDA out of memory`). Если её нет — в `configs/vllm/args.env` задайте **`VLLM_USE_V1=0`**, пересоздайте контейнер; при необходимости `VLLM_LOGGING_LEVEL=DEBUG` |
 | **Grafana недоступна снаружи** | Проверить `GRAFANA_BIND`, firewall, `GF_SERVER_ROOT_URL` |
 | **Unknown reasoning / tool parser** | Обновить образ vLLM; см. команду проверки списка парсеров в `configs/models/README.md` |
 | **404: model `gpt-oss-120b` does not exist** | В запросе укажите тот же `id`, что в `/v1/models` — для пресета `gpt-oss-120b` это **`openai/gpt-oss-120b`**, не короткий алиас |

@@ -40,7 +40,7 @@ MODEL=qwen3-next-80b-thinking ./scripts/up.sh vllm
 | openai/gpt-oss-*           | `openai_gptoss`    | `openai` (Harmony) |
 | zai-org/GLM-4.5 / 4.6 / 5.x| `glm45`            | `glm45`            |
 | MiniMaxAI/MiniMax-M1 / M2  | `minimax_m2`       | `minimax_m2`       |
-| moonshotai/Kimi-K2 / K2.5  | `kimi_k2`          | `kimi_k2`          |
+| moonshotai/Kimi-K2 / K2.5 / K2.6 | `kimi_k2`          | `kimi_k2`          |
 | Llama 3.x                  | (пусто)            | `llama3_json`      |
 
 Имена `*_PARSER` зависят от версии vLLM. Если при старте ловите `Unknown reasoning parser`, обновите образ (`vllm/vllm-openai:latest`) или проверьте актуальные имена: `docker compose exec vllm python -c "from vllm.reasoning import ReasoningParserManager; print(list(ReasoningParserManager.reasoning_parsers))"`.
