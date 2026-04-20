@@ -75,8 +75,9 @@ python3 scripts/compare.py
 
 ## 4. Мониторинг
 
-- **Prometheus**: `http://127.0.0.1:9090` (если проброен на localhost).
-- **Grafana**: `http://127.0.0.1:3000` (логин/пароль из `.env`: `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD`).
+- **Prometheus**: `http://127.0.0.1:9090` (по умолчанию приватный — `PROMETHEUS_BIND=127.0.0.1`).
+- **Grafana**: `http://<host>:3000` (по умолчанию доступна снаружи — `GRAFANA_BIND=0.0.0.0`). Логин/пароль: `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD` из `.env`. **Перед публичным доступом обязательно смените пароль и при необходимости задайте `GF_SERVER_ROOT_URL`.**
+- Если стенд доступен из интернета — закройте порт **3000** firewall’ом и пускайте через reverse-proxy с TLS, либо оставьте `GRAFANA_BIND=127.0.0.1` и ходите по SSH-туннелю: `ssh -L 3000:127.0.0.1:3000 user@host`.
 - Метрики vLLM / SGLang: `/metrics` на том же порту, что и API.
 - **DCGM exporter**: телеметрия GPU.
 

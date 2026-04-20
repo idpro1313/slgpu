@@ -93,13 +93,13 @@ services:
     cap_add:
       - SYS_ADMIN
     ports:
-      - "127.0.0.1:9400:9400"
+      - "${DCGM_BIND:-127.0.0.1}:9400:9400"
 
   prometheus:
     image: prom/prometheus:v2.53.3
     restart: unless-stopped
     ports:
-      - "127.0.0.1:9090:9090"
+      - "${PROMETHEUS_BIND:-127.0.0.1}:9090:9090"
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./monitoring/prometheus-alerts.yml:/etc/prometheus/prometheus-alerts.yml:ro
@@ -114,11 +114,12 @@ services:
     depends_on:
       - prometheus
     ports:
-      - "127.0.0.1:3000:3000"
+      - "${GRAFANA_BIND:-0.0.0.0}:${GRAFANA_PORT:-3000}:3000"
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
       GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: ${GF_SERVER_ROOT_URL:-}
     volumes:
       - grafana-data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
