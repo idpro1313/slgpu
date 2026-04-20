@@ -45,6 +45,8 @@ chmod +x scripts/*.sh
 cp .env.example .env
 # Отредактируйте .env: HF_TOKEN, MODEL_ID, MODEL_REVISION, MAX_MODEL_LEN и т.д.
 
+# Актуальный Hugging Face CLI (команда hf):
+#   pip install -U "huggingface_hub[cli]"
 ./scripts/download-model.sh
 
 # Только инференс + мониторинг (профиль vllm или sglang)
