@@ -45,7 +45,7 @@ docker compose stop vllm sglang 2>/dev/null || true
 docker compose rm -f vllm sglang 2>/dev/null || true
 
 echo "Поднимаю мониторинг…"
-docker compose up -d dcgm-exporter prometheus grafana
+docker compose up -d dcgm-exporter node-exporter prometheus grafana
 
 case "${MODE}" in
   vllm)

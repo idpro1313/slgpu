@@ -64,9 +64,9 @@
          │   Grafana     │  :3000 (bind настраивается)
          └───────────────┘
                  ▲
-         ┌───────┴───────┐
-         │ dcgm-exporter │  :9400 (GPU metrics)
-         └───────────────┘
+         ┌───────┴───────┬───────────────────┐
+         │ dcgm-exporter │  node-exporter    │  :9400 / :9100
+         └───────────────┴───────────────────┘
 ```
 
 - **Compose-проект** `slgpu`: сервисы описаны в `docker-compose.yml`; для co-run подключается второй файл `docker-compose.both.yml`.
@@ -84,6 +84,7 @@
 | **Prometheus** | `prom/prometheus:v2.53.3` | **9090** (`PROMETHEUS_BIND`) | Сбор метрик |
 | **Grafana** | `grafana/grafana:11.4.0` | **3000** (`GRAFANA_BIND`/`GRAFANA_PORT`) | Дашборды |
 | **dcgm-exporter** | `nvidia/dcgm-exporter:latest` | **9400** (`DCGM_BIND`) | Метрики GPU |
+| **node-exporter** | `prom/node-exporter:v1.8.2` | **9100** (`NODE_EXPORTER_BIND`) | Метрики хоста (Linux) для дашборда *Node Exporter Full* |
 
 Базовые URL API: `http://<host>:8111/v1`, `http://<host>:8222/v1`.
 
@@ -174,7 +175,7 @@ MODEL=gpt-oss-120b ./scripts/up.sh sglang
 | `KV_CACHE_DTYPE` | пресет / `.env` | Тип KV (важно для Qwen3 Next / Qwen3.6) |
 | `REASONING_PARSER` | пресет / `.env` | `--reasoning-parser` (vLLM и SGLang) |
 | `TOOL_CALL_PARSER` | пресет / `.env` | `--tool-call-parser` (**только vLLM**) |
-| `GRAFANA_*`, `PROMETHEUS_BIND`, `DCGM_BIND`, `GF_SERVER_ROOT_URL` | `.env` | Мониторинг и сеть |
+| `GRAFANA_*`, `PROMETHEUS_BIND`, `DCGM_BIND`, `NODE_EXPORTER_BIND`, `GF_SERVER_ROOT_URL` | `.env` | Мониторинг и сеть |
 
 В режиме `both` скрипт задаёт **`TP=2`** (переменная окружения при вызове compose), если не переопределено `TP_BOTH`.
 
@@ -272,7 +273,7 @@ python3 scripts/compare.py
 
 ## 11. Мониторинг и безопасность
 
-- **Prometheus** скрейпит `vllm:8111/metrics`, `sglang:8222/metrics`, `dcgm-exporter:9400` (см. [`monitoring/prometheus.yml`](monitoring/prometheus.yml)).
+- **Prometheus** скрейпит `vllm:8111/metrics`, `sglang:8222/metrics`, `dcgm-exporter:9400`, **`node-exporter:9100`** (см. [`monitoring/prometheus.yml`](monitoring/prometheus.yml)). Дашборд **Node Exporter Full** в Grafana — импорт ID [1860](https://grafana.com/grafana/dashboards/1860), см. [`monitoring/README.md`](monitoring/README.md).
 - **Grafana**: провижининг датасорса и дашборда в [`monitoring/grafana/provisioning/`](monitoring/grafana/provisioning/).
 - Подробности и типичные сообщения в логах: [`monitoring/README.md`](monitoring/README.md).
 
@@ -383,4 +384,4 @@ slgpu/
 
 ## 17. Лицензии образов
 
-Используются публичные образы **`vllm/vllm-openai`**, **`lmsysorg/sglang`**, **`prom/prometheus`**, **`grafana/grafana`**, **`nvidia/dcgm-exporter`**. Для продакшена ознакомьтесь с лицензиями и политиками поставщиков; веса моделей на Hugging Face имеют отдельные лицензии репозиториев.
+Используются публичные образы **`vllm/vllm-openai`**, **`lmsysorg/sglang`**, **`prom/prometheus`**, **`prom/node-exporter`**, **`grafana/grafana`**, **`nvidia/dcgm-exporter`**. Для продакшена ознакомьтесь с лицензиями и политиками поставщиков; веса моделей на Hugging Face имеют отдельные лицензии репозиториев.

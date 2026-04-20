@@ -116,6 +116,23 @@ services:
     ports:
       - "${DCGM_BIND:-127.0.0.1}:9400:9400"
 
+  # Метрики хоста (CPU, RAM, disk, net) для дашборда Grafana «Node Exporter Full» (ID 1860).
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    restart: unless-stopped
+    pid: host
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/host
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host:ro,rslave
+    ports:
+      - "${NODE_EXPORTER_BIND:-127.0.0.1}:9100:9100"
+
   prometheus:
     image: prom/prometheus:v2.53.3
     restart: unless-stopped
