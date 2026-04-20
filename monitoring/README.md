@@ -19,3 +19,12 @@ curl -X POST http://127.0.0.1:9090/-/reload
 ```
 
 (в compose включён `--web.enable-lifecycle`).
+
+## Сообщения в логах Grafana (часто безвредны)
+
+| Сообщение | Смысл |
+|-----------|--------|
+| `migrations completed` / `Created default admin` | Первый запуск: встроенная SQLite создала БД и пользователя `admin` — норма. |
+| `plugin xychart is already registered` | Известная коллизия встроенного и подгружаемого плагина в части сборок Grafana; дашборды обычно работают. |
+| `Failed to read plugin provisioning ... plugins` / `alerting` | Раньше не было пустых каталогов в `provisioning/` — в репозитории добавлены `plugins/` и `alerting/`, после `git pull` и пересоздания контейнера строки пропадают. |
+| `Database locked, sleeping then retrying` | SQLite под нагрузкой; Grafana ретраит. Если повторяется часто — для продакшена лучше вынести БД Grafana в PostgreSQL. |
