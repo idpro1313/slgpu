@@ -30,10 +30,12 @@ services:
       NCCL_P2P_LEVEL: NVL
       NCCL_IB_DISABLE: "1"
       VLLM_LOGGING_LEVEL: INFO
+      # Пресет может задать 0 для тяжёлых MoE (см. configs/models/kimi-k2.6.env); иначе как в configs/vllm/args.env.
+      VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS: ${VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS:-1}
     volumes:
       - ${MODELS_DIR:-/opt/models}:/models:ro
     command:
-      - --model
+      - serve
       - /models/${MODEL_ID}
       - --served-model-name
       - ${MODEL_ID}
