@@ -94,6 +94,8 @@ services:
     command:
       - --model-path
       - /models/${MODEL_ID}
+      # Репозитории с custom code на HF (Kimi-K2.x и др.) — иначе падает AutoProcessor.from_pretrained.
+      - --trust-remote-code
       - --served-model-name
       - ${MODEL_ID}
       - --tp
