@@ -52,6 +52,9 @@ services:
       - "${MAX_MODEL_LEN:-32768}"
       # Репозитории с custom code на HF (Kimi-K2.x и др.) — иначе падает загрузка токенизатора.
       - --trust-remote-code
+      # Fallback на NCCL вместо CUDA custom all-reduce (иначе на части железа / MoE — `invalid argument`
+      # в custom_all_reduce.cuh при профилировании KV/CUDA graphs, см. README troubleshooting).
+      - --disable-custom-all-reduce
       - --kv-cache-dtype
       - "${KV_CACHE_DTYPE:-fp8_e4m3}"
       - --enable-chunked-prefill
