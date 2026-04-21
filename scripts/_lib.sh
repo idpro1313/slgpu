@@ -256,3 +256,58 @@ slgpu_detect_running_engine() {
   fi
   return 1
 }
+
+# Определить текущую модель из запущенного API.
+# Вывод: MODEL_ID из /v1/models или пусто при ошибке.
+slgpu_detect_running_model() {
+  local base_url="${1:-http://127.0.0.1:8111/v1}"
+  local model_id
+  model_id="$(curl -sf "${base_url%/}/models" 2>/dev/null | python3 -c '
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    models = data.get("data", [])
+    if models: print(models[0].get("id", ""))
+except Exception: pass
+' 2>/dev/null)" || true
+  echo "${model_id}"
+}
+
+# Проверить соответствие запущенного движка и модели с параметрами бенча.
+# $1 = engine (vllm|sglang), $2 = preset slug, $3 = MODEL_ID из env.
+slgpu_validate_running_config() {
+  local engine="${1:-}"
+  local preset="${2:-}"
+  local preset_model_id="${3:-}"
+  local api_url="http://127.0.0.1:8111/v1"
+
+  local running_engine
+  running_engine="$(slgpu_detect_running_engine)" || true
+
+  if [[ -z "${running_engine}" ]]; then
+    echo "[VALIDATE] ОШИБКА: ни vllm, ни sglang не запущены. Сначала: ./slgpu up ${engine} -m ${preset}" >&2
+    return 1
+  fi
+
+  if [[ "${running_engine}" != "${engine}" ]]; then
+    echo "[VALIDATE] ОШИБКА: запущен ${running_engine}, а бенч для ${engine}. Сначала: ./slgpu down && ./slgpu up ${engine} -m ${preset}" >&2
+    return 1
+  fi
+
+  local running_model
+  running_model="$(slgpu_detect_running_model "${api_url}")" || true
+
+  if [[ -z "${running_model}" ]]; then
+    echo "[VALIDATE] WARNING: не удалось определить модель из API — продолжаем (порт 8111 недоступен?)." >&2
+    return 0
+  fi
+
+  if [[ "${running_model}" != "${preset_model_id}" ]]; then
+    echo "[VALIDATE] ОШИБКА: запущена модель '${running_model}', а пресет '${preset}' → MODEL_ID='${preset_model_id}'." >&2
+    echo "[VALIDATE] Перезапустите: ./slgpu restart -m ${preset}   (или down → up ${engine} -m ${preset})" >&2
+    return 1
+  fi
+
+  echo "[VALIDATE] OK: engine=${running_engine}, model=${running_model}"
+  return 0
+}
