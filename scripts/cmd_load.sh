@@ -2,16 +2,16 @@
 set -euo pipefail
 
 # FILE: scripts/cmd_load.sh
-# VERSION: 1.0.0
+# VERSION: 1.0.1
 # START_MODULE_CONTRACT
 #   PURPOSE: Обёртка для длительного нагрузочного теста bench_load.py.
-#   SCOPE: Загрузка env, валидация аргументов, запуск bench_load.py, вывод пути результатов.
+#   SCOPE: Загрузка env, валидация аргументов, проверка API, запуск bench_load.py.
 #   DEPENDS: M-LIB (env loading), M-LOAD (bench_load.py)
 #   LINKS: grace/knowledge-graph/knowledge-graph.xml -> M-LOAD
 # END_MODULE_CONTRACT
 #
 # START_MODULE_MAP
-#   cmd_load.sh      - обёртка запуска bench_load.py
+#   cmd_load.sh      - обёртка запуска bench_load.py с предflight-проверкой API
 # END_MODULE_MAP
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -36,8 +36,15 @@ usage() {
   --warmup <N>            Число warmup запросов перед тестом (default: 3)
   -h, --help              Эта справка
 
-Пример:
+Примеры:
+  # Стандарт: 250 пользователей, 15 мин steady, 2 мин ramp-up
+  ./slgpu load vllm -m qwen3.6-35b-a3b
+
+  # 300 пользователей, 20 мин steady
   ./slgpu load vllm -m qwen3.6-35b-a3b --users 300 --duration 1200
+
+  # Быстрый тест: 50 пользователей, 2 мин
+  ./slgpu load vllm -m qwen3.6-35b-a3b --users 50 --duration 120 --ramp-up 30 --ramp-down 30
 EOF
 }
 
@@ -79,6 +86,15 @@ fi
 slgpu_load_env "${MODEL_SLUG}"
 
 BASE="http://127.0.0.1:8111/v1"
+
+# Предflight-проверка API
+echo "[LOAD] Проверка API ${BASE}/models ..."
+if ! curl -sf "${BASE}/models" >/dev/null 2>&1; then
+  echo "[LOAD] ОШИБКА: API не отвечает на ${BASE}/models" >&2
+  echo "[LOAD] Убедитесь, что движок запущен: ./slgpu up ${ENGINE} -m ${MODEL_SLUG}" >&2
+  exit 1
+fi
+echo "[LOAD] API доступен."
 
 TS="$(date +%Y%m%d_%H%M%S)"
 OUT="${ROOT}/bench/results/${ENGINE}/${TS}"

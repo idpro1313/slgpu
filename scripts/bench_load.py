@@ -152,7 +152,9 @@ def _stream_chat(
             return -1.0, t1 - t0, 0, "no_content"
         return ttft - t0, t1 - t0, max(out_chunks, 1), None
     except Exception as e:
-        return -1.0, time.perf_counter() - t0, 0, repr(e)
+        err_str = repr(e)
+        print(f"[ERROR][_stream_chat] {err_str}", flush=True)
+        return -1.0, time.perf_counter() - t0, 0, err_str
 
 
 @dataclass
@@ -318,6 +320,9 @@ class LoadTestRunner:
         self._ok_requests_since_start = 0
         self._err_requests_since_start = 0
         self._last_report_time = 0.0
+        self._snapshot_total = 0
+        self._snapshot_ok = 0
+        self._snapshot_err = 0
 
     def _current_phase(self, elapsed: float) -> str:
         if elapsed < self.ramp_up_sec:
@@ -344,8 +349,10 @@ class LoadTestRunner:
         rng = random.Random(user.uid + 12345)
         while not self._stop_event.is_set():
             with self._lock:
-                if not user.active:
-                    break
+                active = user.active
+            if not active:
+                time.sleep(0.5)
+                continue
 
             think = rng.randint(self.think_time_ms[0], self.think_time_ms[1]) / 1000.0
             time.sleep(think)
@@ -421,9 +428,12 @@ class LoadTestRunner:
                         if r.total_s >= 0:
                             totals.append(r.total_s * 1000)
                         total_tokens += r.out_tokens
-            total_since_last = self._total_requests_since_start
-            ok_since_last = self._ok_requests_since_start
-            err_since_last = self._err_requests_since_start
+            total_since_last = self._total_requests_since_start - self._snapshot_total
+            ok_since_last = self._ok_requests_since_start - self._snapshot_ok
+            err_since_last = self._err_requests_since_start - self._snapshot_err
+            self._snapshot_total = self._total_requests_since_start
+            self._snapshot_ok = self._ok_requests_since_start
+            self._snapshot_err = self._err_requests_since_start
 
         interval = now - self._last_report_time if self._last_report_time > 0 else self.report_interval
         self._last_report_time = now
@@ -597,11 +607,14 @@ def main() -> None:
     bench_name = os.environ.get("BENCH_MODEL_NAME")
     model = _resolve_model(base, bench_name.strip() if bench_name else None)
 
-    # Warmup
+    # Warmup с проверкой
     for i in range(args.warmup_requests):
         p = _build_prompt(512)
-        _stream_chat(base, model, p, 16)
-        print(f"[warmup] {i + 1}/{args.warmup_requests}", flush=True)
+        ttft_s, total_s, out_toks, err = _stream_chat(base, model, p, 16)
+        if err:
+            print(f"[warmup] {i + 1}/{args.warmup_requests} FAILED: {err}", flush=True)
+        else:
+            print(f"[warmup] {i + 1}/{args.warmup_requests} OK (ttft={ttft_s:.3f}s, total={total_s:.3f}s)", flush=True)
 
     think_parts = args.think_time.split(",")
     think_min = int(think_parts[0].strip())
