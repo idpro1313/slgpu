@@ -117,7 +117,7 @@ TS="$(date +%Y%m%d_%H%M%S)"
 OUT="${ROOT}/bench/results/${ENGINE}/${TS}"
 mkdir -p "${OUT}"
 
-local model_label="${BENCH_MODEL_NAME:-${MODEL_ID:-<auto>}}"
+model_label="${BENCH_MODEL_NAME:-${MODEL_ID:-<auto>}}"
 if [[ -n "${BURST}" ]]; then
   echo "LOAD: engine=${ENGINE} users=${USERS} duration=${DURATION}s base=${BASE} model=${model_label}"
   echo "  ramp_up=${RAMP_UP}s steady=${DURATION}s ramp_down=${RAMP_DOWN}s burst=ON"
