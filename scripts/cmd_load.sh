@@ -34,6 +34,7 @@ usage() {
   --max-output <TOKENS>   Макс длина output (default: 256)
   --report-interval <SEC> Интервал записи метрик CSV (default: 5)
   --warmup <N>            Число warmup запросов перед тестом (default: 3)
+  --burst                 Burst-режим: максимальная нагрузка без пауз между запросами
   -h, --help              Эта справка
 
 Примеры:
@@ -73,6 +74,7 @@ while [[ $# -gt 0 ]]; do
     --max-output) MAX_OUTPUT="${2:?}"; shift 2 ;;
     --report-interval) REPORT_INTERVAL="${2:?}"; shift 2 ;;
     --warmup) WARMUP="${2:?}"; shift 2 ;;
+    --burst) BURST="--burst"; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Неизвестный аргумент: $1" >&2; usage >&2; exit 1 ;;
   esac
@@ -100,8 +102,13 @@ TS="$(date +%Y%m%d_%H%M%S)"
 OUT="${ROOT}/bench/results/${ENGINE}/${TS}"
 mkdir -p "${OUT}"
 
-echo "LOAD: engine=${ENGINE} users=${USERS} duration=${DURATION}s base=${BASE} model=${BENCH_MODEL_NAME:-${MODEL_ID}}"
-echo "  ramp_up=${RAMP_UP}s steady=${DURATION}s ramp_down=${RAMP_DOWN}s think_time=${THINK_TIME}ms"
+if [[ -n "${BURST}" ]]; then
+  echo "LOAD: engine=${ENGINE} users=${USERS} duration=${DURATION}s base=${BASE} model=${BENCH_MODEL_NAME:-${MODEL_ID}}"
+  echo "  ramp_up=${RAMP_UP}s steady=${DURATION}s ramp_down=${RAMP_DOWN}s burst=ON"
+else
+  echo "LOAD: engine=${ENGINE} users=${USERS} duration=${DURATION}s base=${BASE} model=${BENCH_MODEL_NAME:-${MODEL_ID}}"
+  echo "  ramp_up=${RAMP_UP}s steady=${DURATION}s ramp_down=${RAMP_DOWN}s think_time=${THINK_TIME}ms"
+fi
 echo "Результаты: ${OUT}"
 
 python3 "${ROOT}/scripts/bench_load.py" \
@@ -116,6 +123,7 @@ python3 "${ROOT}/scripts/bench_load.py" \
   --max-prompt-tokens "${MAX_PROMPT}" \
   --max-output-tokens "${MAX_OUTPUT}" \
   --report-interval "${REPORT_INTERVAL}" \
-  --warmup-requests "${WARMUP}"
+  --warmup-requests "${WARMUP}" \
+  ${BURST}
 
 echo "Готово. summary: ${OUT}/summary.json"

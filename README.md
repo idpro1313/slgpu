@@ -233,6 +233,9 @@ M=qwen3.6-35b-a3b
 # Быстрый тест для отладки: 50 пользователей, 2 мин steady
 ./slgpu load vllm -m qwen3.6-35b-a3b --users 50 --duration 120 --ramp-up 30 --ramp-down 30
 
+# Burst-режим: максимальная нагрузка, запросы без пауз (для 192 vCPU)
+./slgpu load vllm -m qwen3.6-35b-a3b --users 384 --burst --duration 900
+
 # Разные сценарии prompt/output
 ./slgpu load sglang -m qwen3.6-35b-a3b --max-prompt 2048 --max-output 512
 ```

@@ -601,6 +601,8 @@ def main() -> None:
                     help="Интервал записи метрик в CSV (сек)")
     ap.add_argument("--warmup-requests", type=int, default=3,
                     help="Число warmup запросов перед измерениями")
+    ap.add_argument("--burst", action="store_true",
+                    help="Burst-режим: think_time=0, каждый worker шлёт запросы без пауз (макс throughput)")
     args = ap.parse_args()
 
     base = args.base_url.rstrip("/")
@@ -619,9 +621,14 @@ def main() -> None:
         else:
             print(f"[warmup] {i + 1}/{args.warmup_requests} OK (ttft={ttft_s:.3f}s, total={total_s:.3f}s)", flush=True)
 
-    think_parts = args.think_time.split(",")
-    think_min = int(think_parts[0].strip())
-    think_max = int(think_parts[1].strip()) if len(think_parts) > 1 else think_min
+    if args.burst:
+        think_min = 0
+        think_max = 0
+        print("[LOAD] Burst-режим: think_time=0 (без пауз между запросами)", flush=True)
+    else:
+        think_parts = args.think_time.split(",")
+        think_min = int(think_parts[0].strip())
+        think_max = int(think_parts[1].strip()) if len(think_parts) > 1 else think_min
 
     runner = LoadTestRunner(
         base_url=base,
