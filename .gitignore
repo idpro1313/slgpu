@@ -5,3 +5,7 @@ bench/results/*/*/
 __pycache__/
 *.pyc
 .DS_Store
+template/*
+
+# GRACE: журнал сессий обычно не коммитится
+docs/HISTORY.md
