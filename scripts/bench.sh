@@ -34,10 +34,7 @@ fi
 
 slgpu_load_env "${MODEL_SLUG}"
 
-case "${ENGINE}" in
-  vllm) BASE="http://127.0.0.1:8111/v1" ;;
-  sglang) BASE="http://127.0.0.1:8222/v1" ;;
-esac
+BASE="http://127.0.0.1:8111/v1"
 
 TS="$(date +%Y%m%d_%H%M%S)"
 OUT="${ROOT}/bench/results/${ENGINE}/${TS}"

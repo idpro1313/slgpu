@@ -3,32 +3,47 @@
 Каждый файл `<slug>.env` задаёт параметры **конкретной модели**, переопределяя значения из корневого `.env`. Используется через флаг `-m <slug>` в скриптах:
 
 ```bash
-./scripts/download-model.sh -m qwen3-30b-a3b
-./scripts/up.sh vllm -m qwen3-30b-a3b
-./scripts/up.sh both -m qwen3-next-80b-thinking
-./scripts/bench.sh vllm -m qwen3-30b-a3b
+./scripts/download-model.sh -m qwen3.6-35b-a3b
+./scripts/up.sh vllm -m qwen3.6-35b-a3b
+./scripts/up.sh sglang -m qwen3.6-35b-a3b
+./scripts/bench.sh vllm -m qwen3.6-35b-a3b
 ```
 
 Или через переменную окружения:
 
 ```bash
-MODEL=qwen3-next-80b-thinking ./scripts/up.sh vllm
+MODEL=qwen3.6-35b-a3b ./scripts/up.sh vllm
 ```
 
-Если `-m` не указан — скрипты работают как раньше, по значениям из `.env`.
+Если `-m` не указан — скрипты берут значения из корневого `.env`.
 
-## Что кладём в пресет
+## Параметры пресета (справочник)
 
-- `MODEL_ID` — HF-репозиторий, он же путь в `/opt/models/<MODEL_ID>`.
-- `MODEL_REVISION` — commit/tag для воспроизводимости (или пусто).
-- `MAX_MODEL_LEN` — максимальное окно контекста для `--max-model-len` / `--context-length`.
-- `KV_CACHE_DTYPE` — `fp8_e4m3` для большинства Qwen3/Qwen3-Next, `fp8_e5m2` где принимают, `auto` — чтобы движок выбрал сам (например, для MXFP4-моделей типа gpt-oss).
-- `GPU_MEM_UTIL` — доля VRAM под vLLM; 0.9–0.94 типично.
-- `SGLANG_MEM_FRACTION_STATIC` — аналог для SGLang (обычно 0.88–0.92).
-- `REASONING_PARSER` — см. таблицу ниже.
-- `TOOL_CALL_PARSER` — см. таблицу ниже.
-- `TP` — tensor-parallel для режима `up.sh <engine>` (в `both` скрипт форсит TP=2).
-- `BENCH_MODEL_NAME` — имя в запросах бенча; если пусто, бенч сам подтянет из `/v1/models`.
+Ниже — для чего переменная и какие значения бывают. То же продублировано комментариями внутри каждого `*.env`.
+
+- **`MODEL_ID`** — Для чего: репозиторий Hugging Face и подкаталог весов на диске (`MODELS_DIR`). Варианты: строка `владелец/имя` с HF, должна совпадать с фактически скачанной моделью.
+
+- **`MODEL_REVISION`** — Для чего: зафиксировать версию файлов весов. Варианты: commit SHA, тег или ветка; пусто — ревизия по умолчанию на Hub.
+
+- **`MAX_MODEL_LEN`** — Для чего: верхняя граница контекста в токенах для `--max-model-len` (vLLM) и `--context-length` (SGLang). Варианты: целое ≤ заявленного для модели; выше — OOM или ошибки; сумма prompt + max_tokens в запросе не должна превышать это значение.
+
+- **`KV_CACHE_DTYPE`** — Для чего: формат KV-кэша. Варианты: `fp8_e4m3`, `fp8`, `fp8_e5m2` (осторожно с qwen3_next — см. README), `auto` для MXFP4 и др.
+
+- **`GPU_MEM_UTIL`** — Для чего: `--gpu-memory-utilization` в vLLM. Варианты: 0.0–1.0; типично 0.90–0.95; при OOM снижать; с профайлером CUDA graphs см. подсказки в логе vLLM.
+
+- **`VLLM_MAX_NUM_BATCHED_TOKENS`** — Для чего: только vLLM, `--max-num-batched-tokens` (chunked prefill). Варианты: 4096–32768+; больше — выше пропускная способность при нагрузке, выше потребление памяти.
+
+- **`SGLANG_MEM_FRACTION_STATIC`** — Для чего: только SGLang, доля VRAM под статические буферы. Варианты: обычно 0.88–0.92; при нехватке памяти под KV — уменьшать.
+
+- **`REASONING_PARSER`** — Для чего: парсер thinking/reasoning; передаётся в оба движка, но списки имён могут различаться. Варианты: см. таблицу ниже и `docker compose logs` при «Unknown reasoning parser».
+
+- **`TOOL_CALL_PARSER`** — Для чего: только vLLM, парсер tool calls. Варианты: `hermes`, `openai`, `glm45`, … по таблице и семейству модели.
+
+- **`VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS`** — Для чего: переопределить учёт CUDA Graph при профилировании памяти vLLM (через environment в compose). Варианты: `0` или `1`; для тяжёлых MoE иногда `0`.
+
+- **`TP`** — Для чего: tensor parallel (число GPU под шард). Варианты: целое, согласованное с `device_ids` в `docker-compose.yml`.
+
+- **`BENCH_MODEL_NAME`** — Для чего: поле `model` в запросах бенчмарка. Варианты: строка как в `/v1/models`; пусто — бенч берёт первую модель из списка.
 
 ## Соответствие моделей и парсеров (vLLM)
 
@@ -48,7 +63,7 @@ MODEL=qwen3-next-80b-thinking ./scripts/up.sh vllm
 ## Добавить свой
 
 ```bash
-cp configs/models/qwen3-30b-a3b.env configs/models/my-model.env
+cp configs/models/qwen3.6-35b-a3b.env configs/models/my-model.env
 $EDITOR configs/models/my-model.env
 ./scripts/up.sh vllm -m my-model
 ```

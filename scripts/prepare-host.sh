@@ -208,13 +208,12 @@ fi
 if want_step 6; then
   log "Шаг 6: firewall (вручную)"
   cat <<'EOF'
-Публично откройте только нужные порты (например 8111/8222 для API за reverse-proxy).
+Публично откройте только нужные порты (например LLM API **8111** за reverse-proxy).
 Prometheus (9090) и Grafana (3000) в compose привязаны к 127.0.0.1 — снаружи не слушают.
 
 Пример UFW (после настройки политик по умолчанию):
   ufw allow OpenSSH
-  ufw allow 8111/tcp   # при необходимости vLLM снаружи
-  ufw allow 8222/tcp   # при необходимости SGLang снаружи
+  ufw allow 8111/tcp   # при необходимости OpenAI API снаружи
   ufw enable
 
 Скрипт не включает UFW автоматически.

@@ -1,6 +1,6 @@
 # slgpu
 
-Репозиторий **стенда для сравнения LLM-инференса** на выделенном Linux-сервере с несколькими GPU: два движка (**vLLM** и **SGLang**) в Docker, общий локальный кэш моделей, OpenAI-совместимый HTTP API, нагрузочный бенчмарк, **Prometheus + Grafana + NVIDIA DCGM Exporter**, опциональный автозапуск через **systemd**.
+Репозиторий **стенда для сравнения LLM-инференса** на выделенном Linux-сервере с несколькими GPU: два движка (**vLLM** и **SGLang**) в Docker, общий локальный кэш моделей, OpenAI-совместимый HTTP API, нагрузочный бенчмарк, **Prometheus + Grafana + NVIDIA DCGM Exporter**.
 
 Целевая конфигурация при разработке: **4× NVIDIA H200**, **96 vCPU**, **~640 GB RAM**, модели на диске в **`/opt/models`**. Проект рассчитан на один хост без Kubernetes.
 
@@ -20,11 +20,10 @@
 10. [Бенчмарк и отчёт A/B](#10-бенчмарк-и-отчёт-ab)
 11. [Мониторинг и безопасность](#11-мониторинг-и-безопасность)
 12. [Reasoning / thinking и парсеры](#12-reasoning--thinking-и-парсеры)
-13. [Автозапуск (systemd)](#13-автозапуск-systemd)
-14. [Устранение неполадок](#14-устранение-неполадок)
-15. [Ограничения и версии](#15-ограничения-и-версии)
-16. [Структура репозитория](#16-структура-репозитория)
-17. [Лицензии образов](#17-лицензии-образов)
+13. [Устранение неполадок](#13-устранение-неполадок)
+14. [Ограничения и версии](#14-ограничения-и-версии)
+15. [Структура репозитория](#15-структура-репозитория)
+16. [Лицензии образов](#16-лицензии-образов)
 
 ---
 
@@ -32,7 +31,7 @@
 
 - **Сравнение vLLM и SGLang** на одной и той же модели и одинаковых сценариях нагрузки (латентность TTFT, длительность ответа, RPS).
 - **Локальные веса** на хосте (`MODELS_DIR`, по умолчанию `/opt/models`), без повторной загрузки при переключении движка.
-- **Два режима GPU**: либо весь кластер на один движок (**TP=4**), либо **два движка параллельно** по две карты (**TP=2**, overlay `docker-compose.both.yml`).
+- **Один движок за раз** на всех GPU (**TP=4** по умолчанию); vLLM и SGLang используют **один и тот же порт 8111** — активен тот сервис, чей профиль запущен.
 - **Пресеты моделей** — не править `.env` под каждую модель: параметры в `configs/models/<slug>.env`, выбор флагом `-m` или `MODEL=...`.
 - **Наблюдаемость**: метрики движков и GPU в Grafana; алерты GPU в Prometheus.
 
@@ -50,8 +49,8 @@
          │                    │
          ▼                    ▼
    ┌──────────┐         ┌──────────┐
-   │  vLLM    │         │ SGLang   │   profiles: vllm | sglang (или оба в both)
-   │ :8111    │         │ :8222    │   OpenAI API: /v1/chat/completions, /v1/models, /metrics
+   │  vLLM    │         │ SGLang   │   profiles: vllm | sglang (по очереди)
+   │ :8111    │         │ :8111    │   один номер порта (vLLM и SGLang по очереди)
    └────┬─────┘         └────┬─────┘
         │                    │
         └────────┬───────────┘
@@ -69,9 +68,9 @@
          └───────────────┴───────────────────┘
 ```
 
-- **Compose-проект** `slgpu`: сервисы описаны в `docker-compose.yml`; для co-run подключается второй файл `docker-compose.both.yml`.
-- **Профили** Docker Compose: `vllm`, `sglang` — поднимается только выбранный LLM-сервис (или оба в режиме `both`).
-- **GPU**: в базовом compose для vLLM/SGLang заданы `device_ids` 0–3; overlay `both` переопределяет на `0,1` и `2,3`.
+- **Compose-проект** `slgpu`: все сервисы в `docker-compose.yml`.
+- **Профили** Docker Compose: `vllm`, `sglang` — поднимается только выбранный LLM-сервис.
+- **GPU**: для vLLM/SGLang заданы `device_ids` 0–3.
 
 ---
 
@@ -80,43 +79,21 @@
 | Сервис | Образ (типично) | Порт на хосте | Назначение |
 |--------|------------------|---------------|------------|
 | **vLLM** | `vllm/vllm-openai:latest` | **8111** | OpenAI API, `/metrics` |
-| **SGLang** | `lmsysorg/sglang:latest` | **8222** | OpenAI API, `/metrics` |
+| **SGLang** | `lmsysorg/sglang:latest` | **8111** | OpenAI API, `/metrics` (тот же порт по очереди) |
 | **Prometheus** | `prom/prometheus:v2.53.3` | **9090** (`PROMETHEUS_BIND`) | Сбор метрик |
 | **Grafana** | `grafana/grafana:11.4.0` | **3000** (`GRAFANA_BIND`/`GRAFANA_PORT`) | Дашборды |
 | **dcgm-exporter** | `nvidia/dcgm-exporter:latest` | **9400** (`DCGM_BIND`) | Метрики GPU |
 | **node-exporter** | `prom/node-exporter:v1.8.2` | **9100** (`NODE_EXPORTER_BIND`) | Метрики хоста (Linux) для дашборда *Node Exporter Full* |
 
-Базовые URL API: `http://<host>:8111/v1`, `http://<host>:8222/v1`.
+Базовый URL API (после `./scripts/up.sh vllm` или `sglang`): `http://<host>:8111/v1`.
 
 ---
 
 ## 4. Режимы запуска инференса
 
-### 4.1. Последовательный A/B (по умолчанию)
-
 - Поднимается **один** из движков: `./scripts/up.sh vllm` или `./scripts/up.sh sglang`.
 - **TP** по умолчанию **4** (все карты), переменная `TP` в окружении/пресете.
-- Сравнение производительности: сначала бенч одного, затем переключение и бенч второго (`compare.py`).
-
-### 4.2. Параллельный co-run
-
-- `./scripts/up.sh both` — **оба** движка; внутри скрипт выставляет **`TP=2`** (или `TP_BOTH`, по умолчанию 2) и подключает **`docker-compose.both.yml`**.
-- **vLLM** видит GPU **0,1**, **SGLang** — **2,3** (правится в overlay).
-- Цифры с TP=2 **не сравнимы напрямую** с TP=4; режим удобен для одновременного ответа двух API на одинаковых запросах.
-
-Под капотом:
-
-```bash
-TP=2 docker compose -f docker-compose.yml -f docker-compose.both.yml \
-  --profile vllm --profile sglang up -d
-```
-
-Проверка видимых GPU:
-
-```bash
-docker compose exec vllm nvidia-smi -L
-docker compose exec sglang nvidia-smi -L
-```
+- Сравнение производительности (A/B): сначала бенч одного движка, затем переключение и бенч второго (`compare.py`).
 
 ---
 
@@ -175,9 +152,8 @@ MODEL=gpt-oss-120b ./scripts/up.sh sglang
 | `KV_CACHE_DTYPE` | пресет / `.env` | Тип KV (важно для Qwen3 Next / Qwen3.6) |
 | `REASONING_PARSER` | пресет / `.env` | `--reasoning-parser` (vLLM и SGLang) |
 | `TOOL_CALL_PARSER` | пресет / `.env` | `--tool-call-parser` (**только vLLM**) |
+| `LLM_API_BIND` | `.env` | Адрес bind на хосте для порта **8111** (API vLLM/SGLang) |
 | `GRAFANA_*`, `PROMETHEUS_BIND`, `PROMETHEUS_RETENTION_TIME`, `PROMETHEUS_RETENTION_SIZE`, `DCGM_BIND`, `NODE_EXPORTER_BIND`, `GF_SERVER_ROOT_URL` | `.env` | Мониторинг и сеть |
-
-В режиме `both` скрипт задаёт **`TP=2`** (переменная окружения при вызове compose), если не переопределено `TP_BOTH`.
 
 ---
 
@@ -233,9 +209,9 @@ curl -s http://127.0.0.1:8111/v1/models
 | Скрипт | Назначение |
 |--------|------------|
 | [`scripts/_lib.sh`](scripts/_lib.sh) | Общая загрузка `.env` + опционального пресета (`slgpu_load_env`) |
-| [`scripts/up.sh`](scripts/up.sh) | `vllm` \| `sglang` \| `both` + `-m <preset>`; поднимает мониторинг и LLM; ждёт `/v1/models` |
+| [`scripts/up.sh`](scripts/up.sh) | `vllm` \| `sglang` + `-m <preset>`; поднимает мониторинг и LLM; ждёт `/v1/models` на **8111** |
 | [`scripts/download-model.sh`](scripts/download-model.sh) | Скачивание модели в `${MODELS_DIR}/${MODEL_ID}` через `hf download` |
-| [`scripts/bench.sh`](scripts/bench.sh) | Запуск [`scripts/bench_openai.py`](scripts/bench_openai.py) против `8111` или `8222` |
+| [`scripts/bench.sh`](scripts/bench.sh) | Запуск [`scripts/bench_openai.py`](scripts/bench_openai.py) на **8111** |
 | [`scripts/bench_openai.py`](scripts/bench_openai.py) | Streaming-нагрузка, сценарии concurrency × длины; учёт `MAX_MODEL_LEN` |
 | [`scripts/compare.py`](scripts/compare.py) | Сводка двух последних `summary.json` → `bench/report.md` |
 | [`scripts/healthcheck.sh`](scripts/healthcheck.sh) | `curl` `/v1/models` для vllm/sglang |
@@ -256,24 +232,13 @@ M=qwen3-30b-a3b
 python3 scripts/compare.py    # → bench/report.md
 ```
 
-**Параллельно в co-run:**
-
-```bash
-M=qwen3-30b-a3b
-./scripts/up.sh both -m $M
-./scripts/bench.sh vllm -m $M &
-./scripts/bench.sh sglang -m $M &
-wait
-python3 scripts/compare.py
-```
-
 Результаты: `bench/results/<engine>/<timestamp>/`, внутри `summary.json` и JSON по сценариям. Сценарии: concurrency `1, 8, 32, 128` и комбинации длин prompt/output; при необходимости `max_tokens` ужимается под `MAX_MODEL_LEN`.
 
 ---
 
 ## 11. Мониторинг и безопасность
 
-- **Prometheus** скрейпит `vllm:8111/metrics`, `sglang:8222/metrics`, `dcgm-exporter:9400`, **`node-exporter:9100`** (см. [`monitoring/prometheus.yml`](monitoring/prometheus.yml)). Дашборд **Node Exporter Full** в Grafana — импорт ID [1860](https://grafana.com/grafana/dashboards/1860), см. [`monitoring/README.md`](monitoring/README.md).
+- **Prometheus** скрейпит `vllm:8111/metrics`, `sglang:8111/metrics`, `dcgm-exporter:9400`, **`node-exporter:9100`** (см. [`monitoring/prometheus.yml`](monitoring/prometheus.yml)). Дашборд **Node Exporter Full** в Grafana — импорт ID [1860](https://grafana.com/grafana/dashboards/1860), см. [`monitoring/README.md`](monitoring/README.md).
 - **Grafana**: провижининг датасорса и дашборда в [`monitoring/grafana/provisioning/`](monitoring/grafana/provisioning/).
 - Подробности и типичные сообщения в логах: [`monitoring/README.md`](monitoring/README.md).
 
@@ -306,22 +271,7 @@ curl -s http://<host>:8111/v1/chat/completions \
 
 ---
 
-## 13. Автозапуск (systemd)
-
-Юнит: [`systemd/slgpu.service`](systemd/slgpu.service). Вызывает **`./scripts/up.sh`**, а не «голый» compose.
-
-```bash
-sudo systemctl edit slgpu.service
-# [Service]
-# Environment=SLGPU_MODE=both    # vllm | sglang | both
-# Environment=MODEL=qwen3-30b-a3b
-```
-
-`ExecStop` останавливает только **`vllm`** и **`sglang`**, мониторинг остаётся работать.
-
----
-
-## 14. Устранение неполадок
+## 13. Устранение неполадок
 
 | Симптом | Что сделать |
 |---------|-------------|
@@ -334,25 +284,22 @@ sudo systemctl edit slgpu.service
 | **Unknown reasoning / tool parser** | Обновить образ vLLM; см. команду проверки списка парсеров в `configs/models/README.md` |
 | **404: model `gpt-oss-120b` does not exist** | В запросе укажите тот же `id`, что в `/v1/models` — для пресета `gpt-oss-120b` это **`openai/gpt-oss-120b`**, не короткий алиас |
 | **`Hermes2ProToolParser... unexpected keyword argument 'token_ids'`** (gpt-oss) | В пресете задайте **`TOOL_CALL_PARSER=openai`**, не `hermes`; пересоздайте контейнер (`docker compose up -d --force-recreate vllm`) |
-| **Оба движка на одни GPU** | Для co-run обязательно `./scripts/up.sh both` (overlay), не два отдельных `up` без overlay |
 
 ---
 
-## 15. Ограничения и версии
+## 14. Ограничения и версии
 
 - Образы **`latest`** меняются; для воспроизводимости зафиксируйте digest или тег образа в fork.
 - **SGLang** может не поддерживать все те же `--reasoning-parser`, что vLLM; при ошибке старта уберите парсер в пресете для SGLang или используйте только vLLM для экзотических моделей.
 - Крупные MoE (например **Kimi-K2.6** в vLLM или SGLang при TP=4) могут **не помещаться** в 4×~140 GiB даже при малом контексте — см. `configs/models/kimi-k2.6.env` (TP=8 или другой чекпоинт).
-- Сравнение **TP=4** и **TP=2 (both)** по цифрам бенча — разные условия; для публикации метрик используйте один режим.
 
 ---
 
-## 16. Структура репозитория
+## 15. Структура репозитория
 
 ```
 slgpu/
 ├── docker-compose.yml          # сервисы vLLM, SGLang, мониторинг; TP и парсеры из env
-├── docker-compose.both.yml     # overlay: split GPU, co-run
 ├── .env.example
 ├── README.md                   # этот файл
 ├── HISTORY.md                  # хронология проекта и коммитов
@@ -377,13 +324,12 @@ slgpu/
 ├── bench/
 │   ├── results/                # артефакты бенчей (не коммитить большие прогоны)
 │   └── report.md               # генерируется compare.py
-└── systemd/slgpu.service
 ```
 
 Файлы в `configs/models/` (пресеты) дополняются по мере необходимости; актуальный список: `ls configs/models/*.env`.
 
 ---
 
-## 17. Лицензии образов
+## 16. Лицензии образов
 
 Используются публичные образы **`vllm/vllm-openai`**, **`lmsysorg/sglang`**, **`prom/prometheus`**, **`prom/node-exporter`**, **`grafana/grafana`**, **`nvidia/dcgm-exporter`**. Для продакшена ознакомьтесь с лицензиями и политиками поставщиков; веса моделей на Hugging Face имеют отдельные лицензии репозиториев.

@@ -206,12 +206,50 @@ def _run_scenario(
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--base-url", required=True, help="Напр. http://127.0.0.1:8111/v1")
-    ap.add_argument("--engine", required=True, help="vllm|sglang (для summary)")
-    ap.add_argument("--output-dir", required=True)
-    ap.add_argument("--rounds", type=int, default=1, help="Сколько раз повторить матрицу (для стабильности)")
-    ap.add_argument("--warmup-requests", type=int, default=3)
+    ap = argparse.ArgumentParser(
+        description="Нагрузочный бенч против OpenAI API. Параметры ниже задают только клиент бенча; движок настраивается через .env и compose."
+    )
+    ap.add_argument(
+        "--base-url",
+        required=True,
+        help=(
+            "Для чего: корневой URL OpenAI-совместимого API (должен оканчиваться на /v1). "
+            "Варианты: например http://127.0.0.1:8111/v1 при локальном vLLM/SGLang; или URL с тем же путём за прокси."
+        ),
+    )
+    ap.add_argument(
+        "--engine",
+        required=True,
+        help=(
+            "Для чего: подпись движка в summary.json и каталогах результатов. "
+            "Варианты: строка `vllm` или `sglang` (логическое имя прогона, на сам сервер не влияет)."
+        ),
+    )
+    ap.add_argument(
+        "--output-dir",
+        required=True,
+        help=(
+            "Для чего: каталог для JSON по сценариям и summary.json. Варианты: любой существующий/создаваемый путь на диске."
+        ),
+    )
+    ap.add_argument(
+        "--rounds",
+        type=int,
+        default=1,
+        help=(
+            "Для чего: сколько раз прогнать всю матрицу сценариев подряд. "
+            "Варианты: целое ≥1; больше — стабильнее средние, дольше время бенча."
+        ),
+    )
+    ap.add_argument(
+        "--warmup-requests",
+        type=int,
+        default=3,
+        help=(
+            "Для чего: число коротких запросов перед измерениями (прогрев кэшей/GPU). "
+            "Варианты: целое ≥0; 0 — без прогрева."
+        ),
+    )
     args = ap.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
