@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+cat <<'EOF'
+slgpu — стенд vLLM vs SGLang в Docker (Linux VM).
+
+Использование:
+  ./slgpu <команда> [аргументы]
+
+Команды:
+  prepare [1–6]        Подготовка хоста (Docker, NVIDIA toolkit, каталог моделей, …)
+  pull <HF_ID|preset>    Скачать модель; HF id (org/name) создаёт configs/models/<slug>.env
+  up <vllm|sglang> -m <preset>
+  down [--all]          Остановить LLM (--all — весь compose)
+  restart -m <preset>   Перезапуск текущего running-движка с новым пресетом
+  bench <vllm|sglang> -m <preset>
+  ab -m <preset>        Полный A/B: vllm→bench→sglang→bench→compare
+  compare               Свести последние summary.json → bench/report.md
+  logs [SERVICE]        Логи сервиса (по умолчанию — активный vllm|sglang)
+  status                docker compose ps, /v1/models, nvidia-smi
+  config <vllm|sglang> -m <preset>
+  help                  Эта справка
+
+Примеры:
+  chmod +x slgpu scripts/cmd_*.sh
+  ./slgpu pull Qwen/Qwen3.6-35B-A3B --tp 8 --max-len 262144
+  ./slgpu up vllm -m qwen3.6-35b-a3b
+  ./slgpu bench vllm -m qwen3.6-35b-a3b
+  ./slgpu ab -m qwen3.6-35b-a3b
+
+Документация: README.md
+EOF

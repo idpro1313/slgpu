@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Единая точка входа slgpu (Linux VM).
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export SLGPU_ROOT="${ROOT}"
+
+cmd="${1:-help}"
+shift || true
+
+case "${cmd}" in
+  help|-h|--help)
+    exec bash "${ROOT}/scripts/cmd_help.sh" "$@"
+    ;;
+  prepare|pull|up|down|restart|bench|ab|compare|logs|status|config)
+    if [[ ! -f "${ROOT}/scripts/cmd_${cmd}.sh" ]]; then
+      echo "Внутренняя ошибка: нет ${ROOT}/scripts/cmd_${cmd}.sh" >&2
+      exit 1
+    fi
+    exec bash "${ROOT}/scripts/cmd_${cmd}.sh" "$@"
+    ;;
+  *)
+    echo "Неизвестная команда: ${cmd}" >&2
+    exec bash "${ROOT}/scripts/cmd_help.sh"
+    exit 1
+    ;;
+esac

@@ -1,194 +1,84 @@
 name: slgpu
 
-# A/B: docker compose --profile vllm up -d  (или sglang). Только один движок за раз; один порт API.
-# Порт API фиксированный 8111 (хост и контейнер). Bind: LLM_API_BIND.
-# Модели на хосте: ${MODELS_DIR:-/opt/models} → /models (read-only)
+# vLLM/SGLang: serve.sh; переменные модели передаются из shell при ./slgpu up (см. environment ниже) + .env + configs/<engine>/<engine>.env
 
 services:
   vllm:
     image: vllm/vllm-openai:latest
-    # Для чего: включение сервиса только при `docker compose --profile vllm`.
-    # Варианты: имя профиля фиксировано; второй профиль — sglang (по очереди, не одновременно).
     profiles: ["vllm"]
     restart: unless-stopped
     deploy:
       resources:
         reservations:
           devices:
-            # Для чего: какие GPU видит контейнер (индексы с `nvidia-smi -L`).
-            # Варианты: список строк `"0"`…`"7"`; число элементов должно быть кратно/согласовано с TP.
             - driver: nvidia
-              device_ids: ["0", "1", "2", "3"]
+              device_ids: ["0", "1", "2", "3", "4", "5", "6", "7"]
               capabilities: [gpu]
-    # Для чего: размер shared memory; vLLM и PyTorch используют /dev/shm для IPC.
-    # Варианты: уменьшать только при лимите хоста; типично `16gb`–`32gb` для больших моделей.
     shm_size: "32gb"
-    # Для чего: IPC namespace хоста (ускорение/совместимость NCCL и IPC).
-    # Варианты: `host` или убрать (изолированный) — для стенда обычно `host`.
     ipc: host
     ports:
-      # Для чего: проброс API vLLM на хост (внутри контейнера порт 8111).
-      # Варианты: слева LLM_API_BIND и порт 8111; справа фиксировано 8111.
       - "${LLM_API_BIND:-0.0.0.0}:8111:8111"
     env_file:
       - .env
-      - configs/vllm/args.env
+      - configs/vllm/vllm.env
     environment:
-      # Для чего: тот же токен HF, что в `.env` — загрузка весов/кода с Hub.
-      # Варианты: строка токена или пусто для только публичных репо.
-      HUGGING_FACE_HUB_TOKEN: ${HF_TOKEN:-}
-      # Для чего: уровень P2P для NCCL на NVLink/NVL.
-      # Варианты: `NVL`, `PIX`, `PHB`, `SYS` и др. — см. доку NCCL; для H200 в стенде часто `NVL`.
-      NCCL_P2P_LEVEL: NVL
-      # Для чего: выключить InfiniBand в NCCL (часто нет IB в однокузовных серверах).
-      # Варианты: `"1"` — не использовать IB; `"0"` — разрешить.
-      NCCL_IB_DISABLE: "1"
-      # Для чего: детальность логов vLLM (перекрывает значение из args.env при необходимости).
-      # Варианты: `DEBUG`, `INFO`, `WARNING`, …
-      VLLM_LOGGING_LEVEL: INFO
-      # Для чего: учёт памяти CUDA Graph в профайлере (связано с GPU_MEM_UTIL). Пресет может задать 0 (тяжёлые MoE).
-      # Варианты: `0` или `1`; переопределяется из пресета через переменную окружения.
+      MODEL_ID: ${MODEL_ID:-}
+      MODEL_REVISION: ${MODEL_REVISION:-}
+      MAX_MODEL_LEN: ${MAX_MODEL_LEN:-32768}
+      TP: ${TP:-8}
+      GPU_MEM_UTIL: ${GPU_MEM_UTIL:-0.92}
+      KV_CACHE_DTYPE: ${KV_CACHE_DTYPE:-fp8_e4m3}
+      VLLM_MAX_NUM_BATCHED_TOKENS: ${VLLM_MAX_NUM_BATCHED_TOKENS:-8192}
+      TOOL_CALL_PARSER: ${TOOL_CALL_PARSER:-hermes}
+      REASONING_PARSER: ${REASONING_PARSER:-qwen3}
       VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS: ${VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS:-1}
     volumes:
-      # Для чего: только чтение весов; путь хоста из MODELS_DIR.
-      # Варианты: любой каталог с полным деревом модели.
       - ${MODELS_DIR:-/opt/models}:/models:ro
-    # Образ запускает `vllm serve`; первый аргумент — путь к модели внутри контейнера.
-    command:
-      # Для чего: каталог/снимок модели для сервера (совпадает с MODEL_ID на диске).
-      - /models/${MODEL_ID}
-      # Для чего: имя модели в OpenAI API (`/v1/models`, поле model в запросах).
-      # Варианты: обычно тот же HF id, что MODEL_ID.
-      - --served-model-name
-      - ${MODEL_ID}
-      # Для чего: интерфейс HTTP-сервера.
-      # Варианты: `0.0.0.0` — все интерфейсы контейнера; `127.0.0.1` — только localhost внутри контейнера.
-      - --host
-      - 0.0.0.0
-      # Для чего: порт HTTP API и /metrics (согласован с ports выше).
-      # Варианты: любой свободный внутри контейнера; в проекте зафиксировано 8111.
-      - --port
-      - "8111"
-      # Для чего: размер tensor parallel (число GPU под шардирование).
-      # Варианты: целое 1…N; должно соответствовать числу выделенных GPU и модели.
-      - --tensor-parallel-size
-      - "${TP:-4}"
-      # Для чего: доля VRAM под веса и KV.
-      # Варианты: 0.0–1.0; типично 0.90–0.95 для интенсивного использования VRAM.
-      - --gpu-memory-utilization
-      - "${GPU_MEM_UTIL:-0.92}"
-      # Для чего: максимальная длина последовательности (контекст) в токенах.
-      # Варианты: ≤ заявленного для модели; выше — OOM или ошибки.
-      - --max-model-len
-      - "${MAX_MODEL_LEN:-32768}"
-      # Для чего: разрешить выполнение custom-кода из репозитория HF (config/modeling). Нужно Kimi, GLM и др.
-      # Варианты: флаг без значения; убрать только если модель не требует remote code.
-      - --trust-remote-code
-      # Для чего: отключить кастомный CUDA all-reduce в пользу NCCL (обход сбоев на части GPU/MoE).
-      # Варианты: флаг present/absent; в проекте включён для стабильности.
-      - --disable-custom-all-reduce
-      # Для чего: dtype KV-кэша.
-      # Варианты: `fp8_e4m3`, `fp8`, `fp8_e5m2`, `auto` — зависит от модели (см. README/Qwen).
-      - --kv-cache-dtype
-      - "${KV_CACHE_DTYPE:-fp8_e4m3}"
-      # Для чего: разбивка prefill на чанки (пропускная способность).
-      # Варианты: флаг включения.
-      - --enable-chunked-prefill
-      # Для чего: лимит токенов за scheduler step при chunked prefill.
-      # Варианты: 4096–32768+; больше — выше throughput при многих запросах, выше память.
-      - --max-num-batched-tokens
-      - "${VLLM_MAX_NUM_BATCHED_TOKENS:-8192}"
-      # Для чего: кэш префиксов для повторяющихся начал промптов.
-      # Варианты: флаг включения.
-      - --enable-prefix-caching
-      # Для чего: схема парсинга tool calls под семейство чата.
-      # Варианты: `hermes`, `openai`, `mistral`, … см. .env.example и доку vLLM.
-      - --tool-call-parser
-      - "${TOOL_CALL_PARSER:-hermes}"
-      # Для чего: разрешить автоматический выбор инструмента при совместимой модели.
-      # Варианты: флаг.
-      - --enable-auto-tool-choice
-      # Для чего: парсер reasoning (thinking-блоки).
-      # Варианты: `qwen3`, `openai_gptoss`, `glm45`, … см. пресеты и README.
-      - --reasoning-parser
-      - "${REASONING_PARSER:-qwen3}"
+      - ./configs/vllm/serve.sh:/etc/slgpu/serve.sh:ro
+    entrypoint: ["/bin/bash"]
+    command: ["/etc/slgpu/serve.sh"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "5"
 
   sglang:
     image: lmsysorg/sglang:latest
-    # Для чего: сервис только при `--profile sglang` (с vLLM не поднимаются вместе в этом проекте).
     profiles: ["sglang"]
     restart: unless-stopped
     deploy:
       resources:
         reservations:
           devices:
-            # Для чего: список GPU для SGLang (те же индексы, что и у vLLM при A/B).
-            # Варианты: набор id строкой; согласовать с TP.
             - driver: nvidia
-              device_ids: ["0", "1", "2", "3"]
+              device_ids: ["0", "1", "2", "3", "4", "5", "6", "7"]
               capabilities: [gpu]
-    # Для чего: shared memory для работы рантайма SGLang.
-    # Варианты: `16gb`–`32gb` типично.
     shm_size: "32gb"
     ipc: host
     ports:
-      # Для чего: тот же внешний порт 8111, что у vLLM (по очереди один движок).
       - "${LLM_API_BIND:-0.0.0.0}:8111:8111"
     env_file:
       - .env
-      - configs/sglang/args.env
+      - configs/sglang/sglang.env
     environment:
-      # Для чего: токен Hugging Face для загрузки моделей/процессоров.
-      # Варианты: строка или пусто.
-      HF_TOKEN: ${HF_TOKEN:-}
-      # Для чего: режим P2P NCCL (как у vLLM).
-      NCCL_P2P_LEVEL: NVL
+      MODEL_ID: ${MODEL_ID:-}
+      MODEL_REVISION: ${MODEL_REVISION:-}
+      MAX_MODEL_LEN: ${MAX_MODEL_LEN:-32768}
+      TP: ${TP:-8}
+      SGLANG_MEM_FRACTION_STATIC: ${SGLANG_MEM_FRACTION_STATIC:-0.90}
+      KV_CACHE_DTYPE: ${KV_CACHE_DTYPE:-fp8_e4m3}
+      REASONING_PARSER: ${REASONING_PARSER:-qwen3}
     volumes:
       - ${MODELS_DIR:-/opt/models}:/models:ro
-    entrypoint:
-      - python3
-      - -m
-      - sglang.launch_server
-    command:
-      # Для чего: путь к весам внутри контейнера.
-      # Варианты: `/models/<как MODEL_ID на диске>`.
-      - --model-path
-      - /models/${MODEL_ID}
-      # Для чего: загрузка кастомного кода из HF (иначе некоторые модели не грузятся).
-      - --trust-remote-code
-      # Для чего: имя в API для клиентов.
-      # Варианты: чаще совпадает с MODEL_ID.
-      - --served-model-name
-      - ${MODEL_ID}
-      # Для чего: tensor parallel size в SGLang.
-      # Варианты: целое; обычно равно числу GPU.
-      - --tp
-      - "${TP:-4}"
-      # Для чего: bind HTTP-сервера.
-      - --host
-      - 0.0.0.0
-      # Для чего: порт HTTP (совпадает с пробросом).
-      - --port
-      - "8111"
-      # Для чего: доля VRAM под статические буферы (остальное под KV и т.д.).
-      # Варианты: примерно 0.85–0.93; ниже — больше места под KV при длинном контексте.
-      - --mem-fraction-static
-      - "${SGLANG_MEM_FRACTION_STATIC:-0.90}"
-      # Для чего: максимальная длина контекста (аналог max-model-len у vLLM).
-      # Варианты: ≤ поддерживаемой моделью.
-      - --context-length
-      - "${MAX_MODEL_LEN:-32768}"
-      # Для чего: Torch Compile ускорение (если поддерживается конфигурацией).
-      # Варианты: флаг; при странных ошибках компиляции временно убрать в fork.
-      - --enable-torch-compile
-      # Для чего: dtype KV-кэша SGLang.
-      # Варианты: те же семейства, что и для vLLM — согласовать с моделью.
-      - --kv-cache-dtype
-      - "${KV_CACHE_DTYPE:-fp8_e4m3}"
-      # Для чего: парсер reasoning в SGLang (набор может отличаться от vLLM).
-      # Варианты: см. совместимость в README; `qwen3`, `openai_gptoss`, …
-      - --reasoning-parser
-      - "${REASONING_PARSER:-qwen3}"
+      - ./configs/sglang/serve.sh:/etc/slgpu/serve.sh:ro
+    entrypoint: ["/bin/bash"]
+    command: ["/etc/slgpu/serve.sh"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "5"
 
   dcgm-exporter:
     image: nvidia/dcgm-exporter:latest
@@ -198,8 +88,12 @@ services:
       - SYS_ADMIN
     ports:
       - "${DCGM_BIND:-127.0.0.1}:9400:9400"
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "5"
 
-  # Метрики хоста (CPU, RAM, disk, net) для дашборда Grafana «Node Exporter Full» (ID 1860).
   node-exporter:
     image: prom/node-exporter:v1.8.2
     restart: unless-stopped
@@ -215,6 +109,11 @@ services:
       - /:/host:ro,rslave
     ports:
       - "${NODE_EXPORTER_BIND:-127.0.0.1}:9100:9100"
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "5"
 
   prometheus:
     image: prom/prometheus:v2.53.3
@@ -228,10 +127,14 @@ services:
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
-      # Ограничение роста TSDB: время и при необходимости размер (см. .env.example).
       - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION_TIME:-15d}
       - --storage.tsdb.retention.size=${PROMETHEUS_RETENTION_SIZE:-0}
       - --web.enable-lifecycle
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "5"
 
   grafana:
     image: grafana/grafana:11.4.0
@@ -248,6 +151,11 @@ services:
     volumes:
       - grafana-data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "5"
 
 volumes:
   grafana-data:

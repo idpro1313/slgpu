@@ -83,6 +83,18 @@
 | `3a664eb` | **gpt-oss**: **`TOOL_CALL_PARSER=openai`** (Hermes давал `TypeError` с `token_ids`); имя модели в API **`openai/gpt-oss-120b`**; **`GPU_MEM_UTIL=0.9296`**; **`BENCH_MODEL_NAME`**; строки в README troubleshooting. |
 | `7b3254e` | **`VLLM_MAX_NUM_BATCHED_TOKENS`** в compose (дефолт 8192); в пресете gpt-oss **16384** для пропускной способности; документация в README и `.env.example`. |
 
+### Рефакторинг CLI (после плана)
+
+| Изменение | Суть |
+|-----------|------|
+| `./slgpu` | Единый диспетчер: `prepare`, `pull`, `up`, `down`, `restart`, `bench`, `ab`, `compare`, `logs`, `status`, `config`, `help`. |
+| `scripts/cmd_*.sh` | Логика бывших `up.sh`, `bench.sh`, `download-model.sh`, `prepare-host.sh`, `healthcheck.sh`. |
+| `./slgpu pull <HF_ID>` | Автогенерация `configs/models/<slug>.env`, опции `--tp`, `--max-len`, парсеры и т.д. |
+| Корневой `.env` | Только server-level (пути, мониторинг); параметры модели только в пресете. |
+| `docker-compose.yml` | `device_ids` **0–7**; блок **`environment`** для переменных модели в vLLM/SGLang; **json-file** логи 100m×5. |
+| Пресеты в репо | Минимум: `qwen3.6-35b-a3b`, `qwen3-30b-a3b`; остальные модели — через `./slgpu pull`. |
+| README | Раздел рецептов **8× H200** (Qwen3.6, Kimi-K2.6, MiniMax, GLM, gpt-oss). |
+
 ---
 
 ## Вне git (контекст разработки)

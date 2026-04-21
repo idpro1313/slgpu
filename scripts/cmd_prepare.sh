@@ -1,14 +1,11 @@
 #!/usr/bin/env bash
-# Подготовка хоста по разделу «1. Подготовка хоста» в README.md
-# Запуск на Ubuntu/Debian (желательно 22.04/24.04 LTS), от root или через sudo.
+# Подготовка хоста (README, раздел «Подготовка хоста»).
+# Запуск на Ubuntu/Debian (22.04/24.04 LTS), от root или через sudo.
 #
 # Использование:
-#   sudo ./scripts/prepare-host.sh          # все шаги 1–6 (где возможно автоматизировать)
-#   sudo ./scripts/prepare-host.sh 1       # только п.1: проверка драйвера NVIDIA
-#   sudo STEPS=3,4 ./scripts/prepare-host.sh   # только перечисленные шаги (через запятую)
-#
-# П.1 (драйвер) не ставится автоматически — только проверка и подсказки (установка драйвера
-# зависит от ядра/образа и часто требует отдельной процедуры от NVIDIA / дистрибутива).
+#   sudo ./slgpu prepare              # все шаги 1–6 (где возможно автоматизировать)
+#   sudo ./slgpu prepare 1            # только п.1: проверка драйвера NVIDIA
+#   sudo STEPS=3,4 ./slgpu prepare    # только перечисленные шаги (через запятую)
 
 set -euo pipefail
 
@@ -39,7 +36,6 @@ want_step() {
   return 0
 }
 
-# Аргумент «1» → только шаг 1; иначе STEPS из env или все шаги
 ONLY=""
 if [[ "${1:-}" =~ ^[1-6]$ ]]; then
   ONLY="$1"
@@ -56,7 +52,6 @@ if [[ "${ID:-}" != "ubuntu" && "${ID:-}" != "debian" ]]; then
   log "Предупреждение: скрипт заточен под Ubuntu/Debian (сейчас ID=${ID:-?}). Продолжаем на свой риск."
 fi
 
-# --- п.1: драйвер NVIDIA ---
 if want_step 1; then
   log "Шаг 1: драйвер NVIDIA (ожидается ≥ ${MIN_DRIVER_MAJOR}, см. README)"
   if ! command -v nvidia-smi &>/dev/null; then
@@ -66,11 +61,10 @@ nvidia-smi не найден. Установите драйвер NVIDIA с са
 
   Ubuntu (проприетарный драйвер из репозитория, пример):
     sudo ubuntu-drivers autoinstall
-    # или выбор конкретной ветки через «Software & Updates» → Additional Drivers
 
   Документация: https://docs.nvidia.com/cuda/cuda-installation-guide-linux/
 
-После установки снова запустите: sudo $0 1
+После установки снова запустите: sudo ./slgpu prepare 1
 EOF
     exit 1
   fi
@@ -84,7 +78,7 @@ EOF
 Текущая версия драйвера: ${ver} (major=${major})
 Рекомендуется ≥ ${MIN_DRIVER_MAJOR} для Hopper/H200 и FP8 (см. README).
 
-Обновите драйвер вручную, затем повторите: sudo $0 1
+Обновите драйвер вручную, затем повторите: sudo ./slgpu prepare 1
 EOF
     exit 1
   fi
@@ -92,7 +86,6 @@ EOF
   nvidia-smi | head -n 15 || true
 fi
 
-# --- п.2: Docker + Compose v2 + NVIDIA Container Toolkit ---
 if want_step 2; then
   log "Шаг 2: Docker Engine, Compose v2, NVIDIA Container Toolkit"
   export DEBIAN_FRONTEND=noninteractive
@@ -139,7 +132,6 @@ if want_step 2; then
   log "Настраиваю Docker runtime для NVIDIA …"
   nvidia-ctk runtime configure --runtime=docker
 
-  # cgroupdriver=systemd (рекомендация README) — аккуратно дописываем daemon.json
   DAEMON_JSON="/etc/docker/daemon.json"
   if command -v python3 &>/dev/null; then
     python3 - "${DAEMON_JSON}" <<'PY'
@@ -168,7 +160,6 @@ PY
   docker run --rm --gpus all nvidia/cuda:12.0.0-base-ubuntu22.04 nvidia-smi -L || log "Предупреждение: тестовый контейнер nvidia/cuda не запустился (сеть/образ)."
 fi
 
-# --- п.3: persistence mode ---
 if want_step 3; then
   log "Шаг 3: nvidia-smi persistence mode"
   if command -v nvidia-smi &>/dev/null; then
@@ -178,14 +169,12 @@ if want_step 3; then
   fi
 fi
 
-# --- п.4: /opt/models ---
 if want_step 4; then
   log "Шаг 4: каталог моделей ${MODELS_DIR}"
   install -d -m 0755 "${MODELS_DIR}"
   log "Создано: ${MODELS_DIR} (mode 755). При необходимости: chown для пользователя Docker."
 fi
 
-# --- п.5: sysctl + limits ---
 if want_step 5; then
   log "Шаг 5: sysctl и limits (nofile)"
   cat >/etc/sysctl.d/99-slgpu.conf <<'EOF'
@@ -204,7 +193,6 @@ EOF
   log "limits: /etc/security/limits.d/99-slgpu-nofile.conf (новый лимит в сессии после перелогина)."
 fi
 
-# --- п.6: firewall (только напоминание) ---
 if want_step 6; then
   log "Шаг 6: firewall (вручную)"
   cat <<'EOF'

@@ -11,7 +11,7 @@
 2. **Node Exporter Full** (хост: CPU, RAM, диск, сеть) — dashboard ID [**1860**](https://grafana.com/grafana/dashboards/1860).  
    - **Dashboards → Import →** вставьте `1860` → Load.  
    - Datasource: **Prometheus** (как в provisioning, uid `prometheus`).  
-   - Убедитесь, что контейнер **`node-exporter`** запущен (`docker compose up -d node-exporter` или через `scripts/up.sh`).  
+   - Убедитесь, что контейнер **`node-exporter`** запущен (`docker compose up -d node-exporter` или через `./slgpu up …`).  
    - В выпадающих списках вверху дашборда выберите **Datasource: Prometheus**, **job = `node-exporter`**, **instance** — обычно **`host`** (так задан label в [`prometheus.yml`](prometheus.yml)); в других ревизиях дашборда может быть `node-exporter:9100`.
 3. **vLLM** — поиск на grafana.com по `vllm` (ID зависят от версии; импорт через **Dashboards → Import**).
 

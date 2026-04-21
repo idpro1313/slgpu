@@ -9,7 +9,7 @@ source "${ROOT}/scripts/_lib.sh"
 usage() {
   cat <<EOF
 Использование:
-  $0 <vllm|sglang> [-m|--model <preset>] [-h|--help]
+  ./slgpu bench <vllm|sglang> -m|--model <preset> [-h|--help]
 
 Пресеты (configs/models/<name>.env):
 $(slgpu_list_presets | sed 's/^/  /')
@@ -17,7 +17,7 @@ EOF
 }
 
 ENGINE=""
-MODEL_SLUG="${MODEL:-}"
+MODEL_SLUG=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     vllm|sglang) ENGINE="$1"; shift ;;

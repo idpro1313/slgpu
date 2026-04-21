@@ -64,7 +64,7 @@ def main() -> None:
 
     if not v_path or not s_path:
         lines.append("\n**Недостаточно данных**: нужны оба файла `summary.json`.\n")
-        lines.append("Запустите `./scripts/bench.sh vllm` и `./scripts/bench.sh sglang`.\n")
+        lines.append("Запустите `./slgpu bench vllm -m <preset>` и `./slgpu bench sglang -m <preset>`.\n")
         report_path.write_text("".join(lines), encoding="utf-8")
         print(f"Записано {report_path} (частично)")
         return

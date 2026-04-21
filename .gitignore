@@ -1,4 +1,5 @@
 .env
+configs/secrets/hf.env
 bench/results/*/*/
 !bench/results/.gitkeep
 __pycache__/

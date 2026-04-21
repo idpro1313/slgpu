@@ -9,20 +9,19 @@ source "${ROOT}/scripts/_lib.sh"
 usage() {
   cat <<EOF
 Использование:
-  $0 <vllm|sglang> [-m|--model <preset>] [-h|--help]
+  ./slgpu up <vllm|sglang> -m|--model <preset> [-h|--help]
 
 Примеры:
-  $0 vllm                          # TP=4, все GPU; модель из .env
-  $0 sglang -m qwen3-30b-a3b       # пресет переопределяет MODEL_ID, MAX_MODEL_LEN и т.д.
-  MODEL=llama-3.1-70b-instruct $0 sglang
+  ./slgpu up vllm -m qwen3.6-35b-a3b
+  ./slgpu up sglang -m qwen3-30b-a3b
 
-Доступные пресеты (configs/models/<name>.env):
+Пресеты (configs/models/<name>.env):
 $(slgpu_list_presets | sed 's/^/  /')
 EOF
 }
 
 MODE=""
-MODEL_SLUG="${MODEL:-}"
+MODEL_SLUG=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     vllm|sglang) MODE="$1"; shift ;;
@@ -37,7 +36,7 @@ if [[ -z "${MODE}" ]]; then
   exit 1
 fi
 
-slgpu_load_env "${MODEL_SLUG}"
+slgpu_load_compose_env "${MODEL_SLUG}" "${MODE}"
 echo "Модель: ${MODEL_ID}  (MAX_MODEL_LEN=${MAX_MODEL_LEN:-<default>}, KV=${KV_CACHE_DTYPE:-<default>}, reasoning=${REASONING_PARSER:-<off>})"
 
 echo "Останавливаю vllm/sglang (если были)…"
