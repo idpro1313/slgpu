@@ -80,7 +80,19 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Авто-определение engine из docker compose, если не указан
 if [[ -z "${ENGINE}" ]]; then
+  ENGINE="$(slgpu_detect_running_engine)" || true
+  if [[ -z "${ENGINE}" ]]; then
+    echo "[LOAD] Не удалось автоопределить движок: ни vllm, ни sglang не запущены." >&2
+    echo "[LOAD] Укажите явно: ./slgpu load <vllm|sglang> -m <preset>" >&2
+    exit 1
+  fi
+  echo "[LOAD] Авто-определён движок: ${ENGINE}"
+fi
+
+if [[ -z "${MODEL_SLUG}" ]]; then
+  echo "[LOAD] ОШИБКА: не указан пресет (флаг -m <preset>)" >&2
   usage >&2
   exit 1
 fi
