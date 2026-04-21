@@ -111,8 +111,8 @@
 | **`up`** | **Запуск стенда**: останавливает и удаляет контейнеры другого движка (vllm/sglang), поднимает мониторинг (Prometheus, Grafana, экспортеры), затем поднимает **один** выбранный профиль — `vllm` или `sglang` с tensor parallel и параметрами из **`-m <preset>`** (обязательно). Экспортирует в shell переменные из `.env` + `configs/<engine>/<engine>.env` + пресета и ждёт готовность `http://127.0.0.1:8111/v1/models`. Идемпотентен при повторном вызове с тем же движком. |
 | **`down`** | **Остановка инференса**: по умолчанию останавливает и снимает контейнеры **только** `vllm` и `sglang` (мониторинг остаётся). С флагом **`--all`** — останавливаются **все** сервисы проекта compose (включая Prometheus/Grafana/экспортеры). Удобно перед сменой движка или освобождением GPU без сноса данных в томах Grafana/Prometheus при обычном `down`. |
 | **`restart`** | **Перезапуск с новым пресетом без смены движка**: определяет, какой сервис сейчас в статусе *running* (`vllm` или `sglang`), и выполняет для него ту же последовательность, что и `up`, с новым **`-m <preset>`**. Если ни один LLM-контейнер не запущен — сообщение об ошибке; тогда используйте `up`. |
-| **`bench`** | **Нагрузочный тест** против уже поднятого API на `127.0.0.1:8111`: запускает [`scripts/bench_openai.py`](scripts/bench_openai.py), подгружает пресет **`-m`** (для `MAX_MODEL_LEN`, `BENCH_MODEL_NAME` и т.д.), пишет артефакты в `bench/results/<engine>/<timestamp>/`. Должен совпадать движок в аргументе (`vllm` или `sglang`) с тем, что реально запущен. |
-| **`load`** | **Длительный нагрузочный тест** (15–20 мин, 200–300 виртуальных пользователей): запускает [`scripts/bench_load.py`](scripts/bench_load.py), эмулирует фазы ramp-up → steady → ramp-down, собирает time-series метрики (throughput, TTFT, latency, error rate) в CSV каждые 5 сек. Артефакты: `summary.json`, `time_series.csv`, `users.jsonl`. Опции: `--users`, `--duration`, `--ramp-up`, `--ramp-down`, `--think-time`, `--max-prompt`, `--max-output`, `--report-interval`. |
+| **`bench`** | **Нагрузочный тест** против уже поднятого API на `127.0.0.1:8111`: запускает [`scripts/bench_openai.py`](scripts/bench_openai.py), подгружает пресет **`-m`** (для `MAX_MODEL_LEN`, `BENCH_MODEL_NAME` и т.д.), пишет артефакты в `bench/results/<engine>/<timestamp>/`. **Автоматически проверяет** запущенный engine и model из `/v1/models`; при несоответствии — ошибка с подсказкой. |
+| **`load`** | **Длительный нагрузочный тест** (15–20 мин, 200–300 виртуальных пользователей): запускает [`scripts/bench_load.py`](scripts/bench_load.py), эмулирует фазы ramp-up → steady → ramp-down, собирает time-series метрики (throughput, TTFT, latency, error rate) в CSV каждые 5 сек. Артефакты: `summary.json`, `time_series.csv`, `users.jsonl`. Опции: `--users`, `--duration`, `--ramp-up`, `--ramp-down`, `--think-time`, `--max-prompt`, `--max-output`, `--report-interval`, `--burst` (макс throughput без пауз). **Автоматически проверяет** запущенный engine и model. |
 | **`ab`** | **Сквозной A/B-сценарий** для честного сравнения на одной модели: `up vllm` → `bench vllm` → `down` (только LLM) → `up sglang` → `bench sglang` → `compare`. Один пресет **`-m`** на всю цепочку; в конце обновляется [`bench/report.md`](bench/report.md). |
 | **`compare`** | **Сводка двух последних прогонов**: читает последние `summary.json` для `vllm` и `sglang` в `bench/results/` (или пути из флагов скрипта) и перезаписывает таблицу в `bench/report.md`. Можно вызывать отдельно после ручных бенчей. |
 | **`logs`** | **Потоковые логи Docker** выбранного сервиса (`docker compose logs -f --tail=200`). Без имени сервиса — логи того из `vllm`/`sglang`, который сейчас *running*. Дополнительные флаги пробрасываются в `docker compose logs` (например другой `--tail`). Сервисы: `vllm`, `sglang`, `prometheus`, `grafana`, `dcgm-exporter`, `node-exporter`. |
@@ -248,7 +248,7 @@ M=qwen3.6-35b-a3b
 
 ---
 
-## 11. Рецепты 8x H200
+## 11. Рецепты 8× H200
 
 Ориентир: **8× H200** (~141 GiB × 8). **`TP=8` уже по умолчанию** в `./slgpu pull` и в шаблонных пресетах — флаг `--tp` можно не указывать. Ниже — агрессивные `gpu-mem` / `batch` для максимума пропускной способности (при OOM уменьшайте `--max-len` или `--batch`).
 
@@ -293,7 +293,7 @@ M=qwen3.6-35b-a3b
 
 ---
 
-## 11. Мониторинг и безопасность
+## 12. Мониторинг и безопасность
 
 - **Prometheus** (`127.0.0.1:9090`): см. [`monitoring/prometheus.yml`](monitoring/prometheus.yml). Неактивный профиль (vllm/sglang) даёт DOWN target — норма для A/B.
 - **Grafana**, дашборды: [`monitoring/README.md`](monitoring/README.md).
@@ -345,15 +345,19 @@ curl -s http://127.0.0.1:8111/v1/chat/completions \
 
 ---
 
-## 15. Структура репозитория
+## 16. Структура репозитория
 
 ```
 slgpu/
 ├── slgpu                       # CLI-диспетчер
+├── VERSION                     # SemVer
+├── AGENTS.md                   # Указатель на правила (AGENTS.md → docs/)
 ├── docker-compose.yml
 ├── .env.example
 ├── README.md
-├── HISTORY.md
+├── docs/
+│   ├── AGENTS.md               # Семантическая карта (GRACE)
+│   └── HISTORY.md              # Журнал сессий
 ├── configs/
 │   ├── secrets/hf.env.example
 │   ├── vllm/{serve.sh,vllm.env}
@@ -363,9 +367,21 @@ slgpu/
 │   ├── _lib.sh
 │   ├── cmd_*.sh
 │   ├── bench_openai.py
+│   ├── bench_load.py           # Длительный нагрузочный тест
 │   └── compare.py
 ├── monitoring/
-└── bench/
+│   ├── prometheus.yml
+│   └── grafana/provisioning/
+├── bench/
+│   └── results/{vllm,sglang}/
+├── grace/                      # GRACE-артефакты
+│   ├── requirements/requirements.xml
+│   ├── technology/technology.xml
+│   ├── plan/development-plan.xml
+│   ├── verification/verification-plan.xml
+│   └── knowledge-graph/knowledge-graph.xml
+├── .cursor/rules/*.mdc         # Правила Cursor (GRACE)
+└── .kilo/agent/rules.md        # Правила Kilo
 ```
 
 ---
