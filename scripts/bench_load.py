@@ -143,9 +143,12 @@ def _stream_chat(
                     continue
                 delta = choices[0].get("delta") or {}
                 content = delta.get("content")
+                # vLLM может присылать content="" в service-чанках, но None — только
+                # в первом choice delta (role). Считаем TTFT на первый chunk с любым
+                # наличием delta, а токены — только по непустым content.
+                if ttft is None and content is not None:
+                    ttft = time.perf_counter()
                 if content:
-                    if ttft is None:
-                        ttft = time.perf_counter()
                     out_chunks += 1
         t1 = time.perf_counter()
         if ttft is None:
