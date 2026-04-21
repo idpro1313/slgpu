@@ -20,7 +20,7 @@ slgpu — стенд vLLM vs SGLang в Docker (Linux VM).
   help                  Эта справка
 
 Примеры:
-  ./slgpu pull Qwen/Qwen3.6-35B-A3B --max-len 262144
+  ./slgpu pull Qwen/Qwen3.6-35B-A3B
   ./slgpu up vllm -m qwen3.6-35b-a3b
   ./slgpu bench vllm -m qwen3.6-35b-a3b
   ./slgpu ab -m qwen3.6-35b-a3b

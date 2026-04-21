@@ -105,7 +105,7 @@
 |---------|------------|
 | **`help`** | Краткая справка по всем подкомандам и примерам вызова (то же, что и `./slgpu` без аргументов с подсказкой). |
 | **`prepare`** | **Один раз при создании ВМ** (или после переустановки ОС): проверка драйвера NVIDIA, установка Docker и Compose v2, NVIDIA Container Toolkit, при желании persistence mode GPU, создание каталога `MODELS_DIR`, sysctl (`vm.swappiness`), лимиты `nofile`, напоминание про firewall. Запуск от root: `sudo ./slgpu prepare` или шаг `sudo ./slgpu prepare 1` … `6`; выборочно: `STEPS=2,4 sudo -E ./slgpu prepare`. |
-| **`pull`** | **Скачивание весов** в `${MODELS_DIR}/<MODEL_ID>` через CLI `hf` (`huggingface_hub`). Если аргумент — **HF id с `/`** (например `Qwen/Qwen3.6-35B-A3B`), **автоматически создаётся** файл пресета `configs/models/<slug>.env` (slug из имени репозитория) с дефолтами и угадыванием парсеров; **`--tp` по умолчанию 8**; затем выполняется загрузка. Если аргумент **без `/`** — трактуется как **уже существующий пресет** (только `hf download` по полям из этого `.env`). Опции: `--slug`, `--force`, `--keep`, `--revision`, `--max-len`, `--tp`, `--kv-dtype`, `--gpu-mem`, `--sglang-mem`, `--batch`, `--reasoning-parser`, `--tool-call-parser`. Токен для приватных репозиториев: [`configs/secrets/hf.env`](configs/secrets/hf.env) (`HF_TOKEN`). |
+| **`pull`** | **Скачивание весов** в `${MODELS_DIR}/<MODEL_ID>` через CLI `hf` (`huggingface_hub`). Если аргумент — **HF id с `/`** (например `Qwen/Qwen3.6-35B-A3B`), **автоматически создаётся** файл пресета `configs/models/<slug>.env` (slug из имени репозитория) с дефолтами и угадыванием парсеров; **`--tp` по умолчанию 8**; **`MAX_MODEL_LEN`** без **`--max-len`** выбирается эвристикой (часто 262144; см. [`configs/models/README.md`](configs/models/README.md)); затем выполняется загрузка. Если аргумент **без `/`** — трактуется как **уже существующий пресет** (только `hf download` по полям из этого `.env`). Опции: `--slug`, `--force`, `--keep`, `--revision`, `--max-len`, `--tp`, `--kv-dtype`, `--gpu-mem`, `--sglang-mem`, `--batch`, `--reasoning-parser`, `--tool-call-parser`. Токен для приватных репозиториев: [`configs/secrets/hf.env`](configs/secrets/hf.env) (`HF_TOKEN`). |
 | **`up`** | **Запуск стенда**: останавливает и удаляет контейнеры другого движка (vllm/sglang), поднимает мониторинг (Prometheus, Grafana, экспортеры), затем поднимает **один** выбранный профиль — `vllm` или `sglang` с tensor parallel и параметрами из **`-m <preset>`** (обязательно). Экспортирует в shell переменные из `.env` + `configs/<engine>/<engine>.env` + пресета и ждёт готовность `http://127.0.0.1:8111/v1/models`. Идемпотентен при повторном вызове с тем же движком. |
 | **`down`** | **Остановка инференса**: по умолчанию останавливает и снимает контейнеры **только** `vllm` и `sglang` (мониторинг остаётся). С флагом **`--all`** — останавливаются **все** сервисы проекта compose (включая Prometheus/Grafana/экспортеры). Удобно перед сменой движка или освобождением GPU без сноса данных в томах Grafana/Prometheus при обычном `down`. |
 | **`restart`** | **Перезапуск с новым пресетом без смены движка**: определяет, какой сервис сейчас в статусе *running* (`vllm` или `sglang`), и выполняет для него ту же последовательность, что и `up`, с новым **`-m <preset>`**. Если ни один LLM-контейнер не запущен — сообщение об ошибке; тогда используйте `up`. |
@@ -198,38 +198,37 @@ M=qwen3.6-35b-a3b
 Ориентир: **8× H200** (~141 GiB × 8). **`TP=8` уже по умолчанию** в `./slgpu pull` и в шаблонных пресетах — флаг `--tp` можно не указывать. Ниже — агрессивные `gpu-mem` / `batch` для максимума пропускной способности (при OOM уменьшайте `--max-len` или `--batch`).
 
 ```bash
-# Qwen3.6-35B-A3B (окно до 262144)
+# Qwen3.6-35B-A3B (pull без --max-len даёт MAX_MODEL_LEN=262144 и парсеры qwen3/hermes)
 ./slgpu pull Qwen/Qwen3.6-35B-A3B \
-  --max-len 262144 --gpu-mem 0.95 --sglang-mem 0.92 \
-  --batch 24576 --kv-dtype fp8_e4m3 \
-  --reasoning-parser qwen3 --tool-call-parser hermes
+  --gpu-mem 0.95 --sglang-mem 0.92 \
+  --batch 24576 --kv-dtype fp8_e4m3
 ./slgpu up vllm -m qwen3.6-35b-a3b
 
 # moonshotai/Kimi-K2.6 (архитектурное окно 128K; веса ~1T — нужен fp8/квант на чекпоинте)
-# Пресет по умолчанию: TP=8, kimi_k2-парсеры, vLLM MM_ENCODER_TP_MODE=data (как у Moonshot); при необходимости переопределите флаги pull.
+# Пресет по умолчанию: TP=8, MAX_MODEL_LEN=131072, kimi_k2-парсеры, vLLM MM_ENCODER_TP_MODE=data (как у Moonshot).
 ./slgpu pull moonshotai/Kimi-K2.6 \
-  --max-len 131072 --gpu-mem 0.94 --sglang-mem 0.90 \
+  --gpu-mem 0.94 --sglang-mem 0.90 \
   --batch 16384 --kv-dtype fp8_e4m3
 ./slgpu up vllm -m kimi-k2.6
 # ./slgpu up sglang -m kimi-k2.6
 
-# MiniMax-M2.7
+# MiniMax-M2.7 (дефолт MAX_MODEL_LEN=262144)
 ./slgpu pull MiniMaxAI/MiniMax-M2.7 \
-  --max-len 262144 --gpu-mem 0.95 --sglang-mem 0.92 \
+  --gpu-mem 0.95 --sglang-mem 0.92 \
   --batch 24576 --kv-dtype fp8_e4m3 \
   --reasoning-parser minimax_m2 --tool-call-parser minimax_m2
 ./slgpu up vllm -m minimax-m2.7
 
-# GLM-5.1
+# GLM-5.1 (дефолт MAX_MODEL_LEN=131072)
 ./slgpu pull zai-org/GLM-5.1 \
-  --max-len 131072 --gpu-mem 0.95 --sglang-mem 0.92 \
+  --gpu-mem 0.95 --sglang-mem 0.92 \
   --batch 24576 --kv-dtype fp8_e4m3 \
   --reasoning-parser glm45 --tool-call-parser glm45
 ./slgpu up vllm -m glm-5.1
 
-# openai/gpt-oss-120b (Harmony: tool parser `openai`; в API указывайте model = openai/gpt-oss-120b)
+# openai/gpt-oss-120b (дефолт MAX_MODEL_LEN=131072; Harmony: tool parser `openai`; в API model = openai/gpt-oss-120b)
 ./slgpu pull openai/gpt-oss-120b \
-  --max-len 131072 --gpu-mem 0.9296 --sglang-mem 0.90 \
+  --gpu-mem 0.9296 --sglang-mem 0.90 \
   --batch 16384 --kv-dtype auto \
   --reasoning-parser openai_gptoss --tool-call-parser openai
 ./slgpu up vllm -m gpt-oss-120b

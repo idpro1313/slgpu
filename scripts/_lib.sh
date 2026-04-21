@@ -173,6 +173,30 @@ slgpu_guess_parsers() {
   printf '%s\t%s' "${r}" "${t}"
 }
 
+# По HF id — дефолтный MAX_MODEL_LEN для ./slgpu pull без --max-len (токены).
+# 262144 = 256k; для моделей с меньшим заявленным окном — меньше (см. README).
+slgpu_guess_max_model_len() {
+  local id="$1"
+  case "${id}" in
+    moonshotai/Kimi-K2.6*|*/Kimi-K2.6*)
+      echo 131072
+      ;;
+    Qwen/Qwen3.6*|Qwen3.6*)
+      echo 262144
+      ;;
+    Qwen/Qwen3-30B*|Qwen3-30B*)
+      # HF: нативно 32k; с YaRN валидировано до 131072 — не 262144 без отдельной настройки rope.
+      echo 131072
+      ;;
+    openai/gpt-oss*|zai-org/GLM*)
+      echo 131072
+      ;;
+    *)
+      echo 262144
+      ;;
+  esac
+}
+
 # Записать configs/models/<slug>.env
 # Аргументы: slug hf_id revision max_len tp kv_dtype gpu_mem sglang_mem batch reason tool [mm_encoder_tp_mode]
 slgpu_gen_preset_file() {

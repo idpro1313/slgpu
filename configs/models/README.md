@@ -15,7 +15,7 @@
 
 - **`MODEL_ID`** — репозиторий Hugging Face и подкаталог в `MODELS_DIR` после `./slgpu pull`.
 - **`MODEL_REVISION`** — SHA/тег на HF; пусто — ветка по умолчанию.
-- **`MAX_MODEL_LEN`** — окно контекста (`--max-model-len` / `--context-length`).
+- **`MAX_MODEL_LEN`** — окно контекста (`--max-model-len` / `--context-length`). При **`./slgpu pull <HF_ID>`** без **`--max-len`** подставляется эвристика ([`slgpu_guess_max_model_len`](../../scripts/_lib.sh)): чаще **262144** (256k); ниже — например **moonshotai/Kimi-K2.6** (131072), **Qwen3-30B** / **gpt-oss** / **GLM** (131072). При OOM уменьшайте вручную.
 - **`KV_CACHE_DTYPE`** — `fp8_e4m3`, `fp8`, `auto`, …; у Qwen3 Next/3.6 избегайте `fp8_e5m2`.
 - **`GPU_MEM_UTIL`** — vLLM `--gpu-memory-utilization`.
 - **`SLGPU_MAX_NUM_BATCHED_TOKENS`** — только vLLM (chunked prefill; не `VLLM_*`, чтобы vLLM 0.19+ не предупреждал о неизвестных переменных).
