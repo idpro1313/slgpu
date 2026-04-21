@@ -94,6 +94,8 @@
 | `docker-compose.yml` | `device_ids` **0–7**; блок **`environment`** для переменных модели в vLLM/SGLang; **json-file** логи 100m×5. |
 | Пресеты в репо | Минимум: `qwen3.6-35b-a3b`, `qwen3-30b-a3b`; остальные модели — через `./slgpu pull`. |
 | README | Раздел рецептов **8× H200** (Qwen3.6, Kimi-K2.6, MiniMax, GLM, gpt-oss). |
+| Образы compose | Prometheus, Grafana, **node-exporter** на **`latest`** (вместе с vLLM/SGLang/dcgm); в README — про воспроизводимость и pin digest/тега. |
+| Исполняемый бит | В git для **`slgpu`** и **`scripts/cmd_*.sh`** — **100755**. |
 
 ---
 

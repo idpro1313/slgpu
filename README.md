@@ -63,14 +63,16 @@
 
 ## 3. Сервисы и порты
 
-| Сервис | Образ (типично) | Порт на хосте |
-|--------|-----------------|---------------|
+| Сервис | Образ в `docker-compose.yml` | Порт на хосте |
+|--------|-------------------------------|---------------|
 | **vLLM** | `vllm/vllm-openai:latest` | **8111** |
 | **SGLang** | `lmsysorg/sglang:latest` | **8111** |
-| **Prometheus** | `prom/prometheus:v2.53.3` | **9090** (`PROMETHEUS_BIND`) |
-| **Grafana** | `grafana/grafana:11.4.0` | **3000** |
+| **Prometheus** | `prom/prometheus:latest` | **9090** (`PROMETHEUS_BIND`) |
+| **Grafana** | `grafana/grafana:latest` | **3000** |
 | **dcgm-exporter** | `nvidia/dcgm-exporter:latest` | **9400** |
-| **node-exporter** | `prom/node-exporter:v1.8.2` | **9100** |
+| **node-exporter** | `prom/node-exporter:latest` | **9100** |
+
+Все перечисленные сервисы в compose собраны на теге **`latest`**: при `docker compose pull` вы получаете актуальные сборки, но **воспроизводимость** между машинами и во временем не гарантируется. Для зафиксированного стенда подставьте **конкретный тег** или **digest** образа в [`docker-compose.yml`](docker-compose.yml).
 
 Базовый URL API: `http://<host>:8111/v1`.
 
@@ -79,7 +81,8 @@
 ## 4. CLI `./slgpu`
 
 ```bash
-chmod +x slgpu scripts/cmd_*.sh   # на Linux VM
+# В репозитории для slgpu и cmd_*.sh выставлен исполняемый бит; при необходимости на VM:
+# chmod +x slgpu scripts/cmd_*.sh
 
 ./slgpu help
 
@@ -127,7 +130,6 @@ chmod +x slgpu scripts/cmd_*.sh   # на Linux VM
 Ubuntu/Debian, драйвер NVIDIA (рекомендуется ≥ 560 для H200/FP8).
 
 ```bash
-chmod +x slgpu scripts/cmd_*.sh
 sudo ./slgpu prepare              # шаги 1–6
 sudo ./slgpu prepare 1            # только проверка драйвера
 sudo STEPS=2,4 ./slgpu prepare
@@ -141,7 +143,6 @@ Docker, Compose v2, NVIDIA Container Toolkit, каталог `MODELS_DIR`, sysct
 
 ```bash
 git clone <repo-url> /opt/slgpu && cd /opt/slgpu
-chmod +x slgpu scripts/cmd_*.sh
 
 cp .env.example .env
 # Опционально для gated моделей:
@@ -266,7 +267,7 @@ curl -s http://127.0.0.1:8111/v1/chat/completions \
 
 ## 14. Ограничения
 
-- Теги образов **`latest`** меняются; для продакшена зафиксируйте digest.
+- В **`docker-compose.yml`** для vLLM, SGLang, Prometheus, Grafana, node-exporter и dcgm-exporter задан тег **`latest`**: содержимое образов меняется без bump версии в репозитории; для продакшена зафиксируйте **digest** или явный **тег** версии.
 - SGLang может не знать те же `--reasoning-parser`, что vLLM.
 - В `docker-compose.yml` заданы **8** `device_ids` (0–7). На хосте с **4** GPU укажите `["0","1","2","3"]` и выставьте **`TP=4`** в пресете.
 
