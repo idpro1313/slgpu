@@ -80,26 +80,43 @@
 
 ## 4. CLI `./slgpu`
 
-```bash
-# В репозитории для slgpu и cmd_*.sh выставлен исполняемый бит; при необходимости на VM:
-# chmod +x slgpu scripts/cmd_*.sh
+Точка входа для всего жизненного цикла стенда: подготовка ОС, загрузка весов, запуск выбранного движка в Docker, бенчмарки, логи и диагностика. Команды реализованы в [`scripts/cmd_*.sh`](scripts/) и вызываются через корневой скрипт [`slgpu`](slgpu). В репозитории для `slgpu` и `cmd_*.sh` уже выставлен исполняемый бит; при необходимости на VM: `chmod +x slgpu scripts/cmd_*.sh`.
 
+### Шпаргалка синтаксиса
+
+```text
 ./slgpu help
-
-./slgpu prepare [1–6]              # подготовка хоста (часто: sudo ./slgpu prepare)
-./slgpu pull <HF_ID|preset> [...]  # скачать веса; HF id → автогенерация configs/models/<slug>.env
+./slgpu prepare [1–6]
+./slgpu pull <HF_ID|preset> [опции]
 ./slgpu up <vllm|sglang> -m <preset>
 ./slgpu down [--all]
-./slgpu restart -m <preset>        # перезапуск текущего running-движка
+./slgpu restart -m <preset>
 ./slgpu bench <vllm|sglang> -m <preset>
-./slgpu ab -m <preset>             # vllm→bench→sglang→bench→compare
+./slgpu ab -m <preset>
 ./slgpu compare
-./slgpu logs [SERVICE] [-f]
+./slgpu logs [SERVICE] [аргументы docker compose logs…]
 ./slgpu status
 ./slgpu config <vllm|sglang> -m <preset>
 ```
 
-**`./slgpu pull`**: если аргумент содержит `/` (например `Qwen/Qwen3.6-35B-A3B`), считается Hugging Face id: создаётся пресет с slug из имени репозитория (`qwen3.6-35b-a3b`). Опции: `--slug`, `--force`, `--keep`, `--revision`, `--max-len`, `--tp`, `--kv-dtype`, `--gpu-mem`, `--sglang-mem`, `--batch`, `--reasoning-parser`, `--tool-call-parser`. Токен: `configs/secrets/hf.env` (`HF_TOKEN`).
+### Назначение команд
+
+| Команда | Назначение |
+|---------|------------|
+| **`help`** | Краткая справка по всем подкомандам и примерам вызова (то же, что и `./slgpu` без аргументов с подсказкой). |
+| **`prepare`** | **Один раз при создании ВМ** (или после переустановки ОС): проверка драйвера NVIDIA, установка Docker и Compose v2, NVIDIA Container Toolkit, при желании persistence mode GPU, создание каталога `MODELS_DIR`, sysctl (`vm.swappiness`), лимиты `nofile`, напоминание про firewall. Запуск от root: `sudo ./slgpu prepare` или шаг `sudo ./slgpu prepare 1` … `6`; выборочно: `STEPS=2,4 sudo -E ./slgpu prepare`. |
+| **`pull`** | **Скачивание весов** в `${MODELS_DIR}/<MODEL_ID>` через CLI `hf` (`huggingface_hub`). Если аргумент — **HF id с `/`** (например `Qwen/Qwen3.6-35B-A3B`), **автоматически создаётся** файл пресета `configs/models/<slug>.env` (slug из имени репозитория) с дефолтами и угадыванием парсеров; затем выполняется загрузка. Если аргумент **без `/`** — трактуется как **уже существующий пресет** (только `hf download` по полям из этого `.env`). Опции: `--slug`, `--force`, `--keep`, `--revision`, `--max-len`, `--tp`, `--kv-dtype`, `--gpu-mem`, `--sglang-mem`, `--batch`, `--reasoning-parser`, `--tool-call-parser`. Токен для приватных репозиториев: [`configs/secrets/hf.env`](configs/secrets/hf.env) (`HF_TOKEN`). |
+| **`up`** | **Запуск стенда**: останавливает и удаляет контейнеры другого движка (vllm/sglang), поднимает мониторинг (Prometheus, Grafana, экспортеры), затем поднимает **один** выбранный профиль — `vllm` или `sglang` с tensor parallel и параметрами из **`-m <preset>`** (обязательно). Экспортирует в shell переменные из `.env` + `configs/<engine>/<engine>.env` + пресета и ждёт готовность `http://127.0.0.1:8111/v1/models`. Идемпотентен при повторном вызове с тем же движком. |
+| **`down`** | **Остановка инференса**: по умолчанию останавливает и снимает контейнеры **только** `vllm` и `sglang` (мониторинг остаётся). С флагом **`--all`** — останавливаются **все** сервисы проекта compose (включая Prometheus/Grafana/экспортеры). Удобно перед сменой движка или освобождением GPU без сноса данных в томах Grafana/Prometheus при обычном `down`. |
+| **`restart`** | **Перезапуск с новым пресетом без смены движка**: определяет, какой сервис сейчас в статусе *running* (`vllm` или `sglang`), и выполняет для него ту же последовательность, что и `up`, с новым **`-m <preset>`**. Если ни один LLM-контейнер не запущен — сообщение об ошибке; тогда используйте `up`. |
+| **`bench`** | **Нагрузочный тест** против уже поднятого API на `127.0.0.1:8111`: запускает [`scripts/bench_openai.py`](scripts/bench_openai.py), подгружает пресет **`-m`** (для `MAX_MODEL_LEN`, `BENCH_MODEL_NAME` и т.д.), пишет артефакты в `bench/results/<engine>/<timestamp>/`. Должен совпадать движок в аргументе (`vllm` или `sglang`) с тем, что реально запущен. |
+| **`ab`** | **Сквозной A/B-сценарий** для честного сравнения на одной модели: `up vllm` → `bench vllm` → `down` (только LLM) → `up sglang` → `bench sglang` → `compare`. Один пресет **`-m`** на всю цепочку; в конце обновляется [`bench/report.md`](bench/report.md). |
+| **`compare`** | **Сводка двух последних прогонов**: читает последние `summary.json` для `vllm` и `sglang` в `bench/results/` (или пути из флагов скрипта) и перезаписывает таблицу в `bench/report.md`. Можно вызывать отдельно после ручных бенчей. |
+| **`logs`** | **Потоковые логи Docker** выбранного сервиса (`docker compose logs -f --tail=200`). Без имени сервиса — логи того из `vllm`/`sglang`, который сейчас *running*. Дополнительные флаги пробрасываются в `docker compose logs` (например другой `--tail`). Сервисы: `vllm`, `sglang`, `prometheus`, `grafana`, `dcgm-exporter`, `node-exporter`. |
+| **`status`** | **Быстрая диагностика «с первого взгляда»**: `docker compose ps`, проверка `GET /v1/models` на localhost:8111, краткий вывод `nvidia-smi` по GPU. Не требует пресета; полезно после `up` или при сбоях. |
+| **`config`** | **Печать эффективного окружения** после слияния `.env` + `configs/<vllm|sglang>/<engine>.env` + пресета **`-m`**: отфильтрованный список переменных (`MODEL_*`, `TP`, `KV_*`, парсеры, …). Нужен, чтобы убедиться, что в контейнер уйдут ожидаемые значения, не заглядывая вручную во все файлы. |
+
+Подробности по флагам **`pull`**: см. `./slgpu pull -h` и [`configs/models/README.md`](configs/models/README.md).
 
 ---
 
