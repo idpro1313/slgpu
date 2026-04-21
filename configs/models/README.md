@@ -18,7 +18,7 @@
 - **`MAX_MODEL_LEN`** — окно контекста (`--max-model-len` / `--context-length`).
 - **`KV_CACHE_DTYPE`** — `fp8_e4m3`, `fp8`, `auto`, …; у Qwen3 Next/3.6 избегайте `fp8_e5m2`.
 - **`GPU_MEM_UTIL`** — vLLM `--gpu-memory-utilization`.
-- **`VLLM_MAX_NUM_BATCHED_TOKENS`** — только vLLM (chunked prefill).
+- **`SLGPU_MAX_NUM_BATCHED_TOKENS`** — только vLLM (chunked prefill; не `VLLM_*`, чтобы vLLM 0.19+ не предупреждал о неизвестных переменных).
 - **`SGLANG_MEM_FRACTION_STATIC`** — только SGLang.
 - **`REASONING_PARSER`**, **`TOOL_CALL_PARSER`** — vLLM (+ reasoning в SGLang); см. таблицу ниже.
 - **`TP`** — tensor parallel; должен согласовываться с числом GPU в `docker-compose.yml`. В шаблонах репозитория и в **`./slgpu pull`** без `--tp` по умолчанию **8**; на 4 GPU задайте **4**.

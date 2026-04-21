@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
 # Запуск vLLM OpenAI-сервера внутри контейнера. Флаги — из env (.env, vllm.env, пресет). HF-токен не используется (модель с диска).
+# Служебные переменные listen/batch — SLGPU_* (см. vllm.env), чтобы vLLM 0.19+ не предупреждал о «Unknown VLLM_*».
 set -euo pipefail
 
 : "${MODEL_ID:?MODEL_ID не задан (корневой .env или пресет модели)}"
 
 MODEL_PATH="/models/${MODEL_ID}"
-HOST="${VLLM_LISTEN_HOST:-0.0.0.0}"
-PORT="${VLLM_LISTEN_PORT:-8111}"
+HOST="${SLGPU_VLLM_HOST:-0.0.0.0}"
+PORT="${SLGPU_VLLM_PORT:-8111}"
 TP="${TP:-8}"
 GPU_MEM="${GPU_MEM_UTIL:-0.92}"
 MAX_LEN="${MAX_MODEL_LEN:-32768}"
 KV="${KV_CACHE_DTYPE:-fp8_e4m3}"
-BATCH="${VLLM_MAX_NUM_BATCHED_TOKENS:-8192}"
+BATCH="${SLGPU_MAX_NUM_BATCHED_TOKENS:-8192}"
 TOOL="${TOOL_CALL_PARSER:-hermes}"
 REASON="${REASONING_PARSER:-qwen3}"
 

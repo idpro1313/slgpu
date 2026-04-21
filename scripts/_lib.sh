@@ -202,7 +202,7 @@ slgpu_gen_preset_file() {
     echo "KV_CACHE_DTYPE=${kv}"
     echo "GPU_MEM_UTIL=${gpu}"
     echo "SGLANG_MEM_FRACTION_STATIC=${sgl}"
-    echo "VLLM_MAX_NUM_BATCHED_TOKENS=${batch}"
+    echo "SLGPU_MAX_NUM_BATCHED_TOKENS=${batch}"
     echo "TP=${tp}"
     echo "REASONING_PARSER=${reason}"
     echo "TOOL_CALL_PARSER=${tool}"

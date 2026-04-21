@@ -37,4 +37,4 @@ fi
 slgpu_load_compose_env "${PRESET}" "${ENGINE}"
 
 echo "=== Effective env (engine=${ENGINE}, preset=${PRESET}) ==="
-env | sort | grep -E '^(MODEL_|MAX_|TP|KV_|GPU_|VLLM_MAX|VLLM_MEM|VLLM_|SGLANG_|REASONING_|TOOL_|BENCH_|PYTORCH_|NCCL_)' || true
+env | sort | grep -E '^(MODEL_|MAX_|TP|KV_|GPU_|SLGPU_|VLLM_MEM|VLLM_LOGGING|VLLM_MEMORY|VLLM_USE|VLLM_|SGLANG_|REASONING_|TOOL_|BENCH_|PYTORCH_|NCCL_)' || true

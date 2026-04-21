@@ -137,7 +137,7 @@
 |------------|--------------|------------|
 | `HF_TOKEN` | [`configs/secrets/hf.env`](configs/secrets/hf.env) | Только для `./slgpu pull` |
 | `MODELS_DIR` | `.env` | Путь к моделям на хосте → `/models` |
-| `MODEL_ID`, `MODEL_REVISION`, `MAX_MODEL_LEN`, `TP`, `GPU_MEM_UTIL`, `KV_CACHE_DTYPE`, `VLLM_MAX_NUM_BATCHED_TOKENS`, `SGLANG_MEM_FRACTION_STATIC`, `REASONING_PARSER`, `TOOL_CALL_PARSER`, `BENCH_MODEL_NAME`, `VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS` | пресет | Параметры инференса (см. `configs/models/README.md`) |
+| `MODEL_ID`, `MODEL_REVISION`, `MAX_MODEL_LEN`, `TP`, `GPU_MEM_UTIL`, `KV_CACHE_DTYPE`, `SLGPU_MAX_NUM_BATCHED_TOKENS`, `SGLANG_MEM_FRACTION_STATIC`, `REASONING_PARSER`, `TOOL_CALL_PARSER`, `BENCH_MODEL_NAME`, `VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS` | пресет | Параметры инференса (см. `configs/models/README.md`) |
 | `LLM_API_BIND`, `GRAFANA_*`, `PROMETHEUS_*`, `DCGM_BIND`, `NODE_EXPORTER_BIND` | `.env` | Сеть и мониторинг |
 
 ---
