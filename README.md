@@ -204,8 +204,8 @@ M=qwen3.6-35b-a3b
   --batch 24576 --kv-dtype fp8_e4m3
 ./slgpu up vllm -m qwen3.6-35b-a3b
 
-# moonshotai/Kimi-K2.6 (архитектурное окно 128K; веса ~1T — нужен fp8/квант на чекпоинте)
-# Пресет по умолчанию: TP=8, MAX_MODEL_LEN=131072, kimi_k2-парсеры, vLLM MM_ENCODER_TP_MODE=data (как у Moonshot).
+# moonshotai/Kimi-K2.6 (заявленное окно на HF — 128K; при OOM снизьте --max-len; веса ~1T — fp8/квант на чекпоинте)
+# Пресет по умолчанию: TP=8, MAX_MODEL_LEN=262144 (как у pull для длинного контекста), kimi_k2-парсеры, MM_ENCODER_TP_MODE=data.
 ./slgpu pull moonshotai/Kimi-K2.6 \
   --gpu-mem 0.94 --sglang-mem 0.90 \
   --batch 16384 --kv-dtype fp8_e4m3

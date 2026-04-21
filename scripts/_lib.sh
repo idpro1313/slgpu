@@ -178,9 +178,6 @@ slgpu_guess_parsers() {
 slgpu_guess_max_model_len() {
   local id="$1"
   case "${id}" in
-    moonshotai/Kimi-K2.6*|*/Kimi-K2.6*)
-      echo 131072
-      ;;
     Qwen/Qwen3.6*|Qwen3.6*)
       echo 262144
       ;;
