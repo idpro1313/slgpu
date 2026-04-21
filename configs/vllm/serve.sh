@@ -7,7 +7,7 @@ set -euo pipefail
 MODEL_PATH="/models/${MODEL_ID}"
 HOST="${VLLM_LISTEN_HOST:-0.0.0.0}"
 PORT="${VLLM_LISTEN_PORT:-8111}"
-TP="${TP:-4}"
+TP="${TP:-8}"
 GPU_MEM="${GPU_MEM_UTIL:-0.92}"
 MAX_LEN="${MAX_MODEL_LEN:-32768}"
 KV="${KV_CACHE_DTYPE:-fp8_e4m3}"

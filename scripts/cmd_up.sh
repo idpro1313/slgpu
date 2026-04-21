@@ -50,11 +50,11 @@ API_PORT=8111
 
 case "${MODE}" in
   vllm)
-    echo "Поднимаю vLLM (TP=${TP:-4}, все GPU), API :${API_PORT}…"
+    echo "Поднимаю vLLM (TP=${TP:-8}, все GPU), API :${API_PORT}…"
     docker compose --profile vllm up -d
     ;;
   sglang)
-    echo "Поднимаю SGLang (TP=${TP:-4}, все GPU), API :${API_PORT}…"
+    echo "Поднимаю SGLang (TP=${TP:-8}, все GPU), API :${API_PORT}…"
     docker compose --profile sglang up -d
     ;;
 esac

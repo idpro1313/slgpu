@@ -21,7 +21,7 @@
 - **`VLLM_MAX_NUM_BATCHED_TOKENS`** — только vLLM (chunked prefill).
 - **`SGLANG_MEM_FRACTION_STATIC`** — только SGLang.
 - **`REASONING_PARSER`**, **`TOOL_CALL_PARSER`** — vLLM (+ reasoning в SGLang); см. таблицу ниже.
-- **`TP`** — tensor parallel; должен согласовываться с числом GPU в `docker-compose.yml`.
+- **`TP`** — tensor parallel; должен согласовываться с числом GPU в `docker-compose.yml`. В шаблонах репозитория и в **`./slgpu pull`** без `--tp` по умолчанию **8**; на 4 GPU задайте **4**.
 - **`BENCH_MODEL_NAME`** — поле `model` в бенче; пусто — первая модель из `/v1/models`.
 - **`VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS`** — `0` или `1` (в пресете для тяжёлых MoE при необходимости).
 
