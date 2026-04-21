@@ -57,8 +57,8 @@ TS="$(date +%Y%m%d_%H%M%S)"
 OUT="${ROOT}/bench/results/${ENGINE}/${TS}"
 mkdir -p "${OUT}"
 
-echo "Бенч: engine=${ENGINE} base=${BASE} model=${BENCH_MODEL_NAME:-${MODEL_ID}}"
-echo "MAX_MODEL_LEN=${MAX_MODEL_LEN:-<unset>}"
+echo "Бенч: engine=${ENGINE} base=${BASE} model=${BENCH_MODEL_NAME:-${MODEL_ID:-<auto>}}"
+echo "MAX_MODEL_LEN=${MAX_MODEL_LEN:-<auto>}"
 echo "Результаты: ${OUT}"
 
 python3 "${ROOT}/scripts/bench_openai.py" \
