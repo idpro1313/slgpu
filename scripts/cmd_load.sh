@@ -99,8 +99,8 @@ fi
 
 slgpu_load_env "${MODEL_SLUG}"
 
-# Проверка соответствия запущенного engine + model
-slgpu_validate_running_config "${ENGINE}" "${MODEL_SLUG}" "${MODEL_ID}" || exit 1
+# Проверка соответствия запущенного engine
+slgpu_validate_running_config "${ENGINE}" "${MODEL_SLUG}" || exit 1
 
 BASE="http://127.0.0.1:8111/v1"
 
