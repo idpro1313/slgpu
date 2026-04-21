@@ -22,7 +22,7 @@ source "${ROOT}/scripts/_lib.sh"
 usage() {
   cat <<EOF
 Использование:
-  ./slgpu load <vllm|sglang> -m|--model <preset> [опции]
+  ./slgpu load [vllm|sglang] [-m|--model <preset>] [опции]
 
 Опции:
   -u, --users <N>         Целевое число виртуальных пользователей (default: 250)
@@ -38,14 +38,17 @@ usage() {
   -h, --help              Эта справка
 
 Примеры:
-  # Стандарт: 250 пользователей, 15 мин steady, 2 мин ramp-up
-  ./slgpu load vllm -m qwen3.6-35b-a3b
+  # Стандарт: 250 пользователей, 15 мин steady (engine и модель автоопределяются)
+  ./slgpu load
+
+  # С явным указанием пресета (для MAX_MODEL_LEN)
+  ./slgpu load -m qwen3.6-35b-a3b
 
   # 300 пользователей, 20 мин steady
-  ./slgpu load vllm -m qwen3.6-35b-a3b --users 300 --duration 1200
+  ./slgpu load --users 300 --duration 1200
 
   # Быстрый тест: 50 пользователей, 2 мин
-  ./slgpu load vllm -m qwen3.6-35b-a3b --users 50 --duration 120 --ramp-up 30 --ramp-down 30
+  ./slgpu load --users 50 --duration 120 --ramp-up 30 --ramp-down 30
 EOF
 }
 
@@ -91,16 +94,13 @@ if [[ -z "${ENGINE}" ]]; then
   echo "[LOAD] Авто-определён движок: ${ENGINE}"
 fi
 
-if [[ -z "${MODEL_SLUG}" ]]; then
-  echo "[LOAD] ОШИБКА: не указан пресет (флаг -m <preset>)" >&2
-  usage >&2
-  exit 1
+# Загрузка env пресета, если указан (для MAX_MODEL_LEN / BENCH_MODEL_NAME)
+if [[ -n "${MODEL_SLUG}" ]]; then
+  slgpu_load_env "${MODEL_SLUG}"
 fi
 
-slgpu_load_env "${MODEL_SLUG}"
-
 # Проверка соответствия запущенного engine
-slgpu_validate_running_config "${ENGINE}" "${MODEL_SLUG}" || exit 1
+slgpu_validate_running_config "${ENGINE}" || exit 1
 
 BASE="http://127.0.0.1:8111/v1"
 

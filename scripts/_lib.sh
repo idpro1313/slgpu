@@ -257,22 +257,21 @@ slgpu_detect_running_engine() {
   return 1
 }
 
-# Проверить соответствие запущенного движка с параметрами бенча.
-# $1 = engine (vllm|sglang), $2 = preset slug (для подсказки в ошибке).
+# Проверить соответствие запущенного движка.
+# $1 = engine (vllm|sglang)
 slgpu_validate_running_config() {
   local engine="${1:-}"
-  local preset="${2:-}"
 
   local running_engine
   running_engine="$(slgpu_detect_running_engine)" || true
 
   if [[ -z "${running_engine}" ]]; then
-    echo "[VALIDATE] ОШИБКА: ни vllm, ни sglang не запущены. Сначала: ./slgpu up ${engine} -m ${preset}" >&2
+    echo "[VALIDATE] ОШИБКА: ни vllm, ни sglang не запущены. Сначала: ./slgpu up ${engine}" >&2
     return 1
   fi
 
   if [[ "${running_engine}" != "${engine}" ]]; then
-    echo "[VALIDATE] ОШИБКА: запущен ${running_engine}, а бенч для ${engine}. Сначала: ./slgpu down && ./slgpu up ${engine} -m ${preset}" >&2
+    echo "[VALIDATE] ОШИБКА: запущен ${running_engine}, а бенч для ${engine}. Сначала: ./slgpu down && ./slgpu up ${engine}" >&2
     return 1
   fi
 

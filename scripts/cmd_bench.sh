@@ -9,7 +9,12 @@ source "${ROOT}/scripts/_lib.sh"
 usage() {
   cat <<EOF
 Использование:
-  ./slgpu bench <vllm|sglang> -m|--model <preset> [-h|--help]
+  ./slgpu bench [vllm|sglang] [-m|--model <preset>] [-h|--help]
+
+Опции:
+  [vllm|sglang]   Движок (автоопределяется из docker compose ps, если не указан)
+  -m <preset>      Пресет модели (опционально; для MAX_MODEL_LEN, BENCH_MODEL_NAME)
+  -h, --help       Эта справка
 
 Пресеты (configs/models/<name>.env):
 $(slgpu_list_presets | sed 's/^/  /')
@@ -38,16 +43,13 @@ if [[ -z "${ENGINE}" ]]; then
   echo "[BENCH] Авто-определён движок: ${ENGINE}"
 fi
 
-if [[ -z "${MODEL_SLUG}" ]]; then
-  echo "[BENCH] ОШИБКА: не указан пресет (флаг -m <preset>)" >&2
-  usage >&2
-  exit 1
+# Загрузка env пресета, если указан (для MAX_MODEL_LEN / BENCH_MODEL_NAME)
+if [[ -n "${MODEL_SLUG}" ]]; then
+  slgpu_load_env "${MODEL_SLUG}"
 fi
 
-slgpu_load_env "${MODEL_SLUG}"
-
 # Проверка соответствия запущенного engine
-slgpu_validate_running_config "${ENGINE}" "${MODEL_SLUG}" || exit 1
+slgpu_validate_running_config "${ENGINE}" || exit 1
 
 BASE="http://127.0.0.1:8111/v1"
 
