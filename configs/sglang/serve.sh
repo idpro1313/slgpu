@@ -12,16 +12,23 @@ MEM_FRAC="${SGLANG_MEM_FRACTION_STATIC:-0.90}"
 MAX_LEN="${MAX_MODEL_LEN:-32768}"
 KV="${KV_CACHE_DTYPE:-fp8_e4m3}"
 REASON="${REASONING_PARSER:-qwen3}"
+TOOL="${TOOL_CALL_PARSER:-}"
 
-exec python3 -m sglang.launch_server \
-  --model-path "${MODEL_PATH}" \
-  --trust-remote-code \
-  --served-model-name "${MODEL_ID}" \
-  --tp "${TP}" \
-  --host "${HOST}" \
-  --port "${PORT}" \
-  --mem-fraction-static "${MEM_FRAC}" \
-  --context-length "${MAX_LEN}" \
-  --enable-torch-compile \
-  --kv-cache-dtype "${KV}" \
+cmd=(
+  python3 -m sglang.launch_server
+  --model-path "${MODEL_PATH}"
+  --trust-remote-code
+  --served-model-name "${MODEL_ID}"
+  --tp "${TP}"
+  --host "${HOST}"
+  --port "${PORT}"
+  --mem-fraction-static "${MEM_FRAC}"
+  --context-length "${MAX_LEN}"
+  --enable-torch-compile
+  --kv-cache-dtype "${KV}"
   --reasoning-parser "${REASON}"
+)
+if [[ -n "${TOOL}" ]]; then
+  cmd+=(--tool-call-parser "${TOOL}")
+fi
+exec "${cmd[@]}"

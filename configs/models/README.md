@@ -20,7 +20,8 @@
 - **`GPU_MEM_UTIL`** — vLLM `--gpu-memory-utilization`.
 - **`SLGPU_MAX_NUM_BATCHED_TOKENS`** — только vLLM (chunked prefill; не `VLLM_*`, чтобы vLLM 0.19+ не предупреждал о неизвестных переменных).
 - **`SGLANG_MEM_FRACTION_STATIC`** — только SGLang.
-- **`REASONING_PARSER`**, **`TOOL_CALL_PARSER`** — vLLM (+ reasoning в SGLang); см. таблицу ниже.
+- **`REASONING_PARSER`**, **`TOOL_CALL_PARSER`** — vLLM и SGLang (`launch_server`); см. таблицу ниже.
+- **`MM_ENCODER_TP_MODE`** — только vLLM (`--mm-encoder-tp-mode`); для **moonshotai/Kimi-K2.6** при `./slgpu pull` подставляется **`data`** по референсу Moonshot.
 - **`TP`** — tensor parallel; должен согласовываться с числом GPU в `docker-compose.yml`. В шаблонах репозитория и в **`./slgpu pull`** без `--tp` по умолчанию **8**; на 4 GPU задайте **4**.
 - **`BENCH_MODEL_NAME`** — поле `model` в бенче; пусто — первая модель из `/v1/models`.
 - **`VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS`** — `0` или `1` (в пресете для тяжёлых MoE при необходимости).

@@ -32,6 +32,8 @@ services:
       SLGPU_MAX_NUM_BATCHED_TOKENS: ${SLGPU_MAX_NUM_BATCHED_TOKENS:-${VLLM_MAX_NUM_BATCHED_TOKENS:-8192}}
       TOOL_CALL_PARSER: ${TOOL_CALL_PARSER:-hermes}
       REASONING_PARSER: ${REASONING_PARSER:-qwen3}
+      # Только vLLM (например moonshotai/Kimi-K2.6 — data; см. референс Moonshot / доку vLLM).
+      MM_ENCODER_TP_MODE: ${MM_ENCODER_TP_MODE:-}
       VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS: ${VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS:-1}
     volumes:
       - ${MODELS_DIR:-/opt/models}:/models:ro
@@ -70,6 +72,7 @@ services:
       SGLANG_MEM_FRACTION_STATIC: ${SGLANG_MEM_FRACTION_STATIC:-0.90}
       KV_CACHE_DTYPE: ${KV_CACHE_DTYPE:-fp8_e4m3}
       REASONING_PARSER: ${REASONING_PARSER:-qwen3}
+      TOOL_CALL_PARSER: ${TOOL_CALL_PARSER:-}
     volumes:
       - ${MODELS_DIR:-/opt/models}:/models:ro
       - ./configs/sglang/serve.sh:/etc/slgpu/serve.sh:ro

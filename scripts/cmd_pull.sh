@@ -184,7 +184,14 @@ if is_hf_id "${TARGET}"; then
   [[ -n "${REASON_O}" ]] && reason="${REASON_O}"
   [[ -n "${TOOL_O}" ]] && tool="${TOOL_O}"
 
-  slgpu_gen_preset_file "${slug}" "${HF_ID}" "${REVISION}" "${MAX_LEN}" "${TP}" "${KV}" "${GPU}" "${SGL}" "${BATCH}" "${reason}" "${tool}" >/dev/null
+  mm_enc=""
+  case "${HF_ID}" in
+    moonshotai/Kimi-K2.6*|*/Kimi-K2.6*)
+      mm_enc="data"
+      ;;
+  esac
+
+  slgpu_gen_preset_file "${slug}" "${HF_ID}" "${REVISION}" "${MAX_LEN}" "${TP}" "${KV}" "${GPU}" "${SGL}" "${BATCH}" "${reason}" "${tool}" "${mm_enc}" >/dev/null
   echo "Создан пресет: configs/models/${slug}.env"
 
   slgpu_load_env "${slug}"

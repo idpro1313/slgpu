@@ -174,9 +174,9 @@ slgpu_guess_parsers() {
 }
 
 # Записать configs/models/<slug>.env
-# Аргументы: slug hf_id revision max_len tp kv_dtype gpu_mem sglang_mem batch reason tool
+# Аргументы: slug hf_id revision max_len tp kv_dtype gpu_mem sglang_mem batch reason tool [mm_encoder_tp_mode]
 slgpu_gen_preset_file() {
-  local root out slug hf_id revision max_len tp kv gpu sgl batch reason tool ts
+  local root out slug hf_id revision max_len tp kv gpu sgl batch reason tool mm_enc ts
   root="$(slgpu_root)"
   slug="$1"
   hf_id="$2"
@@ -189,6 +189,7 @@ slgpu_gen_preset_file() {
   batch="$9"
   reason="${10}"
   tool="${11}"
+  mm_enc="${12:-}"
   ts="$(date -Iseconds 2>/dev/null || date)"
   out="${root}/configs/models/${slug}.env"
 
@@ -206,6 +207,10 @@ slgpu_gen_preset_file() {
     echo "TP=${tp}"
     echo "REASONING_PARSER=${reason}"
     echo "TOOL_CALL_PARSER=${tool}"
+    if [[ -n "${mm_enc}" ]]; then
+      echo "# Для чего: vLLM --mm-encoder-tp-mode (мультимодальный энкодер); для Kimi-K2.6 — data по референсу Moonshot."
+      echo "MM_ENCODER_TP_MODE=${mm_enc}"
+    fi
     echo "BENCH_MODEL_NAME="
     if [[ -z "${reason}" && -z "${tool}" ]]; then
       echo ""

@@ -16,19 +16,25 @@ BATCH="${SLGPU_MAX_NUM_BATCHED_TOKENS:-8192}"
 TOOL="${TOOL_CALL_PARSER:-hermes}"
 REASON="${REASONING_PARSER:-qwen3}"
 
-exec vllm serve "${MODEL_PATH}" \
-  --served-model-name "${MODEL_ID}" \
-  --host "${HOST}" \
-  --port "${PORT}" \
-  --tensor-parallel-size "${TP}" \
-  --gpu-memory-utilization "${GPU_MEM}" \
-  --max-model-len "${MAX_LEN}" \
-  --trust-remote-code \
-  --disable-custom-all-reduce \
-  --kv-cache-dtype "${KV}" \
-  --enable-chunked-prefill \
-  --max-num-batched-tokens "${BATCH}" \
-  --enable-prefix-caching \
-  --tool-call-parser "${TOOL}" \
-  --enable-auto-tool-choice \
+cmd=(
+  vllm serve "${MODEL_PATH}"
+  --served-model-name "${MODEL_ID}"
+  --host "${HOST}"
+  --port "${PORT}"
+  --tensor-parallel-size "${TP}"
+  --gpu-memory-utilization "${GPU_MEM}"
+  --max-model-len "${MAX_LEN}"
+  --trust-remote-code
+  --disable-custom-all-reduce
+  --kv-cache-dtype "${KV}"
+  --enable-chunked-prefill
+  --max-num-batched-tokens "${BATCH}"
+  --enable-prefix-caching
+  --tool-call-parser "${TOOL}"
+  --enable-auto-tool-choice
   --reasoning-parser "${REASON}"
+)
+if [[ -n "${MM_ENCODER_TP_MODE:-}" ]]; then
+  cmd+=(--mm-encoder-tp-mode "${MM_ENCODER_TP_MODE}")
+fi
+exec "${cmd[@]}"

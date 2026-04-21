@@ -137,7 +137,7 @@
 |------------|--------------|------------|
 | `HF_TOKEN` | [`configs/secrets/hf.env`](configs/secrets/hf.env) | Только для `./slgpu pull` |
 | `MODELS_DIR` | `.env` | Путь к моделям на хосте → `/models` |
-| `MODEL_ID`, `MODEL_REVISION`, `MAX_MODEL_LEN`, `TP`, `GPU_MEM_UTIL`, `KV_CACHE_DTYPE`, `SLGPU_MAX_NUM_BATCHED_TOKENS`, `SGLANG_MEM_FRACTION_STATIC`, `REASONING_PARSER`, `TOOL_CALL_PARSER`, `BENCH_MODEL_NAME`, `VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS` | пресет | Параметры инференса (см. `configs/models/README.md`) |
+| `MODEL_ID`, `MODEL_REVISION`, `MAX_MODEL_LEN`, `TP`, `GPU_MEM_UTIL`, `KV_CACHE_DTYPE`, `SLGPU_MAX_NUM_BATCHED_TOKENS`, `SGLANG_MEM_FRACTION_STATIC`, `REASONING_PARSER`, `TOOL_CALL_PARSER`, `MM_ENCODER_TP_MODE`, `BENCH_MODEL_NAME`, `VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS` | пресет | Параметры инференса (см. `configs/models/README.md`) |
 | `LLM_API_BIND`, `GRAFANA_*`, `PROMETHEUS_*`, `DCGM_BIND`, `NODE_EXPORTER_BIND` | `.env` | Сеть и мониторинг |
 
 ---
@@ -206,11 +206,12 @@ M=qwen3.6-35b-a3b
 ./slgpu up vllm -m qwen3.6-35b-a3b
 
 # moonshotai/Kimi-K2.6 (архитектурное окно 128K; веса ~1T — нужен fp8/квант на чекпоинте)
+# Пресет по умолчанию: TP=8, kimi_k2-парсеры, vLLM MM_ENCODER_TP_MODE=data (как у Moonshot); при необходимости переопределите флаги pull.
 ./slgpu pull moonshotai/Kimi-K2.6 \
   --max-len 131072 --gpu-mem 0.94 --sglang-mem 0.90 \
-  --batch 16384 --kv-dtype fp8_e4m3 \
-  --reasoning-parser kimi_k2 --tool-call-parser kimi_k2
+  --batch 16384 --kv-dtype fp8_e4m3
 ./slgpu up vllm -m kimi-k2.6
+# ./slgpu up sglang -m kimi-k2.6
 
 # MiniMax-M2.7
 ./slgpu pull MiniMaxAI/MiniMax-M2.7 \
