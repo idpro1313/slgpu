@@ -37,10 +37,12 @@ def _index_scenarios(summary: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     return out
 
 
-def _fmt(x: Any) -> str:
+def _fmt(x: Any, err_code: Optional[str] = None) -> str:
+    if x is None:
+        return f"err:{err_code}" if err_code else "—"
     if isinstance(x, float):
-        if x != x:  # NaN
-            return "nan"
+        if x != x:  # NaN — legacy (старые summary.json)
+            return f"err:{err_code}" if err_code else "nan"
         return f"{x:.4f}"
     return str(x)
 
@@ -88,11 +90,13 @@ def main() -> None:
         tv50, sv50 = rv.get("ttft_s_p50"), rs.get("ttft_s_p50")
         tv95, sv95 = rv.get("ttft_s_p95"), rs.get("ttft_s_p95")
         rpv, rps = rv.get("rps"), rs.get("rps")
+        ev, es = rv.get("error_code"), rs.get("error_code")
         ratio = ""
         if isinstance(rpv, (int, float)) and isinstance(rps, (int, float)) and rpv == rpv and rps == rps and rpv > 0:
             ratio = f"{(rps / rpv):.3f}"
         lines.append(
-            f"| `{name}` | {_fmt(tv50)} | {_fmt(sv50)} | {_fmt(tv95)} | {_fmt(sv95)} | {_fmt(rpv)} | {_fmt(rps)} | {ratio} |\n"
+            f"| `{name}` | {_fmt(tv50, ev)} | {_fmt(sv50, es)} | {_fmt(tv95, ev)} | {_fmt(sv95, es)} "
+            f"| {_fmt(rpv, ev)} | {_fmt(rps, es)} | {ratio} |\n"
         )
 
     lines.append("\n## Модели в прогонах\n")

@@ -13,9 +13,11 @@ import random
 import ssl
 import string
 import time
+import urllib.error
 import urllib.request
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from typing import Any, Dict, List, Optional, Tuple
 
 
@@ -66,6 +68,25 @@ def _resolve_model(base_url: str, override: Optional[str]) -> str:
     return models[0]
 
 
+def _classify_exception(e: BaseException) -> str:
+    """Короткий стабильный код ошибки вместо repr(e).
+
+    Возвращает одну из форм:
+      HTTPError:<code>, URLError:<reason>, TimeoutError, ClassName:<short-msg>
+    """
+    if isinstance(e, urllib.error.HTTPError):
+        return f"HTTPError:{e.code}"
+    if isinstance(e, urllib.error.URLError):
+        reason = getattr(e, "reason", e)
+        reason_name = type(reason).__name__ if not isinstance(reason, str) else reason
+        return f"URLError:{reason_name}"
+    if isinstance(e, TimeoutError):
+        return "TimeoutError"
+    msg = str(e).splitlines()[0][:80] if str(e) else ""
+    name = type(e).__name__
+    return f"{name}:{msg}" if msg else name
+
+
 def _stream_chat(
     base_url: str,
     model: str,
@@ -76,6 +97,8 @@ def _stream_chat(
     """
     Возвращает (ttft_s, total_s, output_tokens_est, error).
     output_tokens_est: по числу чанков с content (грубо).
+    error: короткий код ошибки (HTTP N / no_content / HTTPError:N / URLError:<reason> / <ClassName>[:msg])
+           или None при успехе.
     """
     url = base_url.rstrip("/") + "/chat/completions"
     payload = {
@@ -131,7 +154,7 @@ def _stream_chat(
             return -1.0, t1 - t0, 0, "no_content"
         return ttft - t0, t1 - t0, max(out_chunks, 1), None
     except Exception as e:  # noqa: BLE001
-        return -1.0, time.perf_counter() - t0, 0, repr(e)
+        return -1.0, time.perf_counter() - t0, 0, _classify_exception(e)
 
 
 @dataclass
@@ -141,12 +164,14 @@ class ScenarioResult:
     prompt_chars: int
     max_tokens: int
     rounds: int
-    ttft_s_p50: float
-    ttft_s_p95: float
-    total_s_mean: float
-    out_tokens_mean: float
+    ttft_s_p50: Optional[float]
+    ttft_s_p95: Optional[float]
+    total_s_mean: Optional[float]
+    out_tokens_mean: Optional[float]
     rps: float
     errors: int
+    error_code: Optional[str] = None
+    errors_breakdown: Dict[str, int] = field(default_factory=dict)
 
 
 def _run_scenario(
@@ -162,7 +187,7 @@ def _run_scenario(
     ttfts: List[float] = []
     totals: List[float] = []
     outs: List[float] = []
-    errors = 0
+    error_codes: List[str] = []
     wall_total = 0.0
     ok_requests = 0
 
@@ -177,7 +202,7 @@ def _run_scenario(
             for fut in as_completed(futures):
                 ttft, total, out_toks, err = fut.result()
                 if err:
-                    errors += 1
+                    error_codes.append(err)
                     continue
                 if ttft >= 0:
                     ttfts.append(ttft)
@@ -187,21 +212,27 @@ def _run_scenario(
         t_batch1 = time.perf_counter()
         wall_total += max(1e-9, t_batch1 - t_batch0)
 
-    rps = ok_requests / wall_total if wall_total > 0 else float("nan")
+    rps = ok_requests / wall_total if wall_total > 0 else 0.0
 
     st = sorted(ttfts)
+    breakdown: Dict[str, int] = dict(Counter(error_codes))
+    top_code: Optional[str] = (
+        Counter(error_codes).most_common(1)[0][0] if error_codes else None
+    )
     return ScenarioResult(
         name=name,
         concurrency=concurrency,
         prompt_chars=prompt_chars,
         max_tokens=max_tokens,
         rounds=rounds,
-        ttft_s_p50=_percentile(st, 50),
-        ttft_s_p95=_percentile(st, 95),
-        total_s_mean=sum(totals) / len(totals) if totals else float("nan"),
-        out_tokens_mean=sum(outs) / len(outs) if outs else float("nan"),
+        ttft_s_p50=_percentile(st, 50) if ttfts else None,
+        ttft_s_p95=_percentile(st, 95) if ttfts else None,
+        total_s_mean=(sum(totals) / len(totals)) if totals else None,
+        out_tokens_mean=(sum(outs) / len(outs)) if outs else None,
         rps=rps,
-        errors=errors,
+        errors=len(error_codes),
+        error_code=top_code,
+        errors_breakdown=breakdown,
     )
 
 
