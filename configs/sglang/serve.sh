@@ -13,6 +13,10 @@ MAX_LEN="${MAX_MODEL_LEN:-32768}"
 KV="${KV_CACHE_DTYPE:-fp8_e4m3}"
 REASON="${REASONING_PARSER:-qwen3}"
 TOOL="${TOOL_CALL_PARSER:-}"
+# 0|no|false: не передавать --enable-torch-compile (см. подсказку SGLang при «Capture cuda graph failed»).
+SGL_TORCH="${SGLANG_ENABLE_TORCH_COMPILE:-1}"
+# 1: добавить --disable-cuda-graph (сильно бьёт по скорости; крайняя мера).
+SGL_NO_CG="${SGLANG_DISABLE_CUDA_GRAPH:-0}"
 
 cmd=(
   python3 -m sglang.launch_server
@@ -24,10 +28,20 @@ cmd=(
   --port "${PORT}"
   --mem-fraction-static "${MEM_FRAC}"
   --context-length "${MAX_LEN}"
-  --enable-torch-compile
   --kv-cache-dtype "${KV}"
   --reasoning-parser "${REASON}"
 )
+# Опции CUDA graph: порядок не критичен, флаги из оф. подсказки SGLang.
+if [[ -n "${SGLANG_CUDA_GRAPH_MAX_BS:-}" ]]; then
+  cmd+=(--cuda-graph-max-bs "${SGLANG_CUDA_GRAPH_MAX_BS}")
+fi
+if [[ "${SGL_NO_CG}" == "1" ]]; then
+  cmd+=(--disable-cuda-graph)
+fi
+case "${SGL_TORCH}" in
+  0|no|NO|false|False) ;;
+  *) cmd+=(--enable-torch-compile) ;;
+esac
 if [[ -n "${TOOL}" ]]; then
   cmd+=(--tool-call-parser "${TOOL}")
 fi
