@@ -89,6 +89,37 @@ def _resolve_model(base_url: str, override: Optional[str]) -> str:
     return models[0]
 
 
+def _delta_stream_started(delta: Dict[str, Any]) -> bool:
+    """Старт стрима для TTFT: ключ content (вкл. пустую строку) или reasoning-поля."""
+    if not delta:
+        return False
+    if "content" in delta:
+        return True
+    if "reasoning_content" in delta:
+        return True
+    if "reasoning" in delta:
+        return True
+    return False
+
+
+def _delta_text_chunk_count(delta: Dict[str, Any]) -> int:
+    """Один зачёт на кадр, если есть непустой текст (content / parts / reasoning_*)."""
+    content = delta.get("content")
+    if isinstance(content, str) and content:
+        return 1
+    if isinstance(content, list):
+        for part in content:
+            if isinstance(part, dict):
+                t = part.get("text")
+                if isinstance(t, str) and t:
+                    return 1
+    for key in ("reasoning_content", "reasoning"):
+        v = delta.get(key)
+        if isinstance(v, str) and v:
+            return 1
+    return 0
+
+
 def _stream_chat(
     base_url: str,
     model: str,
@@ -142,14 +173,12 @@ def _stream_chat(
                 if not choices:
                     continue
                 delta = choices[0].get("delta") or {}
-                content = delta.get("content")
-                # vLLM может присылать content="" в service-чанках, но None — только
-                # в первом choice delta (role). Считаем TTFT на первый chunk с любым
-                # наличием delta, а токены — только по непустым content.
-                if ttft is None and content is not None:
+                if not isinstance(delta, dict):
+                    continue
+                # vLLM: служебные чанки с content=""; reasoning-модели — reasoning_content.
+                if ttft is None and _delta_stream_started(delta):
                     ttft = time.perf_counter()
-                if content:
-                    out_chunks += 1
+                out_chunks += _delta_text_chunk_count(delta)
         t1 = time.perf_counter()
         if ttft is None:
             return -1.0, t1 - t0, 0, "no_content"

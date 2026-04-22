@@ -87,6 +87,41 @@ def _classify_exception(e: BaseException) -> str:
     return f"{name}:{msg}" if msg else name
 
 
+def _delta_stream_started(delta: Dict[str, Any]) -> bool:
+    """Первый чанк, с которого считаем TTFT (совместимо с vLLM и reasoning-моделями).
+
+    vLLM может слать служебные чанки с ``content: ""``; ключ ``content`` при этом уже есть.
+    Kimi и др. могут отдавать текст только в ``reasoning_content`` / ``reasoning``.
+    """
+    if not delta:
+        return False
+    if "content" in delta:
+        return True
+    if "reasoning_content" in delta:
+        return True
+    if "reasoning" in delta:
+        return True
+    return False
+
+
+def _delta_text_chunk_count(delta: Dict[str, Any]) -> int:
+    """Сколько «выходных» чанков учесть (не более 1 на SSE-кадр, как раньше по content)."""
+    content = delta.get("content")
+    if isinstance(content, str) and content:
+        return 1
+    if isinstance(content, list):
+        for part in content:
+            if isinstance(part, dict):
+                t = part.get("text")
+                if isinstance(t, str) and t:
+                    return 1
+    for key in ("reasoning_content", "reasoning"):
+        v = delta.get(key)
+        if isinstance(v, str) and v:
+            return 1
+    return 0
+
+
 def _stream_chat(
     base_url: str,
     model: str,
@@ -96,7 +131,7 @@ def _stream_chat(
 ) -> Tuple[float, float, int, Optional[str]]:
     """
     Возвращает (ttft_s, total_s, output_tokens_est, error).
-    output_tokens_est: по числу чанков с content (грубо).
+    output_tokens_est: по числу чанков с непустым текстом (content / list[text] / reasoning_*).
     error: короткий код ошибки (HTTP N / no_content / HTTPError:N / URLError:<reason> / <ClassName>[:msg])
            или None при успехе.
     """
@@ -144,11 +179,11 @@ def _stream_chat(
                 if not choices:
                     continue
                 delta = choices[0].get("delta") or {}
-                content = delta.get("content")
-                if content:
-                    if ttft is None:
-                        ttft = time.perf_counter()
-                    out_chunks += 1
+                if not isinstance(delta, dict):
+                    continue
+                if ttft is None and _delta_stream_started(delta):
+                    ttft = time.perf_counter()
+                out_chunks += _delta_text_chunk_count(delta)
         t1 = time.perf_counter()
         if ttft is None:
             return -1.0, t1 - t0, 0, "no_content"
