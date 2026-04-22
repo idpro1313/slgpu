@@ -15,6 +15,24 @@
    - Убедитесь, что контейнер **`node-exporter`** запущен (`docker compose up -d node-exporter` или через `./slgpu up …`).  
    - В выпадающих списках вверху дашборда выберите **Datasource: Prometheus**, **job = `node-exporter`**, **instance** — обычно **`host`** (так задан label в [`prometheus.yml`](prometheus.yml)); в других ревизиях дашборда может быть `node-exporter:9100`.
 3. **vLLM** — поиск на grafana.com по `vllm` (ID зависят от версии; импорт через **Dashboards → Import**).
+4. **SGLang** — оф. JSON из [репозитория SGLang](https://github.com/sgl-project/sglang/blob/main/examples/monitoring/grafana/dashboards/json/sglang-dashboard.json) или аналог с grafana.com. Datasource: **Prometheus** (`uid: prometheus`).
+
+### SGLang Dashboard: красный треугольник, «No data», пустой model name
+
+Переменная **`instance`** в дашборде должна **совпадать с целевым адресом скрейпа** в Prometheus. У меток `sglang:*` в запросах участвует тот `instance`, который Prometheus ставит от **target** (не внешний порт хоста).
+
+| Конфигурация | В Grafana **instance** |
+|--------------|-------------------------|
+| Актуальный slgpu: SGLang слушает **8222** в контейнере, в [`prometheus.yml`](prometheus.yml) `sglang:8222` | **`sglang:8222`** |
+| Старый стенд: внутри контейнера ещё **8111** (`8222:8111` в Portainer), scrape не обновлён | **`sglang:8111`** |
+
+Если выбрать **`sglang:8111`**, а Prometheus уже скрейпит **`:8222`**, в выборке **нет** метрик с нужным `instance` → **пустые панели** и **ошибка/предупреждение** на панелях.
+
+**Что сделать:** **Dashboards** → открыть SGLang Dashboard → вверху **instance** переключить на **`sglang:8222`** (или тот, что виден в **Prometheus → Status → Targets** для job `sglang`, **State: UP**). Кнопка **Refresh** у переменных, при необходимости обновить страницу.
+
+**`model name` пустой:** варианты (1) неверный **instance** (см. выше) — в запросе нет ряда `model_name`; (2) ещё **не было запросов** к API после старта — сделайте пару вызовов `chat/completions`, затем обновите переменные; (3) ваша версия SGLang экспортирует другое имя лейбла — проверьте в **Explore**: `sglang:generation_tokens_total` или `…{job="sglang"}`.
+
+**Проверки:** `--enable-metrics` (в slgpu по умолчанию); `curl -s 127.0.0.1:<хост_порт>/metrics | head` с хоста — должны быть строки с префиксом, характерным для SGLang.
 
 ### Node Exporter Full «не работает» / пустые графики
 
