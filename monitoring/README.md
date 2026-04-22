@@ -1,6 +1,7 @@
 # Мониторинг
 
-- **Prometheus** (`127.0.0.1:9090`): скрейп `vllm:8111/metrics`, `sglang:8222/metrics`, `dcgm-exporter:9400`, **`node-exporter:9100`** (job **`node-exporter`** — метрики хоста).
+- **Prometheus** (`127.0.0.1:9090`): скрейп `vllm:8111/metrics`, `sglang:<внутренний_порт>/metrics` (в актуальном compose SGLang слушает **8222** внутри контейнера → в [`prometheus.yml`](prometheus.yml) — `sglang:8222`; если у вас старый проброс **8222:8111**, target должен быть **`sglang:8111`**, иначе scrape **DOWN**), `dcgm-exporter:9400`, **`node-exporter:9100`** (job **`node-exporter`** — метрики хоста).
+  - **SGLang:** для наполнения оф. Grafana «SGLang Dashboard» сервер должен запускаться с **`--enable-metrics`** (в slgpu: по умолчанию через `SGLANG_ENABLE_METRICS=1` в `serve.sh`). Иначе панели по `sglang:*` часто пустые.
   - Когда контейнер vLLM или SGLang **не создан** (другой профиль compose), DNS-имя `vllm`/`sglang` отсутствует — target будет **DOWN** или с ошибкой lookup. Это ожидаемо для A/B; смотрите метрики активного движка.
 - **Grafana** (`127.0.0.1:3000`): datasource Prometheus подключён автоматически.
 - **Алерты**: [prometheus-alerts.yml](prometheus-alerts.yml) (пороги при необходимости ослабьте, если метрики в вашей версии vLLM называются иначе).

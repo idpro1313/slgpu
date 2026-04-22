@@ -19,6 +19,9 @@ SGL_TORCH="${SGLANG_ENABLE_TORCH_COMPILE:-1}"
 SGL_NO_CG="${SGLANG_DISABLE_CUDA_GRAPH:-0}"
 # 1: --disable-custom-all-reduce (NCCL); при RuntimeError в custom_all_reduce / get_graph_buffer_ipc_meta.
 SGL_NO_CAR="${SGLANG_DISABLE_CUSTOM_ALL_REDUCE:-0}"
+# 1: /metrics с sglang:* (Grafana «SGLang Dashboard»); без этого панели часто пустые.
+SGL_METRICS="${SGLANG_ENABLE_METRICS:-1}"
+SGL_MFU="${SGLANG_ENABLE_MFU_METRICS:-0}"
 
 cmd=(
   python3 -m sglang.launch_server
@@ -33,6 +36,12 @@ cmd=(
   --kv-cache-dtype "${KV}"
   --reasoning-parser "${REASON}"
 )
+if [[ "${SGL_METRICS}" == "1" ]]; then
+  cmd+=(--enable-metrics)
+fi
+if [[ "${SGL_MFU}" == "1" ]]; then
+  cmd+=(--enable-mfu-metrics)
+fi
 if [[ "${SGL_NO_CAR}" == "1" ]]; then
   cmd+=(--disable-custom-all-reduce)
 fi
