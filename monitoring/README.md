@@ -15,7 +15,7 @@
    - Убедитесь, что контейнер **`node-exporter`** запущен (`docker compose up -d node-exporter` или через `./slgpu up …`).  
    - В выпадающих списках вверху дашборда выберите **Datasource: Prometheus**, **job = `node-exporter`**, **instance** — обычно **`host`** (так задан label в [`prometheus.yml`](prometheus.yml)); в других ревизиях дашборда может быть `node-exporter:9100`.
 3. **vLLM** — поиск на grafana.com по `vllm` (ID зависят от версии; импорт через **Dashboards → Import**).
-4. **SGLang** — оф. JSON из [репозитория SGLang](https://github.com/sgl-project/sglang/blob/main/examples/monitoring/grafana/dashboards/json/sglang-dashboard.json) или аналог с grafana.com. Datasource: **Prometheus** (`uid: prometheus`).
+4. **SGLang** — в репозитории slgpu уже лежит адаптированная копия: [`monitoring/grafana/provisioning/dashboards/json/sglang-dashboard-slgpu.json`](grafana/provisioning/dashboards/json/sglang-dashboard-slgpu.json) (подхватывается provisioning’ом после `docker compose up -d grafana`). Отличия от [апстрима](https://github.com/sgl-project/sglang/blob/main/examples/monitoring/grafana/dashboards/json/sglang-dashboard.json): **uid datasource `prometheus`**, имена метрик **`sglang:…`** (с двоеточием, как в выгрузке SGLang), переменные **`instance`** / **`model_name`** сужены под `job="sglang"`. Если в вашем образе метрики только в виде `sglang_…` без двоеточия — откатите префиксы в JSON или используйте чистый апстрим и при импорте укажите datasource.
 
 ### SGLang Dashboard: красный треугольник, «No data», пустой model name
 
