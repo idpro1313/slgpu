@@ -14,10 +14,16 @@
    - Datasource: **Prometheus** (как в provisioning, uid `prometheus`).  
    - Убедитесь, что контейнер **`node-exporter`** запущен (`docker compose up -d node-exporter` или через `./slgpu up …`).  
    - В выпадающих списках вверху дашборда выберите **Datasource: Prometheus**, **job = `node-exporter`**, **instance** — обычно **`host`** (так задан label в [`prometheus.yml`](prometheus.yml)); в других ревизиях дашборда может быть `node-exporter:9100`.
-3. **vLLM** — поиск на grafana.com по `vllm` (ID зависят от версии; импорт через **Dashboards → Import**).
-4. **SGLang** — в репозитории slgpu уже лежит адаптированная копия: [`monitoring/grafana/provisioning/dashboards/json/sglang-dashboard-slgpu.json`](grafana/provisioning/dashboards/json/sglang-dashboard-slgpu.json) (подхватывается provisioning’ом после `docker compose up -d grafana`). Отличия от [апстрима](https://github.com/sgl-project/sglang/blob/main/examples/monitoring/grafana/dashboards/json/sglang-dashboard.json): **uid datasource `prometheus`**, имена метрик **`sglang:…`** (с двоеточием, как в выгрузке SGLang), переменные **`instance`** / **`model_name`** сужены под `job="sglang"`. Если в вашем образе метрики только в виде `sglang_…` без двоеточия — откатите префиксы в JSON или используйте чистый апстрим и при импорте укажите datasource.
+3. **vLLM** — поиск на grafana.com по `vllm` (ID зависят от версии; импорт через **Dashboards → Import**). В репозитории для справки лежит экспорт **vLLM Monitoring V2**: [`vllmdash2.json`](grafana/provisioning/dashboards/json/vllmdash2.json) (как внешний импорт с подстановкой datasource); его же разметка перенесена в SGLang-дашборд ниже.
+4. **SGLang (два варианта в provisioning)** — JSON в [`grafana/provisioning/dashboards/json/`](grafana/provisioning/dashboards/json/); подхватываются автоматически при `docker compose up -d grafana` (datasource **uid `prometheus`**, метрики **`sglang:…`**, **`instance`** / **`model_name`**, `job="sglang"`):
+   - [**`sglang-dashboard-slgpu.json`**](grafana/provisioning/dashboards/json/sglang-dashboard-slgpu.json) — сокращённая адаптация [официального SGLang Dashboard](https://github.com/sgl-project/sglang/blob/main/examples/monitoring/grafana/dashboards/json/sglang-dashboard.json) (лагенси, p50/p90/p99, очереди, throughput, cache hit).
+   - [**`sglangdash2-slgpu.json`**](grafana/provisioning/dashboards/json/sglangdash2-slgpu.json) — **расширенный** обзор в духе vLLM «V2» (верхние stat/gauge, E2E/TTFT, токены, очередь, KV/token usage, pie aborted/non-aborted). Собран из `vllmdash2` скриптом [`_build_sglangdash2.py`](grafana/provisioning/dashboards/json/_build_sglangdash2.py) при смене исходника vLLM. Прямого соответствия метрик vLLM нет (например `finished_reason` в Prometheus SGLang нет — срезы через aborted/requests). Гистограмма длины промпта — `sglang:prompt_tokens_histogram_bucket` (нужны включённые у сервера гистограммы длин; иначе панель пустая).
 
-### SGLang Dashboard: красный треугольник, «No data», пустой model name
+   Если в образе префиксы метрик **`sglang_`** без двоеточия — правьте выражения в JSON или импортируйте апстрим-дашборд и укажите datasource вручную.
+
+### SGLang: красный треугольник, «No data», пустой model name
+
+Одинаково для **`sglang-dashboard-slgpu`** и **`sglangdash2-slgpu`**: переменные **`instance`** и **`model_name`** вверху дашборда.
 
 Переменная **`instance`** в дашборде должна **совпадать с целевым адресом скрейпа** в Prometheus. У меток `sglang:*` в запросах участвует тот `instance`, который Prometheus ставит от **target** (не внешний порт хоста).
 
@@ -28,7 +34,7 @@
 
 Если выбрать **`sglang:8111`**, а Prometheus уже скрейпит **`:8222`**, в выборке **нет** метрик с нужным `instance` → **пустые панели** и **ошибка/предупреждение** на панелях.
 
-**Что сделать:** **Dashboards** → открыть SGLang Dashboard → вверху **instance** переключить на **`sglang:8222`** (или тот, что виден в **Prometheus → Status → Targets** для job `sglang`, **State: UP**). Кнопка **Refresh** у переменных, при необходимости обновить страницу.
+**Что сделать:** **Dashboards** → открыть нужный SGLang-дашборд → вверху **instance** переключить на **`sglang:8222`** (или тот, что виден в **Prometheus → Status → Targets** для job `sglang`, **State: UP**). Кнопка **Refresh** у переменных, при необходимости обновить страницу.
 
 **`model name` пустой:** варианты (1) неверный **instance** (см. выше) — в запросе нет ряда `model_name`; (2) ещё **не было запросов** к API после старта — сделайте пару вызовов `chat/completions`, затем обновите переменные; (3) ваша версия SGLang экспортирует другое имя лейбла — проверьте в **Explore**: `sglang:generation_tokens_total` или `…{job="sglang"}`.
 

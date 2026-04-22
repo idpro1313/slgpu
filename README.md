@@ -296,7 +296,7 @@ M=qwen3.6-35b-a3b
 ## 12. Мониторинг и безопасность
 
 - **Prometheus** (`127.0.0.1:9090`): см. [`monitoring/prometheus.yml`](monitoring/prometheus.yml). Неактивный профиль (vllm/sglang) даёт DOWN target — норма для A/B.
-- **Grafana**, дашборды: [`monitoring/README.md`](monitoring/README.md).
+- **Grafana** (`127.0.0.1:3000`), дашборды: в [`monitoring/grafana/provisioning/dashboards/json/`](monitoring/grafana/provisioning/dashboards/json/) лежат JSON с provisioning (Prometheus, uid `prometheus`): краткий **SGLang** (`sglang-dashboard-slgpu.json`), расширенный **SGLang по мотивам vLLM V2** (`sglangdash2-slgpu.json`, сборка из `vllmdash2.json` скриптом `_build_sglangdash2.py`), плюс эталон **vLLM** для ручного импорта (`vllmdash2.json`). Подробности, переменные `instance` / `model_name` и типичные сбои — в [`monitoring/README.md`](monitoring/README.md).
 - Логи контейнеров: **`./slgpu logs vllm -f`**; ротация **json-file** (100 MiB × 5) задана в compose.
 
 **Безопасность:** смените пароль Grafana; не коммитьте `.env` с секретами.
@@ -371,7 +371,8 @@ slgpu/
 │   └── compare.py
 ├── monitoring/
 │   ├── prometheus.yml
-│   └── grafana/provisioning/
+│   ├── README.md
+│   └── grafana/provisioning/   # в dashboards/json/ — vLLM/SGLang Grafana JSON
 ├── bench/
 │   └── results/{vllm,sglang}/
 ├── grace/                      # GRACE-артефакты
