@@ -85,6 +85,8 @@ services:
     volumes:
       - ${MODELS_DIR:-/opt/models}:/models:ro
       - ./configs/sglang/serve.sh:/etc/slgpu/serve.sh:ro
+      # Triton / TorchInductor: autotune и скомпиленные ядра (см. TRITON_CACHE_DIR в sglang.env)
+      - sglang-kernel-cache:/var/cache/slgpu-kernels
     entrypoint: ["/bin/bash"]
     command: ["/etc/slgpu/serve.sh"]
     logging:
@@ -173,3 +175,4 @@ services:
 volumes:
   grafana-data:
   prometheus-data:
+  sglang-kernel-cache:
