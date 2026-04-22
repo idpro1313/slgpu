@@ -102,7 +102,7 @@ fi
 # Проверка соответствия запущенного engine
 slgpu_validate_running_config "${ENGINE}" || exit 1
 
-BASE="http://127.0.0.1:8111/v1"
+BASE="$(slgpu_openai_base_url "${ENGINE}")"
 
 # Предflight-проверка API
 echo "[LOAD] Проверка API ${BASE}/models ..."

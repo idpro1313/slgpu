@@ -257,6 +257,33 @@ slgpu_detect_running_engine() {
   return 1
 }
 
+# База OpenAI API: http://127.0.0.1:<порт>/v1 для запущенного движка (порт с хоста из docker compose).
+# $1: vllm|sglang. Внутри контейнера: vLLM 8111, SGLang 8222.
+slgpu_openai_base_url() {
+  local e="${1:?укажите vllm или sglang}"
+  local root in_p mapped host_port
+  root="$(slgpu_root)"
+  cd "${root}" || return 1
+  case "${e}" in
+    vllm) in_p=8111 ;;
+    sglang) in_p=8222 ;;
+    *) echo "slgpu_openai_base_url: ожидается vllm|sglang" >&2; return 1 ;;
+  esac
+  mapped="$(docker compose port "${e}" "${in_p}" 2>/dev/null | head -1 || true)"
+  host_port=""
+  if [[ -n "${mapped}" ]] && [[ "${mapped}" =~ :([0-9]+)$ ]]; then
+    host_port="${BASH_REMATCH[1]}"
+  fi
+  if [[ -z "${host_port}" ]]; then
+    if [[ "${e}" == sglang ]]; then
+      host_port=8222
+    else
+      host_port=8111
+    fi
+  fi
+  echo "http://127.0.0.1:${host_port}/v1"
+}
+
 # Проверить соответствие запущенного движка.
 # $1 = engine (vllm|sglang)
 slgpu_validate_running_config() {

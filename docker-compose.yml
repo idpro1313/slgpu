@@ -60,7 +60,8 @@ services:
     shm_size: "32gb"
     ipc: host
     ports:
-      - "${LLM_API_BIND:-0.0.0.0}:${LLM_API_PORT:-8111}:8111"
+      # Внутри контейнера API SGLang — 8222 (см. SGLANG_LISTEN_PORT); vLLM по-прежнему 8111.
+      - "${LLM_API_BIND:-0.0.0.0}:${LLM_API_PORT:-8222}:8222"
     env_file:
       - .env
       - configs/sglang/sglang.env

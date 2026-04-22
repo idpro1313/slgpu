@@ -11,7 +11,7 @@ usage() {
 Использование:
   ./slgpu up <vllm|sglang> -m|--model <preset> [-p|--port <порт>] [-h|--help]
 
-  -p, --port   порт API на хосте (по умолчанию 8111)
+  -p, --port   порт API на хосте (vLLM: по умолчанию 8111; SGLang: 8222)
 
 Примеры:
   ./slgpu up vllm -m qwen3.6-35b-a3b
@@ -25,7 +25,8 @@ EOF
 
 MODE=""
 MODEL_SLUG=""
-API_PORT=8111
+API_PORT=""
+PORT_GIVEN=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     vllm|sglang) MODE="$1"; shift ;;
@@ -36,6 +37,7 @@ while [[ $# -gt 0 ]]; do
         usage >&2
         exit 1
       fi
+      PORT_GIVEN=1
       API_PORT="${2}"
       shift 2
       ;;
@@ -47,6 +49,14 @@ done
 if [[ -z "${MODE}" ]]; then
   usage >&2
   exit 1
+fi
+
+if [[ "${PORT_GIVEN}" != "1" ]]; then
+  if [[ "${MODE}" == sglang ]]; then
+    API_PORT=8222
+  else
+    API_PORT=8111
+  fi
 fi
 
 if ! [[ "${API_PORT}" =~ ^[0-9]+$ ]] || (( API_PORT < 1 || API_PORT > 65535 )); then
@@ -83,9 +93,12 @@ case "${MODE}" in
 esac
 
 sleep 2
-mapped="$(compose_llm_env docker compose port "${MODE}" 8111 2>/dev/null | head -1 || true)"
+# Внутри контейнера: vLLM 8111, SGLang 8222 (см. docker-compose, SGLANG_LISTEN_PORT).
+llm_in_port=8111
+[[ "${MODE}" == sglang ]] && llm_in_port=8222
+mapped="$(compose_llm_env docker compose port "${MODE}" "${llm_in_port}" 2>/dev/null | head -1 || true)"
 if [[ -n "${mapped}" ]]; then
-  echo "Проброс порта 8111 (внутри контейнера) → хост: ${mapped}"
+  echo "Проброс порта ${llm_in_port} (внутри контейнера) → хост: ${mapped}"
   if [[ "${mapped}" =~ :([0-9]+)$ ]]; then
     if [[ "${BASH_REMATCH[1]}" != "${API_PORT}" ]]; then
       echo "ВНИМАНИЕ: ожидаемый порт хоста -p ${API_PORT}, compose сообщает :${BASH_REMATCH[1]}. Проверьте LLM_API_PORT в .env и повторите up." >&2
@@ -111,8 +124,8 @@ for _ in $(seq 1 "${SLGPU_UP_READY_ATTEMPTS}"); do
 done
 if [[ "${ok}" != "1" ]]; then
   echo "Таймаут ожидания API на :${API_PORT}. Логи: docker compose logs -f ${MODE}" >&2
-  echo "=== docker compose port ${MODE} 8111 ===" >&2
-  compose_llm_env docker compose port "${MODE}" 8111 2>&1 >&2 || true
+  echo "=== docker compose port ${MODE} ${llm_in_port} ===" >&2
+  compose_llm_env docker compose port "${MODE}" "${llm_in_port}" 2>&1 >&2 || true
   echo "=== docker compose ps (фрагмент) ===" >&2
   docker compose ps 2>&1 | head -n 20 >&2
   exit 1

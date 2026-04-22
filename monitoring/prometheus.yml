@@ -20,7 +20,7 @@ scrape_configs:
   - job_name: sglang
     metrics_path: /metrics
     static_configs:
-      - targets: ["sglang:8111"]
+      - targets: ["sglang:8222"]
         labels:
           engine: sglang
 
