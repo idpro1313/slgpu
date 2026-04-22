@@ -64,6 +64,8 @@ services:
     env_file:
       - .env
       - configs/sglang/sglang.env
+    # Переменные из пресета (source в ./slgpu up) обязаны быть здесь, иначе в контейнер не попадут
+    # (пресет не в env_file). См. configs/sglang/serve.sh
     environment:
       MODEL_ID: ${MODEL_ID:-}
       MODEL_REVISION: ${MODEL_REVISION:-}
@@ -73,6 +75,10 @@ services:
       KV_CACHE_DTYPE: ${KV_CACHE_DTYPE:-fp8_e4m3}
       REASONING_PARSER: ${REASONING_PARSER:-qwen3}
       TOOL_CALL_PARSER: ${TOOL_CALL_PARSER:-}
+      SGLANG_CUDA_GRAPH_MAX_BS: ${SGLANG_CUDA_GRAPH_MAX_BS:-}
+      SGLANG_ENABLE_TORCH_COMPILE: ${SGLANG_ENABLE_TORCH_COMPILE:-1}
+      SGLANG_DISABLE_CUDA_GRAPH: ${SGLANG_DISABLE_CUDA_GRAPH:-0}
+      SGLANG_DISABLE_CUSTOM_ALL_REDUCE: ${SGLANG_DISABLE_CUSTOM_ALL_REDUCE:-0}
     volumes:
       - ${MODELS_DIR:-/opt/models}:/models:ro
       - ./configs/sglang/serve.sh:/etc/slgpu/serve.sh:ro
