@@ -17,6 +17,8 @@ TOOL="${TOOL_CALL_PARSER:-}"
 SGL_TORCH="${SGLANG_ENABLE_TORCH_COMPILE:-1}"
 # 1: добавить --disable-cuda-graph (сильно бьёт по скорости; крайняя мера).
 SGL_NO_CG="${SGLANG_DISABLE_CUDA_GRAPH:-0}"
+# 1: --disable-custom-all-reduce (NCCL); при RuntimeError в custom_all_reduce / get_graph_buffer_ipc_meta.
+SGL_NO_CAR="${SGLANG_DISABLE_CUSTOM_ALL_REDUCE:-0}"
 
 cmd=(
   python3 -m sglang.launch_server
@@ -31,6 +33,9 @@ cmd=(
   --kv-cache-dtype "${KV}"
   --reasoning-parser "${REASON}"
 )
+if [[ "${SGL_NO_CAR}" == "1" ]]; then
+  cmd+=(--disable-custom-all-reduce)
+fi
 # Опции CUDA graph: порядок не критичен, флаги из оф. подсказки SGLang.
 if [[ -n "${SGLANG_CUDA_GRAPH_MAX_BS:-}" ]]; then
   cmd+=(--cuda-graph-max-bs "${SGLANG_CUDA_GRAPH_MAX_BS}")
