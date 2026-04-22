@@ -58,9 +58,15 @@ slgpu_load_compose_env "${MODEL_SLUG}" "${MODE}"
 export LLM_API_PORT="${API_PORT}"
 echo "Модель: ${MODEL_ID}  (MAX_MODEL_LEN=${MAX_MODEL_LEN:-<default>}, KV=${KV_CACHE_DTYPE:-<default>}, reasoning=${REASONING_PARSER:-<off>})"
 
+# Для docker compose: явно передаём LLM_API_PORT/LLM_API_BIND, чтобы подстановка в
+# docker-compose.yml не взяла устаревшее значение из корневого .env без учёта -p.
+compose_llm_env() {
+  env LLM_API_PORT="${API_PORT}" LLM_API_BIND="${LLM_API_BIND:-0.0.0.0}" "$@"
+}
+
 echo "Останавливаю vllm/sglang (если были)…"
-docker compose stop vllm sglang 2>/dev/null || true
-docker compose rm -f vllm sglang 2>/dev/null || true
+compose_llm_env docker compose stop vllm sglang 2>/dev/null || true
+compose_llm_env docker compose rm -f vllm sglang 2>/dev/null || true
 
 echo "Поднимаю мониторинг…"
 docker compose up -d dcgm-exporter node-exporter prometheus grafana
@@ -68,20 +74,35 @@ docker compose up -d dcgm-exporter node-exporter prometheus grafana
 case "${MODE}" in
   vllm)
     echo "Поднимаю vLLM (TP=${TP:-8}, все GPU), API :${API_PORT}…"
-    docker compose --profile vllm up -d
+    compose_llm_env docker compose --profile vllm up -d
     ;;
   sglang)
     echo "Поднимаю SGLang (TP=${TP:-8}, все GPU), API :${API_PORT}…"
-    docker compose --profile sglang up -d
+    compose_llm_env docker compose --profile sglang up -d
     ;;
 esac
 
-echo "Ожидание готовности http://127.0.0.1:${API_PORT}/v1/models …"
+sleep 2
+mapped="$(compose_llm_env docker compose port "${MODE}" 8111 2>/dev/null | head -1 || true)"
+if [[ -n "${mapped}" ]]; then
+  echo "Проброс порта 8111 (внутри контейнера) → хост: ${mapped}"
+  if [[ "${mapped}" =~ :([0-9]+)$ ]]; then
+    if [[ "${BASH_REMATCH[1]}" != "${API_PORT}" ]]; then
+      echo "ВНИМАНИЕ: ожидаемый порт хоста -p ${API_PORT}, compose сообщает :${BASH_REMATCH[1]}. Проверьте LLM_API_PORT в .env и повторите up." >&2
+    fi
+  fi
+else
+  echo "Не удалось получить проброс порта (сервис ещё стартует или контейнер не в сети)." >&2
+fi
+
+# До 30 минут: тяжёлые MoE/медленный диск могут не уложиться в 15 минут.
+: "${SLGPU_UP_READY_ATTEMPTS:=360}"
+echo "Ожидание готовности http://127.0.0.1:${API_PORT}/v1/models … (до $((SLGPU_UP_READY_ATTEMPTS * 5 / 60)) мин, шаг 5 с; SLGPU_UP_READY_ATTEMPTS при необходимости) …"
 ok=0
-for _ in $(seq 1 180); do
-  if curl -sf "http://127.0.0.1:${API_PORT}/v1/models" >/dev/null; then
+for _ in $(seq 1 "${SLGPU_UP_READY_ATTEMPTS}"); do
+  if curl -sf --connect-timeout 3 --max-time 20 "http://127.0.0.1:${API_PORT}/v1/models" >/dev/null; then
     echo "API http://127.0.0.1:${API_PORT}/v1/models отвечает."
-    curl -s "http://127.0.0.1:${API_PORT}/v1/models" | head -c 400 || true
+    curl -s --connect-timeout 3 --max-time 20 "http://127.0.0.1:${API_PORT}/v1/models" | head -c 400 || true
     echo
     ok=1
     break
@@ -90,5 +111,9 @@ for _ in $(seq 1 180); do
 done
 if [[ "${ok}" != "1" ]]; then
   echo "Таймаут ожидания API на :${API_PORT}. Логи: docker compose logs -f ${MODE}" >&2
+  echo "=== docker compose port ${MODE} 8111 ===" >&2
+  compose_llm_env docker compose port "${MODE}" 8111 2>&1 >&2 || true
+  echo "=== docker compose ps (фрагмент) ===" >&2
+  docker compose ps 2>&1 | head -n 20 >&2
   exit 1
 fi
