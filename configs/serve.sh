@@ -4,7 +4,7 @@
 set -euo pipefail
 
 slgpu_run_vllm() {
-  # Служебные listen/batch — SLGPU_* (см. vllm.env), чтобы vLLM 0.19+ не предупреждало о «Unknown VLLM_*».
+  # Служебные listen/batch — SLGPU_* (см. main.env), чтобы vLLM 0.19+ не предупреждало о «Unknown VLLM_*».
   local MODEL_PATH HOST PORT TP GPU_MEM MAX_LEN KV BATCH TOOL REASON DISABLE_CAR PREFIX_CACHE cmd
   MODEL_PATH="/models/${MODEL_ID}"
   HOST="${SLGPU_VLLM_HOST:-0.0.0.0}"

@@ -84,7 +84,7 @@ slgpu_load_env() {
   : "${MODEL_ID:?MODEL_ID не задан в пресете ${preset}.env}"
 }
 
-# Для docker compose: main.env → configs/<engine>/<engine>.env → пресет (обязателен).
+# Для docker compose: main.env → пресет (обязателен).
 # $1 — слаг пресета, $2 — vllm | sglang.
 slgpu_load_compose_env() {
   local preset="${1:-}"
@@ -102,16 +102,8 @@ slgpu_load_compose_env() {
     *) echo "slgpu_load_compose_env: ожидается vllm|sglang, получено: ${engine}" >&2; return 1 ;;
   esac
 
-  local eng_file="${root}/configs/${engine}/${engine}.env"
-  if [[ ! -f "${eng_file}" ]]; then
-    echo "Нет файла движка: ${eng_file}" >&2
-    return 1
-  fi
-
   set -a
   slgpu_source_main_env
-  # shellcheck disable=SC1090
-  source "${eng_file}"
 
   local f="${root}/configs/models/${preset}.env"
   if [[ ! -f "${f}" ]]; then

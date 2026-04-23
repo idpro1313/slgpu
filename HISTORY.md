@@ -105,6 +105,7 @@
 | 2.0.10 | **`docker-compose.yml`:** `env_file: main.env`; комментарий про `--env-file`. |
 | 2.0.11 | **Без обязательного `.env`:** `_lib.sh`, compose, удалён `.env.example`; секреты — `main.env` / `export`. |
 | 2.0.12 | **Один [`configs/serve.sh`](configs/serve.sh):** `SLGPU_ENGINE=vllm|sglang`; удалены `configs/vllm/serve.sh`, `configs/sglang/serve.sh`; compose, README, GRACE. |
+| 2.0.13 | **Параметры из `vllm.env` / `sglang.env` в [`main.env`](main.env);** удалены файлы движка; compose — только `env_file: main.env`; [`scripts/_lib.sh`](scripts/_lib.sh) без `configs/<engine>.env`. |
 
 ### Документация и gpt-oss (исправления)
 

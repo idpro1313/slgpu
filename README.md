@@ -58,7 +58,7 @@
          dcgm-exporter :9400 · node-exporter :9100
 ```
 
-Переменные модели передаются в контейнер через блок **`environment`** в `docker-compose.yml` и значения, экспортированные в shell командой **`./slgpu up`** (после слияния [`main.env`](main.env) + `configs/<engine>/<engine>.env` + пресет).
+Переменные модели передаются в контейнер через блок **`environment`** в `docker-compose.yml` и значения, экспортированные в shell командой **`./slgpu up`** (после слияния [`main.env`](main.env) + пресет).
 
 ---
 
@@ -116,7 +116,7 @@
 
 - **[`main.env`](main.env)** — **дефолты хоста и движка** (пути, `MODELS_DIR`, `VLLM_DOCKER_IMAGE`, `MAX_MODEL_LEN`, `TP`, NCCL, мониторинг, …); секреты и редкие per-host поля — в комментариях-заготовках внизу файла или через `export` (см. шапку `main.env`).
 - **`configs/models/<preset>.env`** — модель: `MODEL_ID`, `MAX_MODEL_LEN`, **`TP`** (в шаблонах репозитория **8**; на 4 GPU — **4**), парсеры, KV и т.д. Обязателен для `up` / `bench` / `restart` (флаг **`-m`**).
-- **`configs/vllm/vllm.env`**, **`configs/sglang/sglang.env`** — listen/vLLM-логи, **Triton/TorchInductor**-кэш (SGLang) и т.д.; **NCCL** и **PyTorch allocator** — в [`main.env`](main.env), в контейнер подключается через **`env_file`** в [`docker-compose.yml`](docker-compose.yml). Сырой `docker compose` без `./slgpu up`: для подстановки `${…}` в YAML из `main` используйте **`docker compose --env-file main.env`** (см. комментарий в compose).
+- Все **дефолты движка** (listen vLLM/SGLang, `VLLM_LOGGING_LEVEL`, **Triton/TorchInductor** для SGLang, NCCL, и т.д.) — в [`main.env`](main.env); в контейнер — **`env_file: main.env`** в [`docker-compose.yml`](docker-compose.yml). Сырой `docker compose` без `./slgpu up`: **`docker compose --env-file main.env`** (см. комментарий в compose).
 - **CLI движка**: единый [`configs/serve.sh`](configs/serve.sh) (`SLGPU_ENGINE=vllm|sglang` задаёт `docker-compose`).
 
 Справка по парсерам: [`configs/models/README.md`](configs/models/README.md).
@@ -309,7 +309,7 @@ curl -s http://127.0.0.1:8111/v1/chat/completions \
 | **`ContextOverflowError`** | Увеличить `MAX_MODEL_LEN` или уменьшить `max_tokens` |
 | **OOM при старте** | Снизить `MAX_MODEL_LEN`, `GPU_MEM_UTIL`, `SGLANG_MEM_FRACTION_STATIC`, увеличить `TP`, квантованный чекпоинт |
 | **OOM MoE при загрузке весов** | Часто не спасает только снижение контекста; **TP=8**, другой чекпоинт HF или квант |
-| **vLLM:** `WorkerProc initialization failed` | Ищите `CUDA OOM` выше в логе; см. [`configs/serve.sh`](configs/serve.sh), [`configs/vllm/vllm.env`](configs/vllm/vllm.env) |
+| **vLLM:** `WorkerProc initialization failed` | Ищите `CUDA OOM` выше в логе; см. [`configs/serve.sh`](configs/serve.sh), [`main.env`](main.env) |
 | **vLLM:** `custom_all_reduce.cuh` / `invalid argument` при старте | Дефолт **`SLGPU_DISABLE_CUSTOM_ALL_REDUCE=1`** (NCCL). Не задавайте `0` в пресете, пока custom all-reduce стабилен на вашем образе/модели. |
 | **404 model `gpt-oss-120b`** | Используйте **`openai/gpt-oss-120b`** как в `/v1/models` |
 | **Hermes2ProToolParser / `token_ids` (gpt-oss)** | `TOOL_CALL_PARSER=openai` в пресете |
@@ -332,7 +332,7 @@ slgpu/
 ├── VERSION                     # SemVer
 ├── AGENTS.md                   # Указатель на правила (AGENTS.md → docs/)
 ├── docker-compose.yml
-├── main.env                    # дефолты; затем движок, пресет
+├── main.env                    # дефолты (в т.ч. vLLM/SGLang); затем пресет
 ├── README.md
 ├── docs/
 │   ├── AGENTS.md               # Семантическая карта (GRACE)
@@ -340,8 +340,6 @@ slgpu/
 ├── configs/
 │   ├── secrets/hf.env.example
 │   ├── serve.sh                # vLLM + SGLang (SLGPU_ENGINE)
-│   ├── vllm/vllm.env
-│   ├── sglang/sglang.env
 │   └── models/*.env
 ├── scripts/
 │   ├── _lib.sh
