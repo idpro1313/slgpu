@@ -116,6 +116,7 @@
 | 2.1.4 | **`./slgpu monitoring fix-perms`**, [`scripts/monitoring_fix_permissions.sh`](scripts/monitoring_fix_permissions.sh) (uid:gid из образов); в compose **убраны** жёсткие `user:` у Prom/Grafana; [monitoring/README](monitoring/README.md), README, main.env. |
 | 2.1.5 | Дефолт **`PROMETHEUS_DATA_DIR` / `GRAFANA_DATA_DIR`**: `/opt/mon/prometheus`, `/opt/mon/grafana` (ранее `/var/lib/slgpu/…`). |
 | 2.1.6 | SGLang Grafana: **Model** — `includeAll` + `allValue: ".*"` в `sglangdash2-slgpu` / `sglang-dashboard-slgpu` (без пустого `model_name`); [monitoring/README](monitoring/README.md). |
+| 2.1.7 | **Документация:** полный обзор `git log` (приложение ниже), эпоха 20.04–22.04.2026 между «ранними» коммитами и нумерованными релизами, раздел **«Диалоги и инциденты запуска»** (транскрипты сессий Cursor + соответствие правкам в репо). |
 
 ### Документация и gpt-oss (исправления)
 
@@ -139,6 +140,196 @@
 | Образы compose | Prometheus, Grafana, **node-exporter** на **`latest`** (вместе с vLLM/SGLang/dcgm); в README — про воспроизводимость и pin digest/тега. |
 | Исполняемый бит | В git для **`slgpu`** и **`scripts/cmd_*.sh`** — **100755**. |
 | vLLM 0.19+ и `Unknown VLLM_*` | Служебные переменные listen/batch переименованы в **`SLGPU_VLLM_HOST`**, **`SLGPU_VLLM_PORT`**, **`SLGPU_MAX_NUM_BATCHED_TOKENS`** (`vllm.env`, `serve.sh`, compose); на хосте compose по-прежнему подхватывает **`VLLM_MAX_NUM_BATCHED_TOKENS`** как fallback для старых пресетов. |
+
+---
+
+## Промежуточная эпоха: 20.04–22.04.2026 (коммиты до нумерованных тегов 1.6+)
+
+Период от первого `HISTORY.md` и расширения README до **1.5.x / 1.6.0** в git не дублирует каждую строку в таблице «Пресеты / версии» выше; смысловые группы:
+
+| Тема | Коммиты (хронология) | Суть |
+|------|----------------------|------|
+| **Доки и диск** | `b204e5d` | Появление корневого `HISTORY.md` и ссылка в README. |
+| **Node Exporter** | `77ed2c5`, `fb5c1f9` | Добавлен node-exporter для дашборда *Node Exporter Full*; `job=node-exporter` и troubleshooting. |
+| **Prometheus** | `787cd44` | Named volume, retention, документация при заполнении диска. |
+| **vLLM: remote code, Kimi, serve** | `8fa0bce`, `45e1d0f`, `d7326a2`, `291e00a`, `5f5e43a`, `f5c5471` | `--trust-remote-code`; пресет/доки Kimi-K2.6, OOM на 4×140 GB как лимит веса; `serve` с позиционным путём к модели; снят дублирующий `serve` (ENTRYPOINT образа = `vllm serve`); уточнение про вес, не только KV. |
+| **SGLang: remote code, MoE alloc** | `c01bb74`, `accef7f` | `--trust-remote-code`; `PYTORCH_CUDA_ALLOC_CONF` для MoE, OOM Kimi в SGLang. |
+| **Custom all-reduce** | `0be5328` | `--disable-custom-all-reduce` (gpt-oss и др., обход `invalid argument` в custom AR). |
+| **Упрощение стенда** | `c8dd602` | Один порт 8111, без co-run и systemd, комментарии в конфигах. |
+| **Unified CLI** | `c018bd3`, `d3c0d06`, `da808f4`, `a7a12a9` | `./slgpu`, pull с автогенерацией пресетов (позже отключена в 1.11.1), обновлённый compose, исполняемость, доки про `latest` образов. |
+| **TP=8** | `5a63468` | Дефолт **TP=8** в `serve.sh`, пресетах, pull, README. |
+| **SLGPU_* / vLLM 0.19** | `36d56f7` | Переименование переменных, чтобы убрать предупреждения `Unknown VLLM_*`. |
+| **Kimi-K2.6** | `c4955b8`, `6aca9bb`, `6a7c768` | Выровнено с референсом Moonshot; эвристика `MAX_MODEL_LEN` в pull; для Kimi 262k как у других long-context. |
+| **GRACE + bench load** | `ba91d5e` … `629e3f7` | Каркас GRACE; `bench_load` (1.1.x), burst, валидация engine/model, фиксы SSE/race, отчёты Kimi. |
+| **Сеть и SGLang** | `0294dfd`–`0d42151` | Порт наружу `-p`, `LLM_API_PORT`, SGLang 8222, метрики, кэш ядер, комментарии в `.env`, troubleshooting Grafana (instance 8222 vs 8111), дашборд `sglangdash2-slgpu` по мотивам vLLM V2. |
+| **Grafana** | `3a664eb` area … `3563023` | README про дашборды; sync GRACE; `vllmdash2` — datasource `prometheus`, переменные **Instance / Model** с `includeAll` и `job="vllm"`. |
+| **TP и GPU** | `e2f9a94`, `1319908` | Флаг `--tp` для up/restart; `NVIDIA_VISIBLE_DEVICES` от TP без жёсткого `device_ids` в compose. |
+
+---
+
+## Диалоги (сессии Cursor) и инциденты при запуске моделей
+
+Сводка по **транскриптам** в `agent-transcripts` и по итерациям, отражённым в коммитах 1.8.x–2.1.x. Настройки — из пресетов [`configs/models/`](configs/models/); движок **vLLM 0.19.x**, стенд **8× H200** / **TP=8**, если не оговорено иное.
+
+### GLM-5.1 (zai-org/GLM-5.1)
+
+| Симптом / ошибка | Условия (настройки) | Что сделали в репо / вывод |
+|------------------|---------------------|---------------------------|
+| Pydantic / валидация `max_model_len` | `MAX_MODEL_LEN=262144` при `max_position_embeddings` / RoPE **202752** в `config.json` | Согласовать окно с конфигом весов: **202752**; опционально `VLLM_ALLOW_LONG_MAX_MODEL_LEN=1` (риск NaN/_oob). Эвристика `pull` для `zai-org/GLM*`, README. |
+| `ValueError: No valid attention backend` / `FLASHMLA_SPARSE: [kv_cache_dtype not supported]` | Дефолтный для Qwen **`KV_CACHE_DTYPE=fp8_e4m3`** + sparse MLA / DSA | **KV_CACHE_DTYPE=auto** в пресете; в `cmd_pull` — авто **`KV=auto`** для `zai-org/GLM*`, ручной `--kv-dtype` помечается флагом. |
+| OOM / `SharedFusedMoE` / `unquantized_fused_moe` | Полное окно 202752 + высокий **GPU_MEM_UTIL** (0.88–0.95), MoE | Пошаговое **сжатие**: 1.9.1 **131072 / 0.88**; 1.9.2 **65536 / 0.82 / batch 4096** + `SLGPU_ENABLE_PREFIX_CACHING=0`; 1.9.3 явный **`--no-enable-prefix-caching`**; 1.9.4 **0.75**; 1.9.5 проброс `SLGPU_ENABLE_PREFIX_CACHING` в **compose** (иначе в контейнере оставался дефолт vLLM). |
+| `enable_prefix_caching: True` при `=0` в пресете | Переменная не попадала в контейнер vLLM | Исправление `docker-compose.yml` (1.9.5). |
+| User-generated `pull` снова **fp8_e4m3** | Старый шаблон pull перезатёр `KV` | Пояснения в README; пресет в репо закрепляет **auto**; сессия: ручная правка после pull. |
+
+### Qwen3.6-27B
+
+| Симптом | Условия | Что сделали |
+|---------|---------|-------------|
+| `custom_all_reduce.cuh` / **`invalid argument`** при graph capture | vLLM 0.19 + Qwen3.6, custom all-reduce | Дефолт **`SLGPU_DISABLE_CUSTOM_ALL_REDUCE=1`** (NCCL); итерации 1.8.0–1.8.2. |
+| Таймауты **tool calling**, `JSONDecodeError` / зависание стрима | `TOOL_CALL_PARSER=hermes` | **1.8.3:** `TOOL_CALL_PARSER=qwen3_xml` (Qwen3.6 ветка Coder, XML-инструменты, не JSON Hermes). |
+
+### Мониторинг (Grafana / Prometheus)
+
+| Симптом | Условия | Что сделали |
+|---------|---------|-------------|
+| «No data» / пустой **Model** на SGLang | Переменная `model_name` без `includeAll` / пустой лейбл | **2.1.6:** `includeAll` + `allValue: ".*"` в `sglangdash2-slgpu` и `sglang-dashboard-slgpu`. |
+| «No data» на **vLLM V2** | Только SGLang запущен, или target **down**, или нет трафика / не тот `job` | **1.5.3–1.5.4:** дашборд vLLM: datasource, `job="vllm"`, `instance`/`model_name` с `All`. Если крутится только SGLang — метрик `vllm:*` нет (ожидаемо). |
+| Ошибки прав на данные Grafana | Bind mount, uid не **472:0** | 2.1.2, затем **2.1.4** `fix-perms` и снятие жёсткого `user:` в compose. |
+| Prometheus **mmap** / `queries.active` | Данные на хосте с **root**-файлами | chown **65534**; 2.1.4 — автоматизировано `fix-perms`. |
+
+### Прочее (кратко)
+
+- **gpt-oss:** `TOOL_CALL_PARSER=openai` (Hermes + `token_ids` → TypeError), имя в API, пропускная способность — см. коммиты `3a664eb`, `7b3254e` и таблицу «Документация и gpt-oss».
+- **Kimi-K2.6 (vLLM):** OOM → trust-remote-code, ужатие памяти, `PYTORCH_ALLOC_CONF`, отдельно от KV — см. `d7326a2`–`291e00a` и референс Moonshot `c4955b8`.
+- **Бенч / load:** ложный `no_content` при пустом `content` в SSE — `1.2.1`; валидация engine+модель — `1.1.5+`.
+
+---
+
+## Приложение: полный список коммитов (`main`, хронологически)
+
+Ниже — **все** записи `git log --reverse` на момент составления (≈117 коммитов). Таблица выше сжимает смысл; дубликаты смотрите в SHA.
+
+| Hash | Дата | Сообщение |
+|------|------|-----------|
+| `06abe8a` | 2026-04-20 | slgpu: vLLM/SGLang inference stand (no secrets in history) |
+| `d0c0ece` | 2026-04-20 | chore: выставить исполняемость (100755) для scripts/*.sh |
+| `9a9692a` | 2026-04-20 | fix script |
+| `b9f3e28` | 2026-04-20 | git |
+| `35cb079` | 2026-04-20 | fix: download-model.sh использует hf download вместо устаревшего huggingface-cli |
+| `235e4c3` | 2026-04-20 | fix(vllm): KV fp8_e4m3 по умолчанию для Qwen3 Next (fp8_e5m2 ломает attention) |
+| `5e537ec` | 2026-04-20 | fix(grafana): пустые каталоги plugins/alerting provisioning, пояснения в README |
+| `e22cb3e` | 2026-04-20 | fix: MAX_MODEL_LEN=65536 по умолчанию + bench уважает окно и ужимает max_tokens |
+| `cee515f` | 2026-04-20 | chore: дефолт MAX_MODEL_LEN=262144 (макс. окно Qwen3 Next) |
+| `e5bc4a0` | 2026-04-20 | feat(grafana): внешний bind по умолчанию; пустые provisioning yaml вместо .gitkeep |
+| `3c68062` | 2026-04-20 | feat(reasoning): включить thinking-режим Qwen3 (--reasoning-parser qwen3) |
+| `91acd19` | 2026-04-20 | perf(vllm): включить VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS и поднять GPU_MEM_UTIL до 0.9242 |
+| `fd417b1` | 2026-04-20 | feat(co-run): режим both — vLLM и SGLang одновременно по 2 GPU каждому |
+| `52f7433` | 2026-04-20 | feat(presets): пресеты моделей и флаг -m в скриптах |
+| `5966aaa` | 2026-04-20 | feat(presets): пресеты gpt-oss-120b, Kimi-K2.5, GLM-5.1, MiniMax-M2.7 |
+| `214b2bc` | 2026-04-20 | docs(readme): полное описание проекта, архитектуры и рабочих процессов |
+| `3a664eb` | 2026-04-20 | fix(gpt-oss): TOOL_CALL_PARSER=openai; GPU_MEM_UTIL 0.9296; BENCH_MODEL_NAME |
+| `7b3254e` | 2026-04-20 | feat(vllm): VLLM_MAX_NUM_BATCHED_TOKENS для пропускной способности |
+| `b204e5d` | 2026-04-20 | docs: HISTORY.md — хронология проекта и ссылка в README |
+| `77ed2c5` | 2026-04-20 | monitoring: add node-exporter for Node Exporter Full dashboard |
+| `787cd44` | 2026-04-20 | monitoring: prometheus volume, retention env, disk full docs |
+| `8fa0bce` | 2026-04-20 | vllm: add --trust-remote-code for HF models with custom tokenizer code |
+| `45e1d0f` | 2026-04-20 | docs: Kimi-K2.6 preset, vLLM WorkerProc/engine failure troubleshooting |
+| `d7326a2` | 2026-04-20 | vllm: Kimi-K2.6 OOM defaults, PYTORCH_ALLOC_CONF expandable_segments |
+| `291e00a` | 2026-04-20 | vllm: serve positional model path; Kimi-K2.6 tighter memory + disable cuda graph profiler |
+| `5f5e43a` | 2026-04-20 | fix(vllm): do not duplicate 'serve' — image ENTRYPOINT is vllm serve |
+| `f5c5471` | 2026-04-20 | docs: Kimi-K2.6 OOM on 4x140GB is weight limit, not KV tuning |
+| `c01bb74` | 2026-04-20 | sglang: включить --trust-remote-code для моделей с custom HF code (Kimi-K2.x) |
+| `accef7f` | 2026-04-20 | sglang: PYTORCH_CUDA_ALLOC_CONF для MoE; документация OOM Kimi в SGLang |
+| `fb5c1f9` | 2026-04-20 | monitoring: job node-exporter для Node Exporter Full; раздел troubleshooting |
+| `0be5328` | 2026-04-20 | vllm: --disable-custom-all-reduce (обход custom_all_reduce invalid argument, gpt-oss и др.) |
+| `c8dd602` | 2026-04-21 | Упрощение стенда: один порт 8111, без co-run и systemd; комментарии в конфигах |
+| `c018bd3` | 2026-04-21 | refactor: unified ./slgpu CLI, pull autogenerates presets, compose env for models |
+| `d3c0d06` | 2026-04-21 | docker-compose.yml updated |
+| `da808f4` | 2026-04-21 | chore: executable slgpu/cmd_*.sh; docs for compose latest images |
+| `a7a12a9` | 2026-04-21 | docs(README): expand section 4 with per-command purpose table |
+| `5a63468` | 2026-04-21 | defaults: TP=8 in serve.sh, presets, pull, and docs |
+| `36d56f7` | 2026-04-21 | fix(vllm): use SLGPU_* env vars to avoid vLLM 0.19 unknown VLLM_* warnings |
+| `c4955b8` | 2026-04-21 | feat(kimi-k2.6): align preset and serve with Moonshot reference |
+| `6aca9bb` | 2026-04-21 | feat(pull): default MAX_MODEL_LEN via slgpu_guess_max_model_len (often 262144) |
+| `6a7c768` | 2026-04-21 | fix(pull): Kimi-K2.6 default MAX_MODEL_LEN 262144 like other long-context models |
+| `ba91d5e` | 2026-04-21 | 1.0.0: инициализация GRACE-фреймворка для slgpu |
+| `662c82a` | 2026-04-21 | 1.1.0: длительный нагрузочный тест bench_load (200-300 виртуальных пользователей) |
+| `165f78a` | 2026-04-21 | 1.1.1: обновлен README с описанием команды load и документацией bench_load |
+| `4e020a8` | 2026-04-21 | 1.1.2: fix bench_load.py — race condition, delta RPS, preflight API check |
+| `89e460f` | 2026-04-21 | 1.1.3: fix SSE parsing — delta.content='' no longer breaks TTFT |
+| `c6600e6` | 2026-04-21 | 1.1.4: добавлен burst-режим (--burst) для макс нагрузки на 192 vCPU |
+| `ca4b7ad` | 2026-04-21 | 1.1.5: автоопределение и валидация запущенного engine+model (bench/load) |
+| `9994f66` | 2026-04-21 | 1.1.6: обновлён README — актуальная структура, описание load/bench с валидацией, фикс нумерации |
+| `06a147c` | 2026-04-21 | 1.1.7: автоопределение engine из docker compose для bench/load |
+| `71e5f52` | 2026-04-21 | 1.1.8: убрана валидация MODEL_ID — проверяется только engine |
+| `31b64af` | 2026-04-21 | 1.1.9: -m <preset> сделан опциональным для bench/load |
+| `f8725c1` | 2026-04-21 | 1.1.10: fix unbound variable MODEL_ID при отсутствии -m |
+| `3d4eb0d` | 2026-04-21 | 1.1.11: fix 'local: can only be used in a function' |
+| `629e3f7` | 2026-04-22 | 1.2.0: отчёт Kimi-K2.6, коды ошибок в bench_openai, compare err:code |
+| `a8cee93` | 2026-04-22 | 1.2.1: парсинг SSE bench — content/reasoning, фикс no_content |
+| `e7165d4` | 2026-04-22 | 1.2.2: отчёт — эталонный прогон 20260422_104802 Kimi scenario |
+| `0294dfd` | 2026-04-22 | 1.3.0: флаг -p/--port для ./slgpu up (внешний порт API) |
+| `4da131e` | 2026-04-22 | 1.3.1: явный LLM_API_PORT в docker compose, дольше wait API, диагностика |
+| `a7208ad` | 2026-04-22 | 1.4.0: SGLang — флаги cuda graph; пресет kimi-k2.6 |
+| `0d9ed55` | 2026-04-22 | 1.4.1: SGLang --disable-custom-all-reduce для сбоя custom AR при graph capture |
+| `c8d37f8` | 2026-04-22 | 1.4.2: прокидывать SGLang-флаги пресета в compose (custom AR, graph) |
+| `15418cc` | 2026-04-22 | 1.4.3: SGLang на 8222 (Prometheus, compose, дефолт up/bench/status) |
+| `e04d5e3` | 2026-04-22 | 1.4.4: SGLang --enable-metrics по умолчанию для Grafana/Prometheus |
+| `8e232b4` | 2026-04-22 | 1.4.5: том sglang-kernel-cache для Triton/TorchInductor autotune |
+| `f4233aa` | 2026-04-22 | 1.4.6: уточнение TORCHINDUCTOR_FX_GRAPH_CACHE в sglang.env |
+| `e920e0a` | 2026-04-22 | 1.4.7: комментарии к каждому параметру во всех .env и в генерации pull |
+| `0d42151` | 2026-04-22 | 1.4.8: troubleshooting SGLang Grafana (instance 8222 vs 8111) |
+| `09094a1` | 2026-04-22 | 1.4.9: SGLang Grafana slgpu: sglang: метрики, uid prometheus, переменные |
+| `ce2036c` | 2026-04-22 | 1.5.0: Grafana SGLang-дашборд по мотивам vLLM V2 (sglangdash2-slgpu) |
+| `a66534e` | 2026-04-22 | 1.5.1: README — дашборды Grafana (SGLang v1/V2, vllmdash2) |
+| `36f7cd8` | 2026-04-22 | 1.5.2: синхронизация GRACE с дашбордами Grafana |
+| `c269809` | 2026-04-22 | 1.5.3: vllmdash2 - datasource prometheus for provisioning |
+| `3563023` | 2026-04-22 | 1.5.4: vllmdash2 - instance/Model All и job=vllm в запросах |
+| `e2f9a94` | 2026-04-23 | 1.6.0: флаг --tp для up и restart (без правки пресета) |
+| `1319908` | 2026-04-23 | 1.7.0: NVIDIA_VISIBLE_DEVICES от TP, без device_ids в compose |
+| `291654c` | 2026-04-23 | 1.8.0: пресет qwen3.6-27b, SLGPU_DISABLE_CUSTOM_ALL_REDUCE |
+| `3b00e1a` | 2026-04-23 | 1.8.1: SLGPU_DISABLE_CUSTOM_ALL_REDUCE по умолчанию 0 |
+| `30acd89` | 2026-04-23 | 1.8.2: дефолт SLGPU_DISABLE_CUSTOM_ALL_REDUCE=1 (NCCL) |
+| `7f11d38` | 2026-04-23 | 1.8.3: qwen3.6-27b — TOOL_CALL_PARSER hermes → qwen3_xml (фикс таймаутов tool calling) |
+| `1f62104` | 2026-04-23 | 1.9.0: пресет GLM-5.1, pull: max_len 202752 и KV auto для zai-org/GLM* |
+| `6739488` | 2026-04-23 | 1.9.1: GLM-5.1 — пресет 131k контекста и GPU_MEM 0.88 против OOM MoE |
+| `24a374d` | 2026-04-23 | 1.9.2: GLM-5.1 пресет 65536, optional prefix cache в serve |
+| `b8b7b1a` | 2026-04-23 | 1.9.3: SLGPU_ENABLE_PREFIX_CACHING=0 → --no-enable-prefix-caching |
+| `16b50e0` | 2026-04-23 | 1.9.4: GLM-5.1 GPU_MEM_UTIL=0.75 для OOM SharedFusedMoE |
+| `b361d2d` | 2026-04-23 | 1.9.5: проброс SLGPU_ENABLE_PREFIX_CACHING в vLLM compose |
+| `d8bfc79` | 2026-04-23 | 1.10.0: GLM-5.1-FP8 preset, VLLM_DOCKER_IMAGE, chat template flag |
+| `937422a` | 2026-04-23 | 1.11.0: MiniMax-M2.7 preset (vLLM recipe TP4+EP, compilation-config) |
+| `0cfff1a` | 2026-04-23 | 1.11.1: pull скачивает веса без автогенерации пресетов |
+| `08b8d1d` | 2026-04-23 | 1.11.2: up без ожидания /v1/models |
+| `2b42dfc` | 2026-04-23 | 2.0.0: remove ab, compare, logs, status, config from ./slgpu |
+| `b2a4360` | 2026-04-23 | 2.0.1: убрать slgpu_guess_parsers, парсеры только из пресета |
+| `c5b6b3e` | 2026-04-23 | 2.0.2: убрать slgpu_guess_max_model_len, MAX_MODEL_LEN из пресета |
+| `a2915e2` | 2026-04-23 | 2.0.3: удалить slgpu_gen_preset_file |
+| `930189e` | 2026-04-23 | tp8 |
+| `90f413a` | 2026-04-23 | 2.0.4: -m без пресета — список доступных вместо ошибки bash |
+| `3a978bb` | 2026-04-23 | max_model_len |
+| `9f8f61c` | 2026-04-23 | mmmax_model_len |
+| `d1fac76` | 2026-04-23 | 2.0.5: подчистить устаревшие формулировки в GRACE и docs |
+| `c4079fb` | 2026-04-23 | 2.0.6: configs/main.env — слой дефолтов до .env и пресета |
+| `4ba5b48` | 2026-04-23 | 2.0.7: main.env в корне репозитория |
+| `741db51` | 2026-04-23 | 2.0.8: NCCL и PyTorch в main.env, compose pass |
+| `0a0f66e` | 2026-04-23 | 2.0.9: .env.example без пересечения с main.env |
+| `a98418d` | 2026-04-23 | 2.0.10: env_file main.env в compose, комментарий про подстановку |
+| `2598597` | 2026-04-23 | 2.0.11: без обязательного корневого .env |
+| `0ed09de` | 2026-04-23 | 2.0.12: универсальный configs/serve.sh (SLGPU_ENGINE) |
+| `a48ee95` | 2026-04-23 | 2.0.13: vLLM/SGLang defaults в main.env |
+| `8941ef6` | 2026-04-23 | 2.0.14: serve.sh в scripts/ |
+| `12d333d` | 2026-04-23 | 2.0.15: удалён scripts/compare.py |
+| `eaf7904` | 2026-04-23 | 2.0.16: vLLM/SGLang — env в main, compose, SLGPU_MODEL_ROOT для SGLang |
+| `e44f39f` | 2026-04-23 | 2.1.0: мониторинг в отдельном compose и ./slgpu monitoring |
+| `3bc3487` | 2026-04-23 | 2.1.1: Prometheus и Grafana на диске хоста (bind mount) |
+| `28822c7` | 2026-04-23 | 2.1.2: Grafana — chown 472:0, user 472:0 в compose |
+| `aab778c` | 2026-04-23 | 2.1.3: Prometheus — user 65534, chown -R на TSDB |
+| `a2e0298` | 2026-04-23 | 2.1.4: ./slgpu monitoring fix-perms (uid:gid из образов) |
+| `aaf7a51` | 2026-04-23 | 2.1.5: дефолт данных мониторинга в /opt/mon |
+| `1532aa5` | 2026-04-23 | 2.1.6: SGLang Grafana — Model All, избегаем No data |
+
+*Чтобы обновить список после новых коммитов:* `git log --reverse --format="%h|%ad|%s" --date=short` и дописать строки.
 
 ---
 
