@@ -140,25 +140,5 @@ else
   echo "Не удалось получить проброс порта (сервис ещё стартует или контейнер не в сети)." >&2
 fi
 
-# До 30 минут: тяжёлые MoE/медленный диск могут не уложиться в 15 минут.
-: "${SLGPU_UP_READY_ATTEMPTS:=360}"
-echo "Ожидание готовности http://127.0.0.1:${API_PORT}/v1/models … (до $((SLGPU_UP_READY_ATTEMPTS * 5 / 60)) мин, шаг 5 с; SLGPU_UP_READY_ATTEMPTS при необходимости) …"
-ok=0
-for _ in $(seq 1 "${SLGPU_UP_READY_ATTEMPTS}"); do
-  if curl -sf --connect-timeout 3 --max-time 20 "http://127.0.0.1:${API_PORT}/v1/models" >/dev/null; then
-    echo "API http://127.0.0.1:${API_PORT}/v1/models отвечает."
-    curl -s --connect-timeout 3 --max-time 20 "http://127.0.0.1:${API_PORT}/v1/models" | head -c 400 || true
-    echo
-    ok=1
-    break
-  fi
-  sleep 5
-done
-if [[ "${ok}" != "1" ]]; then
-  echo "Таймаут ожидания API на :${API_PORT}. Логи: docker compose logs -f ${MODE}" >&2
-  echo "=== docker compose port ${MODE} ${llm_in_port} ===" >&2
-  compose_llm_env docker compose port "${MODE}" "${llm_in_port}" 2>&1 >&2 || true
-  echo "=== docker compose ps (фрагмент) ===" >&2
-  docker compose ps 2>&1 | head -n 20 >&2
-  exit 1
-fi
+echo ""
+echo "Готовность модели: curl -s http://127.0.0.1:${API_PORT}/v1/models  ·  логи: docker compose logs -f ${MODE}"
