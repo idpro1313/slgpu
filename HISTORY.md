@@ -117,6 +117,7 @@
 | 2.1.5 | Дефолт **`PROMETHEUS_DATA_DIR` / `GRAFANA_DATA_DIR`**: `/opt/mon/prometheus`, `/opt/mon/grafana` (ранее `/var/lib/slgpu/…`). |
 | 2.1.6 | SGLang Grafana: **Model** — `includeAll` + `allValue: ".*"` в `sglangdash2-slgpu` / `sglang-dashboard-slgpu` (без пустого `model_name`); [monitoring/README](monitoring/README.md). |
 | 2.1.7 | **Документация:** полный обзор `git log` (приложение ниже), эпоха 20.04–22.04.2026 между «ранними» коммитами и нумерованными релизами, раздел **«Диалоги и инциденты запуска»** (транскрипты сессий Cursor + соответствие правкам в репо). |
+| 2.1.8 | **Аналитика в `HISTORY.md`:** крупный раздел **«что делали → что произошло → что поменяли»** — vLLM `SLGPU_*`, KV Qwen, custom AR Qwen3.6, tool parsers, gpt-oss, Kimi, пошагово GLM-5.1 (262k→202k, fp8 KV, MoE OOM, prefix cache, compose), MiniMax, порты SGLang/compose, мониторинг (uid, mmap, Grafana variables), CLI 2.0, бенч; **шпаргалка** по файлам. |
 
 ### Документация и gpt-oss (исправления)
 
@@ -140,6 +141,116 @@
 | Образы compose | Prometheus, Grafana, **node-exporter** на **`latest`** (вместе с vLLM/SGLang/dcgm); в README — про воспроизводимость и pin digest/тега. |
 | Исполняемый бит | В git для **`slgpu`** и **`scripts/cmd_*.sh`** — **100755**. |
 | vLLM 0.19+ и `Unknown VLLM_*` | Служебные переменные listen/batch переименованы в **`SLGPU_VLLM_HOST`**, **`SLGPU_VLLM_PORT`**, **`SLGPU_MAX_NUM_BATCHED_TOKENS`** (`vllm.env`, `serve.sh`, compose); на хосте compose по-прежнему подхватывает **`VLLM_MAX_NUM_BATCHED_TOKENS`** как fallback для старых пресетов. |
+
+---
+
+## Аналитика: «что делали → что произошло → что поменяли»
+
+Ниже — развёрнутые сценарии для статьи: **контекст**, **симптом/ошибка**, **механизм**, **артефакты в репо** (файлы, переменные, флаги CLI). Сводные таблицы по GLM/Qwen/мониторингу — в отдельном разделе **«Диалоги (сессии Cursor)…»** ниже по этому файлу.
+
+### vLLM 0.19+ и «неизвестные» переменные окружения
+
+- **Делали:** в `.env` / пресете задавали **`VLLM_HOST`**, **`VLLM_PORT`**, **`VLLM_MAX_NUM_BATCHED_TOKENS`** (или аналоги), ожидая, что vLLM их «поймёт» по префиксу.
+- **Произошло:** в логах vLLM **0.19+** предупреждения вроде *Unknown / unsupported environment variable* для префикса `VLLM_*`, потому что движок **не** экспортируемые в контейнер переменные сканирует и ругается на незарегистрированные имена; часть настроек должна идти **только** через `vllm serve` (аргументы, не «магия» env).
+- **Поменяли:** в [`scripts/serve.sh`](scripts/serve.sh) и [`docker-compose.yml`](docker-compose.yml) — служебные вещи переименованы в **`SLGPU_VLLM_HOST`**, **`SLGPU_VLLM_PORT`**, **`SLGPU_MAX_NUM_BATCHED_TOKENS`**; в compose оставлен **fallback** `VLLM_MAX_NUM_BATCHED_TOKENS` для старых пресетов. Коммит `36d56f7` (см. таблицу «Рефакторинг CLI»).
+
+### Qwen3 Next: тип KV — не «любой fp8»
+
+- **Делали:** для экономии VRAM тянули **KV fp8**; пробовали варианты, близкие к `fp8_e5m2`.
+- **Произошло:** **assert** / поломка attention / Dynamo (зависит от сборки) при **`KV_CACHE_DTYPE=fp8_e5m2`**; для Qwen3 Next в карточке и vLLM стабильнее **`fp8_e4m3`**.
+- **Поменяли:** дефолт в цепочке env → **`KV_CACHE_DTYPE=fp8_e4m3`** (`235e4c3`); комментарии в `main.env` / пресетах, troubleshooting в README. Бенч: [`scripts/bench_openai.py`](scripts/bench_openai.py) уважает **`MAX_MODEL_LEN`** и ужимает **`max_tokens`** (`e22cb3e`), чтобы не ловить переполнение окна.
+
+### Qwen3.6-27B: custom all-reduce и graph capture
+
+- **Делали:** `TP=8`, custom all-reduce vLLM **включён** (`SLGPU_DISABLE_CUSTOM_ALL_REDUCE=0`) — ожидание низкой латентности all-reduce.
+- **Произошло:** при **CUDA graph capture** / инициализации движка — падения из **`vllm/model_executor/layers/custom_all_reduce.cuh`** с сообщениями в духе **`invalid argument`**, `WorkerProc` / `EngineCore` не дожидается готовности воркеров.
+- **Поменяли:** флаг в [`scripts/serve.sh`](scripts/serve.sh): при **`SLGPU_DISABLE_CUSTOM_ALL_REDUCE=1`** добавляется **`--disable-custom-all-reduce`** (обход через **NCCL**). Итерация версий: **1.8.0** (пресет + переменная в compose) → **1.8.1** дефолт `0` → **1.8.2** снова дефолт **`1`** как практичный default для 0.19 + Qwen3.6. Пресет: [`configs/models/qwen3.6-27b.env`](configs/models/qwen3.6-27b.env).
+
+### Qwen3.6-27B: tool calling и несовместимость `hermes` parser
+
+- **Делали:** `TOOL_CALL_PARSER=hermes` (как у классического Qwen2.5 / JSON tool schema).
+- **Произошло:** модель (ветка Qwen3.6 / Coder) эмитит **XML-инструменты**; `hermes_tool_parser` ждёт JSON → **`JSONDecodeError`**, бесконечный стрим для клиента, **таймаут** на tool round-trip.
+- **Поменяли:** **`TOOL_CALL_PARSER=qwen3_xml`** (альтернатива в комментариях: `qwen3_coder`). Версия **1.8.3**, тот же пресет + [`configs/models/README.md`](configs/models/README.md).
+
+### gpt-oss-120b: tool parser и пропускная способность
+
+- **Делали:** `TOOL_CALL_PARSER=hermes` (или близкое) для tool-enabled сценариев.
+- **Произошло:** **`TypeError`** вокруг `token_ids` (несовпадение ожидаемого формата Hermes с фактическим выводом gpt-oss); для бенча нужна консистентная строка **имени модели** в запросе vs сервер.
+- **Поменяли:** **`TOOL_CALL_PARSER=openai`**, в API / бенче ориентир **`openai/gpt-oss-120b`**, поднят **`GPU_MEM_UTIL=0.9296`**, введён **`BENCH_MODEL_NAME`**, в compose — лимит **`VLLM_MAX_NUM_BATCHED_TOKENS`** (в пресете gpt-oss **16384** для throughput) — коммиты `3a664eb`, `7b3254e`.
+
+### Kimi-K2.6: вес MoE, OOM, remote code (vLLM и SGLang)
+
+- **Делали:** запуск `moonshotai/Kimi-K2.6` на **4×140 GB** или 8×H200; ожидание «подкрутить только KV / batch».
+- **Произошло:** **OOM** ещё на фазе загрузки / размещения весов; на **4×140 GB** упирались **в лимит размера модели**, а не в тонкую настройку KV. Для HF-моделей с custom tokenizer / кода в репо — vLLM/SGLang требуют **`--trust-remote-code`**.
+- **Поменяли (vLLM):** `SLGPU_VLLM_TRUST_REMOTE_CODE` / путь в `serve` к **`MODEL_ID`**, **`PYTORCH_ALLOC_CONF`** с **`expandable_segments:True`**, снижение **GPU mem**, отключение profiler CUDA graphs для стабильности — `8fa0bce`, `d7326a2`, `291e00a`, референс Moonshot `c4955b8`. **SGLang:** `SGLANG_TRUST_REMOTE_CODE`, **`PYTORCH_CUDA_ALLOC_CONF`** для MoE — `c01bb74`, `accef7f`. Док: «OOM на 4×140 = weight limit» — `f5c5471`.
+
+### GLM-5.1 (zai-org/GLM-5.1, bf16): пошаговая эскалация инцидентов
+
+1. **Контекст 262144 vs `config.json`**
+   - *Делали:* выставляли **`MAX_MODEL_LEN=262144`** (как у Qwen long-context), либо тянули дефолт **pull** для длинного окна.
+   - *Произошло:* vLLM валидатор сравнивает с **`max_position_embeddings`** в **`config.json`** весов (**≈202752**); Pydantic / argparse отвергает **`--max-model-len`**, если оно **выше** «родного» RoPE-лимита (сообщение указывает на **`VLLM_ALLOW_LONG_MAX_MODEL_LEN`** как небезопасный override).
+   - *Поменяли:* для **`zai-org/GLM*`** в логике **pull** / доках — **202752**; пресет [`configs/models/glm-5.1.env`](configs/models/glm-5.1.env) (см. `MAX_MODEL_LEN`).
+
+2. **Sparse MLA + `KV_CACHE_DTYPE=fp8_e4m3`**
+   - *Делали:* оставляли глобальный дефолт **fp8_e4m3** для KV (как для Qwen3 Next) после `pull` без ручного `--kv-dtype auto`.
+   - *Произошло:* **`ValueError: No valid attention backend`**, в логе — связка **`FLASHMLA_SPARSE`** и **`kv_cache_dtype not supported`** (ни один backend vLLM 0.19.x не сочетает sparse MLA+DSA с **fp8** KV).
+   - *Поменяли:* **`KV_CACHE_DTYPE=auto`** в пресете; в **`cmd_pull`** для **`zai-org/GLM*`** — автоматически **`KV=auto`**, unless явный **`--kv-dtype`**. **Версия 1.9.0** (`1f62104`).
+
+3. **OOM `SharedFusedMoE` / `unquantized_fused_moe` при 202k и высоком util**
+   - *Делали:* **`MAX_MODEL_LEN=202752`**, **`GPU_MEM_UTIL=0.92`–0.95**, **`SLGPU_MAX_NUM_BATCHED_TOKENS=24576`**.
+   - *Произошло:* **CUDA OOM** в **`SharedFusedMoE`**, **`torch.empty`** при создании весов expert-слоёв; рекомендация vLLM: снизить **`--gpu-memory-utilization`**, уменьшить окно и/или **prefix cache** (съедает пул под KV/буферы).
+   - *Поменяли (итеративно):* **1.9.1** — **`131072`**, **`0.88`**; **1.9.2** — **`65536`**, **`0.82`**, **`4096` batched**, **`SLGPU_ENABLE_PREFIX_CACHING=0`**; **1.9.3** — в `serve` при `0` флаг **`--no-enable-prefix-caching`** (в vLLM 0.19 prefix cache **включён по умолчанию**, просто «не передавать» флаг = кэш остаётся **включённым**); **1.9.4** — **`GPU_MEM_UTIL=0.75`**; **1.9.5** — переменная **`SLGPU_ENABLE_PREFIX_CACHING`** добавлена в **`docker-compose.yml` → `environment` сервиса `vllm`**, иначе пресет с хоста **не** попадал в контейнер и `serve.sh` брал **дефолт `1`**.
+
+4. **GLM-5.1-FP8 (отдельный чекпоинт)**
+   - *Делали:* перейти на **`zai-org/GLM-5.1-FP8`**, сменить **Docker-образ** (рецепт vLLM GLM5.md).
+   - *Поменяли:* пресет [`configs/models/glm-5.1-fp8.env`](configs/models/glm-5.1-fp8.env), **`VLLM_DOCKER_IMAGE`**, **`CHAT_TEMPLATE_CONTENT_FORMAT=string`**, `TOOL`/`REASON` **`glm47`** / **`glm45`**, `serve` — флаг **`--chat-template-content-format`**. **Версия 1.10.0** (`d8bfc79`).
+
+### MiniMax-M2.7: рецепт vLLM ≠ «голый TP8»
+
+- **Делали:** `TP=8` на 8 GPU «по привычке».
+- **Произошло:** [рецепт vLLM](https://github.com/vllm-project/recipes/blob/main/MiniMax/MiniMax-M2.md) требует на 8×GPU **TP4 + expert parallel (EP)** и **`--compilation-config`**; маска **`NVIDIA_VISIBLE_DEVICES`** на **все** карты при EP; **200704** max len по карточке/рецепту.
+- **Поменяли:** [`configs/models/minimax-m2.7.env`](configs/models/minimax-m2.7.env), переменные **`SLGPU_VLLM_COMPILATION_CONFIG`**, **`SLGPU_ENABLE_EXPERT_PARALLEL`**, **`SLGPU_VLLM_DATA_PARALLEL_SIZE`**, pass в [`docker-compose.yml`](docker-compose.yml) и [`scripts/serve.sh`](scripts/serve.sh). **1.11.0** (`937422a`).
+
+### Сеть и порты: внешний `LLM_API_PORT` vs внутри контейнера
+
+- **Делали:** `./slgpu up sglang -m kimi-k2.6 -p 8222` — ожидание, что **и** healthcheck, **и** `curl` **внутри** контейнера ходят на **8222**.
+- **Произошло:** в compose проброс **`${LLM_API_PORT:-8222}:8222`**: **хост 8222 → контейнер 8222** (SGLang). Внутри **`SGLANG_LISTEN_PORT`** (часто **8222** в `main.env` для sglang-профиля) должен **совпадать** с целевым портом образа. Путаница: **`curl` к `127.0.0.1:8111` внутри sglang-контейнера** при том, что слушатель на **8222** → *connection refused*; снаружи **Connection reset** при обращении, пока идут **Triton autotune** / **graph capture** (десятки минут) — **нормальная** фаза, не «сломанный» compose.
+- **Поменяли:** **1.3.0** — `-p` / `LLM_API_PORT`; **1.4.3** — SGLang, метрики, Prometheus targets на **8222**; troubleshooting в [monitoring/README.md](monitoring/README.md) (**instance:8222** для SGLang vs **8111** для vLLM в scrape).
+
+### Мониторинг: права, mmap Prometheus, дашборды
+
+- **Делали:** bind mount **`-v /path/grafana:/var/lib/grafana`**, **`-v /path/prometheus`**, запуск **от root** / случайные `chown`.
+- **Произошло:** Grafana: **`GF_PATHS_DATA is not writable`**, плагины/БД; Prometheus **3.x**: **mmap** на TSDB, ошибки **`queries.active`**, **panic** при **root**-владельце файлов, созданных вне контейнера.
+- **Поменяли:** **2.1.0** — отдельный [`docker-compose.monitoring.yml`](docker-compose.monitoring.yml), сеть **`slgpu`**; **2.1.1** — bind; **2.1.2** — Grafana `user: 472:0`, **`chown -R 472:0`**, не 472:472; **2.1.3** — Prometheus `65534:65534` и **рекурсивный** chown; **2.1.4** — **`./slgpu monitoring fix-perms`**, снятие жёсткого `user:` из compose (uid из **реального** образа); **2.1.5** — дефолт **`/opt/mon/prometheus`**, **`/opt/mon/grafana`**.
+
+- **Grafana: «No data» на панелях SGLang**
+  - *Произошло:* variable **`model_name`** в JSON без корректного **«All»** / **`.*`**, или пустой label при отсутствии трафика.
+  - *Поменяли:* **2.1.6** — в `sglangdash2-slgpu` / `sglang-dashboard-slgpu`: **`includeAll: true`**, **`allValue: ".*"`** (аналогия с уже исправленным **vllmdash2** в **1.5.4**).
+
+- **vLLM дашборд пустой при работе только SGLang**
+  - *Механизм:* **PromQL** `vllm:*` + `job="vllm"` — **нет** рядов, если не запущен scrape target **vllm** / нет запросов — не баг дашборда, а **отсутствие процесса vllm** или **модель не создаёт** label `model_name` до первого вызова.
+
+### CLI 2.0: один `serve.sh`, `main.env`, отказ от лишнего
+
+- **Делали:** много расслоений: `configs/vllm/vllm.env`, `sglang/sglang.env`, корневой **`.env`**, автогенерация пресетов в `pull`, команды `status`/`compare`/…
+- **Поменяли:** единый [`scripts/serve.sh`](scripts/serve.sh) с **`SLGPU_ENGINE`**, всё движковое в [**`main.env`**](main.env) + **пресет**; **2.0.11** — без **обязательного** `.env` в корне; **1.11.1** — `pull` **без** автосоздания `configs/models/*.env`; **2.0.0** — урезан CLI. **`SLGPU_MODEL_ROOT`**: SGLang читает веса из примонтированного корня, совпадающего с vLLM.
+
+### Бенчмарк: сеть, `no_content`, коды ошибок
+
+- **Делали:** в SSE принимать только **truthy** `content` для учёта токенов.
+- **Произошло:** vLLM отдаёт чанк с **`content: ""`** (служебный кадр) при наличии **`reasoning_content`** → сценарий бенчмарка помечал ответ как **`no_content`**, хотя HTTP 200.
+- **Поменяли:** **1.2.1** — учёт пустой строки как «стрим начался»; **1.2.0** — `error_code` / `errors_breakdown` вместо «немых» **NaN** в сводке. **1.1.5+** — сверка **engine** (из compose) с флагом **`--engine`** / модель с `/v1/models`.
+
+### Шпаргалка: ключевые файлы, где «живут» настройки
+
+| Назначение | Файлы (типично) |
+|------------|-----------------|
+| Дефолты хоста / оба движка | [`main.env`](main.env) |
+| Параметры конкретной модели | [`configs/models/<preset>.env`](configs/models/) |
+| Сборка аргументов vLLM / SGLang | [`scripts/serve.sh`](scripts/serve.sh) |
+| Проброс в контейнер | [`docker-compose.yml`](docker-compose.yml) |
+| Сеть LLM + scrape | [monitoring/prometheus.yml](monitoring/prometheus.yml), [monitoring/README.md](monitoring/README.md) |
+| Дашборды | [monitoring/grafana/provisioning/dashboards/json/](monitoring/grafana/provisioning/dashboards/json/) |
 
 ---
 
