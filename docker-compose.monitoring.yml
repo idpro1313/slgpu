@@ -59,7 +59,7 @@ services:
     networks:
       - slgpu
     volumes:
-      - ${PROMETHEUS_DATA_DIR:-/var/lib/slgpu/prometheus}:/prometheus
+      - ${PROMETHEUS_DATA_DIR:-/opt/mon/prometheus}:/prometheus
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./monitoring/prometheus-alerts.yml:/etc/prometheus/prometheus-alerts.yml:ro
     command:
@@ -92,7 +92,7 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_SERVER_ROOT_URL: ${GF_SERVER_ROOT_URL:-}
     volumes:
-      - ${GRAFANA_DATA_DIR:-/var/lib/slgpu/grafana}:/var/lib/grafana
+      - ${GRAFANA_DATA_DIR:-/opt/mon/grafana}:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
     logging:
       driver: json-file

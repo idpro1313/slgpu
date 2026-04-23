@@ -14,8 +14,8 @@ if [[ -f "${ROOT}/main.env" ]]; then
   set +a
 fi
 
-GDIR="${GRAFANA_DATA_DIR:-/var/lib/slgpu/grafana}"
-PDIR="${PROMETHEUS_DATA_DIR:-/var/lib/slgpu/prometheus}"
+GDIR="${GRAFANA_DATA_DIR:-/opt/mon/grafana}"
+PDIR="${PROMETHEUS_DATA_DIR:-/opt/mon/prometheus}"
 GIMG="${SLGPU_GRAFANA_IMAGE:-grafana/grafana:latest}"
 PIMG="${SLGPU_PROMETHEUS_IMAGE:-prom/prometheus:latest}"
 

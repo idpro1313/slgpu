@@ -79,10 +79,10 @@ curl -X POST http://127.0.0.1:9090/-/reload
 **Вручную:** см. [оф. Grafana (docker)](https://grafana.com/docs/grafana/latest/setup-grafana/installation/docker/) и проверяйте `docker run --rm --entrypoint sh grafana/grafana -c 'id'`.
 
 ```bash
-sudo mkdir -p /var/lib/slgpu/prometheus /var/lib/slgpu/grafana
+sudo mkdir -p /opt/mon/prometheus /opt/mon/grafana
 # пример для типичного оф. образа; лучше fix-perms
-sudo chown -R 65534:65534 /var/lib/slgpu/prometheus
-sudo chown -R 472:0 /var/lib/slgpu/grafana
+sudo chown -R 65534:65534 /opt/mon/prometheus
+sudo chown -R 472:0 /opt/mon/grafana
 ./slgpu monitoring up
 ```
 
