@@ -17,7 +17,7 @@ usage() {
 HF id с «/» (например Qwen/Qwen3.6-35B-A3B): веса в \${MODELS_DIR}/<HF_ID>.
   Если существует configs/models/<slug>.env (slug = имя репозитария, нижний регистр, _ → -),
   подгружаются MODEL_ID, MODEL_REVISION и т.д.
-  Если пресета нет — скачивание только по HF id; для ./slgpu up создайте .env вручную.
+  Если пресета нет — скачивание только по HF id; для ./slgpu up заведите пресет configs/models/<slug>.env.
 
 Аргумент без «/» — имя существующего пресета configs/models/<name>.env.
 

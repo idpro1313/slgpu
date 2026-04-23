@@ -69,7 +69,7 @@ curl -X POST http://127.0.0.1:9090/-/reload
 
 1. Посмотреть место: `df -h`, `docker system df` (образы, build cache, тома).
 2. Освободить диск: удалить неиспользуемые образы/кэш (`docker system prune` — осторожно), почистить логи, перенести модели/данные на другой раздел.
-3. Ограничить рост TSDB в `.env`: уменьшить **`PROMETHEUS_RETENTION_TIME`** (например `7d`) и/или задать **`PROMETHEUS_RETENTION_SIZE`** (например `20GB`). Перезапустить контейнер Prometheus: `docker compose up -d prometheus`.
+3. Ограничить рост TSDB в [`main.env`](../main.env): уменьшить **`PROMETHEUS_RETENTION_TIME`** (например `7d`) и/или задать **`PROMETHEUS_RETENTION_SIZE`** (например `20GB`). Перезапустить контейнер Prometheus: `docker compose up -d prometheus`.
 
 Данные Prometheus хранятся в именованном томе **`prometheus-data`** (путь на хосте: `docker volume inspect slgpu_prometheus-data`).
 

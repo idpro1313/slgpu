@@ -2,7 +2,7 @@
 
 Репозиторий **стенда для сравнения LLM-инференса** на Linux-сервере с GPU: два движка (**vLLM** и **SGLang**) в Docker, общий локальный кэш моделей, OpenAI-совместимый HTTP API, нагрузочный бенчмарк, **Prometheus + Grafana + NVIDIA DCGM Exporter**.
 
-Целевая конфигурация при разработке: **8× NVIDIA H200**. **Tensor parallel по умолчанию `TP=8`**: в пресетах [`configs/models/*.env`](configs/models/) и в [`serve.sh`](configs/vllm/serve.sh) при отсутствии переменной. При [`./slgpu up`](scripts/cmd_up.sh) в контейнеры выставляется **`NVIDIA_VISIBLE_DEVICES=0,1,…,TP-1`**, так что число видимых GPU согласовано с `TP` (ручной список в `docker-compose` не нужен; нестандартная нумерация — `SLGPU_NVIDIA_VISIBLE_DEVICES` в `.env`). Проект рассчитан на один хост без Kubernetes.
+Целевая конфигурация при разработке: **8× NVIDIA H200**. **Tensor parallel по умолчанию `TP=8`**: в пресетах [`configs/models/*.env`](configs/models/) и в [`serve.sh`](configs/vllm/serve.sh) при отсутствии переменной. При [`./slgpu up`](scripts/cmd_up.sh) в контейнеры выставляется **`NVIDIA_VISIBLE_DEVICES=0,1,…,TP-1`**, так что число видимых GPU согласовано с `TP` (ручной список в `docker-compose` не нужен; нестандартная нумерация — `SLGPU_NVIDIA_VISIBLE_DEVICES` в `main.env` или `export`). Проект рассчитан на один хост без Kubernetes.
 
 Единая точка входа: **`./slgpu`** (bash, только Linux VM).
 
@@ -14,7 +14,7 @@
 2. [Архитектура](#2-архитектура)
 3. [Сервисы и порты](#3-сервисы-и-порты)
 4. [CLI `./slgpu`](#4-cli-slgpu)
-5. [Конфигурация: `main.env`, `.env` и пресеты](#5-конфигурация)
+5. [Конфигурация: `main.env` и пресеты](#5-конфигурация)
 6. [Переменные окружения (справочник)](#6-переменные-окружения)
 7. [Подготовка хоста](#7-подготовка-хоста)
 8. [Быстрый старт](#8-быстрый-старт)
@@ -58,7 +58,7 @@
          dcgm-exporter :9400 · node-exporter :9100
 ```
 
-Переменные модели передаются в контейнер через блок **`environment`** в `docker-compose.yml` и значения, экспортированные в shell командой **`./slgpu up`** (после слияния [`main.env`](main.env) + `.env` + `configs/<engine>/<engine>.env` + пресет).
+Переменные модели передаются в контейнер через блок **`environment`** в `docker-compose.yml` и значения, экспортированные в shell командой **`./slgpu up`** (после слияния [`main.env`](main.env) + `configs/<engine>/<engine>.env` + пресет).
 
 ---
 
@@ -102,7 +102,7 @@
 |---------|------------|
 | **`help`** | Краткая справка по всем подкомандам и примерам вызова (то же, что и `./slgpu` без аргументов с подсказкой). |
 | **`prepare`** | **Один раз при создании ВМ** (или после переустановки ОС): проверка драйвера NVIDIA, установка Docker и Compose v2, NVIDIA Container Toolkit, при желании persistence mode GPU, создание каталога `MODELS_DIR`, sysctl (`vm.swappiness`), лимиты `nofile`, напоминание про firewall. Запуск от root: `sudo ./slgpu prepare` или шаг `sudo ./slgpu prepare 1` … `6`; выборочно: `STEPS=2,4 sudo -E ./slgpu prepare`. |
-| **`pull`** | **Скачивание весов** в `${MODELS_DIR}/<MODEL_ID>` через `hf download`. **Файл пресета не создаётся.** Аргумент **с `/`** — HF id: если есть `configs/models/<slug>.env` (slug из имени репо), подхватывается `MODEL_ID` и т.д.; если пресета **нет** — скачивание только по HF id, для `./slgpu up` нужно завести `.env` вручную. Аргумент **без `/`** — имя существующего пресета. Опция **`--revision`**: пин ревизии (переопределяет `MODEL_REVISION` при загрузке с пресетом). Токен: [`configs/secrets/hf.env`](configs/secrets/hf.env) (`HF_TOKEN`). |
+| **`pull`** | **Скачивание весов** в `${MODELS_DIR}/<MODEL_ID>` через `hf download`. **Файл пресета не создаётся.** Аргумент **с `/`** — HF id: если есть `configs/models/<slug>.env` (slug из имени репо), подхватывается `MODEL_ID` и т.д.; если пресета **нет** — скачивание только по HF id, для `./slgpu up` заведите `configs/models/<slug>.env`. Аргумент **без `/`** — имя существующего пресета. Опция **`--revision`**: пин ревизии (переопределяет `MODEL_REVISION` при загрузке с пресетом). Токен: [`configs/secrets/hf.env`](configs/secrets/hf.env) (`HF_TOKEN`). |
 | **`up`** | **Запуск стенда**: останавливает и удаляет контейнеры другого движка (vllm/sglang), поднимает мониторинг (Prometheus, Grafana, экспортеры), затем поднимает **один** выбранный профиль — `vllm` или `sglang` с tensor parallel и параметрами из **`-m <preset>`** (обязательно). Опция **`--tp <N>`** переопределяет **TP** на этот запуск (без правки `configs/models/*.env`); без неё **TP** берётся из пресета, а если в пресете нет — **8**. **Не ждёт** готовности `GET /v1/models` — проверяйте вручную: `curl -s http://127.0.0.1:<порт>/v1/models`. vLLM по умолчанию **:8111**, SGLang **:8222** на хосте; **`-p`** меняет порт. |
 | **`down`** | **Остановка инференса**: по умолчанию останавливает и снимает контейнеры **только** `vllm` и `sglang` (мониторинг остаётся). С флагом **`--all`** — останавливаются **все** сервисы проекта compose (включая Prometheus/Grafana/экспортеры). Удобно перед сменой движка или освобождением GPU без сноса данных в томах Grafana/Prometheus при обычном `down`. |
 | **`restart`** | **Перезапуск с новым пресетом без смены движка**: определяет, какой сервис сейчас в статусе *running* (`vllm` или `sglang`), и выполняет для него ту же последовательность, что и `up`, с новым **`-m <preset>`**; опционально **`--tp`**, как у `up`. Если ни один LLM-контейнер не запущен — сообщение об ошибке; тогда используйте `up`. |
@@ -114,8 +114,7 @@
 
 ## 5. Конфигурация
 
-- **[`main.env`](main.env)** — весь набор **дефолтов в репозитории** (пути, `MODELS_DIR`, `VLLM_DOCKER_IMAGE`, `MAX_MODEL_LEN`, `TP`, NCCL, мониторинг, …).
-- **Корневой `.env`** — **только** то, чего **нет** в `main` (секреты и редкие per-host поля; см. [`.env.example`](.env.example)), **без** дублирования имён из `main.env`.
+- **[`main.env`](main.env)** — **дефолты хоста и движка** (пути, `MODELS_DIR`, `VLLM_DOCKER_IMAGE`, `MAX_MODEL_LEN`, `TP`, NCCL, мониторинг, …); секреты и редкие per-host поля — в комментариях-заготовках внизу файла или через `export` (см. шапку `main.env`).
 - **`configs/models/<preset>.env`** — модель: `MODEL_ID`, `MAX_MODEL_LEN`, **`TP`** (в шаблонах репозитория **8**; на 4 GPU — **4**), парсеры, KV и т.д. Обязателен для `up` / `bench` / `restart` (флаг **`-m`**).
 - **`configs/vllm/vllm.env`**, **`configs/sglang/sglang.env`** — listen/vLLM-логи, **Triton/TorchInductor**-кэш (SGLang) и т.д.; **NCCL** и **PyTorch allocator** — в [`main.env`](main.env), в контейнер подключается через **`env_file`** в [`docker-compose.yml`](docker-compose.yml). Сырой `docker compose` без `./slgpu up`: для подстановки `${…}` в YAML из `main` используйте **`docker compose --env-file main.env`** (см. комментарий в compose).
 - **CLI движка**: [`configs/vllm/serve.sh`](configs/vllm/serve.sh), [`configs/sglang/serve.sh`](configs/sglang/serve.sh).
@@ -129,9 +128,9 @@
 | Переменная | Где задаётся | Назначение |
 |------------|--------------|------------|
 | `HF_TOKEN` | [`configs/secrets/hf.env`](configs/secrets/hf.env) | Только для `./slgpu pull` |
-| `MODELS_DIR`, `VLLM_DOCKER_IMAGE`, `LLM_API_BIND`, `GRAFANA_BIND`, `GRAFANA_PORT`, `GRAFANA_ADMIN_USER`, `PROMETHEUS_*`, `DCGM_BIND`, `NODE_EXPORTER_BIND` и пр. | [`main.env`](main.env) | Дефолты; не дублируйте в `.env` |
-| `GRAFANA_ADMIN_PASSWORD` | `.env` | Секрет; в `main` не хранится |
-| `GF_SERVER_ROOT_URL`, `LLM_API_PORT`, `SLGPU_NVIDIA_VISIBLE_DEVICES` (опц.) | `.env` | Только если нужны; **нет** в `main` |
+| `MODELS_DIR`, `VLLM_DOCKER_IMAGE`, `LLM_API_BIND`, `GRAFANA_BIND`, `GRAFANA_PORT`, `GRAFANA_ADMIN_USER`, `PROMETHEUS_*`, `DCGM_BIND`, `NODE_EXPORTER_BIND` и пр. | [`main.env`](main.env) | Дефолты в репозитории |
+| `GRAFANA_ADMIN_PASSWORD` | `main.env` (локально) или `export` | Секрет; см. шаблон внизу [`main.env`](main.env) |
+| `GF_SERVER_ROOT_URL`, `LLM_API_PORT`, `SLGPU_NVIDIA_VISIBLE_DEVICES` (опц.) | `main.env` или `export` | В [`main.env`](main.env) — закомментированные заготовки |
 | `MODEL_ID`, `MODEL_REVISION`, `MAX_MODEL_LEN`, `TP`, `GPU_MEM_UTIL`, `KV_CACHE_DTYPE`, `SLGPU_MAX_NUM_BATCHED_TOKENS`, `SLGPU_DISABLE_CUSTOM_ALL_REDUCE`, `SLGPU_ENABLE_PREFIX_CACHING`, `SGLANG_MEM_FRACTION_STATIC`, `REASONING_PARSER`, `TOOL_CALL_PARSER`, `MM_ENCODER_TP_MODE`, `BENCH_MODEL_NAME`, `VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS` | пресет + `docker-compose` | Параметры инференса; **каждая** нужная для `serve.sh` переменная должна быть в [`docker-compose.yml`](docker-compose.yml) (см. `SLGPU_ENABLE_PREFIX_CACHING`). |
 
 ---
@@ -155,7 +154,7 @@ Docker, Compose v2, NVIDIA Container Toolkit, каталог `MODELS_DIR`, sysct
 ```bash
 git clone <repo-url> /opt/slgpu && cd /opt/slgpu
 
-cp .env.example .env
+# Опционально: при необходимости — пароль Grafana и т.д. (см. шапку main.env)
 # Опционально для gated моделей:
 # cp configs/secrets/hf.env.example configs/secrets/hf.env
 
@@ -275,7 +274,7 @@ python3 scripts/compare.py   # последние summary vLLM + SGLang → об
 - **Grafana** (`127.0.0.1:3000`), дашборды: в [`monitoring/grafana/provisioning/dashboards/json/`](monitoring/grafana/provisioning/dashboards/json/) лежат JSON с provisioning (Prometheus, uid `prometheus`): краткий **SGLang** (`sglang-dashboard-slgpu.json`), расширенный **SGLang по мотивам vLLM V2** (`sglangdash2-slgpu.json`, сборка из `vllmdash2.json` скриптом `_build_sglangdash2.py`), плюс эталон **vLLM** для ручного импорта (`vllmdash2.json`). Подробности, переменные `instance` / `model_name` и типичные сбои — в [`monitoring/README.md`](monitoring/README.md).
 - Логи контейнеров: **`docker compose logs -f vllm`** (или `sglang`, `prometheus`, …); ротация **json-file** (100 MiB × 5) задана в compose.
 
-**Безопасность:** смените пароль Grafana; не коммитьте `.env` с секретами.
+**Безопасность:** смените пароль Grafana; не коммитьте `main.env` с реальными секретами в публичный репозиторий.
 
 ---
 
@@ -321,7 +320,7 @@ curl -s http://127.0.0.1:8111/v1/chat/completions \
 
 - В **`docker-compose.yml`** для vLLM задайте тег/дижест через **`VLLM_DOCKER_IMAGE`** (по умолчанию `vllm/vllm-openai:latest`); для SGLang, Prometheus, Grafana, node-exporter и dcgm-exporter сейчас **`latest`**: содержимое образов меняется без bump версии в репозитории; для продакшена зафиксируйте **digest** или явный **тег** версии.
 - SGLang может не знать те же `--reasoning-parser`, что vLLM.
-- Сервисы LLM используют **`gpus: all`**, а реальная маска GPU — **`NVIDIA_VISIBLE_DEVICES`**: по умолчанию **первые `TP` карт** (`0`…`TP-1` через [`./slgpu up`](scripts/cmd_up.sh)). На хосте с **4** GPU задайте **`TP=4`** (или `--tp 4`); маппинг вручную — **`SLGPU_NVIDIA_VISIBLE_DEVICES`** в `.env`.
+- Сервисы LLM используют **`gpus: all`**, а реальная маска GPU — **`NVIDIA_VISIBLE_DEVICES`**: по умолчанию **первые `TP` карт** (`0`…`TP-1` через [`./slgpu up`](scripts/cmd_up.sh)). На хосте с **4** GPU задайте **`TP=4`** (или `--tp 4`); маппинг вручную — **`SLGPU_NVIDIA_VISIBLE_DEVICES`** в `main.env` или `export`.
 
 ---
 
@@ -333,8 +332,7 @@ slgpu/
 ├── VERSION                     # SemVer
 ├── AGENTS.md                   # Указатель на правила (AGENTS.md → docs/)
 ├── docker-compose.yml
-├── main.env                    # дефолты; затем .env, движок, пресет
-├── .env.example
+├── main.env                    # дефолты; затем движок, пресет
 ├── README.md
 ├── docs/
 │   ├── AGENTS.md               # Семантическая карта (GRACE)

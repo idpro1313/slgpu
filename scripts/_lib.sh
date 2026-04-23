@@ -28,7 +28,7 @@ slgpu_fail_if_missing_preset_arg() {
   fi
 }
 
-# Дефолты репозитория: `main.env` в корне (если есть), до `.env` и пресетов.
+# Дефолты репозитория: `main.env` в корне (если есть), до движка и пресетов.
 slgpu_source_main_env() {
   local root
   root="$(slgpu_root)"
@@ -39,22 +39,14 @@ slgpu_source_main_env() {
   fi
 }
 
-# Только корневой .env (пути, мониторинг). Без пресета.
+# `main.env` (пути, мониторинг). Без пресета.
 slgpu_load_server_env() {
-  local root
-  root="$(slgpu_root)"
-  if [[ ! -f "${root}/.env" ]]; then
-    echo "Нет файла .env — скопируйте: cp .env.example .env" >&2
-    return 1
-  fi
   set -a
   slgpu_source_main_env
-  # shellcheck disable=SC1091
-  source "${root}/.env"
   set +a
 }
 
-# main.env + .env + обязательный пресет configs/models/<slug>.env (bench, load, …).
+# main.env + обязательный пресет configs/models/<slug>.env (bench, load, …).
 slgpu_load_env() {
   local preset="${1:-}"
   local root
@@ -67,15 +59,8 @@ slgpu_load_env() {
     return 1
   fi
 
-  if [[ ! -f "${root}/.env" ]]; then
-    echo "Нет файла .env — скопируйте: cp .env.example .env" >&2
-    return 1
-  fi
-
   set -a
   slgpu_source_main_env
-  # shellcheck disable=SC1091
-  source "${root}/.env"
 
   local f="${root}/configs/models/${preset}.env"
   if [[ ! -f "${f}" ]]; then
@@ -99,7 +84,7 @@ slgpu_load_env() {
   : "${MODEL_ID:?MODEL_ID не задан в пресете ${preset}.env}"
 }
 
-# Для docker compose: main.env → .env → configs/<engine>/<engine>.env → пресет (обязателен).
+# Для docker compose: main.env → configs/<engine>/<engine>.env → пресет (обязателен).
 # $1 — слаг пресета, $2 — vllm | sglang.
 slgpu_load_compose_env() {
   local preset="${1:-}"
@@ -109,11 +94,6 @@ slgpu_load_compose_env() {
 
   if [[ -z "${preset}" ]]; then
     echo "Укажите пресет: -m <slug>" >&2
-    return 1
-  fi
-
-  if [[ ! -f "${root}/.env" ]]; then
-    echo "Нет файла .env — скопируйте: cp .env.example .env" >&2
     return 1
   fi
 
@@ -130,8 +110,6 @@ slgpu_load_compose_env() {
 
   set -a
   slgpu_source_main_env
-  # shellcheck disable=SC1091
-  source "${root}/.env"
   # shellcheck disable=SC1090
   source "${eng_file}"
 

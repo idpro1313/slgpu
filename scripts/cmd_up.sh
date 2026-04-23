@@ -98,7 +98,7 @@ else
   tp_src="пресет"
 fi
 export TP
-# Согласовать Docker с TP: в контейнере видны GPU 0..TP-1 (маска: NVIDIA_VISIBLE_DEVICES). Переопределение: SLGPU_NVIDIA_VISIBLE_DEVICES=2,3 в .env
+# Согласовать Docker с TP: в контейнере видны GPU 0..TP-1 (маска: NVIDIA_VISIBLE_DEVICES). Переопределение: SLGPU_NVIDIA_VISIBLE_DEVICES=2,3 в main.env или export
 if [[ -n "${SLGPU_NVIDIA_VISIBLE_DEVICES:-}" ]]; then
   export NVIDIA_VISIBLE_DEVICES="${SLGPU_NVIDIA_VISIBLE_DEVICES}"
 else
@@ -108,7 +108,7 @@ fi
 echo "Модель: ${MODEL_ID}  TP=${TP} (${tp_src})  NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES}  (MAX_MODEL_LEN=${MAX_MODEL_LEN:-<default>}, KV=${KV_CACHE_DTYPE:-<default>}, reasoning=${REASONING_PARSER:-<off>})"
 
 # Для docker compose: явно передаём LLM_API_PORT/LLM_API_BIND, чтобы подстановка в
-# docker-compose.yml не взяла устаревшее значение из корневого .env без учёта -p.
+# docker-compose.yml не взяла устаревшее значение из shell без учёта -p.
 compose_llm_env() {
   env LLM_API_PORT="${API_PORT}" LLM_API_BIND="${LLM_API_BIND:-0.0.0.0}" TP="${TP}" NVIDIA_VISIBLE_DEVICES="${NVIDIA_VISIBLE_DEVICES}" "$@"
 }
@@ -140,7 +140,7 @@ if [[ -n "${mapped}" ]]; then
   echo "Проброс порта ${llm_in_port} (внутри контейнера) → хост: ${mapped}"
   if [[ "${mapped}" =~ :([0-9]+)$ ]]; then
     if [[ "${BASH_REMATCH[1]}" != "${API_PORT}" ]]; then
-      echo "ВНИМАНИЕ: ожидаемый порт хоста -p ${API_PORT}, compose сообщает :${BASH_REMATCH[1]}. Проверьте LLM_API_PORT в .env и повторите up." >&2
+      echo "ВНИМАНИЕ: ожидаемый порт хоста -p ${API_PORT}, compose сообщает :${BASH_REMATCH[1]}. Проверьте LLM_API_PORT (main.env / export) и повторите up." >&2
     fi
   fi
 else

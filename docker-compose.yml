@@ -1,9 +1,8 @@
 name: slgpu
 
-# vLLM/SGLang: serve.sh. Слой env: main.env → .env → configs/<engine>/*.env → пресет (export в ./slgpu up).
-# Подстановка ${VAR} в этом YAML: по умолчанию из корневого .env и env процесса; из main — так:
-#   docker compose --env-file main.env …
-#   (или: set -a && source main.env && docker compose …). В контейнер defaults из main: env_file ниже.
+# vLLM/SGLang: serve.sh. Слой env: main.env → configs/<engine>/*.env → пресет (export в ./slgpu up).
+# Подстановка ${VAR} в YAML: env процесса; для значений из main: docker compose --env-file main.env …
+#   (или: set -a && source main.env && docker compose …). В контейнер: env_file main.env ниже.
 
 services:
   vllm:
@@ -18,7 +17,6 @@ services:
       - "${LLM_API_BIND:-0.0.0.0}:${LLM_API_PORT:-8111}:8111"
     env_file:
       - main.env
-      - .env
       - configs/vllm/vllm.env
     environment:
       MODEL_ID: ${MODEL_ID:-}
@@ -71,7 +69,6 @@ services:
       - "${LLM_API_BIND:-0.0.0.0}:${LLM_API_PORT:-8222}:8222"
     env_file:
       - main.env
-      - .env
       - configs/sglang/sglang.env
     # Переменные из пресета (source в ./slgpu up) обязаны быть здесь, иначе в контейнер не попадут
     # (пресет не в env_file). См. configs/sglang/serve.sh
@@ -108,7 +105,6 @@ services:
     image: nvidia/dcgm-exporter:latest
     env_file:
       - main.env
-      - .env
     restart: unless-stopped
     gpus: all
     cap_add:
@@ -125,7 +121,6 @@ services:
     image: prom/node-exporter:latest
     env_file:
       - main.env
-      - .env
     restart: unless-stopped
     pid: host
     command:
@@ -149,7 +144,6 @@ services:
     image: prom/prometheus:latest
     env_file:
       - main.env
-      - .env
     restart: unless-stopped
     ports:
       - "${PROMETHEUS_BIND:-127.0.0.1}:9090:9090"
@@ -173,7 +167,6 @@ services:
     image: grafana/grafana:latest
     env_file:
       - main.env
-      - .env
     restart: unless-stopped
     depends_on:
       - prometheus

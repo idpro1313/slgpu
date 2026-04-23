@@ -2,7 +2,7 @@
 # Запуск SGLang launch_server. Параметры — из env (через compose: main.env → … → пресет). Ниже — запасные ${VAR:-…}.
 set -euo pipefail
 
-: "${MODEL_ID:?MODEL_ID не задан (корневой .env или пресет модели)}"
+: "${MODEL_ID:?MODEL_ID не задан (main.env / пресет модели)}"
 
 MODEL_PATH="/models/${MODEL_ID}"
 HOST="${SGLANG_LISTEN_HOST:-0.0.0.0}"

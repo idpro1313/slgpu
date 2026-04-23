@@ -103,6 +103,7 @@
 | 2.0.8 | **NCCL / PyTorch** в `main.env`; vllm/sglang `*.env` укорочены; `docker-compose` pass. |
 | 2.0.9 | **`.env.example`:** без дублей с `main.env`; README, `main` шапка. |
 | 2.0.10 | **`docker-compose.yml`:** `env_file: main.env`; комментарий про `--env-file`. |
+| 2.0.11 | **Без обязательного `.env`:** `_lib.sh`, compose, удалён `.env.example`; секреты — `main.env` / `export`. |
 
 ### Документация и gpt-oss (исправления)
 
@@ -119,7 +120,7 @@
 | `./slgpu` | Единый диспетчер: `prepare`, `pull`, `up`, `down`, `restart`, `bench`, `load`, `help` (v2.0.0 — убраны `ab`, `compare`, `logs`, `status`, `config`). |
 | `scripts/cmd_*.sh` | Логика бывших `up.sh`, `bench.sh`, `download-model.sh`, `prepare-host.sh`, `healthcheck.sh`. |
 | `./slgpu pull` | Только `hf download`; пресет не создаётся. При существующем `configs/models/<slug>.env` — загрузка по полям из файла. |
-| Корневой `.env` | Только server-level (пути, мониторинг); параметры модели только в пресете. |
+| `main.env` + пресет | Server-level в `main.env`; параметры модели только в пресете. |
 | `docker-compose.yml` | **`gpus: all`**, маска GPU через **`NVIDIA_VISIBLE_DEVICES`** (по умолчанию `0,…,TP-1` из [`./slgpu up`](scripts/cmd_up.sh)); блок **`environment`** для vLLM/SGLang; **json-file** логи 100m×5. |
 | Пресеты в репо | Минимум: `qwen3.6-27b`, `qwen3.6-35b-a3b`, `qwen3-30b-a3b`; остальные модели — через `./slgpu pull`. |
 | README | Раздел рецептов **8× H200** (Qwen3.6, Kimi-K2.6, MiniMax, GLM, gpt-oss). |
@@ -133,7 +134,7 @@
 
 - Планировался **A/B** vLLM vs SGLang на модели вроде **Qwen/Qwen3.6-35B-A3B**, единый порт API **8111**, модели в **`/opt/models`** (сейчас по умолчанию **TP=8** на 8 GPU).
 - Решались инциденты: **утечка HF-токена** в истории (история переписана, токен отозвать), **`ContextOverflowError`** (окно и адаптивный бенч), доступ к **Grafana** снаружи.
-- Пользовательские пожелания: **thinking Qwen3**, **co-run по 2 GPU**, **универсальные скрипты без правки `.env` под каждую модель** (пресеты), **полный README**, **ускорение gpt-oss**, **запись истории** (этот файл).
+- Пользовательские пожелания: **thinking Qwen3**, **co-run по 2 GPU**, **универсальные скрипты через пресеты** (без правки общего env под каждую модель), **полный README**, **ускорение gpt-oss**, **запись истории** (этот файл).
 
 ---
 

@@ -3,7 +3,7 @@
 # Служебные listen/batch — SLGPU_* (см. vllm.env), чтобы vLLM 0.19+ не предупреждало о «Unknown VLLM_*».
 set -euo pipefail
 
-: "${MODEL_ID:?MODEL_ID не задан (корневой .env или пресет модели)}"
+: "${MODEL_ID:?MODEL_ID не задан (main.env / пресет модели)}"
 
 MODEL_PATH="/models/${MODEL_ID}"
 HOST="${SLGPU_VLLM_HOST:-0.0.0.0}"

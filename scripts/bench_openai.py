@@ -273,7 +273,7 @@ def _run_scenario(
 
 def main() -> None:
     ap = argparse.ArgumentParser(
-        description="Нагрузочный бенч против OpenAI API. Параметры ниже задают только клиент бенча; движок настраивается через .env и compose."
+        description="Нагрузочный бенч против OpenAI API. Параметры ниже задают только клиент бенча; движок настраивается через main.env, пресет и compose."
     )
     ap.add_argument(
         "--base-url",
