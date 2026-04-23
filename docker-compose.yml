@@ -18,6 +18,10 @@ services:
       - .env
       - configs/vllm/vllm.env
     environment:
+      # NCCL / PyTorch — дефолты в main.env
+      NCCL_P2P_LEVEL: ${NCCL_P2P_LEVEL:-NVL}
+      NCCL_IB_DISABLE: ${NCCL_IB_DISABLE:-1}
+      PYTORCH_ALLOC_CONF: ${PYTORCH_ALLOC_CONF:-expandable_segments:True}
       MODEL_ID: ${MODEL_ID:-}
       MODEL_REVISION: ${MODEL_REVISION:-}
       MAX_MODEL_LEN: ${MAX_MODEL_LEN:-32768}
@@ -72,6 +76,10 @@ services:
     # Переменные из пресета (source в ./slgpu up) обязаны быть здесь, иначе в контейнер не попадут
     # (пресет не в env_file). См. configs/sglang/serve.sh
     environment:
+      # NCCL / PyTorch — дефолты в main.env
+      NCCL_P2P_LEVEL: ${NCCL_P2P_LEVEL:-NVL}
+      NCCL_IB_DISABLE: ${NCCL_IB_DISABLE:-1}
+      PYTORCH_CUDA_ALLOC_CONF: ${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
       MODEL_ID: ${MODEL_ID:-}
       MODEL_REVISION: ${MODEL_REVISION:-}
       MAX_MODEL_LEN: ${MAX_MODEL_LEN:-32768}

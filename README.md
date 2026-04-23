@@ -114,7 +114,7 @@
 
 ## 5. Конфигурация
 
-- **[`main.env`](main.env)** — базовые дефолты в корне репозитория (пути, `MAX_MODEL_LEN`, `TP`, бинды мониторинга и т.д.); их могут перекрыть корневой **`.env`** и пресет.
+- **[`main.env`](main.env)** — базовые дефолты в корне (пути, `MAX_MODEL_LEN`, `TP`, NCCL, `PYTORCH_ALLOC_CONF` / `PYTORCH_CUDA_ALLOC_CONF`, бинды мониторинга и т.д.); их могут перекрыть **`.env`** и пресет.
 - **Корневой `.env`** — настройки сервера, секреты, переопределения (см. [`.env.example`](.env.example)).
 - **`configs/models/<preset>.env`** — модель: `MODEL_ID`, `MAX_MODEL_LEN`, **`TP`** (в шаблонах репозитория **8**; на 4 GPU — **4**), парсеры, KV и т.д. Обязателен для `up` / `bench` / `restart` (флаг **`-m`**).
 - **`configs/vllm/vllm.env`**, **`configs/sglang/sglang.env`** — NCCL, логи, alloc, **кэш Triton/TorchInductor** (том `sglang-kernel-cache` в compose — быстрее повторные старты после autotune, см. комментарии в `sglang.env`).
