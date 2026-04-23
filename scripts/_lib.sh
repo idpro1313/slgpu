@@ -28,11 +28,11 @@ slgpu_fail_if_missing_preset_arg() {
   fi
 }
 
-# Дефолты репозитория: `configs/main.env` (если есть), до `.env` и пресетов.
+# Дефолты репозитория: `main.env` в корне (если есть), до `.env` и пресетов.
 slgpu_source_main_env() {
   local root
   root="$(slgpu_root)"
-  local f="${root}/configs/main.env"
+  local f="${root}/main.env"
   if [[ -f "${f}" ]]; then
     # shellcheck disable=SC1091
     source "${f}"

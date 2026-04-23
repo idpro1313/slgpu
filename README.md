@@ -58,7 +58,7 @@
          dcgm-exporter :9400 · node-exporter :9100
 ```
 
-Переменные модели передаются в контейнер через блок **`environment`** в `docker-compose.yml` и значения, экспортированные в shell командой **`./slgpu up`** (после слияния [`configs/main.env`](configs/main.env) + `.env` + `configs/<engine>/<engine>.env` + пресет).
+Переменные модели передаются в контейнер через блок **`environment`** в `docker-compose.yml` и значения, экспортированные в shell командой **`./slgpu up`** (после слияния [`main.env`](main.env) + `.env` + `configs/<engine>/<engine>.env` + пресет).
 
 ---
 
@@ -114,7 +114,7 @@
 
 ## 5. Конфигурация
 
-- **[`configs/main.env`](configs/main.env)** — базовые дефолты (пути, `MAX_MODEL_LEN`, `TP`, бинды мониторинга и т.д.); их могут перекрыть корневой **`.env`** и пресет.
+- **[`main.env`](main.env)** — базовые дефолты в корне репозитория (пути, `MAX_MODEL_LEN`, `TP`, бинды мониторинга и т.д.); их могут перекрыть корневой **`.env`** и пресет.
 - **Корневой `.env`** — настройки сервера, секреты, переопределения (см. [`.env.example`](.env.example)).
 - **`configs/models/<preset>.env`** — модель: `MODEL_ID`, `MAX_MODEL_LEN`, **`TP`** (в шаблонах репозитория **8**; на 4 GPU — **4**), парсеры, KV и т.д. Обязателен для `up` / `bench` / `restart` (флаг **`-m`**).
 - **`configs/vllm/vllm.env`**, **`configs/sglang/sglang.env`** — NCCL, логи, alloc, **кэш Triton/TorchInductor** (том `sglang-kernel-cache` в compose — быстрее повторные старты после autotune, см. комментарии в `sglang.env`).
@@ -332,7 +332,7 @@ slgpu/
 ├── VERSION                     # SemVer
 ├── AGENTS.md                   # Указатель на правила (AGENTS.md → docs/)
 ├── docker-compose.yml
-├── configs/main.env            # дефолты; затем .env, движок, пресет
+├── main.env                    # дефолты; затем .env, движок, пресет
 ├── .env.example
 ├── README.md
 ├── docs/

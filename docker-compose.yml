@@ -1,6 +1,6 @@
 name: slgpu
 
-# vLLM/SGLang: serve.sh. Дефолты: configs/main.env; затем .env, configs/<engine>/<engine>.env, пресет (порядок в scripts/_lib.sh).
+# vLLM/SGLang: serve.sh. Дефолты: ./main.env; затем .env, configs/<engine>/<engine>.env, пресет (порядок в scripts/_lib.sh).
 # Плейсхолдеры ${VAR:-…} — запас, если `docker compose` вызвали без export из ./slgpu up.
 
 services:
