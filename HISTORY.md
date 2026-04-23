@@ -108,6 +108,7 @@
 | 2.0.13 | **Параметры из `vllm.env` / `sglang.env` в [`main.env`](main.env);** удалены файлы движка; compose — только `env_file: main.env`; [`scripts/_lib.sh`](scripts/_lib.sh) без `configs/<engine>.env`. |
 | 2.0.14 | **[`scripts/serve.sh`](scripts/serve.sh)** (был `configs/serve.sh`); compose монтирует `./scripts/serve.sh` → `/etc/slgpu/serve.sh`. |
 | 2.0.15 | Удалён `scripts/compare.py` (A/B-сводка `bench/report.md`); README, `cmd_help`, GRACE. |
+| 2.0.16 | **`serve` / `main`:** `SLGPU_VLLM_TRUST_REMOTE_CODE`, `SLGPU_VLLM_ENABLE_CHUNKED_PREFILL`, `SLGPU_VLLM_ENABLE_AUTO_TOOL_CHOICE` в `main.env`; SGLang — `MODEL_PATH` через **`SLGPU_MODEL_ROOT`**; `docker-compose` pass **`SLGPU_MODEL_ROOT`**, vLLM-флаги, **`SGLANG_TRUST_REMOTE_CODE`**. |
 
 ### Документация и gpt-oss (исправления)
 

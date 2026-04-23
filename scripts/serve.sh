@@ -5,8 +5,9 @@ set -euo pipefail
 
 slgpu_run_vllm() {
   # Служебные listen/batch — SLGPU_* (см. main.env), чтобы vLLM 0.19+ не предупреждало о «Unknown VLLM_*».
-  local MODEL_PATH HOST PORT TP GPU_MEM MAX_LEN KV BATCH TOOL REASON DISABLE_CAR PREFIX_CACHE cmd
-  MODEL_PATH="/models/${MODEL_ID}"
+  local MODEL_PATH HOST PORT TP GPU_MEM MAX_LEN KV BATCH TOOL REASON DISABLE_CAR PREFIX_CACHE \
+    TRUST CR_PREFILL AUTO_TOOL cmd
+  MODEL_PATH="${SLGPU_MODEL_ROOT:-/models}/${MODEL_ID}"
   HOST="${SLGPU_VLLM_HOST:-0.0.0.0}"
   PORT="${SLGPU_VLLM_PORT:-8111}"
   TP="${TP:-8}"
@@ -18,6 +19,9 @@ slgpu_run_vllm() {
   REASON="${REASONING_PARSER:-qwen3}"
   DISABLE_CAR="${SLGPU_DISABLE_CUSTOM_ALL_REDUCE:-1}"
   PREFIX_CACHE="${SLGPU_ENABLE_PREFIX_CACHING:-1}"
+  TRUST="${SLGPU_VLLM_TRUST_REMOTE_CODE:-1}"
+  CR_PREFILL="${SLGPU_VLLM_ENABLE_CHUNKED_PREFILL:-1}"
+  AUTO_TOOL="${SLGPU_VLLM_ENABLE_AUTO_TOOL_CHOICE:-1}"
 
   cmd=(
     vllm serve "${MODEL_PATH}"
@@ -27,19 +31,25 @@ slgpu_run_vllm() {
     --tensor-parallel-size "${TP}"
     --gpu-memory-utilization "${GPU_MEM}"
     --max-model-len "${MAX_LEN}"
-    --trust-remote-code
   )
+  if [[ "${TRUST}" == "1" ]]; then
+    cmd+=(--trust-remote-code)
+  fi
   if [[ "${DISABLE_CAR}" == "1" ]]; then
     cmd+=(--disable-custom-all-reduce)
   fi
   cmd+=(
     --kv-cache-dtype "${KV}"
-    --enable-chunked-prefill
     --max-num-batched-tokens "${BATCH}"
     --tool-call-parser "${TOOL}"
-    --enable-auto-tool-choice
     --reasoning-parser "${REASON}"
   )
+  if [[ "${CR_PREFILL}" == "1" ]]; then
+    cmd+=(--enable-chunked-prefill)
+  fi
+  if [[ "${AUTO_TOOL}" == "1" ]]; then
+    cmd+=(--enable-auto-tool-choice)
+  fi
   if [[ -n "${CHAT_TEMPLATE_CONTENT_FORMAT:-}" ]]; then
     cmd+=(--chat-template-content-format "${CHAT_TEMPLATE_CONTENT_FORMAT}")
   fi
@@ -65,7 +75,7 @@ slgpu_run_vllm() {
 
 slgpu_run_sglang() {
   local MODEL_PATH HOST PORT TP MEM_FRAC MAX_LEN KV REASON TOOL SGL_TORCH SGL_NO_CG SGL_NO_CAR SGL_METRICS SGL_MFU cmd
-  MODEL_PATH="/models/${MODEL_ID}"
+  MODEL_PATH="${SLGPU_MODEL_ROOT:-/models}/${MODEL_ID}"
   HOST="${SGLANG_LISTEN_HOST:-0.0.0.0}"
   PORT="${SGLANG_LISTEN_PORT:-8222}"
   TP="${TP:-8}"
@@ -79,11 +89,11 @@ slgpu_run_sglang() {
   SGL_NO_CAR="${SGLANG_DISABLE_CUSTOM_ALL_REDUCE:-0}"
   SGL_METRICS="${SGLANG_ENABLE_METRICS:-1}"
   SGL_MFU="${SGLANG_ENABLE_MFU_METRICS:-0}"
+  SGL_TRUST="${SGLANG_TRUST_REMOTE_CODE:-1}"
 
   cmd=(
     python3 -m sglang.launch_server
     --model-path "${MODEL_PATH}"
-    --trust-remote-code
     --served-model-name "${MODEL_ID}"
     --tp "${TP}"
     --host "${HOST}"
@@ -93,6 +103,9 @@ slgpu_run_sglang() {
     --kv-cache-dtype "${KV}"
     --reasoning-parser "${REASON}"
   )
+  if [[ "${SGL_TRUST}" == "1" ]]; then
+    cmd+=(--trust-remote-code)
+  fi
   if [[ "${SGL_METRICS}" == "1" ]]; then
     cmd+=(--enable-metrics)
   fi
