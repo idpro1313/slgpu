@@ -63,6 +63,34 @@ curl -X POST http://127.0.0.1:9090/-/reload
 
 (в compose включён `--web.enable-lifecycle`).
 
+## Данные на локальном диске (не в томе Docker)
+
+Пути задаются в [`main.env`](../main.env): **`PROMETHEUS_DATA_DIR`**, **`GRAFANA_DATA_DIR`** (по умолчанию `/var/lib/slgpu/prometheus` и `/var/lib/slgpu/grafana` на сервере). Каталоги **создайте на нужном разделе/точке монтирования** до `up` (или `mkdir` + выставьте владельца, см. ниже). Compose подключает их **bind mount**’ом, данные остаются на диске хоста при пересоздании контейнеров.
+
+**Права (типичные UID в образах; проверьте: `docker run --rm prom/prometheus id`, `docker run --rm grafana/grafana id`):**
+
+- Prometheus: **`65534:65534`** (часто `nobody` в `prom/prometheus`)
+- Grafana: **`472:472`** (пользователь `grafana` в `grafana/grafana`)
+
+```bash
+sudo mkdir -p /var/lib/slgpu/prometheus /var/lib/slgpu/grafana
+sudo chown 65534:65534 /var/lib/slgpu/prometheus
+sudo chown 472:472 /var/lib/slgpu/grafana
+./slgpu monitoring up
+```
+
+**Перенос из старых named volumes** (`slgpu_prometheus-data`, `slgpu_grafana-data` — до смены на bind):
+
+1. Остановить стек: **`./slgpu monitoring down`**.
+2. Узнать путь данных Docker: `docker volume inspect slgpu_prometheus-data` / `slgpu_grafana-data` (поле **`Mountpoint`**, внутри — подкаталог **`_data/`**).
+3. Создать хостовые каталоги и **скопировать** (с сохранением прав, от root):  
+   `sudo rsync -a /var/lib/docker/volumes/slgpu_prometheus-data/_data/ "${PROMETHEUS_DATA_DIR}/"`  
+   `sudo rsync -a /var/lib/docker/volumes/slgpu_grafana-data/_data/ "${GRAFANA_DATA_DIR}/"`
+4. Выставить владельцев как в блоке выше (после `rsync` снова `chown` при необходимости).
+5. Поднять: **`./slgpu monitoring up`**. Старые тома, если больше не нужны, удаляйте только после проверки: `docker volume rm slgpu_prometheus-data slgpu_grafana-data`.
+
+**SELinux (RHEL и др.):** если контейнер не видит файлы, для bind mount в compose иногда добавляют суффикс **`:Z`** (или `:z`) к путям; см. документацию Docker/SELinux.
+
 ## Диск заполнился: `no space left on device` / ошибки WAL Prometheus
 
 Сообщения вида `write /prometheus/wal/...: no space left on device` значат, что **на хосте или в разделе Docker закончилось свободное место**. Prometheus не может писать WAL и TSDB — скрейпы и правила падают.
@@ -73,7 +101,7 @@ curl -X POST http://127.0.0.1:9090/-/reload
 2. Освободить диск: удалить неиспользуемые образы/кэш (`docker system prune` — осторожно), почистить логи, перенести модели/данные на другой раздел.
 3. Ограничить рост TSDB в [`main.env`](../main.env): уменьшить **`PROMETHEUS_RETENTION_TIME`** (например `7d`) и/или задать **`PROMETHEUS_RETENTION_SIZE`** (например `20GB`). Перезапустить: `./slgpu monitoring restart` или `docker compose -f ../docker-compose.monitoring.yml up -d prometheus`.
 
-Данные Prometheus хранятся в именованном томе **`prometheus-data`** (путь на хосте: `docker volume inspect slgpu_prometheus-data`).
+TSDB и WAL лежат в каталоге **`PROMETHEUS_DATA_DIR`** на хосте (см. [выше](#данные-на-локальном-диске-не-в-томе-docker)).
 
 ## Сообщения в логах Grafana (часто безвредны)
 

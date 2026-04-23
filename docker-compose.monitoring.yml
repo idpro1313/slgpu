@@ -1,6 +1,6 @@
 # dcgm, node-exporter, Prometheus, Grafana — отдельно от движка (см. ./slgpu monitoring up).
 # Общая сеть `slgpu` с docker-compose.yml: Prometheus скрейпит vllm:8111 / sglang:8222 по DNS.
-# Тома с прежними именами (slgpu_*), чтобы не терять TSDB/дашборды при разделении стеков.
+# Данные TSDB / SQLite Grafana — bind mount на хост, пути: PROMETHEUS_DATA_DIR, GRAFANA_DATA_DIR (main.env).
 
 name: slgpu-monitoring
 
@@ -58,7 +58,7 @@ services:
     networks:
       - slgpu
     volumes:
-      - prometheus-data:/prometheus
+      - ${PROMETHEUS_DATA_DIR:-/var/lib/slgpu/prometheus}:/prometheus
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./monitoring/prometheus-alerts.yml:/etc/prometheus/prometheus-alerts.yml:ro
     command:
@@ -90,7 +90,7 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_SERVER_ROOT_URL: ${GF_SERVER_ROOT_URL:-}
     volumes:
-      - grafana-data:/var/lib/grafana
+      - ${GRAFANA_DATA_DIR:-/var/lib/slgpu/grafana}:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
     logging:
       driver: json-file
@@ -102,9 +102,3 @@ networks:
   slgpu:
     name: slgpu
     external: true
-
-volumes:
-  grafana-data:
-    name: slgpu_grafana-data
-  prometheus-data:
-    name: slgpu_prometheus-data
