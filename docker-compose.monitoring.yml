@@ -50,6 +50,8 @@ services:
 
   prometheus:
     image: prom/prometheus:latest
+    # С bind mount PROMETHEUS_DATA_DIR: sudo chown -R 65534:65534 (см. monitoring/README)
+    user: "65534:65534"
     env_file:
       - main.env
     restart: unless-stopped

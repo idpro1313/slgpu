@@ -67,19 +67,20 @@ curl -X POST http://127.0.0.1:9090/-/reload
 
 Пути задаются в [`main.env`](../main.env): **`PROMETHEUS_DATA_DIR`**, **`GRAFANA_DATA_DIR`** (по умолчанию `/var/lib/slgpu/prometheus` и `/var/lib/slgpu/grafana` на сервере). Каталоги **создайте на нужном разделе/точке монтирования** до `up` (или `mkdir` + выставьте владельца, см. ниже). Compose подключает их **bind mount**’ом, данные остаются на диске хоста при пересоздании контейнеров.
 
-**Права (проверьте на своём образе: `docker run --rm --entrypoint id prom/prometheus -a`, `docker run --rm grafana/grafana id`):**
+**Права (проверьте: `docker run --rm --entrypoint id prom/prometheus -a`, `docker run --rm grafana/grafana id`):**
 
-- Prometheus: чаще всего **`65534:65534`** (`nobody` в `prom/prometheus`).
-- Grafana (**офиц. [docker-образ](https://grafana.com/docs/grafana/latest/setup-grafana/installation/docker/)**): обычно **`472:0`** (uid=grafana, gid=**root/0**), **не** `472:472`. С bind mount каталог на хосте **обязан** совпадать, иначе `GF_PATHS_DATA is not writable` и `Permission denied` на `.../plugins`.
+- Prometheus: обычно **`65534:65534`** (non-root `nobody` в `prom/prometheus`). Нужен **`chown -R` по всему TSDB** — иначе после `rsync` или существующих `wal/`, `chunks/` владелец `root` и Prometheus не создаст **`queries.active`** (panic `Unable to create mmap-ed active query log`).
+- Grafana: **`472:0`**, **не** `472:472` (см. [оф. доку](https://grafana.com/docs/grafana/latest/setup-grafana/installation/docker/)). Иначе `GF_PATHS_DATA` / `.../plugins: Permission denied`.
 
 ```bash
 sudo mkdir -p /var/lib/slgpu/prometheus /var/lib/slgpu/grafana
-sudo chown 65534:65534 /var/lib/slgpu/prometheus
+sudo chown -R 65534:65534 /var/lib/slgpu/prometheus
 sudo chown -R 472:0 /var/lib/slgpu/grafana
 ./slgpu monitoring up
 ```
 
-**Если уже делали `chown 472:472`:** выполните `sudo chown -R 472:0 "…/grafana"`, иначе Grafana не создаст подкаталоги.
+**Если уже делали `chown 472:472`:** `sudo chown -R 472:0 "…/grafana"`.  
+**Для Prometheus:** `sudo chown -R 65534:65534 "…/prometheus"` (замените на ваш `PROMETHEUS_DATA_DIR`).
 
 ### `GF_PATHS_DATA` not writable / `mkdir .../plugins: Permission denied`
 
@@ -89,6 +90,18 @@ sudo chown -R 472:0 /var/lib/slgpu/grafana
 
 Если bind mount пуст и Docker **сам** создал каталог с владельцем root, шаг 2 обязателен **до** первого удачного старта.
 
+### `queries.active` / `open /prometheus/...: permission denied` / panic `Unable to create mmap-ed active query log`
+
+Каталог **`PROMETHEUS_DATA_DIR`** или его подкаталоги не принадлежат **`65534:65534`** (часто остаются `root` после копирования с тома). На хосте:
+
+```bash
+docker run --rm --entrypoint id prom/prometheus
+sudo chown -R 65534:65534 "${PROMETHEUS_DATA_DIR:-/var/lib/slgpu/prometheus}"
+./slgpu monitoring restart
+```
+
+В [`docker-compose.monitoring.yml`](../docker-compose.monitoring.yml) у Prometheus задано **`user: "65534:65534"`** — владелец на диске должен совпадать.
+
 **Перенос из старых named volumes** (`slgpu_prometheus-data`, `slgpu_grafana-data` — до смены на bind):
 
 1. Остановить стек: **`./slgpu monitoring down`**.
@@ -96,7 +109,7 @@ sudo chown -R 472:0 /var/lib/slgpu/grafana
 3. Создать хостовые каталоги и **скопировать** (с сохранением прав, от root):  
    `sudo rsync -a /var/lib/docker/volumes/slgpu_prometheus-data/_data/ "${PROMETHEUS_DATA_DIR}/"`  
    `sudo rsync -a /var/lib/docker/volumes/slgpu_grafana-data/_data/ "${GRAFANA_DATA_DIR}/"`
-4. **Обязательно** выставить владельца Grafana на **`472:0`**: `sudo chown -R 472:0 "${GRAFANA_DATA_DIR}"` (и Prometheus — `65534:65534` к каталогу TSDB, см. выше), даже если `rsync` копировал с тома.
+4. **Обязательно** выставить владельца: `sudo chown -R 472:0 "${GRAFANA_DATA_DIR}"` и `sudo chown -R 65534:65534 "${PROMETHEUS_DATA_DIR}"` (после `rsync` файлы иначе чаще всего `root`).
 5. Поднять: **`./slgpu monitoring up`**. Старые тома, если больше не нужны, удаляйте только после проверки: `docker volume rm slgpu_prometheus-data slgpu_grafana-data`.
 
 **SELinux (RHEL и др.):** если контейнер не видит файлы, для bind mount в compose иногда добавляют суффикс **`:Z`** (или `:z`) к путям; см. документацию Docker/SELinux.
