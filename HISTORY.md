@@ -113,6 +113,7 @@
 | 2.1.1 | **Prometheus/Grafana:** bind mount в **`PROMETHEUS_DATA_DIR`**, **`GRAFANA_DATA_DIR`** (по умолч. `/var/lib/slgpu/…`); миграция с named volume в [monitoring/README](monitoring/README.md). |
 | 2.1.2 | **Grafana bind mount:** `user: 472:0` в [`docker-compose.monitoring.yml`](docker-compose.monitoring.yml), на хосте **`chown -R 472:0`**; правка [monitoring/README](monitoring/README.md) (ошибка 472:472), main.env. |
 | 2.1.3 | **Prometheus:** `user: 65534:65534`, **`chown -R 65534:65534`** на `PROMETHEUS_DATA_DIR` (fix `queries.active` / mmap panic); [monitoring/README](monitoring/README.md), main.env. |
+| 2.1.4 | **`./slgpu monitoring fix-perms`**, [`scripts/monitoring_fix_permissions.sh`](scripts/monitoring_fix_permissions.sh) (uid:gid из образов); в compose **убраны** жёсткие `user:` у Prom/Grafana; [monitoring/README](monitoring/README.md), README, main.env. |
 
 ### Документация и gpt-oss (исправления)
 

@@ -50,8 +50,7 @@ services:
 
   prometheus:
     image: prom/prometheus:latest
-    # С bind mount PROMETHEUS_DATA_DIR: sudo chown -R 65534:65534 (см. monitoring/README)
-    user: "65534:65534"
+    # Права на PROMETHEUS_DATA_DIR: ./scripts/monitoring_fix_permissions.sh или ./slgpu monitoring fix-perms
     env_file:
       - main.env
     restart: unless-stopped
@@ -77,8 +76,7 @@ services:
 
   grafana:
     image: grafana/grafana:latest
-    # С bind mount GRAFANA_DATA_DIR на хосте: sudo chown -R 472:0 (см. monitoring/README, иначе not writable)
-    user: "472:0"
+    # Права на GRAFANA_DATA_DIR: ./slgpu monitoring fix-perms (uid/gid из образа, без угадывания)
     env_file:
       - main.env
     restart: unless-stopped

@@ -19,6 +19,10 @@ usage() {
 Перезапуск контейнеров мониторинга:
   ./slgpu monitoring restart
 
+Права на каталоги данных (bind mount: GF_PATHS_DATA, /prometheus/…): по uid:gid **из образов** (рекомендуется до up или при ошибках):
+  ./slgpu monitoring fix-perms
+  (см. scripts/monitoring_fix_permissions.sh, main.env: GRAFANA_DATA_DIR, PROMETHEUS_DATA_DIR)
+
 Конфиг: docker-compose.monitoring.yml, сеть \`slgpu\` — общая с docker-compose.yml (Prometheus → vllm:8111 / sglang:8222).
 
 Переменные портов и ретенции — main.env (как раньше).
@@ -48,6 +52,9 @@ case "${SUB}" in
     echo "Перезапуск мониторинга…"
     docker compose -f docker-compose.monitoring.yml --env-file main.env up -d --force-recreate
     echo "Готово."
+    ;;
+  fix-perms|fix_permissions)
+    exec bash "${ROOT}/scripts/monitoring_fix_permissions.sh"
     ;;
   -h|--help|help)
     usage
