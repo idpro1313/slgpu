@@ -274,10 +274,10 @@ M=qwen3.6-35b-a3b
   --reasoning-parser minimax_m2 --tool-call-parser minimax_m2
 ./slgpu up vllm -m minimax-m2.7
 
-# GLM-5.1 (дефолт MAX_MODEL_LEN=131072)
+# GLM-5.1 (дефолт MAX_MODEL_LEN=202752; без --kv-dtype в pull — KV=auto — нужно для sparse MLA в vLLM 0.19)
 ./slgpu pull zai-org/GLM-5.1 \
   --gpu-mem 0.95 --sglang-mem 0.92 \
-  --batch 24576 --kv-dtype fp8_e4m3 \
+  --batch 24576 \
   --reasoning-parser glm45 --tool-call-parser glm45
 ./slgpu up vllm -m glm-5.1
 
@@ -328,6 +328,7 @@ curl -s http://127.0.0.1:8111/v1/chat/completions \
 | Симптом | Что сделать |
 |---------|-------------|
 | **Qwen3 Next / Qwen3.6:** assert / `fp8_e5m2` | В пресете: `KV_CACHE_DTYPE=fp8_e4m3` или `fp8`, пересоздать контейнер |
+| **GLM-5.1 (vLLM):** `No valid attention backend` / `FLASHMLA_SPARSE: [kv_cache_dtype not supported]` | `KV_CACHE_DTYPE=auto` (в пресете [`configs/models/glm-5.1.env`](configs/models/glm-5.1.env)); не `fp8_e4m3` для sparse MLA+KV |
 | **`ContextOverflowError`** | Увеличить `MAX_MODEL_LEN` или уменьшить `max_tokens` |
 | **OOM при старте** | Снизить `MAX_MODEL_LEN`, `GPU_MEM_UTIL`, `SGLANG_MEM_FRACTION_STATIC`, увеличить `TP`, квантованный чекпоинт |
 | **OOM MoE при загрузке весов** | Часто не спасает только снижение контекста; **TP=8**, другой чекпоинт HF или квант |

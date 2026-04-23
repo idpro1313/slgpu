@@ -185,7 +185,11 @@ slgpu_guess_max_model_len() {
       # HF: нативно 32k; с YaRN валидировано до 131072 — не 262144 без отдельной настройки rope.
       echo 131072
       ;;
-    openai/gpt-oss*|zai-org/GLM*)
+    zai-org/GLM*)
+      # max_position_embeddings в config.json; ~200k заявленного окна
+      echo 202752
+      ;;
+    openai/gpt-oss*)
       echo 131072
       ;;
     *)

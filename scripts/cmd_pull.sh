@@ -23,7 +23,7 @@ HF id содержит «/» (например Qwen/Qwen3.6-35B-A3B) — соз�
   --revision REV        MODEL_REVISION
   --max-len N           MAX_MODEL_LEN (без флага — автовыбор по модели, часто 262144; см. configs/models/README.md)
   --tp N                TP (по умолчанию 8)
-  --kv-dtype X          KV_CACHE_DTYPE (по умолчанию fp8_e4m3)
+  --kv-dtype X          KV_CACHE_DTYPE (по умолчанию fp8_e4m3; для zai-org/GLM-* без флага — auto)
   --gpu-mem F           GPU_MEM_UTIL (по умолчанию 0.92)
   --sglang-mem F        SGLANG_MEM_FRACTION_STATIC (по умолчанию 0.90)
   --batch N             SLGPU_MAX_NUM_BATCHED_TOKENS для vLLM (по умолчанию 8192)
@@ -48,6 +48,7 @@ MAX_LEN=""
 MAX_LEN_USER=0
 TP="8"
 KV="fp8_e4m3"
+KV_USER=0
 GPU="0.92"
 SGL="0.90"
 BATCH="8192"
@@ -64,7 +65,7 @@ while [[ $# -gt 0 ]]; do
     --revision) REVISION="${2:?}"; shift 2 ;;
     --max-len) MAX_LEN="${2:?}"; MAX_LEN_USER=1; shift 2 ;;
     --tp) TP="${2:?}"; shift 2 ;;
-    --kv-dtype) KV="${2:?}"; shift 2 ;;
+    --kv-dtype) KV="${2:?}"; KV_USER=1; shift 2 ;;
     --gpu-mem) GPU="${2:?}"; shift 2 ;;
     --sglang-mem) SGL="${2:?}"; shift 2 ;;
     --batch) BATCH="${2:?}"; shift 2 ;;
@@ -194,6 +195,12 @@ if is_hf_id "${TARGET}"; then
 
   if [[ "${MAX_LEN_USER}" -eq 0 ]]; then
     MAX_LEN="$(slgpu_guess_max_model_len "${HF_ID}")"
+  fi
+  # zai-org/GLM-*: sparse DSA+MLA — в vLLM 0.19 нет бэкенда для kv_cache fp8 (см. ValueError get_attn_backend_cls).
+  if [[ "${KV_USER}" -eq 0 ]]; then
+    case "${HF_ID}" in
+      zai-org/GLM*) KV="auto" ;;
+    esac
   fi
 
   slgpu_gen_preset_file "${slug}" "${HF_ID}" "${REVISION}" "${MAX_LEN}" "${TP}" "${KV}" "${GPU}" "${SGL}" "${BATCH}" "${reason}" "${tool}" "${mm_enc}" >/dev/null
