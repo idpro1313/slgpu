@@ -117,7 +117,7 @@
 - **[`main.env`](main.env)** — весь набор **дефолтов в репозитории** (пути, `MODELS_DIR`, `VLLM_DOCKER_IMAGE`, `MAX_MODEL_LEN`, `TP`, NCCL, мониторинг, …).
 - **Корневой `.env`** — **только** то, чего **нет** в `main` (секреты и редкие per-host поля; см. [`.env.example`](.env.example)), **без** дублирования имён из `main.env`.
 - **`configs/models/<preset>.env`** — модель: `MODEL_ID`, `MAX_MODEL_LEN`, **`TP`** (в шаблонах репозитория **8**; на 4 GPU — **4**), парсеры, KV и т.д. Обязателен для `up` / `bench` / `restart` (флаг **`-m`**).
-- **`configs/vllm/vllm.env`**, **`configs/sglang/sglang.env`** — listen/vLLM-логи, **Triton/TorchInductor**-кэш (SGLang) и т.д.; **NCCL** и **PyTorch allocator** — в `main.env` + `docker-compose`.
+- **`configs/vllm/vllm.env`**, **`configs/sglang/sglang.env`** — listen/vLLM-логи, **Triton/TorchInductor**-кэш (SGLang) и т.д.; **NCCL** и **PyTorch allocator** — в [`main.env`](main.env), в контейнер подключается через **`env_file`** в [`docker-compose.yml`](docker-compose.yml). Сырой `docker compose` без `./slgpu up`: для подстановки `${…}` в YAML из `main` используйте **`docker compose --env-file main.env`** (см. комментарий в compose).
 - **CLI движка**: [`configs/vllm/serve.sh`](configs/vllm/serve.sh), [`configs/sglang/serve.sh`](configs/sglang/serve.sh).
 
 Справка по парсерам: [`configs/models/README.md`](configs/models/README.md).

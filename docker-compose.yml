@@ -1,7 +1,9 @@
 name: slgpu
 
-# vLLM/SGLang: serve.sh. Дефолты: ./main.env; затем .env, configs/<engine>/<engine>.env, пресет (порядок в scripts/_lib.sh).
-# Плейсхолдеры ${VAR:-…} — запас, если `docker compose` вызвали без export из ./slgpu up.
+# vLLM/SGLang: serve.sh. Слой env: main.env → .env → configs/<engine>/*.env → пресет (export в ./slgpu up).
+# Подстановка ${VAR} в этом YAML: по умолчанию из корневого .env и env процесса; из main — так:
+#   docker compose --env-file main.env …
+#   (или: set -a && source main.env && docker compose …). В контейнер defaults из main: env_file ниже.
 
 services:
   vllm:
@@ -15,13 +17,10 @@ services:
     ports:
       - "${LLM_API_BIND:-0.0.0.0}:${LLM_API_PORT:-8111}:8111"
     env_file:
+      - main.env
       - .env
       - configs/vllm/vllm.env
     environment:
-      # NCCL / PyTorch — дефолты в main.env
-      NCCL_P2P_LEVEL: ${NCCL_P2P_LEVEL:-NVL}
-      NCCL_IB_DISABLE: ${NCCL_IB_DISABLE:-1}
-      PYTORCH_ALLOC_CONF: ${PYTORCH_ALLOC_CONF:-expandable_segments:True}
       MODEL_ID: ${MODEL_ID:-}
       MODEL_REVISION: ${MODEL_REVISION:-}
       MAX_MODEL_LEN: ${MAX_MODEL_LEN:-32768}
@@ -71,15 +70,12 @@ services:
       # Внутри контейнера API SGLang — 8222 (см. SGLANG_LISTEN_PORT); vLLM по-прежнему 8111.
       - "${LLM_API_BIND:-0.0.0.0}:${LLM_API_PORT:-8222}:8222"
     env_file:
+      - main.env
       - .env
       - configs/sglang/sglang.env
     # Переменные из пресета (source в ./slgpu up) обязаны быть здесь, иначе в контейнер не попадут
     # (пресет не в env_file). См. configs/sglang/serve.sh
     environment:
-      # NCCL / PyTorch — дефолты в main.env
-      NCCL_P2P_LEVEL: ${NCCL_P2P_LEVEL:-NVL}
-      NCCL_IB_DISABLE: ${NCCL_IB_DISABLE:-1}
-      PYTORCH_CUDA_ALLOC_CONF: ${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
       MODEL_ID: ${MODEL_ID:-}
       MODEL_REVISION: ${MODEL_REVISION:-}
       MAX_MODEL_LEN: ${MAX_MODEL_LEN:-32768}
@@ -110,6 +106,9 @@ services:
 
   dcgm-exporter:
     image: nvidia/dcgm-exporter:latest
+    env_file:
+      - main.env
+      - .env
     restart: unless-stopped
     gpus: all
     cap_add:
@@ -124,6 +123,9 @@ services:
 
   node-exporter:
     image: prom/node-exporter:latest
+    env_file:
+      - main.env
+      - .env
     restart: unless-stopped
     pid: host
     command:
@@ -145,6 +147,9 @@ services:
 
   prometheus:
     image: prom/prometheus:latest
+    env_file:
+      - main.env
+      - .env
     restart: unless-stopped
     ports:
       - "${PROMETHEUS_BIND:-127.0.0.1}:9090:9090"
@@ -166,6 +171,9 @@ services:
 
   grafana:
     image: grafana/grafana:latest
+    env_file:
+      - main.env
+      - .env
     restart: unless-stopped
     depends_on:
       - prometheus

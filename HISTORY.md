@@ -102,6 +102,7 @@
 | 2.0.7 | **`main.env` в корне репозитория** (ранее `configs/main.env`); README, `_lib.sh`, GRACE. |
 | 2.0.8 | **NCCL / PyTorch** в `main.env`; vllm/sglang `*.env` укорочены; `docker-compose` pass. |
 | 2.0.9 | **`.env.example`:** без дублей с `main.env`; README, `main` шапка. |
+| 2.0.10 | **`docker-compose.yml`:** `env_file: main.env`; комментарий про `--env-file`. |
 
 ### Документация и gpt-oss (исправления)
 
