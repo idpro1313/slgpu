@@ -128,56 +128,7 @@ slgpu_hf_id_to_slug() {
   echo "${base,,}" | tr '_' '-'
 }
 
-# По HF id угадываем парсеры (vLLM). Вывод: две строки reasoning<TAB>tool.
-slgpu_guess_parsers() {
-  local id="$1"
-  local r="" t=""
-  case "${id}" in
-    *Thinking*|*-thinking*)
-      r="qwen3-thinking"
-      t="hermes"
-      ;;
-    Qwen/Qwen3*|Qwen/Qwen3.6*|Qwen3.6*)
-      r="qwen3"
-      t="hermes"
-      ;;
-    deepseek-ai/DeepSeek-R1*|DeepSeek-R1*)
-      r="deepseek_r1"
-      t="pythonic"
-      ;;
-    meta-llama/Llama-3*|Llama-3*)
-      r=""
-      t="llama3_json"
-      ;;
-    moonshotai/Kimi*|*/Kimi-K2*)
-      r="kimi_k2"
-      t="kimi_k2"
-      ;;
-    MiniMaxAI/MiniMax*)
-      r="minimax_m2"
-      t="minimax_m2"
-      ;;
-    zai-org/GLM*FP8*|*GLM-5*FP8*)
-      r="glm45"
-      t="glm47"
-      ;;
-    zai-org/GLM*)
-      r="glm45"
-      t="glm45"
-      ;;
-    openai/gpt-oss*)
-      r="openai_gptoss"
-      t="openai"
-      ;;
-    *)
-      r=""
-      t=""
-      ;;
-  esac
-  printf '%s\t%s' "${r}" "${t}"
-}
-
-# По HF id — дефолтный MAX_MODEL_LEN для ./slgpu pull без --max-len (токены).
+# По HF id — дефолтный MAX_MODEL_LEN для сценариев с эвристикой (токены); парсеры — только в пресете.
 # 262144 = 256k; для моделей с меньшим заявленным окном — меньше (см. README).
 slgpu_guess_max_model_len() {
   local id="$1"
@@ -254,11 +205,9 @@ slgpu_gen_preset_file() {
     echo "# Для чего: tensor parallel (число GPU одной реплики)."
     echo "# Варианты: совпадать с device_ids в docker-compose; 1/2/4/8/…"
     echo "TP=${tp}"
-    echo "# Для чего: парсер reasoning/think-тегов."
-    echo "# Варианты: угадан по семейству; проверьте в доке vLLM/SGLang и при смене модели."
+    echo "# Для чего: парсер reasoning/think-тегов (vLLM/SGLang) — задайте вручную по карточке модели и docs движка."
     echo "REASONING_PARSER=${reason}"
-    echo "# Для чего: парсер tool/function calling."
-    echo "# Варианты: пусто или hermes/…; см. configs/models/README.md."
+    echo "# Для чего: парсер tool/function calling — вручную; см. configs/models/README.md."
     echo "TOOL_CALL_PARSER=${tool}"
     if [[ -n "${mm_enc}" ]]; then
       echo "# Для чего: vLLM --mm-encoder-tp-mode (модальности, Kimi/мультимодель)."

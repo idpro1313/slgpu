@@ -69,4 +69,4 @@ $EDITOR configs/models/my-model.env
 ./slgpu up vllm -m my-model
 ```
 
-Функции-эвристики [`slgpu_guess_max_model_len`](../../scripts/_lib.sh) / [`slgpu_guess_parsers`](../../scripts/_lib.sh) в репо остаются для сценариев вне `pull` (при необходимости — подставьте значения в `.env` вручную).
+Эвристика [`slgpu_guess_max_model_len`](../../scripts/_lib.sh) (опционально, вне `pull`) — для подсказки `MAX_MODEL_LEN` по HF id. **`REASONING_PARSER`** и **`TOOL_CALL_PARSER`** из пресета / доку vLLM, автоподбора по id нет.
