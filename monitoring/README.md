@@ -38,7 +38,7 @@
 
 **Что сделать:** **Dashboards** → открыть нужный SGLang-дашборд → вверху **instance** переключить на **`sglang:8222`** (или тот, что виден в **Prometheus → Status → Targets** для job `sglang`, **State: UP**). Кнопка **Refresh** у переменных, при необходимости обновить страницу.
 
-**`model name` пустой:** варианты (1) неверный **instance** (см. выше) — в запросе нет ряда `model_name`; (2) ещё **не было запросов** к API после старта — сделайте пару вызовов `chat/completions`, затем обновите переменные; (3) ваша версия SGLang экспортирует другое имя лейбла — проверьте в **Explore**: `sglang:generation_tokens_total` или `…{job="sglang"}`.
+**`Model` / model name** — панели в [`sglangdash2-slgpu.json`](grafana/provisioning/dashboards/json/sglangdash2-slgpu.json) фильтруют по `model_name=~"$model_name"`. Пустой **Model** (ничего не выбрано) **не** совпадает с реальным лейблом в Prometheus → **No data** (это не «пропажа» данных: метрики в **Prometheus**; в Grafana — только дашборд). **По умолчанию** в дашбордах включён **All** (регулярка `.*`), либо выберите конкретную модель в дропдауне. (1) неверный **instance**; (2) ещё **не было запросов** к API — сделайте `chat/completions`, обновите переменные; (3) другой `model_name` в метриках — **Explore:** `sglang:generation_tokens_total{job="sglang"}`.
 
 **Проверки:** `--enable-metrics` (в slgpu по умолчанию); `curl -s 127.0.0.1:<хост_порт>/metrics | head` с хоста — должны быть строки с префиксом, характерным для SGLang.
 

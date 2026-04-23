@@ -949,15 +949,16 @@
         "type": "query"
       },
       {
+        "allValue": ".*",
         "current": {
-          "text": "meta-llama/Llama-3.1-8B-Instruct",
-          "value": "meta-llama/Llama-3.1-8B-Instruct"
+          "text": "All",
+          "value": "$__all"
         },
         "datasource": {
           "type": "prometheus"
         },
         "definition": "label_values(sglang:generation_tokens_total{job=\"sglang\",instance=~\"$instance\"}, model_name)",
-        "includeAll": false,
+        "includeAll": true,
         "label": "model name",
         "name": "model_name",
         "options": [],

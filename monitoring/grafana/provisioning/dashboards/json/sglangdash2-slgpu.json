@@ -1978,13 +1978,17 @@
         "type": "query"
       },
       {
-        "current": {},
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
         "datasource": {
           "type": "prometheus",
           "uid": "prometheus"
         },
         "definition": "label_values(sglang:generation_tokens_total{job=\"sglang\",instance=~\"$instance\"}, model_name)",
-        "includeAll": false,
+        "includeAll": true,
         "label": "Model",
         "name": "model_name",
         "options": [],
@@ -2007,6 +2011,6 @@
   "timezone": "",
   "title": "SGLang Monitoring (from vLLM V2, slgpu)",
   "uid": "sglangdash2-slgpu",
-  "version": 1,
+  "version": 2,
   "gnetId": null
 }
