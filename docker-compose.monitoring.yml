@@ -75,6 +75,8 @@ services:
 
   grafana:
     image: grafana/grafana:latest
+    # С bind mount GRAFANA_DATA_DIR на хосте: sudo chown -R 472:0 (см. monitoring/README, иначе not writable)
+    user: "472:0"
     env_file:
       - main.env
     restart: unless-stopped

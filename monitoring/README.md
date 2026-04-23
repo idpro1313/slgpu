@@ -67,17 +67,27 @@ curl -X POST http://127.0.0.1:9090/-/reload
 
 Пути задаются в [`main.env`](../main.env): **`PROMETHEUS_DATA_DIR`**, **`GRAFANA_DATA_DIR`** (по умолчанию `/var/lib/slgpu/prometheus` и `/var/lib/slgpu/grafana` на сервере). Каталоги **создайте на нужном разделе/точке монтирования** до `up` (или `mkdir` + выставьте владельца, см. ниже). Compose подключает их **bind mount**’ом, данные остаются на диске хоста при пересоздании контейнеров.
 
-**Права (типичные UID в образах; проверьте: `docker run --rm prom/prometheus id`, `docker run --rm grafana/grafana id`):**
+**Права (проверьте на своём образе: `docker run --rm --entrypoint id prom/prometheus -a`, `docker run --rm grafana/grafana id`):**
 
-- Prometheus: **`65534:65534`** (часто `nobody` в `prom/prometheus`)
-- Grafana: **`472:472`** (пользователь `grafana` в `grafana/grafana`)
+- Prometheus: чаще всего **`65534:65534`** (`nobody` в `prom/prometheus`).
+- Grafana (**офиц. [docker-образ](https://grafana.com/docs/grafana/latest/setup-grafana/installation/docker/)**): обычно **`472:0`** (uid=grafana, gid=**root/0**), **не** `472:472`. С bind mount каталог на хосте **обязан** совпадать, иначе `GF_PATHS_DATA is not writable` и `Permission denied` на `.../plugins`.
 
 ```bash
 sudo mkdir -p /var/lib/slgpu/prometheus /var/lib/slgpu/grafana
 sudo chown 65534:65534 /var/lib/slgpu/prometheus
-sudo chown 472:472 /var/lib/slgpu/grafana
+sudo chown -R 472:0 /var/lib/slgpu/grafana
 ./slgpu monitoring up
 ```
+
+**Если уже делали `chown 472:472`:** выполните `sudo chown -R 472:0 "…/grafana"`, иначе Grafana не создаст подкаталоги.
+
+### `GF_PATHS_DATA` not writable / `mkdir .../plugins: Permission denied`
+
+1. `docker run --rm grafana/grafana id` — смотрите **uid** и **gid** (у официального образа часто `uid=472 gid=0 (groups=0(root))`, `…`).
+2. Сопоставьте владельца каталога: `sudo chown -R 472:0 "${GRAFANA_DATA_DIR}"` (подставьте uid:gid с шага 1, если у вас другой тег образа).
+3. Перезапуск: **`./slgpu monitoring restart`**.
+
+Если bind mount пуст и Docker **сам** создал каталог с владельцем root, шаг 2 обязателен **до** первого удачного старта.
 
 **Перенос из старых named volumes** (`slgpu_prometheus-data`, `slgpu_grafana-data` — до смены на bind):
 
@@ -86,7 +96,7 @@ sudo chown 472:472 /var/lib/slgpu/grafana
 3. Создать хостовые каталоги и **скопировать** (с сохранением прав, от root):  
    `sudo rsync -a /var/lib/docker/volumes/slgpu_prometheus-data/_data/ "${PROMETHEUS_DATA_DIR}/"`  
    `sudo rsync -a /var/lib/docker/volumes/slgpu_grafana-data/_data/ "${GRAFANA_DATA_DIR}/"`
-4. Выставить владельцев как в блоке выше (после `rsync` снова `chown` при необходимости).
+4. **Обязательно** выставить владельца Grafana на **`472:0`**: `sudo chown -R 472:0 "${GRAFANA_DATA_DIR}"` (и Prometheus — `65534:65534` к каталогу TSDB, см. выше), даже если `rsync` копировал с тома.
 5. Поднять: **`./slgpu monitoring up`**. Старые тома, если больше не нужны, удаляйте только после проверки: `docker volume rm slgpu_prometheus-data slgpu_grafana-data`.
 
 **SELinux (RHEL и др.):** если контейнер не видит файлы, для bind mount в compose иногда добавляют суффикс **`:Z`** (или `:z`) к путям; см. документацию Docker/SELinux.
