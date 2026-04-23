@@ -2,7 +2,7 @@
 
 Репозиторий **стенда для сравнения LLM-инференса** на Linux-сервере с GPU: два движка (**vLLM** и **SGLang**) в Docker, общий локальный кэш моделей, OpenAI-совместимый HTTP API, нагрузочный бенчмарк, **Prometheus + Grafana + NVIDIA DCGM Exporter**.
 
-Целевая конфигурация при разработке: **8× NVIDIA H200** (в `docker-compose.yml` заданы `device_ids` 0–7). **Tensor parallel по умолчанию `TP=8`**: в пресетах [`configs/models/*.env`](configs/models/), в [`./slgpu pull`](scripts/cmd_pull.sh) (если не указать `--tp`) и в [`serve.sh`](configs/vllm/serve.sh) при отсутствии переменной. На меньшем числе GPU уменьшите `TP` и список `device_ids` в compose. Проект рассчитан на один хост без Kubernetes.
+Целевая конфигурация при разработке: **8× NVIDIA H200**. **Tensor parallel по умолчанию `TP=8`**: в пресетах [`configs/models/*.env`](configs/models/), в [`./slgpu pull`](scripts/cmd_pull.sh) (если не указать `--tp`) и в [`serve.sh`](configs/vllm/serve.sh) при отсутствии переменной. При [`./slgpu up`](scripts/cmd_up.sh) в контейнеры выставляется **`NVIDIA_VISIBLE_DEVICES=0,1,…,TP-1`**, так что число видимых GPU согласовано с `TP` (ручной список в `docker-compose` не нужен; нестандартная нумерация — `SLGPU_NVIDIA_VISIBLE_DEVICES` в `.env`). Проект рассчитан на один хост без Kubernetes.
 
 Единая точка входа: **`./slgpu`** (bash, только Linux VM).
 
@@ -341,7 +341,7 @@ curl -s http://127.0.0.1:8111/v1/chat/completions \
 
 - В **`docker-compose.yml`** для vLLM, SGLang, Prometheus, Grafana, node-exporter и dcgm-exporter задан тег **`latest`**: содержимое образов меняется без bump версии в репозитории; для продакшена зафиксируйте **digest** или явный **тег** версии.
 - SGLang может не знать те же `--reasoning-parser`, что vLLM.
-- В `docker-compose.yml` заданы **8** `device_ids` (0–7). На хосте с **4** GPU укажите `["0","1","2","3"]` и выставьте **`TP=4`** в пресете.
+- Сервисы LLM используют **`gpus: all`**, а реальная маска GPU — **`NVIDIA_VISIBLE_DEVICES`**: по умолчанию **первые `TP` карт** (`0`…`TP-1` через [`./slgpu up`](scripts/cmd_up.sh)). На хосте с **4** GPU задайте **`TP=4`** (или `--tp 4`); маппинг вручную — **`SLGPU_NVIDIA_VISIBLE_DEVICES`** в `.env`.
 
 ---
 

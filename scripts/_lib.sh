@@ -280,6 +280,15 @@ slgpu_detect_running_engine() {
   return 1
 }
 
+# Список «0,1,…,N-1» для NVIDIA_VISIBLE_DEVICES (согласовано с tensor parallel).
+slgpu_nvidia_visible_from_tp() {
+  local t="${1:?}" i s=""
+  for ((i = 0; i < t; i++)); do
+    s+="${s:+,}$i"
+  done
+  echo "$s"
+}
+
 # База OpenAI API: http://127.0.0.1:<порт>/v1 для запущенного движка (порт с хоста из docker compose).
 # $1: vllm|sglang. Внутри контейнера: vLLM 8111, SGLang 8222.
 slgpu_openai_base_url() {

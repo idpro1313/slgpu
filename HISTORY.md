@@ -91,7 +91,7 @@
 | `scripts/cmd_*.sh` | Логика бывших `up.sh`, `bench.sh`, `download-model.sh`, `prepare-host.sh`, `healthcheck.sh`. |
 | `./slgpu pull <HF_ID>` | Автогенерация `configs/models/<slug>.env`, опции `--tp`, `--max-len`, парсеры и т.д. |
 | Корневой `.env` | Только server-level (пути, мониторинг); параметры модели только в пресете. |
-| `docker-compose.yml` | `device_ids` **0–7**; блок **`environment`** для переменных модели в vLLM/SGLang; **json-file** логи 100m×5. |
+| `docker-compose.yml` | **`gpus: all`**, маска GPU через **`NVIDIA_VISIBLE_DEVICES`** (по умолчанию `0,…,TP-1` из [`./slgpu up`](scripts/cmd_up.sh)); блок **`environment`** для vLLM/SGLang; **json-file** логи 100m×5. |
 | Пресеты в репо | Минимум: `qwen3.6-35b-a3b`, `qwen3-30b-a3b`; остальные модели — через `./slgpu pull`. |
 | README | Раздел рецептов **8× H200** (Qwen3.6, Kimi-K2.6, MiniMax, GLM, gpt-oss). |
 | Образы compose | Prometheus, Grafana, **node-exporter** на **`latest`** (вместе с vLLM/SGLang/dcgm); в README — про воспроизводимость и pin digest/тега. |

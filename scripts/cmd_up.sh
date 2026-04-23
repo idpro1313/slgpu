@@ -81,7 +81,7 @@ export LLM_API_PORT="${API_PORT}"
 
 if [[ -n "${TP_OVERRIDE}" ]]; then
   if ! [[ "${TP_OVERRIDE}" =~ ^[1-9][0-9]*$ ]] || (( TP_OVERRIDE > 128 )); then
-    echo "Некорректный --tp: ${TP_OVERRIDE} (нужно целое 1…128; согласуйте с числом GPU в docker-compose device_ids)" >&2
+    echo "Некорректный --tp: ${TP_OVERRIDE} (нужно целое 1…128; согласуйте с числом GPU на хосте)" >&2
     exit 1
   fi
   export TP="${TP_OVERRIDE}"
@@ -91,13 +91,19 @@ else
   tp_src="пресет"
 fi
 export TP
+# Согласовать Docker с TP: в контейнере видны GPU 0..TP-1 (маска: NVIDIA_VISIBLE_DEVICES). Переопределение: SLGPU_NVIDIA_VISIBLE_DEVICES=2,3 в .env
+if [[ -n "${SLGPU_NVIDIA_VISIBLE_DEVICES:-}" ]]; then
+  export NVIDIA_VISIBLE_DEVICES="${SLGPU_NVIDIA_VISIBLE_DEVICES}"
+else
+  export NVIDIA_VISIBLE_DEVICES="$(slgpu_nvidia_visible_from_tp "${TP}")"
+fi
 
-echo "Модель: ${MODEL_ID}  TP=${TP} (${tp_src})  (MAX_MODEL_LEN=${MAX_MODEL_LEN:-<default>}, KV=${KV_CACHE_DTYPE:-<default>}, reasoning=${REASONING_PARSER:-<off>})"
+echo "Модель: ${MODEL_ID}  TP=${TP} (${tp_src})  NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES}  (MAX_MODEL_LEN=${MAX_MODEL_LEN:-<default>}, KV=${KV_CACHE_DTYPE:-<default>}, reasoning=${REASONING_PARSER:-<off>})"
 
 # Для docker compose: явно передаём LLM_API_PORT/LLM_API_BIND, чтобы подстановка в
 # docker-compose.yml не взяла устаревшее значение из корневого .env без учёта -p.
 compose_llm_env() {
-  env LLM_API_PORT="${API_PORT}" LLM_API_BIND="${LLM_API_BIND:-0.0.0.0}" TP="${TP}" "$@"
+  env LLM_API_PORT="${API_PORT}" LLM_API_BIND="${LLM_API_BIND:-0.0.0.0}" TP="${TP}" NVIDIA_VISIBLE_DEVICES="${NVIDIA_VISIBLE_DEVICES}" "$@"
 }
 
 echo "Останавливаю vllm/sglang (если были)…"
@@ -109,11 +115,11 @@ docker compose up -d dcgm-exporter node-exporter prometheus grafana
 
 case "${MODE}" in
   vllm)
-    echo "Поднимаю vLLM (TP=${TP:-8}, все GPU), API :${API_PORT}…"
+    echo "Поднимаю vLLM (TP=${TP:-8}, GPU ${NVIDIA_VISIBLE_DEVICES}), API :${API_PORT}…"
     compose_llm_env docker compose --profile vllm up -d
     ;;
   sglang)
-    echo "Поднимаю SGLang (TP=${TP:-8}, все GPU), API :${API_PORT}…"
+    echo "Поднимаю SGLang (TP=${TP:-8}, GPU ${NVIDIA_VISIBLE_DEVICES}), API :${API_PORT}…"
     compose_llm_env docker compose --profile sglang up -d
     ;;
 esac
