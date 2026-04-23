@@ -140,7 +140,7 @@
 |------------|--------------|------------|
 | `HF_TOKEN` | [`configs/secrets/hf.env`](configs/secrets/hf.env) | Только для `./slgpu pull` |
 | `MODELS_DIR` | `.env` | Путь к моделям на хосте → `/models` |
-| `MODEL_ID`, `MODEL_REVISION`, `MAX_MODEL_LEN`, `TP`, `GPU_MEM_UTIL`, `KV_CACHE_DTYPE`, `SLGPU_MAX_NUM_BATCHED_TOKENS`, `SLGPU_DISABLE_CUSTOM_ALL_REDUCE`, `SGLANG_MEM_FRACTION_STATIC`, `REASONING_PARSER`, `TOOL_CALL_PARSER`, `MM_ENCODER_TP_MODE`, `BENCH_MODEL_NAME`, `VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS` | пресет | Параметры инференса (см. `configs/models/README.md`) |
+| `MODEL_ID`, `MODEL_REVISION`, `MAX_MODEL_LEN`, `TP`, `GPU_MEM_UTIL`, `KV_CACHE_DTYPE`, `SLGPU_MAX_NUM_BATCHED_TOKENS`, `SLGPU_DISABLE_CUSTOM_ALL_REDUCE`, `SLGPU_ENABLE_PREFIX_CACHING`, `SGLANG_MEM_FRACTION_STATIC`, `REASONING_PARSER`, `TOOL_CALL_PARSER`, `MM_ENCODER_TP_MODE`, `BENCH_MODEL_NAME`, `VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS` | пресет + `docker-compose` (`environment` vLLM/SGLang) | Параметры инференса; **каждая** нужная для `serve.sh` переменная должна быть в [`docker-compose.yml`](docker-compose.yml), иначе в контейнер не попадёт (см. `SLGPU_ENABLE_PREFIX_CACHING`). |
 | `LLM_API_BIND`, `GRAFANA_*`, `PROMETHEUS_*`, `DCGM_BIND`, `NODE_EXPORTER_BIND` | `.env` | Сеть и мониторинг |
 
 ---
@@ -329,7 +329,7 @@ curl -s http://127.0.0.1:8111/v1/chat/completions \
 |---------|-------------|
 | **Qwen3 Next / Qwen3.6:** assert / `fp8_e5m2` | В пресете: `KV_CACHE_DTYPE=fp8_e4m3` или `fp8`, пересоздать контейнер |
 | **GLM-5.1 (vLLM):** `No valid attention backend` / `FLASHMLA_SPARSE: [kv_cache_dtype not supported]` | `KV_CACHE_DTYPE=auto` (в пресете [`configs/models/glm-5.1.env`](configs/models/glm-5.1.env)); не `fp8_e4m3` для sparse MLA+KV |
-| **GLM-5.1:** `OutOfMemoryError` / `SharedFusedMoE` / `unquantized_fused_moe` при `load_model` | Снизить **`GPU_MEM_UTIL`** (в пресете **0.75**; при повторе — **0.72–0.70**) — vLLM резервирует меньше под KV, больше остаётся под веса. Плюс **`MAX_MODEL_LEN`**, **`SLGPU_MAX_NUM_BATCHED_TOKENS`**, **`SLGPU_ENABLE_PREFIX_CACHING=0`** (в логе `enable_prefix_caching: False`). Если не проходит: **квант** / **больше GPU** (`TP`). |
+| **GLM-5.1:** `OutOfMemoryError` / `SharedFusedMoE` / `unquantized_fused_moe` при `load_model` | Снизить **`GPU_MEM_UTIL`** (в пресете **0.75**; при повторе — **0.72–0.70**) — vLLM резервирует меньше под KV, больше остаётся под веса. Плюс **`MAX_MODEL_LEN`**, **`SLGPU_MAX_NUM_BATCHED_TOKENS`**, **`SLGPU_ENABLE_PREFIX_CACHING=0`** (в логе APIServer `enable_prefix_caching: False` / не появляется в non-default как `True`). Если в логе всё ещё `True` — обновите репо: **`SLGPU_ENABLE_PREFIX_CACHING` должен быть в `environment` vLLM в `docker-compose.yml`**, иначе пресет не доезжает до контейнера. Дальше: **квант** / **больше GPU** (`TP`). |
 | **`ContextOverflowError`** | Увеличить `MAX_MODEL_LEN` или уменьшить `max_tokens` |
 | **OOM при старте** | Снизить `MAX_MODEL_LEN`, `GPU_MEM_UTIL`, `SGLANG_MEM_FRACTION_STATIC`, увеличить `TP`, квантованный чекпоинт |
 | **OOM MoE при загрузке весов** | Часто не спасает только снижение контекста; **TP=8**, другой чекпоинт HF или квант |

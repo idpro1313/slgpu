@@ -87,6 +87,7 @@
 | 1.9.2 | **GLM-5.1:** пресет **65536** / **0.82** / **4096** batched, **`SLGPU_ENABLE_PREFIX_CACHING=0`**; в **`serve.sh`** опциональное отключение prefix cache; vllm.env, README, troubleshooting. |
 | 1.9.3 | **`serve.sh`:** при `SLGPU_ENABLE_PREFIX_CACHING=0` — **`--no-enable-prefix-caching`** (vLLM 0.19 по умолчанию включает кэш; раньше флаг не отключался). README troubleshooting. |
 | 1.9.4 | **GLM-5.1:** в пресете **`GPU_MEM_UTIL=0.75`** (OOM `SharedFusedMoE` при 0.82: vLLM просит снизить util, чтобы освободить память под веса). |
+| 1.9.5 | **`docker-compose.yml` (vLLM):** **`SLGPU_ENABLE_PREFIX_CACHING`** в `environment` — иначе из пресета в контейнер не попадала; `serve.sh` видел дефолт `1` → в логах оставалось `enable_prefix_caching: True`. |
 
 ### Документация и gpt-oss (исправления)
 
