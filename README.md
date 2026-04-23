@@ -18,7 +18,7 @@
 6. [Переменные окружения (справочник)](#6-переменные-окружения)
 7. [Подготовка хоста](#7-подготовка-хоста)
 8. [Быстрый старт](#8-быстрый-старт)
-9. [Бенчмарк и A/B](#9-бенчмарк-и-ab)
+9. [Бенчмарк и отчёт](#9-бенчмарк-и-отчёт)
 10. [Длительный нагрузочный тест (`load`)](#10-длительный-нагрузочный-тест-load)
 11. [Рецепты 8× H200](#11-рецепты-8-h200)
 12. [Мониторинг и безопасность](#12-мониторинг-и-безопасность)
@@ -81,7 +81,7 @@
 
 ## 4. CLI `./slgpu`
 
-Точка входа для всего жизненного цикла стенда: подготовка ОС, загрузка весов, запуск выбранного движка в Docker, бенчмарки, логи и диагностика. Команды реализованы в [`scripts/cmd_*.sh`](scripts/) и вызываются через корневой скрипт [`slgpu`](slgpu). В репозитории для `slgpu` и `cmd_*.sh` уже выставлен исполняемый бит; при необходимости на VM: `chmod +x slgpu scripts/cmd_*.sh`.
+Точка входа для жизненного цикла стенда: подготовка ОС, загрузка весов, запуск движка в Docker, бенчмарки. Логи и проверка API — через **`docker compose`** и **`curl`** (см. [§9](#9-бенчмарк-и-отчёт), [§12](#12-мониторинг-и-безопасность)). Команды реализованы в [`scripts/cmd_*.sh`](scripts/) и вызываются через корневой скрипт [`slgpu`](slgpu). В репозитории для `slgpu` и `cmd_*.sh` уже выставлен исполняемый бит; при необходимости на VM: `chmod +x slgpu scripts/cmd_*.sh`.
 
 ### Шпаргалка синтаксиса
 
@@ -94,11 +94,6 @@
 ./slgpu restart -m <preset> [--tp <N>]
 ./slgpu bench [vllm|sglang] [-m <preset>]
 ./slgpu load [vllm|sglang] [-m <preset>] [опции]
-./slgpu ab -m <preset>
-./slgpu compare
-./slgpu logs [SERVICE] [аргументы docker compose logs…]
-./slgpu status
-./slgpu config <vllm|sglang> -m <preset>
 ```
 
 ### Назначение команд
@@ -108,18 +103,12 @@
 | **`help`** | Краткая справка по всем подкомандам и примерам вызова (то же, что и `./slgpu` без аргументов с подсказкой). |
 | **`prepare`** | **Один раз при создании ВМ** (или после переустановки ОС): проверка драйвера NVIDIA, установка Docker и Compose v2, NVIDIA Container Toolkit, при желании persistence mode GPU, создание каталога `MODELS_DIR`, sysctl (`vm.swappiness`), лимиты `nofile`, напоминание про firewall. Запуск от root: `sudo ./slgpu prepare` или шаг `sudo ./slgpu prepare 1` … `6`; выборочно: `STEPS=2,4 sudo -E ./slgpu prepare`. |
 | **`pull`** | **Скачивание весов** в `${MODELS_DIR}/<MODEL_ID>` через `hf download`. **Файл пресета не создаётся.** Аргумент **с `/`** — HF id: если есть `configs/models/<slug>.env` (slug из имени репо), подхватывается `MODEL_ID` и т.д.; если пресета **нет** — скачивание только по HF id, для `./slgpu up` нужно завести `.env` вручную. Аргумент **без `/`** — имя существующего пресета. Опция **`--revision`**: пин ревизии (переопределяет `MODEL_REVISION` при загрузке с пресетом). Токен: [`configs/secrets/hf.env`](configs/secrets/hf.env) (`HF_TOKEN`). |
-| **`up`** | **Запуск стенда**: останавливает и удаляет контейнеры другого движка (vllm/sglang), поднимает мониторинг (Prometheus, Grafana, экспортеры), затем поднимает **один** выбранный профиль — `vllm` или `sglang` с tensor parallel и параметрами из **`-m <preset>`** (обязательно). Опция **`--tp <N>`** переопределяет **TP** на этот запуск (без правки `configs/models/*.env`); без неё **TP** берётся из пресета, а если в пресете нет — **8**. **Не ждёт** готовности `GET /v1/models` (тяжёлые MoE стартуют долго) — проверяйте вручную `curl` или `./slgpu status`. vLLM по умолчанию **:8111**, SGLang **:8222** на хосте; **`-p`** меняет порт. |
+| **`up`** | **Запуск стенда**: останавливает и удаляет контейнеры другого движка (vllm/sglang), поднимает мониторинг (Prometheus, Grafana, экспортеры), затем поднимает **один** выбранный профиль — `vllm` или `sglang` с tensor parallel и параметрами из **`-m <preset>`** (обязательно). Опция **`--tp <N>`** переопределяет **TP** на этот запуск (без правки `configs/models/*.env`); без неё **TP** берётся из пресета, а если в пресете нет — **8**. **Не ждёт** готовности `GET /v1/models` — проверяйте вручную: `curl -s http://127.0.0.1:<порт>/v1/models`. vLLM по умолчанию **:8111**, SGLang **:8222** на хосте; **`-p`** меняет порт. |
 | **`down`** | **Остановка инференса**: по умолчанию останавливает и снимает контейнеры **только** `vllm` и `sglang` (мониторинг остаётся). С флагом **`--all`** — останавливаются **все** сервисы проекта compose (включая Prometheus/Grafana/экспортеры). Удобно перед сменой движка или освобождением GPU без сноса данных в томах Grafana/Prometheus при обычном `down`. |
 | **`restart`** | **Перезапуск с новым пресетом без смены движка**: определяет, какой сервис сейчас в статусе *running* (`vllm` или `sglang`), и выполняет для него ту же последовательность, что и `up`, с новым **`-m <preset>`**; опционально **`--tp`**, как у `up`. Если ни один LLM-контейнер не запущен — сообщение об ошибке; тогда используйте `up`. |
 | **`bench`** | **Нагрузочный тест** против уже поднятого API (порт vLLM 8111 / SGLang 8222 по умолчанию, см. `docker compose port`): запускает [`scripts/bench_openai.py`](scripts/bench_openai.py). Модель и engine **автоматически определяются** из запущенного API (`/v1/models`) и docker compose. Пресет **`-m`** опционален — используется только для `MAX_MODEL_LEN` и `BENCH_MODEL_NAME`, если указан. Пишет артефакты в `bench/results/<engine>/<timestamp>/`. |
 | **`load`** | **Длительный нагрузочный тест** (15–20 мин, 200–300 виртуальных пользователей): запускает [`scripts/bench_load.py`](scripts/bench_load.py). Модель и engine **автоматически определяются** из запущенного API. Эмулирует фазы ramp-up → steady → ramp-down, собирает time-series метрики (throughput, TTFT, latency, error rate) в CSV каждые 5 сек. Артефакты: `summary.json`, `time_series.csv`, `users.jsonl`. Опции: `--users`, `--duration`, `--ramp-up`, `--ramp-down`, `--think-time`, `--max-prompt`, `--max-output`, `--report-interval`, `--burst` (макс throughput без пауз). |
-| **`ab`** | **Сквозной A/B-сценарий** для честного сравнения на одной модели: `up vllm` → `bench vllm` → `down` (только LLM) → `up sglang` → `bench sglang` → `compare`. Один пресет **`-m`** на всю цепочку; в конце обновляется [`bench/report.md`](bench/report.md). |
-| **`compare`** | **Сводка двух последних прогонов**: читает последние `summary.json` для `vllm` и `sglang` в `bench/results/` (или пути из флагов скрипта) и перезаписывает таблицу в `bench/report.md`. Можно вызывать отдельно после ручных бенчей. |
-| **`logs`** | **Потоковые логи Docker** выбранного сервиса (`docker compose logs -f --tail=200`). Без имени сервиса — логи того из `vllm`/`sglang`, который сейчас *running*. Дополнительные флаги пробрасываются в `docker compose logs` (например другой `--tail`). Сервисы: `vllm`, `sglang`, `prometheus`, `grafana`, `dcgm-exporter`, `node-exporter`. |
-| **`status`** | **Быстрая диагностика «с первого взгляда»**: `docker compose ps`, проверка `GET /v1/models` (порт из compose: vLLM 8111, SGLang 8222), краткий вывод `nvidia-smi` по GPU. Не требует пресета; полезно после `up` или при сбоях. |
-| **`config`** | **Печать эффективного окружения** после слияния `.env` + `configs/<vllm|sglang>/<engine>.env` + пресета **`-m`**: отфильтрованный список переменных (`MODEL_*`, `TP`, `KV_*`, парсеры, …). Нужен, чтобы убедиться, что в контейнер уйдут ожидаемые значения, не заглядывая вручную во все файлы. |
-
-Подробности по флагам **`pull`**: см. `./slgpu pull -h` и [`configs/models/README.md`](configs/models/README.md).
+Подробности по флагам **`pull`**: см. `./slgpu pull -h` и [`configs/models/README.md`](configs/models/README.md). Сводка бенчей vLLM/SGLang в [`bench/report.md`](bench/report.md): **`python3 scripts/compare.py`** (после прогонов `bench` для обоих движков). Логи: **`docker compose logs -f vllm`** (или `sglang`, `grafana`, …). Диагностика: **`docker compose ps`**, **`curl`**, **`nvidia-smi`**.
 
 ---
 
@@ -180,19 +169,17 @@ curl -s http://127.0.0.1:8111/v1/models
 
 ---
 
-## 9. Бенчмарк и A/B
+## 9. Бенчмарк и отчёт
 
 ```bash
 M=qwen3.6-35b-a3b
 ./slgpu up vllm   -m $M && ./slgpu bench vllm   -m $M
 ./slgpu down
 ./slgpu up sglang -m $M && ./slgpu bench sglang -m $M
-./slgpu compare              # → bench/report.md
+python3 scripts/compare.py   # последние summary vLLM + SGLang → обновит bench/report.md
 ```
 
-Или одной командой: **`./slgpu ab -m qwen3.6-35b-a3b`**.
-
-Результаты: `bench/results/<engine>/<timestamp>/summary.json`.
+Артефакты: `bench/results/<engine>/<timestamp>/summary.json`.
 
 ---
 
@@ -284,7 +271,7 @@ M=qwen3.6-35b-a3b
 
 - **Prometheus** (`127.0.0.1:9090`): см. [`monitoring/prometheus.yml`](monitoring/prometheus.yml). Неактивный профиль (vllm/sglang) даёт DOWN target — норма для A/B.
 - **Grafana** (`127.0.0.1:3000`), дашборды: в [`monitoring/grafana/provisioning/dashboards/json/`](monitoring/grafana/provisioning/dashboards/json/) лежат JSON с provisioning (Prometheus, uid `prometheus`): краткий **SGLang** (`sglang-dashboard-slgpu.json`), расширенный **SGLang по мотивам vLLM V2** (`sglangdash2-slgpu.json`, сборка из `vllmdash2.json` скриптом `_build_sglangdash2.py`), плюс эталон **vLLM** для ручного импорта (`vllmdash2.json`). Подробности, переменные `instance` / `model_name` и типичные сбои — в [`monitoring/README.md`](monitoring/README.md).
-- Логи контейнеров: **`./slgpu logs vllm -f`**; ротация **json-file** (100 MiB × 5) задана в compose.
+- Логи контейнеров: **`docker compose logs -f vllm`** (или `sglang`, `prometheus`, …); ротация **json-file** (100 MiB × 5) задана в compose.
 
 **Безопасность:** смените пароль Grafana; не коммитьте `.env` с секретами.
 

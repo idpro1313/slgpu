@@ -11,7 +11,7 @@ case "${cmd}" in
   help|-h|--help)
     exec bash "${ROOT}/scripts/cmd_help.sh" "$@"
     ;;
-  prepare|pull|up|down|restart|bench|load|ab|compare|logs|status|config)
+  prepare|pull|up|down|restart|bench|load)
     if [[ ! -f "${ROOT}/scripts/cmd_${cmd}.sh" ]]; then
       echo "Внутренняя ошибка: нет ${ROOT}/scripts/cmd_${cmd}.sh" >&2
       exit 1

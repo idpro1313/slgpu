@@ -9,7 +9,7 @@
 ./slgpu bench sglang -m qwen3.6-35b-a3b
 ```
 
-Для **`./slgpu up`**, **`./slgpu bench`**, **`./slgpu restart`**, **`./slgpu ab`**, **`./slgpu config`** флаг **`-m <slug>`** обязателен.
+Для **`./slgpu up`**, **`./slgpu bench`**, **`./slgpu load`**, **`./slgpu restart`** флаг **`-m <slug>`** обязателен (где команда его поддерживает).
 
 ## Параметры пресета (справочник)
 

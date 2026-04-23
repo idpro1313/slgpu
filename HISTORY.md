@@ -92,6 +92,7 @@
 | 1.11.0 | **MiniMax-M2.7:** пресет [`configs/models/minimax-m2.7.env`](configs/models/minimax-m2.7.env) ([рецепт](https://github.com/vllm-project/recipes/blob/main/MiniMax/MiniMax-M2.md) — **TP4**, **TP4+EP** на 8×GPU, **`--compilation-config`**); `serve.sh` / compose — **`SLGPU_VLLM_COMPILATION_CONFIG`**, **`SLGPU_ENABLE_EXPERT_PARALLEL`**, **`SLGPU_VLLM_DATA_PARALLEL_SIZE`**; **`slgpu_guess_max_model_len`** — **200704** для `MiniMaxAI/MiniMax*`. |
 | 1.11.1 | **`pull`:** только скачивание весов, **без** создания `configs/models/*.env`; обновлены README, `configs/models/README.md`, справка. |
 | 1.11.2 | **`up`:** убрано ожидание `GET /v1/models` (пуллинг API); README, `grace` M-UP, `.env.example` (удалён `SLGPU_UP_READY_ATTEMPTS`). |
+| 2.0.0 | **CLI:** удалены команды **`ab`**, **`compare`**, **`logs`**, **`status`**, **`config`**; соответствующие `cmd_*.sh`. Сводка бенчей: `python3 scripts/compare.py`. README, GRACE, `configs/models/README.md`. |
 
 ### Документация и gpt-oss (исправления)
 
@@ -105,7 +106,7 @@
 
 | Изменение | Суть |
 |-----------|------|
-| `./slgpu` | Единый диспетчер: `prepare`, `pull`, `up`, `down`, `restart`, `bench`, `ab`, `compare`, `logs`, `status`, `config`, `help`. |
+| `./slgpu` | Единый диспетчер: `prepare`, `pull`, `up`, `down`, `restart`, `bench`, `load`, `help` (v2.0.0 — убраны `ab`, `compare`, `logs`, `status`, `config`). |
 | `scripts/cmd_*.sh` | Логика бывших `up.sh`, `bench.sh`, `download-model.sh`, `prepare-host.sh`, `healthcheck.sh`. |
 | `./slgpu pull` | Только `hf download`; пресет не создаётся. При существующем `configs/models/<slug>.env` — загрузка по полям из файла. |
 | Корневой `.env` | Только server-level (пути, мониторинг); параметры модели только в пресете. |
