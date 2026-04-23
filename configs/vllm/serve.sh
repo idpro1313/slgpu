@@ -41,6 +41,10 @@ cmd+=(
   --enable-auto-tool-choice
   --reasoning-parser "${REASON}"
 )
+# Рецепт GLM-5.1 (FP8): --chat-template-content-format string, см. vllm-project/recipes GLM/GLM5.md
+if [[ -n "${CHAT_TEMPLATE_CONTENT_FORMAT:-}" ]]; then
+  cmd+=(--chat-template-content-format "${CHAT_TEMPLATE_CONTENT_FORMAT}")
+fi
 if [[ -n "${MM_ENCODER_TP_MODE:-}" ]]; then
   cmd+=(--mm-encoder-tp-mode "${MM_ENCODER_TP_MODE}")
 fi

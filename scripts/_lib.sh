@@ -157,6 +157,10 @@ slgpu_guess_parsers() {
       r="minimax_m2"
       t="minimax_m2"
       ;;
+    zai-org/GLM*FP8*|*GLM-5*FP8*)
+      r="glm45"
+      t="glm47"
+      ;;
     zai-org/GLM*)
       r="glm45"
       t="glm45"

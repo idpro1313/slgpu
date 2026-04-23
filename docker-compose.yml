@@ -4,7 +4,7 @@ name: slgpu
 
 services:
   vllm:
-    image: vllm/vllm-openai:latest
+    image: ${VLLM_DOCKER_IMAGE:-vllm/vllm-openai:latest}
     profiles: ["vllm"]
     restart: unless-stopped
     # Список физических GPU задаётся через NVIDIA_VISIBLE_DEVICES (0..TP-1 от ./slgpu up), см. cmd_up.sh
@@ -31,6 +31,8 @@ services:
       SLGPU_ENABLE_PREFIX_CACHING: ${SLGPU_ENABLE_PREFIX_CACHING:-1}
       TOOL_CALL_PARSER: ${TOOL_CALL_PARSER:-hermes}
       REASONING_PARSER: ${REASONING_PARSER:-qwen3}
+      # GLM-5.1 (FP8): string — см. GLM/GLM5.md в vllm-project/recipes
+      CHAT_TEMPLATE_CONTENT_FORMAT: ${CHAT_TEMPLATE_CONTENT_FORMAT:-}
       # Только vLLM (например moonshotai/Kimi-K2.6 — data; см. референс Moonshot / доку vLLM).
       MM_ENCODER_TP_MODE: ${MM_ENCODER_TP_MODE:-}
       VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS: ${VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS:-1}

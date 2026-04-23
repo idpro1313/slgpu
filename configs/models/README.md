@@ -15,7 +15,7 @@
 
 - **`MODEL_ID`** — репозиторий Hugging Face и подкаталог в `MODELS_DIR` после `./slgpu pull`.
 - **`MODEL_REVISION`** — SHA/тег на HF; пусто — ветка по умолчанию.
-- **`MAX_MODEL_LEN`** — окно контекста (`--max-model-len` / `--context-length`). При **`./slgpu pull <HF_ID>`** без **`--max-len`** подставляется эвристика ([`slgpu_guess_max_model_len`](../../scripts/_lib.sh)): чаще **262144** (256k), в т.ч. **moonshotai/Kimi-K2.6**; ниже — **Qwen3-30B** / **gpt-oss** (131072) / **GLM** (202752). **GLM-5.1** на 8×~140 GB с полным окном часто даёт OOM в MoE — в [`glm-5.1.env`](glm-5.1.env) заложено **65536**, **`SLGPU_ENABLE_PREFIX_CACHING=0`**; при OOM снижайте дальше `MAX_MODEL_LEN` / `GPU_MEM_UTIL` / batched tokens или ищите квант/больше шардов.
+- **`MAX_MODEL_LEN`** — окно контекста (`--max-model-len` / `--context-length`). При **`./slgpu pull <HF_ID>`** без **`--max-len`** подставляется эвристика ([`slgpu_guess_max_model_len`](../../scripts/_lib.sh)): чаще **262144** (256k), в т.ч. **moonshotai/Kimi-K2.6**; ниже — **Qwen3-30B** / **gpt-oss** (131072) / **GLM** (202752). **GLM-5.1** bf16 на 8×~140 GB с полным окном часто даёт OOM в MoE — в [`glm-5.1.env`](glm-5.1.env) заложено **65536**; **GLM-5.1-FP8** — [`glm-5.1-fp8.env`](glm-5.1-fp8.env) и образ **`VLLM_DOCKER_IMAGE=vllm/vllm-openai:glm51`**. **`SLGPU_ENABLE_PREFIX_CACHING=0`** в пресетах GLM; при OOM снижайте `MAX_MODEL_LEN` / `GPU_MEM_UTIL` / batched tokens.
 - **`KV_CACHE_DTYPE`** — `fp8_e4m3`, `fp8`, `auto`, …; у Qwen3 Next/3.6 избегайте `fp8_e5m2`. У **zai-org/GLM-5.1** (sparse MLA) в vLLM 0.19 используйте **`auto`** (или не-fp8 KV) — иначе `No valid attention backend` при старте.
 - **`GPU_MEM_UTIL`** — vLLM `--gpu-memory-utilization`.
 - **`SLGPU_MAX_NUM_BATCHED_TOKENS`** — только vLLM (chunked prefill; не `VLLM_*`, чтобы vLLM 0.19+ не предупреждал о неизвестных переменных).
@@ -23,6 +23,7 @@
 - **`SGLANG_MEM_FRACTION_STATIC`** — только SGLang.
 - **`SGLANG_CUDA_GRAPH_MAX_BS`**, **`SGLANG_ENABLE_TORCH_COMPILE`**, **`SGLANG_DISABLE_CUDA_GRAPH`**, **`SGLANG_DISABLE_CUSTOM_ALL_REDUCE`** — только SGLang: обход OOM/ошибок **CUDA graph capture** и сбоев **custom all-reduce** (см. `configs/sglang/sglang.env`, `serve.sh`); при «Capture cuda graph failed» SGLang подсказывает понижать mem / max-bs, отключать torch compile, в крайнем случае граф; при ошибках в `custom_all_reduce` — `SGLANG_DISABLE_CUSTOM_ALL_REDUCE=1` (откат на NCCL).
 - **`REASONING_PARSER`**, **`TOOL_CALL_PARSER`** — vLLM и SGLang (`launch_server`); см. таблицу ниже.
+- **`CHAT_TEMPLATE_CONTENT_FORMAT`** — только vLLM (`--chat-template-content-format`); у **GLM-5.1-FP8** в пресете [`glm-5.1-fp8.env`](glm-5.1-fp8.env) задано **`string`**, как в [рецепте vLLM GLM5](https://github.com/vllm-project/recipes/blob/main/GLM/GLM5.md).
 - **`MM_ENCODER_TP_MODE`** — только vLLM (`--mm-encoder-tp-mode`); для **moonshotai/Kimi-K2.6** при `./slgpu pull` подставляется **`data`** по референсу Moonshot.
 - **`TP`** — tensor parallel; должен согласовываться с числом GPU в `docker-compose.yml`. В шаблонах репозитория и в **`./slgpu pull`** без `--tp` по умолчанию **8**; на 4 GPU задайте **4** в файле или однократно: **`./slgpu up vllm -m <preset> --tp 4`** / **`./slgpu restart -m <preset> --tp 4`** (флаг переопределяет TP без правки `.env` пресета; если флага нет — как в файле, иначе подстановка **8** в `serve.sh`).
 - **`BENCH_MODEL_NAME`** — поле `model` в бенче; пусто — первая модель из `/v1/models`.
@@ -37,7 +38,8 @@
 | Qwen3-*-Thinking           | `qwen3-thinking`   | `hermes`                           |
 | DeepSeek R1              | `deepseek_r1`      | `pythonic`         |
 | openai/gpt-oss-*         | `openai_gptoss`    | `openai`           |
-| zai-org/GLM-*            | `glm45`            | `glm45`            |
+| zai-org/GLM* (bf16)     | `glm45`            | `glm45`            |
+| zai-org/GLM*FP8         | `glm45`            | `glm47`            |
 | MiniMaxAI/MiniMax-*      | `minimax_m2`       | `minimax_m2`       |
 | moonshotai/Kimi-K2*      | `kimi_k2`          | `kimi_k2`          |
 | Llama 3.x                | (пусто)            | `llama3_json`                      |

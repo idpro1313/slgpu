@@ -274,12 +274,20 @@ M=qwen3.6-35b-a3b
   --reasoning-parser minimax_m2 --tool-call-parser minimax_m2
 ./slgpu up vllm -m minimax-m2.7
 
-# GLM-5.1 (в пресете: MAX_MODEL_LEN=65536, GPU_MEM_UTIL=0.75, KV=auto, prefix cache off; при OOM в MoE — см. troubleshooting)
+# GLM-5.1 bf16 (в пресете: MAX_MODEL_LEN=65536, GPU_MEM_UTIL=0.75, KV=auto, prefix cache off; при OOM в MoE — см. troubleshooting)
 ./slgpu pull zai-org/GLM-5.1 \
   --gpu-mem 0.95 --sglang-mem 0.92 \
   --batch 24576 \
   --reasoning-parser glm45 --tool-call-parser glm45
 ./slgpu up vllm -m glm-5.1
+
+# GLM-5.1-FP8 (рекомендовано vLLM на 8×H200, меньше VRAM; рецепт: GLM/GLM5.md)
+# В .env: VLLM_DOCKER_IMAGE=vllm/vllm-openai:glm51
+./slgpu pull zai-org/GLM-5.1-FP8 \
+  --gpu-mem 0.90 --sglang-mem 0.92 \
+  --batch 8192 \
+  --reasoning-parser glm45 --tool-call-parser glm47
+./slgpu up vllm -m glm-5.1-fp8
 
 # openai/gpt-oss-120b (дефолт MAX_MODEL_LEN=131072; Harmony: tool parser `openai`; в API model = openai/gpt-oss-120b)
 ./slgpu pull openai/gpt-oss-120b \
@@ -289,7 +297,7 @@ M=qwen3.6-35b-a3b
 ./slgpu up vllm -m gpt-oss-120b
 ```
 
-**Замечания:** у **Qwen3.6** не используйте `fp8_e5m2` для KV — см. troubleshooting. **Kimi / большие MoE:** OOM на `create_weights` — упор в размер весей на шард; не всегда помогает снижение контекста — нужен **TP=8**, другой чекпоинт или квант. **gpt-oss:** полный id в поле `model`. **MiniMax/GLM:** имена парсеров зависят от версии образа vLLM.
+**Замечания:** у **Qwen3.6** не используйте `fp8_e5m2` для KV — см. troubleshooting. **Kimi / большие MoE:** OOM на `create_weights` — упор в размер весей на шард; не всегда помогает снижение контекста — нужен **TP=8**, другой чекпоинт или квант. **GLM-5.1** bf16 на грани VRAM — см. пресет **`glm-5.1-fp8`** и [рецепт vLLM GLM5](https://github.com/vllm-project/recipes/blob/main/GLM/GLM5.md) (образ `glm51`, `glm47`/`glm45` парсеры, при бенчмарке — `--no-enable-prefix-caching`). **gpt-oss:** полный id в поле `model`. **MiniMax/GLM:** имена парсеров зависят от версии образа vLLM.
 
 ---
 
@@ -329,7 +337,7 @@ curl -s http://127.0.0.1:8111/v1/chat/completions \
 |---------|-------------|
 | **Qwen3 Next / Qwen3.6:** assert / `fp8_e5m2` | В пресете: `KV_CACHE_DTYPE=fp8_e4m3` или `fp8`, пересоздать контейнер |
 | **GLM-5.1 (vLLM):** `No valid attention backend` / `FLASHMLA_SPARSE: [kv_cache_dtype not supported]` | `KV_CACHE_DTYPE=auto` (в пресете [`configs/models/glm-5.1.env`](configs/models/glm-5.1.env)); не `fp8_e4m3` для sparse MLA+KV |
-| **GLM-5.1:** `OutOfMemoryError` / `SharedFusedMoE` / `unquantized_fused_moe` при `load_model` | Снизить **`GPU_MEM_UTIL`** (в пресете **0.75**; при повторе — **0.72–0.70**) — vLLM резервирует меньше под KV, больше остаётся под веса. Плюс **`MAX_MODEL_LEN`**, **`SLGPU_MAX_NUM_BATCHED_TOKENS`**, **`SLGPU_ENABLE_PREFIX_CACHING=0`** (в логе APIServer `enable_prefix_caching: False` / не появляется в non-default как `True`). Если в логе всё ещё `True` — обновите репо: **`SLGPU_ENABLE_PREFIX_CACHING` должен быть в `environment` vLLM в `docker-compose.yml`**, иначе пресет не доезжает до контейнера. Дальше: **квант** / **больше GPU** (`TP`). |
+| **GLM-5.1 (bf16):** `OutOfMemoryError` / `SharedFusedMoE` / `unquantized_fused_moe` при `load_model` | Снизить **`GPU_MEM_UTIL`** (в пресете **0.75**; при повторе — **0.72–0.70**) — vLLM резервирует меньше под KV, больше остаётся под веса. Плюс **`MAX_MODEL_LEN`**, **`SLGPU_MAX_NUM_BATCHED_TOKENS`**, **`SLGPU_ENABLE_PREFIX_CACHING=0`**. Предпочтительно: чекпоинт **FP8** — пресет [`glm-5.1-fp8`](configs/models/glm-5.1-fp8.env) и в `.env` **`VLLM_DOCKER_IMAGE=vllm/vllm-openai:glm51`**, см. [GLM/GLM5.md](https://github.com/vllm-project/recipes/blob/main/GLM/GLM5.md). Если в логе prefix cache `True` при `0` в пресете — в **`docker-compose.yml`** у vLLM должен быть **`SLGPU_ENABLE_PREFIX_CACHING`**. Дальше: **больше GPU** (`TP`). |
 | **`ContextOverflowError`** | Увеличить `MAX_MODEL_LEN` или уменьшить `max_tokens` |
 | **OOM при старте** | Снизить `MAX_MODEL_LEN`, `GPU_MEM_UTIL`, `SGLANG_MEM_FRACTION_STATIC`, увеличить `TP`, квантованный чекпоинт |
 | **OOM MoE при загрузке весов** | Часто не спасает только снижение контекста; **TP=8**, другой чекпоинт HF или квант |
@@ -342,7 +350,7 @@ curl -s http://127.0.0.1:8111/v1/chat/completions \
 
 ## 14. Ограничения
 
-- В **`docker-compose.yml`** для vLLM, SGLang, Prometheus, Grafana, node-exporter и dcgm-exporter задан тег **`latest`**: содержимое образов меняется без bump версии в репозитории; для продакшена зафиксируйте **digest** или явный **тег** версии.
+- В **`docker-compose.yml`** для vLLM задайте тег/дижест через **`VLLM_DOCKER_IMAGE`** (по умолчанию `vllm/vllm-openai:latest`); для SGLang, Prometheus, Grafana, node-exporter и dcgm-exporter сейчас **`latest`**: содержимое образов меняется без bump версии в репозитории; для продакшена зафиксируйте **digest** или явный **тег** версии.
 - SGLang может не знать те же `--reasoning-parser`, что vLLM.
 - Сервисы LLM используют **`gpus: all`**, а реальная маска GPU — **`NVIDIA_VISIBLE_DEVICES`**: по умолчанию **первые `TP` карт** (`0`…`TP-1` через [`./slgpu up`](scripts/cmd_up.sh)). На хосте с **4** GPU задайте **`TP=4`** (или `--tp 4`); маппинг вручную — **`SLGPU_NVIDIA_VISIBLE_DEVICES`** в `.env`.
 
