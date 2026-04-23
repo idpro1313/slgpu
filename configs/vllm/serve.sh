@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Запуск vLLM OpenAI-сервера внутри контейнера. Флаги — из env (.env, vllm.env, пресет). HF-токен не используется (модель с диска).
-# Служебные переменные listen/batch — SLGPU_* (см. vllm.env), чтобы vLLM 0.19+ не предупреждал о «Unknown VLLM_*».
+# Запуск vLLM OpenAI-сервера внутри контейнера. Флаги — из env (через compose: main.env → … → пресет). Ниже — запасные ${VAR:-…}. HF-токен не используется (модель с диска).
+# Служебные listen/batch — SLGPU_* (см. vllm.env), чтобы vLLM 0.19+ не предупреждало о «Unknown VLLM_*».
 set -euo pipefail
 
 : "${MODEL_ID:?MODEL_ID не задан (корневой .env или пресет модели)}"

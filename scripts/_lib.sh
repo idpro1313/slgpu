@@ -28,6 +28,17 @@ slgpu_fail_if_missing_preset_arg() {
   fi
 }
 
+# Дефолты репозитория: `configs/main.env` (если есть), до `.env` и пресетов.
+slgpu_source_main_env() {
+  local root
+  root="$(slgpu_root)"
+  local f="${root}/configs/main.env"
+  if [[ -f "${f}" ]]; then
+    # shellcheck disable=SC1091
+    source "${f}"
+  fi
+}
+
 # Только корневой .env (пути, мониторинг). Без пресета.
 slgpu_load_server_env() {
   local root
@@ -37,12 +48,13 @@ slgpu_load_server_env() {
     return 1
   fi
   set -a
+  slgpu_source_main_env
   # shellcheck disable=SC1091
   source "${root}/.env"
   set +a
 }
 
-# .env + обязательный пресет configs/models/<slug>.env (bench, status и т.д.).
+# main.env + .env + обязательный пресет configs/models/<slug>.env (bench, load, …).
 slgpu_load_env() {
   local preset="${1:-}"
   local root
@@ -61,6 +73,7 @@ slgpu_load_env() {
   fi
 
   set -a
+  slgpu_source_main_env
   # shellcheck disable=SC1091
   source "${root}/.env"
 
@@ -86,7 +99,7 @@ slgpu_load_env() {
   : "${MODEL_ID:?MODEL_ID не задан в пресете ${preset}.env}"
 }
 
-# Для docker compose: .env → configs/<engine>/<engine>.env → пресет (обязателен).
+# Для docker compose: main.env → .env → configs/<engine>/<engine>.env → пресет (обязателен).
 # $1 — слаг пресета, $2 — vllm | sglang.
 slgpu_load_compose_env() {
   local preset="${1:-}"
@@ -116,6 +129,7 @@ slgpu_load_compose_env() {
   fi
 
   set -a
+  slgpu_source_main_env
   # shellcheck disable=SC1091
   source "${root}/.env"
   # shellcheck disable=SC1090

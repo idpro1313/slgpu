@@ -1,6 +1,7 @@
 name: slgpu
 
-# vLLM/SGLang: serve.sh; переменные модели передаются из shell при ./slgpu up (см. environment ниже) + .env + configs/<engine>/<engine>.env
+# vLLM/SGLang: serve.sh. Дефолты: configs/main.env; затем .env, configs/<engine>/<engine>.env, пресет (порядок в scripts/_lib.sh).
+# Плейсхолдеры ${VAR:-…} — запас, если `docker compose` вызвали без export из ./slgpu up.
 
 services:
   vllm:

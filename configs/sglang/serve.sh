@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Запуск SGLang launch_server. Параметры — из env (.env, sglang.env, пресет).
+# Запуск SGLang launch_server. Параметры — из env (через compose: main.env → … → пресет). Ниже — запасные ${VAR:-…}.
 set -euo pipefail
 
 : "${MODEL_ID:?MODEL_ID не задан (корневой .env или пресет модели)}"

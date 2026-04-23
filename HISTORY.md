@@ -98,6 +98,7 @@
 | 2.0.3 | **`_lib.sh`:** удалена **`slgpu_gen_preset_file`** (не вызывалась); GRACE, `configs/models/README.md`, журналы. |
 | 2.0.4 | **`-m` без пресета:** вывод списка пресетов (`slgpu_fail_if_missing_preset_arg`); `cmd_up` и др. |
 | 2.0.5 | **GRACE / `docs/AGENTS.md`:** сценарии pull/up, риск парсеров, контракт M-PULL, версии XML. |
+| 2.0.6 | **[`configs/main.env`](configs/main.env):** дефолты; `slgpu_source_main_env` в `_lib.sh`; README, compose, vllm/sglang env, GRACE. |
 
 ### Документация и gpt-oss (исправления)
 
