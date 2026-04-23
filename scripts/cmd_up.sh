@@ -33,7 +33,14 @@ TP_OVERRIDE=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     vllm|sglang) MODE="$1"; shift ;;
-    -m|--model) MODEL_SLUG="${2:?}"; shift 2 ;;
+    -m|--model)
+      if [[ -z "${2:-}" || "${2}" == -* ]]; then
+        slgpu_fail_if_missing_preset_arg "$1"
+        exit 1
+      fi
+      MODEL_SLUG="${2}"
+      shift 2
+      ;;
     -p|--port)
       if [[ -z "${2:-}" || "${2:-}" == -* ]]; then
         echo "Опция $1 требует номер порта (1–65535)" >&2

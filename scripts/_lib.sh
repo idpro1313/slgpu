@@ -14,6 +14,20 @@ slgpu_list_presets() {
   fi
 }
 
+# После -m|--model нет имени (или следующий токен — флаг): подсказка + список пресетов в stderr.
+slgpu_fail_if_missing_preset_arg() {
+  local opt="$1"
+  echo "Опция ${opt} требует имя пресета (файл configs/models/<name>.env)." >&2
+  echo "Доступные пресеты:" >&2
+  local list
+  list="$(slgpu_list_presets)"
+  if [[ -n "${list}" ]]; then
+    echo "${list}" | sed 's/^/  /' >&2
+  else
+    echo "  (нет файлов *.env в configs/models/)" >&2
+  fi
+}
+
 # Только корневой .env (пути, мониторинг). Без пресета.
 slgpu_load_server_env() {
   local root

@@ -39,7 +39,14 @@ REVISION=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -h|--help) usage; exit 0 ;;
-    -m|--model) TARGET="${2:?}"; shift 2 ;;
+    -m|--model)
+      if [[ -z "${2:-}" || "${2}" == -* ]]; then
+        slgpu_fail_if_missing_preset_arg "$1"
+        exit 1
+      fi
+      TARGET="${2}"
+      shift 2
+      ;;
     --revision) REVISION="${2:?}"; shift 2 ;;
     -*)
       echo "Неизвестная опция: $1" >&2

@@ -67,7 +67,14 @@ WARMUP=3
 while [[ $# -gt 0 ]]; do
   case "$1" in
     vllm|sglang) ENGINE="$1"; shift ;;
-    -m|--model) MODEL_SLUG="${2:?}"; shift 2 ;;
+    -m|--model)
+      if [[ -z "${2:-}" || "${2}" == -* ]]; then
+        slgpu_fail_if_missing_preset_arg "$1"
+        exit 1
+      fi
+      MODEL_SLUG="${2}"
+      shift 2
+      ;;
     -u|--users) USERS="${2:?}"; shift 2 ;;
     -d|--duration) DURATION="${2:?}"; shift 2 ;;
     --ramp-up) RAMP_UP="${2:?}"; shift 2 ;;

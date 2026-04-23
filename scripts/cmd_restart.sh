@@ -25,7 +25,14 @@ MODEL_SLUG=""
 RESTART_EXTRA=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    -m|--model) MODEL_SLUG="${2:?}"; shift 2 ;;
+    -m|--model)
+      if [[ -z "${2:-}" || "${2}" == -* ]]; then
+        slgpu_fail_if_missing_preset_arg "$1"
+        exit 1
+      fi
+      MODEL_SLUG="${2}"
+      shift 2
+      ;;
     --tp)
       if [[ -z "${2:-}" || "${2:-}" == -* ]]; then
         echo "Опция --tp требует целое число ≥1" >&2
