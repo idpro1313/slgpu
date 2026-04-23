@@ -1,6 +1,6 @@
 name: slgpu
 
-# vLLM/SGLang: serve.sh. Слой env: main.env → configs/<engine>/*.env → пресет (export в ./slgpu up).
+# vLLM/SGLang: configs/serve.sh (SLGPU_ENGINE). Слой env: main.env → configs/<engine>/*.env → пресет (export в ./slgpu up).
 # Подстановка ${VAR} в YAML: env процесса; для значений из main: docker compose --env-file main.env …
 #   (или: set -a && source main.env && docker compose …). В контейнер: env_file main.env ниже.
 
@@ -19,6 +19,7 @@ services:
       - main.env
       - configs/vllm/vllm.env
     environment:
+      SLGPU_ENGINE: vllm
       MODEL_ID: ${MODEL_ID:-}
       MODEL_REVISION: ${MODEL_REVISION:-}
       MAX_MODEL_LEN: ${MAX_MODEL_LEN:-32768}
@@ -48,7 +49,7 @@ services:
       NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-0,1,2,3,4,5,6,7}
     volumes:
       - ${MODELS_DIR:-/opt/models}:/models:ro
-      - ./configs/vllm/serve.sh:/etc/slgpu/serve.sh:ro
+      - ./configs/serve.sh:/etc/slgpu/serve.sh:ro
     entrypoint: ["/bin/bash"]
     command: ["/etc/slgpu/serve.sh"]
     logging:
@@ -71,8 +72,9 @@ services:
       - main.env
       - configs/sglang/sglang.env
     # Переменные из пресета (source в ./slgpu up) обязаны быть здесь, иначе в контейнер не попадут
-    # (пресет не в env_file). См. configs/sglang/serve.sh
+    # (пресет не в env_file). См. configs/serve.sh
     environment:
+      SLGPU_ENGINE: sglang
       MODEL_ID: ${MODEL_ID:-}
       MODEL_REVISION: ${MODEL_REVISION:-}
       MAX_MODEL_LEN: ${MAX_MODEL_LEN:-32768}
@@ -90,7 +92,7 @@ services:
       NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-0,1,2,3,4,5,6,7}
     volumes:
       - ${MODELS_DIR:-/opt/models}:/models:ro
-      - ./configs/sglang/serve.sh:/etc/slgpu/serve.sh:ro
+      - ./configs/serve.sh:/etc/slgpu/serve.sh:ro
       # Triton / TorchInductor: autotune и скомпиленные ядра (см. TRITON_CACHE_DIR в sglang.env)
       - sglang-kernel-cache:/var/cache/slgpu-kernels
     entrypoint: ["/bin/bash"]
