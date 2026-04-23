@@ -101,6 +101,7 @@
 | 2.0.6 | Дефолты в `main.env`, `slgpu_source_main_env` в `_lib.sh`; README, compose, vllm/sglang env, GRACE. |
 | 2.0.7 | **`main.env` в корне репозитория** (ранее `configs/main.env`); README, `_lib.sh`, GRACE. |
 | 2.0.8 | **NCCL / PyTorch** в `main.env`; vllm/sglang `*.env` укорочены; `docker-compose` pass. |
+| 2.0.9 | **`.env.example`:** без дублей с `main.env`; README, `main` шапка. |
 
 ### Документация и gpt-oss (исправления)
 
