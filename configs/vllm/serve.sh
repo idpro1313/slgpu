@@ -17,7 +17,7 @@ TOOL="${TOOL_CALL_PARSER:-hermes}"
 REASON="${REASONING_PARSER:-qwen3}"
 # 1 (по умолчанию) = --disable-custom-all-reduce (NCCL, стабильно). 0 = custom all-reduce (быстрее на части GPU, но на vLLM 0.19 + Qwen3.6 бывает custom_all_reduce.cuh invalid argument при graph capture).
 DISABLE_CAR="${SLGPU_DISABLE_CUSTOM_ALL_REDUCE:-1}"
-# 1 (по умолчанию) = --enable-prefix-caching. 0 — без prefix cache (чуть меньше VRAM при тесном OOM, см. GLM-5.1).
+# 1 = --enable-prefix-caching. 0 = --no-enable-prefix-caching (в vLLM 0.19+ prefix cache по умолчанию ВКЛ, просто «не передавать --enable» не отключает).
 PREFIX_CACHE="${SLGPU_ENABLE_PREFIX_CACHING:-1}"
 
 cmd=(
@@ -46,5 +46,7 @@ if [[ -n "${MM_ENCODER_TP_MODE:-}" ]]; then
 fi
 if [[ "${PREFIX_CACHE}" == "1" ]]; then
   cmd+=(--enable-prefix-caching)
+else
+  cmd+=(--no-enable-prefix-caching)
 fi
 exec "${cmd[@]}"
