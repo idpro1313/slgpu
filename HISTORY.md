@@ -202,6 +202,7 @@
 - **gpt-oss:** `TOOL_CALL_PARSER=openai` (Hermes + `token_ids` → TypeError), имя в API, пропускная способность — см. коммиты `3a664eb`, `7b3254e` и таблицу «Документация и gpt-oss».
 - **Kimi-K2.6 (vLLM):** OOM → trust-remote-code, ужатие памяти, `PYTORCH_ALLOC_CONF`, отдельно от KV — см. `d7326a2`–`291e00a` и референс Moonshot `c4955b8`.
 - **Бенч / load:** ложный `no_content` при пустом `content` в SSE — `1.2.1`; валидация engine+модель — `1.1.5+`.
+- **SGLang + внешний порт / Kimi (диалоги 22.04):** путаница **хост `8222` → контейнер** vs внутренний **`SGLANG_LISTEN_PORT` / `LLM_API_PORT` (часто 8111)**: `curl` на хост должен бить в проброшенный порт, внутри контейнера — в порт, на котором реально слушает процесс. Таймаут `up` / «ожидание `/v1/models`» и **`Connection reset` при 8222** — типично, пока идут **Triton autotune** и долгий **CUDA graph capture** (десятки минут); не ошибка конфига, а фаза прогрева. Отдельно встречались **падения scheduler при graph capture** на Kimi в SGLang — вне репо решались снижением/отключением graph, правками mem; см. релизы **1.4.x** (флаги graph, custom AR) и [monitoring/README](monitoring/README.md) (instance **8222** для метрик SGLang vs **8111** API vLLM).
 
 ---
 
