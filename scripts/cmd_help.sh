@@ -7,7 +7,7 @@ slgpu — стенд vLLM vs SGLang в Docker (Linux VM).
 
 Команды:
   prepare [1–6]        Подготовка хоста (Docker, NVIDIA toolkit, каталог моделей, …)
-  pull <HF_ID|preset>    Скачать модель; HF id (org/name) создаёт configs/models/<slug>.env
+  pull <HF_ID|preset>    Скачать веса (hf download); пресет не создаётся — см. configs/models/README.md
   up <vllm|sglang> -m <preset> [-p <порт>] [--tp <N>]
   down [--all]          Остановить LLM (--all — весь compose)
   restart -m <preset> [--tp <N>]  Перезапуск running vllm|sglang с новым пресетом

@@ -3,8 +3,8 @@
 Каждый файл `<slug>.env` задаёт параметры **конкретной модели**. Используется с **`-m <slug>`** в командах `./slgpu`:
 
 ```bash
-./slgpu pull Qwen/Qwen3.6-35B-A3B          # создаст qwen3.6-35b-a3b.env и скачает веса
-./slgpu pull -m qwen3.6-35b-a3b            # только скачивание по существующему пресету
+./slgpu pull qwen3.6-35b-a3b               # hf download по MODEL_ID из пресета
+# либо ./slgpu pull Qwen/Qwen3.6-35B-A3B   # то же, если есть configs/models/qwen3.6-35b-a3b.env
 ./slgpu up vllm -m qwen3.6-35b-a3b
 ./slgpu bench sglang -m qwen3.6-35b-a3b
 ```
@@ -15,7 +15,7 @@
 
 - **`MODEL_ID`** — репозиторий Hugging Face и подкаталог в `MODELS_DIR` после `./slgpu pull`.
 - **`MODEL_REVISION`** — SHA/тег на HF; пусто — ветка по умолчанию.
-- **`MAX_MODEL_LEN`** — окно контекста (`--max-model-len` / `--context-length`). При **`./slgpu pull <HF_ID>`** без **`--max-len`** подставляется эвристика ([`slgpu_guess_max_model_len`](../../scripts/_lib.sh)): чаще **262144** (256k), в т.ч. **moonshotai/Kimi-K2.6**; ниже — **Qwen3-30B** / **gpt-oss** (131072) / **GLM** (202752) / **MiniMax M2** (**200704**, ≈196 Ki токенов по [рецепту](https://github.com/vllm-project/recipes/blob/main/MiniMax/MiniMax-M2.md)). **GLM-5.1** bf16 на 8×~140 GB с полным окном часто даёт OOM в MoE — в [`glm-5.1.env`](glm-5.1.env) заложено **65536**; **GLM-5.1-FP8** — [`glm-5.1-fp8.env`](glm-5.1-fp8.env). **`SLGPU_ENABLE_PREFIX_CACHING=0`** в пресетах GLM; при OOM снижайте `MAX_MODEL_LEN` / `GPU_MEM_UTIL` / batched tokens.
+- **`MAX_MODEL_LEN`** — окно контекста (`--max-model-len` / `--context-length`). Задаёте **вручную** (ориентиры: **262144** у многих 256k-моделей; **131072** — Qwen3-30B / gpt-oss; **202752** / **200704** — GLM / MiniMax M2 — см. репозитарии и [рецепты](https://github.com/vllm-project/recipes) vLLM). **GLM-5.1** bf16 на 8×~140 GB — в [`glm-5.1.env`](glm-5.1.env) **65536**; **GLM-5.1-FP8** — [`glm-5.1-fp8.env`](glm-5.1-fp8.env). **`SLGPU_ENABLE_PREFIX_CACHING=0`** в пресетах GLM; при OOM снижайте `MAX_MODEL_LEN` / `GPU_MEM_UTIL` / batched tokens.
 - **`KV_CACHE_DTYPE`** — `fp8_e4m3`, `fp8`, `auto`, …; у Qwen3 Next/3.6 избегайте `fp8_e5m2`. У **zai-org/GLM-5.1** (sparse MLA) в vLLM 0.19 используйте **`auto`** (или не-fp8 KV) — иначе `No valid attention backend` при старте.
 - **`GPU_MEM_UTIL`** — vLLM `--gpu-memory-utilization`.
 - **`SLGPU_MAX_NUM_BATCHED_TOKENS`** — только vLLM (chunked prefill; не `VLLM_*`, чтобы vLLM 0.19+ не предупреждал о неизвестных переменных).
@@ -27,8 +27,8 @@
 - **`SLGPU_VLLM_COMPILATION_CONFIG`** — только vLLM: JSON для **`--compilation-config`**; у **MiniMax M2** см. [`minimax-m2.7.env`](minimax-m2.7.env) и [рецепт MiniMax-M2](https://github.com/vllm-project/recipes/blob/main/MiniMax/MiniMax-M2.md) (`fuse_minimax_qk_norm`).
 - **`SLGPU_ENABLE_EXPERT_PARALLEL`** — только vLLM: **`1`** → **`--enable-expert-parallel`** (типично 8×GPU при **TP=4** для M2.7).
 - **`SLGPU_VLLM_DATA_PARALLEL_SIZE`** — только vLLM: при необходимости **`--data-parallel-size`** (сценарий **DP8+EP** в рецепте MiniMax).
-- **`MM_ENCODER_TP_MODE`** — только vLLM (`--mm-encoder-tp-mode`); для **moonshotai/Kimi-K2.6** при `./slgpu pull` подставляется **`data`** по референсу Moonshot.
-- **`TP`** — tensor parallel; должен согласовываться с числом GPU в `docker-compose.yml`. В шаблонах репозитория и в **`./slgpu pull`** без `--tp` по умолчанию **8**; на 4 GPU задайте **4** в файле или однократно: **`./slgpu up vllm -m <preset> --tp 4`** / **`./slgpu restart -m <preset> --tp 4`** (флаг переопределяет TP без правки `.env` пресета; если флага нет — как в файле, иначе подстановка **8** в `serve.sh`).
+- **`MM_ENCODER_TP_MODE`** — только vLLM (`--mm-encoder-tp-mode`); для **moonshotai/Kimi-K2.6** в репозитории в пресете задано **`data`** (референс Moonshot).
+- **`TP`** — tensor parallel; согласуйте с числом GPU. В шаблонах репозитория по умолчанию **8**; на 4 GPU — **4** в файле или **`./slgpu up vllm -m <preset> --tp 4`** (без флага в пресете — **8** в `serve.sh`).
 - **`BENCH_MODEL_NAME`** — поле `model` в бенче; пусто — первая модель из `/v1/models`.
 - **`VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS`** — `0` или `1` (в пресете для тяжёлых MoE при необходимости).
 
@@ -69,4 +69,4 @@ $EDITOR configs/models/my-model.env
 ./slgpu up vllm -m my-model
 ```
 
-Или сгенерировать черновик через `./slgpu pull org/model --slug my-model`.
+Функции-эвристики [`slgpu_guess_max_model_len`](../../scripts/_lib.sh) / [`slgpu_guess_parsers`](../../scripts/_lib.sh) в репо остаются для сценариев вне `pull` (при необходимости — подставьте значения в `.env` вручную).

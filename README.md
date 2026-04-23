@@ -2,7 +2,7 @@
 
 Репозиторий **стенда для сравнения LLM-инференса** на Linux-сервере с GPU: два движка (**vLLM** и **SGLang**) в Docker, общий локальный кэш моделей, OpenAI-совместимый HTTP API, нагрузочный бенчмарк, **Prometheus + Grafana + NVIDIA DCGM Exporter**.
 
-Целевая конфигурация при разработке: **8× NVIDIA H200**. **Tensor parallel по умолчанию `TP=8`**: в пресетах [`configs/models/*.env`](configs/models/), в [`./slgpu pull`](scripts/cmd_pull.sh) (если не указать `--tp`) и в [`serve.sh`](configs/vllm/serve.sh) при отсутствии переменной. При [`./slgpu up`](scripts/cmd_up.sh) в контейнеры выставляется **`NVIDIA_VISIBLE_DEVICES=0,1,…,TP-1`**, так что число видимых GPU согласовано с `TP` (ручной список в `docker-compose` не нужен; нестандартная нумерация — `SLGPU_NVIDIA_VISIBLE_DEVICES` в `.env`). Проект рассчитан на один хост без Kubernetes.
+Целевая конфигурация при разработке: **8× NVIDIA H200**. **Tensor parallel по умолчанию `TP=8`**: в пресетах [`configs/models/*.env`](configs/models/) и в [`serve.sh`](configs/vllm/serve.sh) при отсутствии переменной. При [`./slgpu up`](scripts/cmd_up.sh) в контейнеры выставляется **`NVIDIA_VISIBLE_DEVICES=0,1,…,TP-1`**, так что число видимых GPU согласовано с `TP` (ручной список в `docker-compose` не нужен; нестандартная нумерация — `SLGPU_NVIDIA_VISIBLE_DEVICES` в `.env`). Проект рассчитан на один хост без Kubernetes.
 
 Единая точка входа: **`./slgpu`** (bash, только Linux VM).
 
@@ -34,7 +34,7 @@
 - Сравнение **vLLM** и **SGLang** на одной модели и одинаковых сценариях нагрузки.
 - Локальные веса на хосте (`MODELS_DIR`, по умолчанию `/opt/models`).
 - Один движок за раз; **vLLM: порт 8111**, **SGLang: 8222** (по умолчанию на хосте и в контейнере, см. `docker-compose.yml`).
-- Пресеты моделей в `configs/models/<slug>.env`; **`./slgpu pull <HF_ID>`** создаёт пресет автоматически.
+- Пресеты моделей в `configs/models/<slug>.env` — **создаются вручную** (или берутся из репозитория); **`./slgpu pull`** только скачивает веса.
 
 ---
 
@@ -107,7 +107,7 @@
 |---------|------------|
 | **`help`** | Краткая справка по всем подкомандам и примерам вызова (то же, что и `./slgpu` без аргументов с подсказкой). |
 | **`prepare`** | **Один раз при создании ВМ** (или после переустановки ОС): проверка драйвера NVIDIA, установка Docker и Compose v2, NVIDIA Container Toolkit, при желании persistence mode GPU, создание каталога `MODELS_DIR`, sysctl (`vm.swappiness`), лимиты `nofile`, напоминание про firewall. Запуск от root: `sudo ./slgpu prepare` или шаг `sudo ./slgpu prepare 1` … `6`; выборочно: `STEPS=2,4 sudo -E ./slgpu prepare`. |
-| **`pull`** | **Скачивание весов** в `${MODELS_DIR}/<MODEL_ID>` через CLI `hf` (`huggingface_hub`). Если аргумент — **HF id с `/`** (например `Qwen/Qwen3.6-35B-A3B`), **автоматически создаётся** файл пресета `configs/models/<slug>.env` (slug из имени репозитория) с дефолтами и угадыванием парсеров; **`--tp` по умолчанию 8**; **`MAX_MODEL_LEN`** без **`--max-len`** выбирается эвристикой (часто 262144; см. [`configs/models/README.md`](configs/models/README.md)); затем выполняется загрузка. Если аргумент **без `/`** — трактуется как **уже существующий пресет** (только `hf download` по полям из этого `.env`). Опции: `--slug`, `--force`, `--keep`, `--revision`, `--max-len`, `--tp`, `--kv-dtype`, `--gpu-mem`, `--sglang-mem`, `--batch`, `--reasoning-parser`, `--tool-call-parser`. Токен для приватных репозиториев: [`configs/secrets/hf.env`](configs/secrets/hf.env) (`HF_TOKEN`). |
+| **`pull`** | **Скачивание весов** в `${MODELS_DIR}/<MODEL_ID>` через `hf download`. **Файл пресета не создаётся.** Аргумент **с `/`** — HF id: если есть `configs/models/<slug>.env` (slug из имени репо), подхватывается `MODEL_ID` и т.д.; если пресета **нет** — скачивание только по HF id, для `./slgpu up` нужно завести `.env` вручную. Аргумент **без `/`** — имя существующего пресета. Опция **`--revision`**: пин ревизии (переопределяет `MODEL_REVISION` при загрузке с пресетом). Токен: [`configs/secrets/hf.env`](configs/secrets/hf.env) (`HF_TOKEN`). |
 | **`up`** | **Запуск стенда**: останавливает и удаляет контейнеры другого движка (vllm/sglang), поднимает мониторинг (Prometheus, Grafana, экспортеры), затем поднимает **один** выбранный профиль — `vllm` или `sglang` с tensor parallel и параметрами из **`-m <preset>`** (обязательно). Опция **`--tp <N>`** переопределяет **TP** на этот запуск (без правки `configs/models/*.env`); без неё **TP** берётся из пресета, а если в пресете нет — **8**. Экспортирует в shell переменные из `.env` + `configs/<engine>/<engine>.env` + пресета и ждёт готовность API `GET /v1/models` (vLLM по умолчанию `:8111`, SGLang `:8222`; `-p` меняет порт на хосте). Идемпотентен при повторном вызове с тем же движком. |
 | **`down`** | **Остановка инференса**: по умолчанию останавливает и снимает контейнеры **только** `vllm` и `sglang` (мониторинг остаётся). С флагом **`--all`** — останавливаются **все** сервисы проекта compose (включая Prometheus/Grafana/экспортеры). Удобно перед сменой движка или освобождением GPU без сноса данных в томах Grafana/Prometheus при обычном `down`. |
 | **`restart`** | **Перезапуск с новым пресетом без смены движка**: определяет, какой сервис сейчас в статусе *running* (`vllm` или `sglang`), и выполняет для него ту же последовательность, что и `up`, с новым **`-m <preset>`**; опционально **`--tp`**, как у `up`. Если ни один LLM-контейнер не запущен — сообщение об ошибке; тогда используйте `up`. |
@@ -170,13 +170,13 @@ cp .env.example .env
 
 pip install -U "huggingface_hub[cli]"
 
-./slgpu pull Qwen/Qwen3.6-35B-A3B
+./slgpu pull Qwen/Qwen3.6-35B-A3B   # пресет qwen3.6-35b-a3b.env есть в репо — pull подхватит MODEL_ID
 ./slgpu up vllm -m qwen3.6-35b-a3b
 
 curl -s http://127.0.0.1:8111/v1/models
 ```
 
-Готовые примеры пресетов в репозитории: `qwen3.6-35b-a3b`, `qwen3-30b-a3b`. Остальные модели — через `./slgpu pull <HF_ID> ...`.
+Готовые примеры пресетов в репозитории: `qwen3.6-35b-a3b`, `qwen3-30b-a3b` и др. Для новой модели: добавьте `configs/models/<slug>.env` (см. соседние пресеты), затем **`./slgpu pull <slug>`** или **`./slgpu pull <HF id>`** при совпадении slug.
 
 ---
 
@@ -250,53 +250,30 @@ M=qwen3.6-35b-a3b
 
 ## 11. Рецепты 8× H200
 
-Ориентир: **8× H200** (~141 GiB × 8). **`TP=8` уже по умолчанию** в `./slgpu pull` и в шаблонных пресетах — флаг `--tp` можно не указывать. Ниже — агрессивные `gpu-mem` / `batch` для максимума пропускной способности (при OOM уменьшайте `--max-len` или `--batch`).
+Ориентир: **8× H200** (~141 GiB × 8). **`TP=8` по умолчанию** в шаблонных пресетах (или **`--tp`** в `./slgpu up` — см. [§4](#4-cli-slgpu)). **`gpu-mem`**, **`batch`**, контекст и парсеры задаются **только в** `configs/models/<preset>.env` — не в `pull`. Ниже: `pull` (скачивание) + `up`; пресеты лежат в репо или добавляйте вручную.
 
 ```bash
-# Qwen3.6-35B-A3B (pull без --max-len даёт MAX_MODEL_LEN=262144 и парсеры qwen3/hermes)
-./slgpu pull Qwen/Qwen3.6-35B-A3B \
-  --gpu-mem 0.95 --sglang-mem 0.92 \
-  --batch 24576 --kv-dtype fp8_e4m3
+# Qwen3.6-35B-A3B (пресет: MAX_MODEL_LEN=262144, qwen3/hermes; см. qwen3.6-35b-a3b.env)
+./slgpu pull Qwen/Qwen3.6-35B-A3B
 ./slgpu up vllm -m qwen3.6-35b-a3b
 
-# moonshotai/Kimi-K2.6 (заявленное окно на HF — 128K; при OOM снизьте --max-len; веса ~1T — fp8/квант на чекпоинте)
-# Пресет по умолчанию: TP=8, MAX_MODEL_LEN=262144 (как у pull для длинного контекста), kimi_k2-парсеры, MM_ENCODER_TP_MODE=data.
-./slgpu pull moonshotai/Kimi-K2.6 \
-  --gpu-mem 0.94 --sglang-mem 0.90 \
-  --batch 16384 --kv-dtype fp8_e4m3
+# moonshotai/Kimi-K2.6 (kimi_k2, MM_ENCODER_TP_MODE=data, см. kimi-k2.6.env)
+./slgpu pull moonshotai/Kimi-K2.6
 ./slgpu up vllm -m kimi-k2.6
 # ./slgpu up sglang -m kimi-k2.6
 
-# MiniMax-M2.7 (рецепт vLLM: TP4, не «голый» TP8; на 8×GPU — TP4+EP, маска GPU в пресете)
-# В .env: VLLM_DOCKER_IMAGE=vllm/vllm-openai:minimax27
-# На 4×GPU: в пресете поставьте SLGPU_ENABLE_EXPERT_PARALLEL=0 и уберите SLGPU_NVIDIA_VISIBLE_DEVICES
-./slgpu pull MiniMaxAI/MiniMax-M2.7 --tp 4 \
-  --gpu-mem 0.95 --sglang-mem 0.92 \
-  --batch 24576 --kv-dtype fp8_e4m3 \
-  --reasoning-parser minimax_m2 --tool-call-parser minimax_m2
+# MiniMax-M2.7 (рецепт vLLM: TP4+EP; VLLM_DOCKER_IMAGE=minimax27 — в .env; см. minimax-m2.7.env)
+./slgpu pull MiniMaxAI/MiniMax-M2.7
 ./slgpu up vllm -m minimax-m2.7
 
-# GLM-5.1 bf16 (в пресете: MAX_MODEL_LEN=65536, GPU_MEM_UTIL=0.75, KV=auto, prefix cache off; при OOM в MoE — см. troubleshooting)
-./slgpu pull zai-org/GLM-5.1 \
-  --gpu-mem 0.95 --sglang-mem 0.92 \
-  --batch 24576 \
-  --reasoning-parser glm45 --tool-call-parser glm45
+# GLM-5.1 / GLM-5.1-FP8 (см. glm-5.1.env, glm-5.1-fp8.env; для FP8: VLLM_DOCKER_IMAGE=glm51)
+./slgpu pull zai-org/GLM-5.1
 ./slgpu up vllm -m glm-5.1
-
-# GLM-5.1-FP8 (рекомендовано vLLM на 8×H200, меньше VRAM; рецепт: GLM/GLM5.md)
-# В .env: VLLM_DOCKER_IMAGE=vllm/vllm-openai:glm51
-./slgpu pull zai-org/GLM-5.1-FP8 \
-  --gpu-mem 0.90 --sglang-mem 0.92 \
-  --batch 8192 \
-  --reasoning-parser glm45 --tool-call-parser glm47
+./slgpu pull zai-org/GLM-5.1-FP8
 ./slgpu up vllm -m glm-5.1-fp8
 
-# openai/gpt-oss-120b (дефолт MAX_MODEL_LEN=131072; Harmony: tool parser `openai`; в API model = openai/gpt-oss-120b)
-./slgpu pull openai/gpt-oss-120b \
-  --gpu-mem 0.9296 --sglang-mem 0.90 \
-  --batch 16384 --kv-dtype auto \
-  --reasoning-parser openai_gptoss --tool-call-parser openai
-./slgpu up vllm -m gpt-oss-120b
+# openai/gpt-oss-120b (добавьте пресет gpt-oss-120b.env по образцу README/соседей, затем:)
+# ./slgpu pull openai/gpt-oss-120b && ./slgpu up vllm -m gpt-oss-120b
 ```
 
 **Замечания:** у **Qwen3.6** не используйте `fp8_e5m2` для KV — см. troubleshooting. **Kimi / большие MoE:** OOM на `create_weights` — упор в размер весей на шард; не всегда помогает снижение контекста — нужен **TP=8**, другой чекпоинт или квант. **MiniMax-M2.7** — не «чистый» **TP8**; см. пресет **`minimax-m2.7`** и [рецепт vLLM](https://github.com/vllm-project/recipes/blob/main/MiniMax/MiniMax-M2.md) (образ `minimax27`, **TP4**, на 8×GPU **TP+EP** / опционально **DP+EP**). **GLM-5.1** bf16 на грани VRAM — пресет **`glm-5.1-fp8`**, [GLM/GLM5.md](https://github.com/vllm-project/recipes/blob/main/GLM/GLM5.md). **gpt-oss:** полный id в поле `model`. **GLM** и иные: парсеры зависят от образа vLLM.
