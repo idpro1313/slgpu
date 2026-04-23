@@ -69,4 +69,4 @@ $EDITOR configs/models/my-model.env
 ./slgpu up vllm -m my-model
 ```
 
-**`MAX_MODEL_LEN`**, как и парсеры, задаёте **в пресете** (или вручную в аргументах `slgpu_gen_preset_file`), ориентируясь на `config.json` / карточку HF и рецепты vLLM — автоподбора по HF id нет.
+**`MAX_MODEL_LEN`**, как и парсеры, задаёте **в пресете** (скопируйте пример и отредактируйте), ориентируясь на `config.json` / карточку HF и рецепты vLLM.
