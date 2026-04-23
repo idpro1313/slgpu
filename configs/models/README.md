@@ -30,18 +30,25 @@
 
 ## Соответствие семейств и парсеров (vLLM)
 
-| Семейство                  | `REASONING_PARSER` | `TOOL_CALL_PARSER` |
-|----------------------------|--------------------|--------------------|
-| Qwen3 / Qwen3.6            | `qwen3`            | `hermes`           |
-| Qwen3-*-Thinking           | `qwen3-thinking`   | `hermes`           |
+| Семейство                  | `REASONING_PARSER` | `TOOL_CALL_PARSER`                 |
+|----------------------------|--------------------|------------------------------------|
+| Qwen3 / Qwen2.5            | `qwen3`            | `hermes`                           |
+| Qwen3-Coder / Qwen3.6      | `qwen3`            | `qwen3_xml` (или `qwen3_coder`)    |
+| Qwen3-*-Thinking           | `qwen3-thinking`   | `hermes`                           |
 | DeepSeek R1              | `deepseek_r1`      | `pythonic`         |
 | openai/gpt-oss-*         | `openai_gptoss`    | `openai`           |
 | zai-org/GLM-*            | `glm45`            | `glm45`            |
 | MiniMaxAI/MiniMax-*      | `minimax_m2`       | `minimax_m2`       |
 | moonshotai/Kimi-K2*      | `kimi_k2`          | `kimi_k2`          |
-| Llama 3.x                | (пусто)            | `llama3_json`      |
+| Llama 3.x                | (пусто)            | `llama3_json`                      |
 
-Проверка списка парсеров в образе vLLM:
+**Qwen3.6 / Qwen3-Coder**: семейство эмитит tool calls в XML-формате (`<tool_call><function=…><parameter=…>…</tool_call>`). Парсер `hermes` ждёт JSON и падает `JSONDecodeError` на таких ответах — стрим не закрывается, клиент получает таймаут. Рекомендация vLLM docs (≥0.12, `qwen3_xml`, streaming-safe, см. vllm-project/vllm#25028); официальная карточка [Qwen/Qwen3.6-27B](https://huggingface.co/Qwen/Qwen3.6-27B) предлагает `qwen3_coder` (non-streaming fallback). Проверить список доступных tool-парсеров в образе:
+
+```bash
+docker compose exec vllm python -c "from vllm.entrypoints.openai.tool_parsers import ToolParserManager; print(list(ToolParserManager.tool_parsers))"
+```
+
+Проверка списка reasoning-парсеров в образе vLLM:
 
 ```bash
 docker compose exec vllm python -c "from vllm.reasoning import ReasoningParserManager; print(list(ReasoningParserManager.reasoning_parsers))"
