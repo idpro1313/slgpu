@@ -15,6 +15,8 @@ KV="${KV_CACHE_DTYPE:-fp8_e4m3}"
 BATCH="${SLGPU_MAX_NUM_BATCHED_TOKENS:-8192}"
 TOOL="${TOOL_CALL_PARSER:-hermes}"
 REASON="${REASONING_PARSER:-qwen3}"
+# 1 = передать --disable-custom-all-reduce (откат на NCCL; как раньше). 0 = vLLM использует custom/TRTLLM all-reduce.
+DISABLE_CAR="${SLGPU_DISABLE_CUSTOM_ALL_REDUCE:-1}"
 
 cmd=(
   vllm serve "${MODEL_PATH}"
@@ -25,7 +27,11 @@ cmd=(
   --gpu-memory-utilization "${GPU_MEM}"
   --max-model-len "${MAX_LEN}"
   --trust-remote-code
-  --disable-custom-all-reduce
+)
+if [[ "${DISABLE_CAR}" == "1" ]]; then
+  cmd+=(--disable-custom-all-reduce)
+fi
+cmd+=(
   --kv-cache-dtype "${KV}"
   --enable-chunked-prefill
   --max-num-batched-tokens "${BATCH}"
