@@ -53,6 +53,7 @@
    └────┬─────┘         └────┬─────┘
         └────────┬───────────┘
                  ▼
+  отдельный compose: `docker-compose.monitoring.yml` (`./slgpu monitoring up`)
          Prometheus :9090 → Grafana :3000
                  ▲
          dcgm-exporter :9400 · node-exporter :9100
@@ -64,14 +65,14 @@
 
 ## 3. Сервисы и порты
 
-| Сервис | Образ в `docker-compose.yml` | Порт на хосте |
+| Сервис | Образ (файл compose) | Порт на хосте |
 |--------|-------------------------------|---------------|
 | **vLLM** | `vllm/vllm-openai:latest` | **8111** |
 | **SGLang** | `lmsysorg/sglang:latest` | **8222** (`LLM_API_PORT`, внутри контейнера тот же порт) |
-| **Prometheus** | `prom/prometheus:latest` | **9090** (`PROMETHEUS_BIND`) |
-| **Grafana** | `grafana/grafana:latest` | **3000** |
-| **dcgm-exporter** | `nvidia/dcgm-exporter:latest` | **9400** |
-| **node-exporter** | `prom/node-exporter:latest` | **9100** |
+| **Prometheus** | `prom/prometheus:latest` ([`docker-compose.monitoring.yml`](docker-compose.monitoring.yml)) | **9090** (`PROMETHEUS_BIND`) |
+| **Grafana** | `grafana/grafana:latest` (тот же файл) | **3000** |
+| **dcgm-exporter** | `nvidia/dcgm-exporter:latest` (тот же файл) | **9400** |
+| **node-exporter** | `prom/node-exporter:latest` (тот же файл) | **9100** |
 
 Все перечисленные сервисы в compose собраны на теге **`latest`**: при `docker compose pull` вы получаете актуальные сборки, но **воспроизводимость** между машинами и во временем не гарантируется. Для зафиксированного стенда подставьте **конкретный тег** или **digest** образа в [`docker-compose.yml`](docker-compose.yml).
 
@@ -103,12 +104,13 @@
 | **`help`** | Краткая справка по всем подкомандам и примерам вызова (то же, что и `./slgpu` без аргументов с подсказкой). |
 | **`prepare`** | **Один раз при создании ВМ** (или после переустановки ОС): проверка драйвера NVIDIA, установка Docker и Compose v2, NVIDIA Container Toolkit, при желании persistence mode GPU, создание каталога `MODELS_DIR`, sysctl (`vm.swappiness`), лимиты `nofile`, напоминание про firewall. Запуск от root: `sudo ./slgpu prepare` или шаг `sudo ./slgpu prepare 1` … `6`; выборочно: `STEPS=2,4 sudo -E ./slgpu prepare`. |
 | **`pull`** | **Скачивание весов** в `${MODELS_DIR}/<MODEL_ID>` через `hf download`. **Файл пресета не создаётся.** Аргумент **с `/`** — HF id: если есть `configs/models/<slug>.env` (slug из имени репо), подхватывается `MODEL_ID` и т.д.; если пресета **нет** — скачивание только по HF id, для `./slgpu up` заведите `configs/models/<slug>.env`. Аргумент **без `/`** — имя существующего пресета. Опция **`--revision`**: пин ревизии (переопределяет `MODEL_REVISION` при загрузке с пресетом). Токен: [`configs/secrets/hf.env`](configs/secrets/hf.env) (`HF_TOKEN`). |
-| **`up`** | **Запуск стенда**: останавливает и удаляет контейнеры другого движка (vllm/sglang), поднимает мониторинг (Prometheus, Grafana, экспортеры), затем поднимает **один** выбранный профиль — `vllm` или `sglang` с tensor parallel и параметрами из **`-m <preset>`** (обязательно). Опция **`--tp <N>`** переопределяет **TP** на этот запуск (без правки `configs/models/*.env`); без неё **TP** берётся из пресета, а если в пресете нет — **8**. **Не ждёт** готовности `GET /v1/models` — проверяйте вручную: `curl -s http://127.0.0.1:<порт>/v1/models`. vLLM по умолчанию **:8111**, SGLang **:8222** на хосте; **`-p`** меняет порт. |
-| **`down`** | **Остановка инференса**: по умолчанию останавливает и снимает контейнеры **только** `vllm` и `sglang` (мониторинг остаётся). С флагом **`--all`** — останавливаются **все** сервисы проекта compose (включая Prometheus/Grafana/экспортеры). Удобно перед сменой движка или освобождением GPU без сноса данных в томах Grafana/Prometheus при обычном `down`. |
+| **`up`** | **Запуск движка**: останавливает и удаляет контейнеры другого движка (vllm/sglang), поднимает **один** выбранный профиль — `vllm` или `sglang` (см. `./slgpu up -h`) с **`-m <preset>`**. Мониторинг (Prometheus, Grafana) **отдельно**: **`./slgpu monitoring up`** (один раз на хост). **Не ждёт** `GET /v1/models` — `curl` вручную. |
+| **`monitoring`** | **`up` / `down` / `restart`**: DCGM, node-exporter, Prometheus, Grafana — [`docker-compose.monitoring.yml`](docker-compose.monitoring.yml), общая сеть с движком; порты в [`main.env`](main.env). |
+| **`down`** | **Остановка инференса**: по умолчанию — **только** `vllm` и `sglang`. С флагом **`--all`** — ещё и стек мониторинга. Тома метрик/дашбордов не удаляются. |
 | **`restart`** | **Перезапуск с новым пресетом без смены движка**: определяет, какой сервис сейчас в статусе *running* (`vllm` или `sglang`), и выполняет для него ту же последовательность, что и `up`, с новым **`-m <preset>`**; опционально **`--tp`**, как у `up`. Если ни один LLM-контейнер не запущен — сообщение об ошибке; тогда используйте `up`. |
-| **`bench`** | **Нагрузочный тест** против уже поднятого API (порт vLLM 8111 / SGLang 8222 по умолчанию, см. `docker compose port`): запускает [`scripts/bench_openai.py`](scripts/bench_openai.py). Модель и engine **автоматически определяются** из запущенного API (`/v1/models`) и docker compose. Пресет **`-m`** опционален — используется только для `MAX_MODEL_LEN` и `BENCH_MODEL_NAME`, если указан. Пишет артефакты в `bench/results/<engine>/<timestamp>/`. |
+| **`bench`** | **Нагрузочный тест** против уже поднятого API (порт vLLM 8111 / SGLang 8222 по умолчанию, см. `docker compose -f docker-compose.yml port`): запускает [`scripts/bench_openai.py`](scripts/bench_openai.py). Модель и engine **автоматически определяются** из запущенного API (`/v1/models`) и docker compose. Пресет **`-m`** опционален — используется только для `MAX_MODEL_LEN` и `BENCH_MODEL_NAME`, если указан. Пишет артефакты в `bench/results/<engine>/<timestamp>/`. |
 | **`load`** | **Длительный нагрузочный тест** (15–20 мин, 200–300 виртуальных пользователей): запускает [`scripts/bench_load.py`](scripts/bench_load.py). Модель и engine **автоматически определяются** из запущенного API. Эмулирует фазы ramp-up → steady → ramp-down, собирает time-series метрики (throughput, TTFT, latency, error rate) в CSV каждые 5 сек. Артефакты: `summary.json`, `time_series.csv`, `users.jsonl`. Опции: `--users`, `--duration`, `--ramp-up`, `--ramp-down`, `--think-time`, `--max-prompt`, `--max-output`, `--report-interval`, `--burst` (макс throughput без пауз). |
-Подробности по флагам **`pull`**: см. `./slgpu pull -h` и [`configs/models/README.md`](configs/models/README.md). Результаты бенчей: **`bench/results/<engine>/<timestamp>/summary.json`**. Пример разборов — [`bench/report.md`](bench/report.md) (вручную, не генерируется репо). Логи: **`docker compose logs -f vllm`** (или `sglang`, `grafana`, …). Диагностика: **`docker compose ps`**, **`curl`**, **`nvidia-smi`**.
+Подробности по флагам **`pull`**: см. `./slgpu pull -h` и [`configs/models/README.md`](configs/models/README.md). Результаты бенчей: **`bench/results/<engine>/<timestamp>/summary.json`**. Пример разборов — [`bench/report.md`](bench/report.md) (вручную, не генерируется репо). Логи: **`docker compose -f docker-compose.yml logs -f vllm`**; мониторинг: **`./slgpu monitoring up`**, логи — `-f docker-compose.monitoring.yml`. Диагностика: **`docker compose ps`**, **`curl`**, **`nvidia-smi`**.
 
 ---
 
@@ -116,7 +118,7 @@
 
 - **[`main.env`](main.env)** — **дефолты хоста и движка** (пути, `MODELS_DIR`, `VLLM_DOCKER_IMAGE`, `MAX_MODEL_LEN`, `TP`, NCCL, мониторинг, …); секреты и редкие per-host поля — в комментариях-заготовках внизу файла или через `export` (см. шапку `main.env`).
 - **`configs/models/<preset>.env`** — модель: `MODEL_ID`, `MAX_MODEL_LEN`, **`TP`** (в шаблонах репозитория **8**; на 4 GPU — **4**), парсеры, KV и т.д. Обязателен для `up` / `bench` / `restart` (флаг **`-m`**).
-- Все **дефолты движка** (listen vLLM/SGLang, `VLLM_LOGGING_LEVEL`, **Triton/TorchInductor** для SGLang, NCCL, и т.д.) — в [`main.env`](main.env); в контейнер — **`env_file: main.env`** в [`docker-compose.yml`](docker-compose.yml). Сырой `docker compose` без `./slgpu up`: **`docker compose --env-file main.env`** (см. комментарий в compose).
+- Все **дефолты движка** (listen vLLM/SGLang, `VLLM_LOGGING_LEVEL`, **Triton/TorchInductor** для SGLang, NCCL, и т.д.) — в [`main.env`](main.env); в контейнер — **`env_file: main.env`** в [`docker-compose.yml`](docker-compose.yml) (движок) и в [`docker-compose.monitoring.yml`](docker-compose.monitoring.yml). Сырой `docker compose`: **`docker compose -f docker-compose.yml --env-file main.env`**, для мониторинга — **`-f docker-compose.monitoring.yml`**. См. [`./slgpu monitoring -h`](scripts/cmd_monitoring.sh).
 - **CLI движка**: единый [`scripts/serve.sh`](scripts/serve.sh) (`SLGPU_ENGINE=vllm|sglang` задаёт `docker-compose`; в контейнере — `/etc/slgpu/serve.sh`).
 
 Справка по парсерам: [`configs/models/README.md`](configs/models/README.md).
@@ -270,9 +272,9 @@ M=qwen3.6-35b-a3b
 
 ## 12. Мониторинг и безопасность
 
-- **Prometheus** (`127.0.0.1:9090`): см. [`monitoring/prometheus.yml`](monitoring/prometheus.yml). Неактивный профиль (vllm/sglang) даёт DOWN target — норма для A/B.
+- **Поднять стек** (если ещё не поднимали): **`./slgpu monitoring up`**. Движок и мониторинг — разные `docker compose` (общая сеть `slgpu`, скрейп `vllm:8111` / `sglang:8222` из [`monitoring/prometheus.yml`](monitoring/prometheus.yml)). Неактивный профиль (vllm/sglang) даёт DOWN target — норма.
 - **Grafana** (`127.0.0.1:3000`), дашборды: в [`monitoring/grafana/provisioning/dashboards/json/`](monitoring/grafana/provisioning/dashboards/json/) лежат JSON с provisioning (Prometheus, uid `prometheus`): краткий **SGLang** (`sglang-dashboard-slgpu.json`), расширенный **SGLang по мотивам vLLM V2** (`sglangdash2-slgpu.json`, сборка из `vllmdash2.json` скриптом `_build_sglangdash2.py`), плюс эталон **vLLM** для ручного импорта (`vllmdash2.json`). Подробности, переменные `instance` / `model_name` и типичные сбои — в [`monitoring/README.md`](monitoring/README.md).
-- Логи контейнеров: **`docker compose logs -f vllm`** (или `sglang`, `prometheus`, …); ротация **json-file** (100 MiB × 5) задана в compose.
+- Логи: **`docker compose -f docker-compose.yml logs -f vllm`**; **`docker compose -f docker-compose.monitoring.yml logs -f prometheus`**. Ротация **json-file** (100 MiB × 5) в обоих compose.
 
 **Безопасность:** смените пароль Grafana; не коммитьте `main.env` с реальными секретами в публичный репозиторий.
 

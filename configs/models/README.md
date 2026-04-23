@@ -52,13 +52,13 @@
 **Qwen3.6 / Qwen3-Coder**: семейство эмитит tool calls в XML-формате (`<tool_call><function=…><parameter=…>…</tool_call>`). Парсер `hermes` ждёт JSON и падает `JSONDecodeError` на таких ответах — стрим не закрывается, клиент получает таймаут. Рекомендация vLLM docs (≥0.12, `qwen3_xml`, streaming-safe, см. vllm-project/vllm#25028); официальная карточка [Qwen/Qwen3.6-27B](https://huggingface.co/Qwen/Qwen3.6-27B) предлагает `qwen3_coder` (non-streaming fallback). Проверить список доступных tool-парсеров в образе:
 
 ```bash
-docker compose exec vllm python -c "from vllm.entrypoints.openai.tool_parsers import ToolParserManager; print(list(ToolParserManager.tool_parsers))"
+docker compose -f docker-compose.yml exec vllm python -c "from vllm.entrypoints.openai.tool_parsers import ToolParserManager; print(list(ToolParserManager.tool_parsers))"
 ```
 
 Проверка списка reasoning-парсеров в образе vLLM:
 
 ```bash
-docker compose exec vllm python -c "from vllm.reasoning import ReasoningParserManager; print(list(ReasoningParserManager.reasoning_parsers))"
+docker compose -f docker-compose.yml exec vllm python -c "from vllm.reasoning import ReasoningParserManager; print(list(ReasoningParserManager.reasoning_parsers))"
 ```
 
 ## Добавить свой пресет

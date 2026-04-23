@@ -1,6 +1,7 @@
 name: slgpu
 
 # vLLM/SGLang: scripts/serve.sh (SLGPU_ENGINE). Слой env: main.env → пресет (export в ./slgpu up).
+# Мониторинг: docker-compose.monitoring.yml, подъём: ./slgpu monitoring up (сеть `slgpu` общая).
 # Подстановка ${VAR} в YAML: env процесса; для значений из main: docker compose --env-file main.env …
 #   (или: set -a && source main.env && docker compose …). В контейнер: env_file main.env ниже.
 
@@ -55,6 +56,8 @@ services:
       - ./scripts/serve.sh:/etc/slgpu/serve.sh:ro
     entrypoint: ["/bin/bash"]
     command: ["/etc/slgpu/serve.sh"]
+    networks:
+      - slgpu
     logging:
       driver: json-file
       options:
@@ -101,98 +104,18 @@ services:
       - sglang-kernel-cache:/var/cache/slgpu-kernels
     entrypoint: ["/bin/bash"]
     command: ["/etc/slgpu/serve.sh"]
+    networks:
+      - slgpu
     logging:
       driver: json-file
       options:
         max-size: "100m"
         max-file: "5"
 
-  dcgm-exporter:
-    image: nvidia/dcgm-exporter:latest
-    env_file:
-      - main.env
-    restart: unless-stopped
-    gpus: all
-    cap_add:
-      - SYS_ADMIN
-    ports:
-      - "${DCGM_BIND:-127.0.0.1}:9400:9400"
-    logging:
-      driver: json-file
-      options:
-        max-size: "100m"
-        max-file: "5"
-
-  node-exporter:
-    image: prom/node-exporter:latest
-    env_file:
-      - main.env
-    restart: unless-stopped
-    pid: host
-    command:
-      - --path.procfs=/host/proc
-      - --path.sysfs=/host/sys
-      - --path.rootfs=/host
-      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
-    volumes:
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /:/host:ro,rslave
-    ports:
-      - "${NODE_EXPORTER_BIND:-127.0.0.1}:9100:9100"
-    logging:
-      driver: json-file
-      options:
-        max-size: "100m"
-        max-file: "5"
-
-  prometheus:
-    image: prom/prometheus:latest
-    env_file:
-      - main.env
-    restart: unless-stopped
-    ports:
-      - "${PROMETHEUS_BIND:-127.0.0.1}:9090:9090"
-    volumes:
-      - prometheus-data:/prometheus
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./monitoring/prometheus-alerts.yml:/etc/prometheus/prometheus-alerts.yml:ro
-    command:
-      - --config.file=/etc/prometheus/prometheus.yml
-      - --storage.tsdb.path=/prometheus
-      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION_TIME:-15d}
-      - --storage.tsdb.retention.size=${PROMETHEUS_RETENTION_SIZE:-0}
-      - --web.enable-lifecycle
-    logging:
-      driver: json-file
-      options:
-        max-size: "100m"
-        max-file: "5"
-
-  grafana:
-    image: grafana/grafana:latest
-    env_file:
-      - main.env
-    restart: unless-stopped
-    depends_on:
-      - prometheus
-    ports:
-      - "${GRAFANA_BIND:-0.0.0.0}:${GRAFANA_PORT:-3000}:3000"
-    environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
-      GF_USERS_ALLOW_SIGN_UP: "false"
-      GF_SERVER_ROOT_URL: ${GF_SERVER_ROOT_URL:-}
-    volumes:
-      - grafana-data:/var/lib/grafana
-      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
-    logging:
-      driver: json-file
-      options:
-        max-size: "100m"
-        max-file: "5"
+networks:
+  slgpu:
+    name: slgpu
+    driver: bridge
 
 volumes:
-  grafana-data:
-  prometheus-data:
   sglang-kernel-cache:

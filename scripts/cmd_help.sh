@@ -9,17 +9,19 @@ slgpu — стенд vLLM vs SGLang в Docker (Linux VM).
   prepare [1–6]        Подготовка хоста (Docker, NVIDIA toolkit, каталог моделей, …)
   pull <HF_ID|preset>   Скачать веса (hf download); пресет не создаётся — см. configs/models/README.md
   up <vllm|sglang> -m <preset> [-p <порт>] [--tp <N>]
-  down [--all]           Остановить LLM (--all — весь compose)
+  monitoring up|down|restart   DCGM, Prometheus, Grafana (один раз на хост, отдельно от движка)
+  down [--all]           Остановить vllm/sglang; --all — ещё и мониторинг
   restart -m <preset> [--tp <N>]  Перезапуск running vllm|sglang с новым пресетом
   bench <vllm|sglang> -m <preset>
   load <vllm|sglang> -m <preset> [опции]
                          Длительный нагрузочный тест (200-300 пользователей, 15-20 мин)
   help                  Эта справка
 
-Вне CLI: `docker compose logs -f vllm`, проверка API — `curl` на порт vLLM/SGLang; артефакты бенчей — `bench/results/<engine>/<timestamp>/`.
+Вне CLI: `docker compose -f docker-compose.yml logs -f vllm`, проверка API — `curl` на порт vLLM/SGLang; артефакты бенчей — `bench/results/<engine>/<timestamp>/`.
 
 Примеры:
   ./slgpu pull Qwen/Qwen3.6-35B-A3B
+  ./slgpu monitoring up
   ./slgpu up vllm -m qwen3.6-35b-a3b
   ./slgpu up sglang -m qwen3-30b-a3b --tp 4
   ./slgpu bench vllm -m qwen3.6-35b-a3b

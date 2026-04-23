@@ -11,8 +11,8 @@ while [[ $# -gt 0 ]]; do
     -h|--help)
       cat <<EOF
 Использование:
-  ./slgpu down              # остановить и удалить контейнеры vllm и sglang
-  ./slgpu down --all        # остановить все сервисы compose (включая мониторинг)
+  ./slgpu down              # остановить vllm и sglang (docker-compose.yml)
+  ./slgpu down --all        # остановить движок и стек мониторинга
 EOF
       exit 0
       ;;
@@ -24,11 +24,12 @@ EOF
 done
 
 if [[ "${ALL}" -eq 1 ]]; then
-  echo "Останавливаю все сервисы slgpu…"
-  docker compose stop
+  echo "Останавливаю vllm, sglang и мониторинг…"
+  docker compose -f docker-compose.yml stop 2>/dev/null || true
+  docker compose -f docker-compose.monitoring.yml stop 2>/dev/null || true
 else
   echo "Останавливаю vllm и sglang…"
-  docker compose stop vllm sglang 2>/dev/null || true
-  docker compose rm -f vllm sglang 2>/dev/null || true
+  docker compose -f docker-compose.yml stop vllm sglang 2>/dev/null || true
+  docker compose -f docker-compose.yml rm -f vllm sglang 2>/dev/null || true
 fi
 echo "Готово."

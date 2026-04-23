@@ -113,21 +113,20 @@ compose_llm_env() {
   env LLM_API_PORT="${API_PORT}" LLM_API_BIND="${LLM_API_BIND:-0.0.0.0}" TP="${TP}" NVIDIA_VISIBLE_DEVICES="${NVIDIA_VISIBLE_DEVICES}" "$@"
 }
 
-echo "Останавливаю vllm/sglang (если были)…"
-compose_llm_env docker compose stop vllm sglang 2>/dev/null || true
-compose_llm_env docker compose rm -f vllm sglang 2>/dev/null || true
+slgpu_ensure_slgpu_network
 
-echo "Поднимаю мониторинг…"
-docker compose up -d dcgm-exporter node-exporter prometheus grafana
+echo "Останавливаю vllm/sglang (если были)…"
+compose_llm_env docker compose -f docker-compose.yml stop vllm sglang 2>/dev/null || true
+compose_llm_env docker compose -f docker-compose.yml rm -f vllm sglang 2>/dev/null || true
 
 case "${MODE}" in
   vllm)
     echo "Поднимаю vLLM (TP=${TP:-8}, GPU ${NVIDIA_VISIBLE_DEVICES}), API :${API_PORT}…"
-    compose_llm_env docker compose --profile vllm up -d
+    compose_llm_env docker compose -f docker-compose.yml --profile vllm up -d
     ;;
   sglang)
     echo "Поднимаю SGLang (TP=${TP:-8}, GPU ${NVIDIA_VISIBLE_DEVICES}), API :${API_PORT}…"
-    compose_llm_env docker compose --profile sglang up -d
+    compose_llm_env docker compose -f docker-compose.yml --profile sglang up -d
     ;;
 esac
 
@@ -135,7 +134,7 @@ sleep 2
 # Внутри контейнера: vLLM 8111, SGLang 8222 (см. docker-compose, SGLANG_LISTEN_PORT).
 llm_in_port=8111
 [[ "${MODE}" == sglang ]] && llm_in_port=8222
-mapped="$(compose_llm_env docker compose port "${MODE}" "${llm_in_port}" 2>/dev/null | head -1 || true)"
+mapped="$(compose_llm_env docker compose -f docker-compose.yml port "${MODE}" "${llm_in_port}" 2>/dev/null | head -1 || true)"
 if [[ -n "${mapped}" ]]; then
   echo "Проброс порта ${llm_in_port} (внутри контейнера) → хост: ${mapped}"
   if [[ "${mapped}" =~ :([0-9]+)$ ]]; then
@@ -148,4 +147,5 @@ else
 fi
 
 echo ""
-echo "Готовность модели: curl -s http://127.0.0.1:${API_PORT}/v1/models  ·  логи: docker compose logs -f ${MODE}"
+echo "Готовность модели: curl -s http://127.0.0.1:${API_PORT}/v1/models  ·  логи: docker compose -f docker-compose.yml logs -f ${MODE}"
+echo "Мониторинг: ./slgpu monitoring up  (один раз на хост; см. ./slgpu monitoring -h)"

@@ -6,6 +6,11 @@ slgpu_root() {
   cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd
 }
 
+# Общая сеть vLLM/SGLang ↔ Prometheus/DCGM/… (см. docker-compose.yml, docker-compose.monitoring.yml).
+slgpu_ensure_slgpu_network() {
+  docker network inspect slgpu &>/dev/null || docker network create slgpu
+}
+
 slgpu_list_presets() {
   local root
   root="$(slgpu_root)"
@@ -131,11 +136,11 @@ slgpu_detect_running_engine() {
   local root
   root="$(slgpu_root)"
   cd "${root}" || return 1
-  if docker compose ps --status running --services 2>/dev/null | grep -qx 'vllm'; then
+  if docker compose -f docker-compose.yml ps --status running --services 2>/dev/null | grep -qx 'vllm'; then
     echo vllm
     return 0
   fi
-  if docker compose ps --status running --services 2>/dev/null | grep -qx 'sglang'; then
+  if docker compose -f docker-compose.yml ps --status running --services 2>/dev/null | grep -qx 'sglang'; then
     echo sglang
     return 0
   fi
@@ -163,7 +168,7 @@ slgpu_openai_base_url() {
     sglang) in_p=8222 ;;
     *) echo "slgpu_openai_base_url: ожидается vllm|sglang" >&2; return 1 ;;
   esac
-  mapped="$(docker compose port "${e}" "${in_p}" 2>/dev/null | head -1 || true)"
+  mapped="$(docker compose -f docker-compose.yml port "${e}" "${in_p}" 2>/dev/null | head -1 || true)"
   host_port=""
   if [[ -n "${mapped}" ]] && [[ "${mapped}" =~ :([0-9]+)$ ]]; then
     host_port="${BASH_REMATCH[1]}"

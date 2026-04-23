@@ -109,6 +109,7 @@
 | 2.0.14 | **[`scripts/serve.sh`](scripts/serve.sh)** (был `configs/serve.sh`); compose монтирует `./scripts/serve.sh` → `/etc/slgpu/serve.sh`. |
 | 2.0.15 | Удалён `scripts/compare.py` (A/B-сводка `bench/report.md`); README, `cmd_help`, GRACE. |
 | 2.0.16 | **`serve` / `main`:** `SLGPU_VLLM_TRUST_REMOTE_CODE`, `SLGPU_VLLM_ENABLE_CHUNKED_PREFILL`, `SLGPU_VLLM_ENABLE_AUTO_TOOL_CHOICE` в `main.env`; SGLang — `MODEL_PATH` через **`SLGPU_MODEL_ROOT`**; `docker-compose` pass **`SLGPU_MODEL_ROOT`**, vLLM-флаги, **`SGLANG_TRUST_REMOTE_CODE`**. |
+| 2.1.0 | **Мониторинг отдельно от движка:** [`docker-compose.monitoring.yml`](docker-compose.monitoring.yml), сеть `slgpu` + **`./slgpu monitoring up|down|restart`**; **`./slgpu up`** — только vLLM/SGLang; **`./slgpu down --all`**, `_lib.sh`, README, [monitoring/README](monitoring/README.md), GRACE. |
 
 ### Документация и gpt-oss (исправления)
 
