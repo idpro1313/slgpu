@@ -2,7 +2,7 @@
 
 Репозиторий **стенда для сравнения LLM-инференса** на Linux-сервере с GPU: два движка (**vLLM** и **SGLang**) в Docker, общий локальный кэш моделей, OpenAI-совместимый HTTP API, нагрузочный бенчмарк, **Prometheus + Grafana + NVIDIA DCGM Exporter**.
 
-Целевая конфигурация при разработке: **8× NVIDIA H200**. **Tensor parallel по умолчанию `TP=8`**: в пресетах [`configs/models/*.env`](configs/models/) и в [`serve.sh`](configs/serve.sh) при отсутствии переменной. При [`./slgpu up`](scripts/cmd_up.sh) в контейнеры выставляется **`NVIDIA_VISIBLE_DEVICES=0,1,…,TP-1`**, так что число видимых GPU согласовано с `TP` (ручной список в `docker-compose` не нужен; нестандартная нумерация — `SLGPU_NVIDIA_VISIBLE_DEVICES` в `main.env` или `export`). Проект рассчитан на один хост без Kubernetes.
+Целевая конфигурация при разработке: **8× NVIDIA H200**. **Tensor parallel по умолчанию `TP=8`**: в пресетах [`configs/models/*.env`](configs/models/) и в [`serve.sh`](scripts/serve.sh) при отсутствии переменной. При [`./slgpu up`](scripts/cmd_up.sh) в контейнеры выставляется **`NVIDIA_VISIBLE_DEVICES=0,1,…,TP-1`**, так что число видимых GPU согласовано с `TP` (ручной список в `docker-compose` не нужен; нестандартная нумерация — `SLGPU_NVIDIA_VISIBLE_DEVICES` в `main.env` или `export`). Проект рассчитан на один хост без Kubernetes.
 
 Единая точка входа: **`./slgpu`** (bash, только Linux VM).
 
@@ -117,7 +117,7 @@
 - **[`main.env`](main.env)** — **дефолты хоста и движка** (пути, `MODELS_DIR`, `VLLM_DOCKER_IMAGE`, `MAX_MODEL_LEN`, `TP`, NCCL, мониторинг, …); секреты и редкие per-host поля — в комментариях-заготовках внизу файла или через `export` (см. шапку `main.env`).
 - **`configs/models/<preset>.env`** — модель: `MODEL_ID`, `MAX_MODEL_LEN`, **`TP`** (в шаблонах репозитория **8**; на 4 GPU — **4**), парсеры, KV и т.д. Обязателен для `up` / `bench` / `restart` (флаг **`-m`**).
 - Все **дефолты движка** (listen vLLM/SGLang, `VLLM_LOGGING_LEVEL`, **Triton/TorchInductor** для SGLang, NCCL, и т.д.) — в [`main.env`](main.env); в контейнер — **`env_file: main.env`** в [`docker-compose.yml`](docker-compose.yml). Сырой `docker compose` без `./slgpu up`: **`docker compose --env-file main.env`** (см. комментарий в compose).
-- **CLI движка**: единый [`configs/serve.sh`](configs/serve.sh) (`SLGPU_ENGINE=vllm|sglang` задаёт `docker-compose`).
+- **CLI движка**: единый [`scripts/serve.sh`](scripts/serve.sh) (`SLGPU_ENGINE=vllm|sglang` задаёт `docker-compose`; в контейнере — `/etc/slgpu/serve.sh`).
 
 Справка по парсерам: [`configs/models/README.md`](configs/models/README.md).
 
@@ -280,8 +280,8 @@ python3 scripts/compare.py   # последние summary vLLM + SGLang → об
 
 ## 12. Reasoning / thinking
 
-- vLLM: `--reasoning-parser` и `--tool-call-parser` из пресета (см. [`configs/serve.sh`](configs/serve.sh) → `slgpu_run_vllm`).
-- SGLang: `--reasoning-parser` из пресета ([`configs/serve.sh`](configs/serve.sh) → `slgpu_run_sglang`).
+- vLLM: `--reasoning-parser` и `--tool-call-parser` из пресета (см. [`scripts/serve.sh`](scripts/serve.sh) → `slgpu_run_vllm`).
+- SGLang: `--reasoning-parser` из пресета ([`scripts/serve.sh`](scripts/serve.sh) → `slgpu_run_sglang`).
 
 Пример Qwen3 (подставьте `model` из `/v1/models`):
 
@@ -309,7 +309,7 @@ curl -s http://127.0.0.1:8111/v1/chat/completions \
 | **`ContextOverflowError`** | Увеличить `MAX_MODEL_LEN` или уменьшить `max_tokens` |
 | **OOM при старте** | Снизить `MAX_MODEL_LEN`, `GPU_MEM_UTIL`, `SGLANG_MEM_FRACTION_STATIC`, увеличить `TP`, квантованный чекпоинт |
 | **OOM MoE при загрузке весов** | Часто не спасает только снижение контекста; **TP=8**, другой чекпоинт HF или квант |
-| **vLLM:** `WorkerProc initialization failed` | Ищите `CUDA OOM` выше в логе; см. [`configs/serve.sh`](configs/serve.sh), [`main.env`](main.env) |
+| **vLLM:** `WorkerProc initialization failed` | Ищите `CUDA OOM` выше в логе; см. [`scripts/serve.sh`](scripts/serve.sh), [`main.env`](main.env) |
 | **vLLM:** `custom_all_reduce.cuh` / `invalid argument` при старте | Дефолт **`SLGPU_DISABLE_CUSTOM_ALL_REDUCE=1`** (NCCL). Не задавайте `0` в пресете, пока custom all-reduce стабилен на вашем образе/модели. |
 | **404 model `gpt-oss-120b`** | Используйте **`openai/gpt-oss-120b`** как в `/v1/models` |
 | **Hermes2ProToolParser / `token_ids` (gpt-oss)** | `TOOL_CALL_PARSER=openai` в пресете |
@@ -339,9 +339,9 @@ slgpu/
 │   └── HISTORY.md              # Журнал сессий
 ├── configs/
 │   ├── secrets/hf.env.example
-│   ├── serve.sh                # vLLM + SGLang (SLGPU_ENGINE)
 │   └── models/*.env
 ├── scripts/
+│   ├── serve.sh                # vLLM + SGLang (SLGPU_ENGINE) → /etc/slgpu/serve.sh в контейнере
 │   ├── _lib.sh
 │   ├── cmd_*.sh
 │   ├── bench_openai.py

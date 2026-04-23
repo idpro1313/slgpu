@@ -79,7 +79,7 @@
 
 | Версия | Суть |
 |--------|------|
-| 1.8.0 | Пресет [**`configs/models/qwen3.6-27b.env`**](configs/models/qwen3.6-27b.env) (throughput: **`SLGPU_MAX_NUM_BATCHED_TOKENS=16384`**, **`GPU_MEM_UTIL=0.9262`**, опционально **`SLGPU_DISABLE_CUSTOM_ALL_REDUCE`**); переменная **`SLGPU_DISABLE_CUSTOM_ALL_REDUCE`** в [`docker-compose.yml`](docker-compose.yml) и условный **`--disable-custom-all-reduce`** в `serve.sh` (см. [`configs/serve.sh`](configs/serve.sh)). |
+| 1.8.0 | Пресет [**`configs/models/qwen3.6-27b.env`**](configs/models/qwen3.6-27b.env) (throughput: **`SLGPU_MAX_NUM_BATCHED_TOKENS=16384`**, **`GPU_MEM_UTIL=0.9262`**, опционально **`SLGPU_DISABLE_CUSTOM_ALL_REDUCE`**); переменная **`SLGPU_DISABLE_CUSTOM_ALL_REDUCE`** в [`docker-compose.yml`](docker-compose.yml) и условный **`--disable-custom-all-reduce`** в `serve.sh` (см. [`scripts/serve.sh`](scripts/serve.sh)). |
 | 1.8.1 | Дефолт **`SLGPU_DISABLE_CUSTOM_ALL_REDUCE=0`** (custom all-reduce без флага); `1` — **NCCL**; документация и [`qwen3.6-27b.env`](configs/models/qwen3.6-27b.env) без дублирования `0`. |
 | 1.8.2 | Снова дефолт **`SLGPU_DISABLE_CUSTOM_ALL_REDUCE=1`** (NCCL): на vLLM 0.19 + Qwen3.6 custom all-reduce даёт **`custom_all_reduce.cuh` / `invalid argument`** при graph capture; troubleshooting в README. |
 | 1.9.0 | Пресет [`configs/models/glm-5.1.env`](configs/models/glm-5.1.env), эвристика **pull**: **zai-org/GLM*** → `MAX_MODEL_LEN=202752`, `KV_CACHE_DTYPE=auto` (разреженная MLA+DSA несовместима с fp8 KV в vLLM 0.19); README и troubleshooting. |
@@ -106,6 +106,7 @@
 | 2.0.11 | **Без обязательного `.env`:** `_lib.sh`, compose, удалён `.env.example`; секреты — `main.env` / `export`. |
 | 2.0.12 | **Один [`configs/serve.sh`](configs/serve.sh):** `SLGPU_ENGINE=vllm|sglang`; удалены `configs/vllm/serve.sh`, `configs/sglang/serve.sh`; compose, README, GRACE. |
 | 2.0.13 | **Параметры из `vllm.env` / `sglang.env` в [`main.env`](main.env);** удалены файлы движка; compose — только `env_file: main.env`; [`scripts/_lib.sh`](scripts/_lib.sh) без `configs/<engine>.env`. |
+| 2.0.14 | **[`scripts/serve.sh`](scripts/serve.sh)** (был `configs/serve.sh`); compose монтирует `./scripts/serve.sh` → `/etc/slgpu/serve.sh`. |
 
 ### Документация и gpt-oss (исправления)
 

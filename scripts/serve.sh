@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Универсальный entrypoint: vLLM или SGLang по SLGPU_ENGINE=vllm|sglang.
-# Env: main.env → configs/<engine>/*.env → пресет (через compose + ./slgpu up).
+# Env: main.env → пресет (через compose + ./slgpu up). Монтируется в контейнер как /etc/slgpu/serve.sh.
 set -euo pipefail
 
 slgpu_run_vllm() {
