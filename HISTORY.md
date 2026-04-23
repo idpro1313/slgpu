@@ -83,6 +83,7 @@
 | 1.8.1 | Дефолт **`SLGPU_DISABLE_CUSTOM_ALL_REDUCE=0`** (custom all-reduce без флага); `1` — **NCCL**; документация и [`qwen3.6-27b.env`](configs/models/qwen3.6-27b.env) без дублирования `0`. |
 | 1.8.2 | Снова дефолт **`SLGPU_DISABLE_CUSTOM_ALL_REDUCE=1`** (NCCL): на vLLM 0.19 + Qwen3.6 custom all-reduce даёт **`custom_all_reduce.cuh` / `invalid argument`** при graph capture; troubleshooting в README. |
 | 1.9.0 | Пресет [`configs/models/glm-5.1.env`](configs/models/glm-5.1.env), эвристика **pull**: **zai-org/GLM*** → `MAX_MODEL_LEN=202752`, `KV_CACHE_DTYPE=auto` (разреженная MLA+DSA несовместима с fp8 KV в vLLM 0.19); README и troubleshooting. |
+| 1.9.1 | **GLM-5.1:** в пресете `MAX_MODEL_LEN=131072`, `GPU_MEM_UTIL=0.88` (OOM `SharedFusedMoE` на 8×~140 GB); README / `configs/models/README.md` / troubleshooting. |
 
 ### Документация и gpt-oss (исправления)
 

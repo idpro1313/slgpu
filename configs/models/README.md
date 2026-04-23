@@ -15,7 +15,7 @@
 
 - **`MODEL_ID`** — репозиторий Hugging Face и подкаталог в `MODELS_DIR` после `./slgpu pull`.
 - **`MODEL_REVISION`** — SHA/тег на HF; пусто — ветка по умолчанию.
-- **`MAX_MODEL_LEN`** — окно контекста (`--max-model-len` / `--context-length`). При **`./slgpu pull <HF_ID>`** без **`--max-len`** подставляется эвристика ([`slgpu_guess_max_model_len`](../../scripts/_lib.sh)): чаще **262144** (256k), в т.ч. **moonshotai/Kimi-K2.6**; ниже — **Qwen3-30B** / **gpt-oss** (131072) / **GLM** (202752). При OOM уменьшайте вручную.
+- **`MAX_MODEL_LEN`** — окно контекста (`--max-model-len` / `--context-length`). При **`./slgpu pull <HF_ID>`** без **`--max-len`** подставляется эвристика ([`slgpu_guess_max_model_len`](../../scripts/_lib.sh)): чаще **262144** (256k), в т.ч. **moonshotai/Kimi-K2.6**; ниже — **Qwen3-30B** / **gpt-oss** (131072) / **GLM** (202752). **GLM-5.1** на 8×~140 GB с полным окном часто даёт OOM в MoE — в [`glm-5.1.env`](glm-5.1.env) заложено **131072**; при OOM уменьшайте `MAX_MODEL_LEN` / `GPU_MEM_UTIL` или ищите квант/больше шардов.
 - **`KV_CACHE_DTYPE`** — `fp8_e4m3`, `fp8`, `auto`, …; у Qwen3 Next/3.6 избегайте `fp8_e5m2`. У **zai-org/GLM-5.1** (sparse MLA) в vLLM 0.19 используйте **`auto`** (или не-fp8 KV) — иначе `No valid attention backend` при старте.
 - **`GPU_MEM_UTIL`** — vLLM `--gpu-memory-utilization`.
 - **`SLGPU_MAX_NUM_BATCHED_TOKENS`** — только vLLM (chunked prefill; не `VLLM_*`, чтобы vLLM 0.19+ не предупреждал о неизвестных переменных).
