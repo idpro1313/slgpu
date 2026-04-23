@@ -97,6 +97,7 @@
 | 2.0.2 | **`_lib.sh`:** удалена **`slgpu_guess_max_model_len`** — **`MAX_MODEL_LEN`** только из пресета; GRACE, `configs/models/README.md`. |
 | 2.0.3 | **`_lib.sh`:** удалена **`slgpu_gen_preset_file`** (не вызывалась); GRACE, `configs/models/README.md`, журналы. |
 | 2.0.4 | **`-m` без пресета:** вывод списка пресетов (`slgpu_fail_if_missing_preset_arg`); `cmd_up` и др. |
+| 2.0.5 | **GRACE / `docs/AGENTS.md`:** сценарии pull/up, риск парсеров, контракт M-PULL, версии XML. |
 
 ### Документация и gpt-oss (исправления)
 
