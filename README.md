@@ -274,7 +274,7 @@ M=qwen3.6-35b-a3b
   --reasoning-parser minimax_m2 --tool-call-parser minimax_m2
 ./slgpu up vllm -m minimax-m2.7
 
-# GLM-5.1 (в пресете репо: MAX_MODEL_LEN=65536, KV=auto, prefix cache off; 202k+ часто OOM в MoE — см. troubleshooting)
+# GLM-5.1 (в пресете: MAX_MODEL_LEN=65536, GPU_MEM_UTIL=0.75, KV=auto, prefix cache off; при OOM в MoE — см. troubleshooting)
 ./slgpu pull zai-org/GLM-5.1 \
   --gpu-mem 0.95 --sglang-mem 0.92 \
   --batch 24576 \
@@ -329,7 +329,7 @@ curl -s http://127.0.0.1:8111/v1/chat/completions \
 |---------|-------------|
 | **Qwen3 Next / Qwen3.6:** assert / `fp8_e5m2` | В пресете: `KV_CACHE_DTYPE=fp8_e4m3` или `fp8`, пересоздать контейнер |
 | **GLM-5.1 (vLLM):** `No valid attention backend` / `FLASHMLA_SPARSE: [kv_cache_dtype not supported]` | `KV_CACHE_DTYPE=auto` (в пресете [`configs/models/glm-5.1.env`](configs/models/glm-5.1.env)); не `fp8_e4m3` для sparse MLA+KV |
-| **GLM-5.1:** `OutOfMemoryError` / `SharedFusedMoE` / `unquantized_fused_moe` при `load_model` | Снизить **`MAX_MODEL_LEN`**, **`GPU_MEM_UTIL`** (резерв под KV; иногда **0.75–0.80**), **`SLGPU_MAX_NUM_BATCHED_TOKENS`**. **`SLGPU_ENABLE_PREFIX_CACHING=0`** → в логе vLLM должно быть `enable_prefix_caching: False` (иначе vLLM по умолчанию кэш **вкл** — нужен флаг `--no-enable-prefix-caching` в `serve.sh`). OOM на последних слоях MoE с bf16: часто только **квант** / **больше GPU** (`TP`). |
+| **GLM-5.1:** `OutOfMemoryError` / `SharedFusedMoE` / `unquantized_fused_moe` при `load_model` | Снизить **`GPU_MEM_UTIL`** (в пресете **0.75**; при повторе — **0.72–0.70**) — vLLM резервирует меньше под KV, больше остаётся под веса. Плюс **`MAX_MODEL_LEN`**, **`SLGPU_MAX_NUM_BATCHED_TOKENS`**, **`SLGPU_ENABLE_PREFIX_CACHING=0`** (в логе `enable_prefix_caching: False`). Если не проходит: **квант** / **больше GPU** (`TP`). |
 | **`ContextOverflowError`** | Увеличить `MAX_MODEL_LEN` или уменьшить `max_tokens` |
 | **OOM при старте** | Снизить `MAX_MODEL_LEN`, `GPU_MEM_UTIL`, `SGLANG_MEM_FRACTION_STATIC`, увеличить `TP`, квантованный чекпоинт |
 | **OOM MoE при загрузке весов** | Часто не спасает только снижение контекста; **TP=8**, другой чекпоинт HF или квант |
