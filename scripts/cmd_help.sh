@@ -16,7 +16,7 @@ slgpu — стенд vLLM vs SGLang в Docker (Linux VM).
                          Длительный нагрузочный тест (200-300 пользователей, 15-20 мин)
   help                  Эта справка
 
-Вне CLI: `docker compose logs -f vllm`, `python3 scripts/compare.py` (сводка бенчей → bench/report.md), проверка API — `curl` на порт vLLM/SGLang.
+Вне CLI: `docker compose logs -f vllm`, проверка API — `curl` на порт vLLM/SGLang; артефакты бенчей — `bench/results/<engine>/<timestamp>/`.
 
 Примеры:
   ./slgpu pull Qwen/Qwen3.6-35B-A3B

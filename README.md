@@ -108,7 +108,7 @@
 | **`restart`** | **Перезапуск с новым пресетом без смены движка**: определяет, какой сервис сейчас в статусе *running* (`vllm` или `sglang`), и выполняет для него ту же последовательность, что и `up`, с новым **`-m <preset>`**; опционально **`--tp`**, как у `up`. Если ни один LLM-контейнер не запущен — сообщение об ошибке; тогда используйте `up`. |
 | **`bench`** | **Нагрузочный тест** против уже поднятого API (порт vLLM 8111 / SGLang 8222 по умолчанию, см. `docker compose port`): запускает [`scripts/bench_openai.py`](scripts/bench_openai.py). Модель и engine **автоматически определяются** из запущенного API (`/v1/models`) и docker compose. Пресет **`-m`** опционален — используется только для `MAX_MODEL_LEN` и `BENCH_MODEL_NAME`, если указан. Пишет артефакты в `bench/results/<engine>/<timestamp>/`. |
 | **`load`** | **Длительный нагрузочный тест** (15–20 мин, 200–300 виртуальных пользователей): запускает [`scripts/bench_load.py`](scripts/bench_load.py). Модель и engine **автоматически определяются** из запущенного API. Эмулирует фазы ramp-up → steady → ramp-down, собирает time-series метрики (throughput, TTFT, latency, error rate) в CSV каждые 5 сек. Артефакты: `summary.json`, `time_series.csv`, `users.jsonl`. Опции: `--users`, `--duration`, `--ramp-up`, `--ramp-down`, `--think-time`, `--max-prompt`, `--max-output`, `--report-interval`, `--burst` (макс throughput без пауз). |
-Подробности по флагам **`pull`**: см. `./slgpu pull -h` и [`configs/models/README.md`](configs/models/README.md). Сводка бенчей vLLM/SGLang в [`bench/report.md`](bench/report.md): **`python3 scripts/compare.py`** (после прогонов `bench` для обоих движков). Логи: **`docker compose logs -f vllm`** (или `sglang`, `grafana`, …). Диагностика: **`docker compose ps`**, **`curl`**, **`nvidia-smi`**.
+Подробности по флагам **`pull`**: см. `./slgpu pull -h` и [`configs/models/README.md`](configs/models/README.md). Результаты бенчей: **`bench/results/<engine>/<timestamp>/summary.json`**. Пример разборов — [`bench/report.md`](bench/report.md) (вручную, не генерируется репо). Логи: **`docker compose logs -f vllm`** (или `sglang`, `grafana`, …). Диагностика: **`docker compose ps`**, **`curl`**, **`nvidia-smi`**.
 
 ---
 
@@ -177,7 +177,7 @@ M=qwen3.6-35b-a3b
 ./slgpu up vllm   -m $M && ./slgpu bench vllm   -m $M
 ./slgpu down
 ./slgpu up sglang -m $M && ./slgpu bench sglang -m $M
-python3 scripts/compare.py   # последние summary vLLM + SGLang → обновит bench/report.md
+# Артефакты: bench/results/vllm|sglang/<timestamp>/summary.json
 ```
 
 Артефакты: `bench/results/<engine>/<timestamp>/summary.json`.
@@ -345,8 +345,7 @@ slgpu/
 │   ├── _lib.sh
 │   ├── cmd_*.sh
 │   ├── bench_openai.py
-│   ├── bench_load.py           # Длительный нагрузочный тест
-│   └── compare.py
+│   └── bench_load.py           # Длительный нагрузочный тест
 ├── monitoring/
 │   ├── prometheus.yml
 │   ├── README.md

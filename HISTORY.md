@@ -92,7 +92,7 @@
 | 1.11.0 | **MiniMax-M2.7:** пресет [`configs/models/minimax-m2.7.env`](configs/models/minimax-m2.7.env) ([рецепт](https://github.com/vllm-project/recipes/blob/main/MiniMax/MiniMax-M2.md) — **TP4**, **TP4+EP** на 8×GPU, **`--compilation-config`**); `serve.sh` / compose — **`SLGPU_VLLM_COMPILATION_CONFIG`**, **`SLGPU_ENABLE_EXPERT_PARALLEL`**, **`SLGPU_VLLM_DATA_PARALLEL_SIZE`**; **`slgpu_guess_max_model_len`** — **200704** для `MiniMaxAI/MiniMax*`. |
 | 1.11.1 | **`pull`:** только скачивание весов, **без** создания `configs/models/*.env`; обновлены README, `configs/models/README.md`, справка. |
 | 1.11.2 | **`up`:** убрано ожидание `GET /v1/models` (пуллинг API); README, `grace` M-UP, `.env.example` (удалён `SLGPU_UP_READY_ATTEMPTS`). |
-| 2.0.0 | **CLI:** удалены команды **`ab`**, **`compare`**, **`logs`**, **`status`**, **`config`**; соответствующие `cmd_*.sh`. Сводка бенчей: `python3 scripts/compare.py`. README, GRACE, `configs/models/README.md`. |
+| 2.0.0 | **CLI:** удалены команды **`ab`**, **`compare`**, **`logs`**, **`status`**, **`config`**; соответствующие `cmd_*.sh`. Внешняя A/B-сводка ранее: `compare.py` (сам скрипт удалён в 2.0.15). README, GRACE, `configs/models/README.md`. |
 | 2.0.1 | **`_lib.sh`:** удалена **`slgpu_guess_parsers`** — парсеры только из пресета; GRACE, `configs/models/README.md`. |
 | 2.0.2 | **`_lib.sh`:** удалена **`slgpu_guess_max_model_len`** — **`MAX_MODEL_LEN`** только из пресета; GRACE, `configs/models/README.md`. |
 | 2.0.3 | **`_lib.sh`:** удалена **`slgpu_gen_preset_file`** (не вызывалась); GRACE, `configs/models/README.md`, журналы. |
@@ -104,9 +104,10 @@
 | 2.0.9 | **`.env.example`:** без дублей с `main.env`; README, `main` шапка. |
 | 2.0.10 | **`docker-compose.yml`:** `env_file: main.env`; комментарий про `--env-file`. |
 | 2.0.11 | **Без обязательного `.env`:** `_lib.sh`, compose, удалён `.env.example`; секреты — `main.env` / `export`. |
-| 2.0.12 | **Один [`configs/serve.sh`](configs/serve.sh):** `SLGPU_ENGINE=vllm|sglang`; удалены `configs/vllm/serve.sh`, `configs/sglang/serve.sh`; compose, README, GRACE. |
+| 2.0.12 | **Один `serve.sh` (тогда `configs/`, сейчас [`scripts/serve.sh`](scripts/serve.sh)):** `SLGPU_ENGINE=vllm|sglang`; удалены `configs/vllm/serve.sh`, `configs/sglang/serve.sh`; compose, README, GRACE. |
 | 2.0.13 | **Параметры из `vllm.env` / `sglang.env` в [`main.env`](main.env);** удалены файлы движка; compose — только `env_file: main.env`; [`scripts/_lib.sh`](scripts/_lib.sh) без `configs/<engine>.env`. |
 | 2.0.14 | **[`scripts/serve.sh`](scripts/serve.sh)** (был `configs/serve.sh`); compose монтирует `./scripts/serve.sh` → `/etc/slgpu/serve.sh`. |
+| 2.0.15 | Удалён `scripts/compare.py` (A/B-сводка `bench/report.md`); README, `cmd_help`, GRACE. |
 
 ### Документация и gpt-oss (исправления)
 
