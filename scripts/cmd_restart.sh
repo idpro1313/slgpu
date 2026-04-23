@@ -9,7 +9,9 @@ source "${ROOT}/scripts/_lib.sh"
 usage() {
   cat <<EOF
 Использование:
-  ./slgpu restart -m|--model <preset> [-h|--help]
+  ./slgpu restart -m|--model <preset> [--tp <N>] [-h|--help]
+
+  --tp <N>   как у ./slgpu up — tensor parallel на этот запуск
 
 Перезапускает тот же движок (vllm или sglang), который сейчас в статусе running.
 Если ни один не запущен — используйте ./slgpu up <vllm|sglang> -m <preset>.
@@ -20,9 +22,19 @@ EOF
 }
 
 MODEL_SLUG=""
+RESTART_EXTRA=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -m|--model) MODEL_SLUG="${2:?}"; shift 2 ;;
+    --tp)
+      if [[ -z "${2:-}" || "${2:-}" == -* ]]; then
+        echo "Опция --tp требует целое число ≥1" >&2
+        usage >&2
+        exit 1
+      fi
+      RESTART_EXTRA+=(--tp "${2}")
+      shift 2
+      ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Неизвестный аргумент: $1" >&2; usage >&2; exit 1 ;;
   esac
@@ -40,4 +52,4 @@ if [[ -z "${engine}" ]]; then
 fi
 
 echo "Перезапуск: engine=${engine}, preset=${MODEL_SLUG}"
-exec bash "${ROOT}/scripts/cmd_up.sh" "${engine}" -m "${MODEL_SLUG}"
+exec bash "${ROOT}/scripts/cmd_up.sh" "${engine}" -m "${MODEL_SLUG}" "${RESTART_EXTRA[@]}"

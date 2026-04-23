@@ -8,9 +8,9 @@ slgpu — стенд vLLM vs SGLang в Docker (Linux VM).
 Команды:
   prepare [1–6]        Подготовка хоста (Docker, NVIDIA toolkit, каталог моделей, …)
   pull <HF_ID|preset>    Скачать модель; HF id (org/name) создаёт configs/models/<slug>.env
-  up <vllm|sglang> -m <preset> [-p <порт API: vLLM 8111, SGLang 8222 по умолчанию>]
+  up <vllm|sglang> -m <preset> [-p <порт>] [--tp <N>]
   down [--all]          Остановить LLM (--all — весь compose)
-  restart -m <preset>   Перезапуск текущего running-движка с новым пресетом
+  restart -m <preset> [--tp <N>]  Перезапуск running vllm|sglang с новым пресетом
    bench <vllm|sglang> -m <preset>
    load <vllm|sglang> -m <preset> [опции]
                          Длительный нагрузочный тест (200-300 пользователей, 15-20 мин)
@@ -24,6 +24,7 @@ slgpu — стенд vLLM vs SGLang в Docker (Linux VM).
 Примеры:
   ./slgpu pull Qwen/Qwen3.6-35B-A3B
   ./slgpu up vllm -m qwen3.6-35b-a3b
+  ./slgpu up sglang -m qwen3-30b-a3b --tp 4
   ./slgpu bench vllm -m qwen3.6-35b-a3b
   ./slgpu ab -m qwen3.6-35b-a3b
 

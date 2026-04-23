@@ -9,14 +9,16 @@ source "${ROOT}/scripts/_lib.sh"
 usage() {
   cat <<EOF
 Использование:
-  ./slgpu up <vllm|sglang> -m|--model <preset> [-p|--port <порт>] [-h|--help]
+  ./slgpu up <vllm|sglang> -m|--model <preset> [-p|--port <порт>] [--tp <N>] [-h|--help]
 
   -p, --port   порт API на хосте (vLLM: по умолчанию 8111; SGLang: 8222)
+  --tp <N>     tensor parallel на этот запуск (переопределяет TP из пресета; по умолчанию — из файла, иначе 8 в serve.sh)
 
 Примеры:
   ./slgpu up vllm -m qwen3.6-35b-a3b
+  ./slgpu up vllm -m qwen3.6-35b-a3b --tp 4
   ./slgpu up vllm -m qwen3.6-35b-a3b -p 8222
-  ./slgpu up sglang -m qwen3-30b-a3b
+  ./slgpu up sglang -m qwen3-30b-a3b --tp 4
 
 Пресеты (configs/models/<name>.env):
 $(slgpu_list_presets | sed 's/^/  /')
@@ -27,6 +29,7 @@ MODE=""
 MODEL_SLUG=""
 API_PORT=""
 PORT_GIVEN=0
+TP_OVERRIDE=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     vllm|sglang) MODE="$1"; shift ;;
@@ -39,6 +42,15 @@ while [[ $# -gt 0 ]]; do
       fi
       PORT_GIVEN=1
       API_PORT="${2}"
+      shift 2
+      ;;
+    --tp)
+      if [[ -z "${2:-}" || "${2:-}" == -* ]]; then
+        echo "Опция --tp требует целое число ≥1 (tensor parallel, например 4 или 8)" >&2
+        usage >&2
+        exit 1
+      fi
+      TP_OVERRIDE="${2}"
       shift 2
       ;;
     -h|--help) usage; exit 0 ;;
@@ -66,12 +78,26 @@ fi
 
 slgpu_load_compose_env "${MODEL_SLUG}" "${MODE}"
 export LLM_API_PORT="${API_PORT}"
-echo "Модель: ${MODEL_ID}  (MAX_MODEL_LEN=${MAX_MODEL_LEN:-<default>}, KV=${KV_CACHE_DTYPE:-<default>}, reasoning=${REASONING_PARSER:-<off>})"
+
+if [[ -n "${TP_OVERRIDE}" ]]; then
+  if ! [[ "${TP_OVERRIDE}" =~ ^[1-9][0-9]*$ ]] || (( TP_OVERRIDE > 128 )); then
+    echo "Некорректный --tp: ${TP_OVERRIDE} (нужно целое 1…128; согласуйте с числом GPU в docker-compose device_ids)" >&2
+    exit 1
+  fi
+  export TP="${TP_OVERRIDE}"
+  tp_src="--tp"
+else
+  : "${TP:=8}"
+  tp_src="пресет"
+fi
+export TP
+
+echo "Модель: ${MODEL_ID}  TP=${TP} (${tp_src})  (MAX_MODEL_LEN=${MAX_MODEL_LEN:-<default>}, KV=${KV_CACHE_DTYPE:-<default>}, reasoning=${REASONING_PARSER:-<off>})"
 
 # Для docker compose: явно передаём LLM_API_PORT/LLM_API_BIND, чтобы подстановка в
 # docker-compose.yml не взяла устаревшее значение из корневого .env без учёта -p.
 compose_llm_env() {
-  env LLM_API_PORT="${API_PORT}" LLM_API_BIND="${LLM_API_BIND:-0.0.0.0}" "$@"
+  env LLM_API_PORT="${API_PORT}" LLM_API_BIND="${LLM_API_BIND:-0.0.0.0}" TP="${TP}" "$@"
 }
 
 echo "Останавливаю vllm/sglang (если были)…"
