@@ -332,6 +332,7 @@ curl -s http://127.0.0.1:8111/v1/chat/completions \
 | **OOM при старте** | Снизить `MAX_MODEL_LEN`, `GPU_MEM_UTIL`, `SGLANG_MEM_FRACTION_STATIC`, увеличить `TP`, квантованный чекпоинт |
 | **OOM MoE при загрузке весов** | Часто не спасает только снижение контекста; **TP=8**, другой чекпоинт HF или квант |
 | **vLLM:** `WorkerProc initialization failed` | Ищите `CUDA OOM` выше в логе; см. [`configs/vllm/serve.sh`](configs/vllm/serve.sh), [`configs/vllm/vllm.env`](configs/vllm/vllm.env) |
+| **vLLM:** `custom_all_reduce.cuh` / `invalid argument` при старте | Дефолт **`SLGPU_DISABLE_CUSTOM_ALL_REDUCE=1`** (NCCL). Не задавайте `0` в пресете, пока custom all-reduce стабилен на вашем образе/модели. |
 | **404 model `gpt-oss-120b`** | Используйте **`openai/gpt-oss-120b`** как в `/v1/models` |
 | **Hermes2ProToolParser / `token_ids` (gpt-oss)** | `TOOL_CALL_PARSER=openai` в пресете |
 

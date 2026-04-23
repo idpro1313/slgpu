@@ -19,7 +19,7 @@
 - **`KV_CACHE_DTYPE`** — `fp8_e4m3`, `fp8`, `auto`, …; у Qwen3 Next/3.6 избегайте `fp8_e5m2`.
 - **`GPU_MEM_UTIL`** — vLLM `--gpu-memory-utilization`.
 - **`SLGPU_MAX_NUM_BATCHED_TOKENS`** — только vLLM (chunked prefill; не `VLLM_*`, чтобы vLLM 0.19+ не предупреждал о неизвестных переменных).
-- **`SLGPU_DISABLE_CUSTOM_ALL_REDUCE`** — только vLLM: `0` (дефолт) — custom/TRTLLM all-reduce; `1` — флаг `--disable-custom-all-reduce` (NCCL); при сбоях all-reduce задайте `1` (см. `serve.sh`, `docker-compose` передаёт переменную).
+- **`SLGPU_DISABLE_CUSTOM_ALL_REDUCE`** — только vLLM: `1` (дефолт) — `--disable-custom-all-reduce` (NCCL); `0` — custom all-reduce (иногда быстрее, но на части моделей/образов vLLM — `custom_all_reduce.cuh` / `invalid argument` при graph capture; тогда оставьте `1`) (см. `serve.sh`, `docker-compose`).
 - **`SGLANG_MEM_FRACTION_STATIC`** — только SGLang.
 - **`SGLANG_CUDA_GRAPH_MAX_BS`**, **`SGLANG_ENABLE_TORCH_COMPILE`**, **`SGLANG_DISABLE_CUDA_GRAPH`**, **`SGLANG_DISABLE_CUSTOM_ALL_REDUCE`** — только SGLang: обход OOM/ошибок **CUDA graph capture** и сбоев **custom all-reduce** (см. `configs/sglang/sglang.env`, `serve.sh`); при «Capture cuda graph failed» SGLang подсказывает понижать mem / max-bs, отключать torch compile, в крайнем случае граф; при ошибках в `custom_all_reduce` — `SGLANG_DISABLE_CUSTOM_ALL_REDUCE=1` (откат на NCCL).
 - **`REASONING_PARSER`**, **`TOOL_CALL_PARSER`** — vLLM и SGLang (`launch_server`); см. таблицу ниже.

@@ -81,6 +81,7 @@
 |--------|------|
 | 1.8.0 | Пресет [**`configs/models/qwen3.6-27b.env`**](configs/models/qwen3.6-27b.env) (throughput: **`SLGPU_MAX_NUM_BATCHED_TOKENS=16384`**, **`GPU_MEM_UTIL=0.9262`**, опционально **`SLGPU_DISABLE_CUSTOM_ALL_REDUCE`**); переменная **`SLGPU_DISABLE_CUSTOM_ALL_REDUCE`** в [`docker-compose.yml`](docker-compose.yml) и условный **`--disable-custom-all-reduce`** в [`configs/vllm/serve.sh`](configs/vllm/serve.sh). |
 | 1.8.1 | Дефолт **`SLGPU_DISABLE_CUSTOM_ALL_REDUCE=0`** (custom all-reduce без флага); `1` — **NCCL**; документация и [`qwen3.6-27b.env`](configs/models/qwen3.6-27b.env) без дублирования `0`. |
+| 1.8.2 | Снова дефолт **`SLGPU_DISABLE_CUSTOM_ALL_REDUCE=1`** (NCCL): на vLLM 0.19 + Qwen3.6 custom all-reduce даёт **`custom_all_reduce.cuh` / `invalid argument`** при graph capture; troubleshooting в README. |
 
 ### Документация и gpt-oss (исправления)
 

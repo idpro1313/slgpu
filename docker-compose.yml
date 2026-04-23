@@ -25,8 +25,8 @@ services:
       KV_CACHE_DTYPE: ${KV_CACHE_DTYPE:-fp8_e4m3}
       # SLGPU_* не сканируется vLLM как неизвестный VLLM_* (см. vllm.env, serve.sh). Для старых пресетов допускается VLLM_MAX_NUM_BATCHED_TOKENS на хосте.
       SLGPU_MAX_NUM_BATCHED_TOKENS: ${SLGPU_MAX_NUM_BATCHED_TOKENS:-${VLLM_MAX_NUM_BATCHED_TOKENS:-8192}}
-      # 0 (по умолчанию) = без --disable-custom-all-reduce. 1 = отключить custom all-reduce (NCCL); см. serve.sh
-      SLGPU_DISABLE_CUSTOM_ALL_REDUCE: ${SLGPU_DISABLE_CUSTOM_ALL_REDUCE:-0}
+      # 1 (по умолчанию) = --disable-custom-all-reduce (NCCL). 0 = custom all-reduce; см. serve.sh
+      SLGPU_DISABLE_CUSTOM_ALL_REDUCE: ${SLGPU_DISABLE_CUSTOM_ALL_REDUCE:-1}
       TOOL_CALL_PARSER: ${TOOL_CALL_PARSER:-hermes}
       REASONING_PARSER: ${REASONING_PARSER:-qwen3}
       # Только vLLM (например moonshotai/Kimi-K2.6 — data; см. референс Moonshot / доку vLLM).

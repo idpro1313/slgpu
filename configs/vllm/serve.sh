@@ -15,8 +15,8 @@ KV="${KV_CACHE_DTYPE:-fp8_e4m3}"
 BATCH="${SLGPU_MAX_NUM_BATCHED_TOKENS:-8192}"
 TOOL="${TOOL_CALL_PARSER:-hermes}"
 REASON="${REASONING_PARSER:-qwen3}"
-# 1 = передать --disable-custom-all-reduce (NCCL). 0 (по умолчанию) = custom/TRTLLM all-reduce.
-DISABLE_CAR="${SLGPU_DISABLE_CUSTOM_ALL_REDUCE:-0}"
+# 1 (по умолчанию) = --disable-custom-all-reduce (NCCL, стабильно). 0 = custom all-reduce (быстрее на части GPU, но на vLLM 0.19 + Qwen3.6 бывает custom_all_reduce.cuh invalid argument при graph capture).
+DISABLE_CAR="${SLGPU_DISABLE_CUSTOM_ALL_REDUCE:-1}"
 
 cmd=(
   vllm serve "${MODEL_PATH}"
