@@ -89,6 +89,7 @@
 | 1.9.4 | **GLM-5.1:** в пресете **`GPU_MEM_UTIL=0.75`** (OOM `SharedFusedMoE` при 0.82: vLLM просит снизить util, чтобы освободить память под веса). |
 | 1.9.5 | **`docker-compose.yml` (vLLM):** **`SLGPU_ENABLE_PREFIX_CACHING`** в `environment` — иначе из пресета в контейнер не попадала; `serve.sh` видел дефолт `1` → в логах оставалось `enable_prefix_caching: True`. |
 | 1.10.0 | **GLM-5.1-FP8:** пресет [`configs/models/glm-5.1-fp8.env`](configs/models/glm-5.1-fp8.env); `serve.sh` — **`CHAT_TEMPLATE_CONTENT_FORMAT`** → `--chat-template-content-format`; compose — **`VLLM_DOCKER_IMAGE`**, **`CHAT_TEMPLATE_CONTENT_FORMAT`**; `_lib.sh` — HF id с **FP8** → tool **`glm47`**; README, `.env.example`. |
+| 1.11.0 | **MiniMax-M2.7:** пресет [`configs/models/minimax-m2.7.env`](configs/models/minimax-m2.7.env) ([рецепт](https://github.com/vllm-project/recipes/blob/main/MiniMax/MiniMax-M2.md) — **TP4**, **TP4+EP** на 8×GPU, **`--compilation-config`**); `serve.sh` / compose — **`SLGPU_VLLM_COMPILATION_CONFIG`**, **`SLGPU_ENABLE_EXPERT_PARALLEL`**, **`SLGPU_VLLM_DATA_PARALLEL_SIZE`**; **`slgpu_guess_max_model_len`** — **200704** для `MiniMaxAI/MiniMax*`. |
 
 ### Документация и gpt-oss (исправления)
 

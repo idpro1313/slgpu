@@ -267,8 +267,10 @@ M=qwen3.6-35b-a3b
 ./slgpu up vllm -m kimi-k2.6
 # ./slgpu up sglang -m kimi-k2.6
 
-# MiniMax-M2.7 (дефолт MAX_MODEL_LEN=262144)
-./slgpu pull MiniMaxAI/MiniMax-M2.7 \
+# MiniMax-M2.7 (рецепт vLLM: TP4, не «голый» TP8; на 8×GPU — TP4+EP, маска GPU в пресете)
+# В .env: VLLM_DOCKER_IMAGE=vllm/vllm-openai:minimax27
+# На 4×GPU: в пресете поставьте SLGPU_ENABLE_EXPERT_PARALLEL=0 и уберите SLGPU_NVIDIA_VISIBLE_DEVICES
+./slgpu pull MiniMaxAI/MiniMax-M2.7 --tp 4 \
   --gpu-mem 0.95 --sglang-mem 0.92 \
   --batch 24576 --kv-dtype fp8_e4m3 \
   --reasoning-parser minimax_m2 --tool-call-parser minimax_m2
@@ -297,7 +299,7 @@ M=qwen3.6-35b-a3b
 ./slgpu up vllm -m gpt-oss-120b
 ```
 
-**Замечания:** у **Qwen3.6** не используйте `fp8_e5m2` для KV — см. troubleshooting. **Kimi / большие MoE:** OOM на `create_weights` — упор в размер весей на шард; не всегда помогает снижение контекста — нужен **TP=8**, другой чекпоинт или квант. **GLM-5.1** bf16 на грани VRAM — см. пресет **`glm-5.1-fp8`** и [рецепт vLLM GLM5](https://github.com/vllm-project/recipes/blob/main/GLM/GLM5.md) (образ `glm51`, `glm47`/`glm45` парсеры, при бенчмарке — `--no-enable-prefix-caching`). **gpt-oss:** полный id в поле `model`. **MiniMax/GLM:** имена парсеров зависят от версии образа vLLM.
+**Замечания:** у **Qwen3.6** не используйте `fp8_e5m2` для KV — см. troubleshooting. **Kimi / большие MoE:** OOM на `create_weights` — упор в размер весей на шард; не всегда помогает снижение контекста — нужен **TP=8**, другой чекпоинт или квант. **MiniMax-M2.7** — не «чистый» **TP8**; см. пресет **`minimax-m2.7`** и [рецепт vLLM](https://github.com/vllm-project/recipes/blob/main/MiniMax/MiniMax-M2.md) (образ `minimax27`, **TP4**, на 8×GPU **TP+EP** / опционально **DP+EP**). **GLM-5.1** bf16 на грани VRAM — пресет **`glm-5.1-fp8`**, [GLM/GLM5.md](https://github.com/vllm-project/recipes/blob/main/GLM/GLM5.md). **gpt-oss:** полный id в поле `model`. **GLM** и иные: парсеры зависят от образа vLLM.
 
 ---
 
@@ -336,6 +338,7 @@ curl -s http://127.0.0.1:8111/v1/chat/completions \
 | Симптом | Что сделать |
 |---------|-------------|
 | **Qwen3 Next / Qwen3.6:** assert / `fp8_e5m2` | В пресете: `KV_CACHE_DTYPE=fp8_e4m3` или `fp8`, пересоздать контейнер |
+| **MiniMax-M2.7 (vLLM):** нельзя только **TP8**; ошибки распределения / рекомендации vLLM | [Рецепт](https://github.com/vllm-project/recipes/blob/main/MiniMax/MiniMax-M2.md): **TP4**; на 8×GPU — **`SLGPU_ENABLE_EXPERT_PARALLEL=1`**, `TP=4`, маска **всех** GPU в **`SLGPU_NVIDIA_VISIBLE_DEVICES`** (см. [`minimax-m2.7.env`](configs/models/minimax-m2.7.env)); образ **`vllm/vllm-openai:minimax27`**, **`SLGPU_VLLM_COMPILATION_CONFIG`** с `fuse_minimax_qk_norm` |
 | **GLM-5.1 (vLLM):** `No valid attention backend` / `FLASHMLA_SPARSE: [kv_cache_dtype not supported]` | `KV_CACHE_DTYPE=auto` (в пресете [`configs/models/glm-5.1.env`](configs/models/glm-5.1.env)); не `fp8_e4m3` для sparse MLA+KV |
 | **GLM-5.1 (bf16):** `OutOfMemoryError` / `SharedFusedMoE` / `unquantized_fused_moe` при `load_model` | Снизить **`GPU_MEM_UTIL`** (в пресете **0.75**; при повторе — **0.72–0.70**) — vLLM резервирует меньше под KV, больше остаётся под веса. Плюс **`MAX_MODEL_LEN`**, **`SLGPU_MAX_NUM_BATCHED_TOKENS`**, **`SLGPU_ENABLE_PREFIX_CACHING=0`**. Предпочтительно: чекпоинт **FP8** — пресет [`glm-5.1-fp8`](configs/models/glm-5.1-fp8.env) и в `.env` **`VLLM_DOCKER_IMAGE=vllm/vllm-openai:glm51`**, см. [GLM/GLM5.md](https://github.com/vllm-project/recipes/blob/main/GLM/GLM5.md). Если в логе prefix cache `True` при `0` в пресете — в **`docker-compose.yml`** у vLLM должен быть **`SLGPU_ENABLE_PREFIX_CACHING`**. Дальше: **больше GPU** (`TP`). |
 | **`ContextOverflowError`** | Увеличить `MAX_MODEL_LEN` или уменьшить `max_tokens` |

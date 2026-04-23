@@ -196,6 +196,10 @@ slgpu_guess_max_model_len() {
     openai/gpt-oss*)
       echo 131072
       ;;
+    MiniMaxAI/MiniMax*)
+      # Рецепт vLLM: max sequence ~196K tokens; 196*1024
+      echo 200704
+      ;;
     *)
       echo 262144
       ;;

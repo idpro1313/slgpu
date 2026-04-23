@@ -45,6 +45,16 @@ cmd+=(
 if [[ -n "${CHAT_TEMPLATE_CONTENT_FORMAT:-}" ]]; then
   cmd+=(--chat-template-content-format "${CHAT_TEMPLATE_CONTENT_FORMAT}")
 fi
+# Рецепт MiniMax M2: --compilation-config mode 3 + fuse_minimax_qk_norm; vllm-project/recipes MiniMax/MiniMax-M2.md
+if [[ -n "${SLGPU_VLLM_COMPILATION_CONFIG:-}" ]]; then
+  cmd+=(--compilation-config "${SLGPU_VLLM_COMPILATION_CONFIG}")
+fi
+if [[ "${SLGPU_ENABLE_EXPERT_PARALLEL:-0}" == "1" ]]; then
+  cmd+=(--enable-expert-parallel)
+fi
+if [[ -n "${SLGPU_VLLM_DATA_PARALLEL_SIZE:-}" ]] && [[ "${SLGPU_VLLM_DATA_PARALLEL_SIZE}" =~ ^[1-9][0-9]*$ ]]; then
+  cmd+=(--data-parallel-size "${SLGPU_VLLM_DATA_PARALLEL_SIZE}")
+fi
 if [[ -n "${MM_ENCODER_TP_MODE:-}" ]]; then
   cmd+=(--mm-encoder-tp-mode "${MM_ENCODER_TP_MODE}")
 fi
