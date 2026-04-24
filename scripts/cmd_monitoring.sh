@@ -8,7 +8,7 @@ source "${ROOT}/scripts/_lib.sh"
 
 usage() {
   cat <<EOF
-Мониторинг (dcgm-exporter, node-exporter, Prometheus, Grafana) — отдельно от движка vLLM/SGLang.
+Мониторинг (dcgm-exporter, node-exporter, Prometheus, Grafana, **Loki**, **Promtail**) — отдельно от движка vLLM/SGLang. Логи: **Grafana → Explore → Loki** (источник уже в provisioning).
 
 Один раз на хост (или после reboot, если не включён restart: unless-stopped):
   ./slgpu monitoring up
@@ -19,9 +19,9 @@ usage() {
 Перезапуск контейнеров мониторинга:
   ./slgpu monitoring restart
 
-Права на каталоги данных (bind mount: GF_PATHS_DATA, /prometheus/…): по uid:gid **из образов** (рекомендуется до up или при ошибках):
+Права на каталоги данных (bind mount: Grafana, Prometheus, **Loki**, **Promtail**/positions): по uid:gid **из образов** (рекомендуется до up или при ошибках):
   ./slgpu monitoring fix-perms
-  (см. scripts/monitoring_fix_permissions.sh, main.env: GRAFANA_DATA_DIR, PROMETHEUS_DATA_DIR)
+  (см. scripts/monitoring_fix_permissions.sh, main.env: GRAFANA_DATA_DIR, PROMETHEUS_DATA_DIR, LOKI_DATA_DIR, PROMTAIL_DATA_DIR)
 
 Конфиг: docker-compose.monitoring.yml, сеть \`slgpu\` — общая с docker-compose.yml (Prometheus → vllm:8111 / sglang:8222).
 
@@ -39,7 +39,7 @@ case "${SUB}" in
     slgpu_load_server_env
     echo "Поднимаю мониторинг (slgpu-monitoring)…"
     docker compose -f docker-compose.monitoring.yml --env-file main.env up -d
-    echo "Проверка: Prometheus /targets (http://<хост>:9090/targets, PROMETHEUS_BIND в main.env; по умолч. 0.0.0.0) · Grafana: GRAFANA_PORT"
+    echo "Проверка: Prometheus /targets (http://<хост>:9090/targets) · Grafana: GRAFANA_PORT · логи: Grafana → Explore → Loki (запрос {job=\"docker-logs\"} или {container=~\".+\"})"
     ;;
   down)
     echo "Останавливаю мониторинг…"

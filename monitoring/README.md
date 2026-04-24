@@ -1,6 +1,6 @@
 # Мониторинг
 
-**Логи всех контейнеров в одно место (journald, Loki, syslog):** см. [LOGS.md](LOGS.md).
+**Логи всех контейнеров в одно место (journald, Loki, syslog):** см. [LOGS.md](LOGS.md). В стеке мониторинга уже подняты **Grafana Loki** + **Promtail** (данные на диске: `LOKI_DATA_DIR`, `PROMTAIL_DATA_DIR` в `main.env`); просмотр в **Grafana → Explore → Loki**.
 
 Сервисы: [`docker-compose.monitoring.yml`](../docker-compose.monitoring.yml) (подъём: **`../slgpu monitoring up`**, **не** в `./slgpu up`). Сеть **`slgpu`** общая с [`docker-compose.yml`](../docker-compose.yml) для **dcgm / node-exporter** и контейнеров в одной сети. **vLLM и SGLang** в [`prometheus.yml`](prometheus.yml) скрейпятся **не** по имени `vllm:8111` (между проектами `slgpu` и `slgpu-monitoring` внутренний DNS краткого имени `vllm` часто даёт *lookup vllm … server misbehaving*), а через **`host.docker.internal:<порт_на_хосте>`** (мост в хост, где опубликованы `LLM_API_PORT` → 8111 / 8222). У сервиса `prometheus` в compose задано `extra_hosts: host.docker.internal:host-gateway` (Linux). Метка **`instance`** для рядов — **`vllm:8111`** / **`sglang:8222`** (Grafana, переменные).
 
