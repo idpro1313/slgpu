@@ -120,6 +120,7 @@
 | 2.1.8 | **Аналитика в `HISTORY.md`:** крупный раздел **«что делали → что произошло → что поменяли»** — vLLM `SLGPU_*`, KV Qwen, custom AR Qwen3.6, tool parsers, gpt-oss, Kimi, пошагово GLM-5.1 (262k→202k, fp8 KV, MoE OOM, prefix cache, compose), MiniMax, порты SGLang/compose, мониторинг (uid, mmap, Grafana variables), CLI 2.0, бенч; **шпаргалка** по файлам. |
 | 2.1.9 | **Мониторинг / vLLM Grafana V2:** в [monitoring/README.md](monitoring/README.md) — раздел **«vLLM V2: все панели No data»** (чеклист: только vLLM vs SGLang, Targets UP, `curl /metrics`, опционально **`VLLM_USE_V1=0`**, трафик); в [main.env](main.env) — закомментированный **`VLLM_USE_V1=0`** и ссылка на vLLM #16348. |
 | 2.1.10 | **Prometheus снаружи:** [main.env](main.env) — **`PROMETHEUS_BIND=0.0.0.0`** (предупреждение: UI/API без auth); [docker-compose.monitoring.yml](docker-compose.monitoring.yml) — fallback `0.0.0.0`; [monitoring/README.md](monitoring/README.md), [README.md](README.md), `cmd_prepare.sh`, `cmd_monitoring.sh`. |
+| 2.1.11 | **Скрейп vLLM/SGLang:** [prometheus.yml](monitoring/prometheus.yml) — `host.docker.internal` + relabel `instance` → `vllm:8111` / `sglang:8222` (обход DNS *lookup vllm* между compose-проектами); [docker-compose.monitoring.yml](docker-compose.monitoring.yml) — `extra_hosts` у Prometheus; [monitoring/README.md](monitoring/README.md). |
 
 ### Документация и gpt-oss (исправления)
 

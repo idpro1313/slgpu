@@ -51,9 +51,13 @@ services:
   prometheus:
     image: prom/prometheus:latest
     # Права на PROMETHEUS_DATA_DIR: ./scripts/monitoring_fix_permissions.sh или ./slgpu monitoring fix-perms
+    # Скрейп vLLM/SGLang идёт на host.docker.internal:порт (см. prometheus.yml) — шлюз в хост, где
+    # слушают опубликованные 8111/8222. Нужен для Linux (compose: host-gateway).
     env_file:
       - main.env
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${PROMETHEUS_BIND:-0.0.0.0}:9090:9090"
     networks:
