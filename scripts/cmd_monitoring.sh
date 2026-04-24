@@ -39,7 +39,7 @@ case "${SUB}" in
     slgpu_load_server_env
     echo "Поднимаю мониторинг (slgpu-monitoring)…"
     docker compose -f docker-compose.monitoring.yml --env-file main.env up -d
-    echo "Проверка: Prometheus /targets (по умолч. http://127.0.0.1:9090/targets, см. PROMETHEUS_BIND в main.env) · Grafana: GRAFANA_PORT"
+    echo "Проверка: Prometheus /targets (http://<хост>:9090/targets, PROMETHEUS_BIND в main.env; по умолч. 0.0.0.0) · Grafana: GRAFANA_PORT"
     ;;
   down)
     echo "Останавливаю мониторинг…"

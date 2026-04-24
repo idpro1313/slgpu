@@ -69,7 +69,7 @@
 |--------|-------------------------------|---------------|
 | **vLLM** | `vllm/vllm-openai:latest` | **8111** |
 | **SGLang** | `lmsysorg/sglang:latest` | **8222** (`LLM_API_PORT`, внутри контейнера тот же порт) |
-| **Prometheus** | `prom/prometheus:latest` ([`docker-compose.monitoring.yml`](docker-compose.monitoring.yml)) | **9090** (`PROMETHEUS_BIND`) |
+| **Prometheus** | `prom/prometheus:latest` ([`docker-compose.monitoring.yml`](docker-compose.monitoring.yml)) | **9090** (`PROMETHEUS_BIND`, по умолч. **0.0.0.0** — сеть; без аутентификации) |
 | **Grafana** | `grafana/grafana:latest` (тот же файл) | **3000** |
 | **dcgm-exporter** | `nvidia/dcgm-exporter:latest` (тот же файл) | **9400** |
 | **node-exporter** | `prom/node-exporter:latest` (тот же файл) | **9100** |

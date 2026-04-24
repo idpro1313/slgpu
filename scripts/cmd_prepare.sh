@@ -196,13 +196,14 @@ fi
 if want_step 6; then
   log "Шаг 6: firewall (вручную)"
   cat <<'EOF'
-Публично откройте только нужные порты (например LLM API: vLLM **8111** / SGLang **8222** за reverse-proxy).
-Prometheus (9090) и Grafana (3000) в compose привязаны к 127.0.0.1 — снаружи не слушают.
+Публично откройте только нужные порты. По умолчанию в main.env: **Grafana :3000** и **Prometheus :9090** слушают **0.0.0.0** (с других машин достижимы) — у Prometheus **нет** встроенного логина; при необходимости задайте `PROMETHEUS_BIND=127.0.0.1` и/или откройте 9090 только в VPN. LLM API: vLLM **8111** / SGLang **8222** (часто за reverse-proxy).
 
 Пример UFW (после настройки политик по умолчанию):
   ufw allow OpenSSH
   ufw allow 8111/tcp   # vLLM
   ufw allow 8222/tcp   # SGLang (по умолчанию в slgpu)
+  ufw allow 3000/tcp   # Grafana (если нужен с другой машины)
+  ufw allow 9090/tcp   # Prometheus (если нужен с другой машины; иначе не открывайте)
   ufw enable
 
 Скрипт не включает UFW автоматически.
