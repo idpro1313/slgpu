@@ -7,5 +7,8 @@ __pycache__/
 .DS_Store
 template/*
 
-# GRACE: журнал сессий обычно не коммитится
-docs/HISTORY.md
+# Доки агентов, GRACE, Kilo, правила Cursor — только локально, не в репозитории
+docs/
+grace/
+.kilo/
+.cursor/
