@@ -8,7 +8,7 @@ source "${ROOT}/scripts/_lib.sh"
 
 usage() {
   cat <<EOF
-Мониторинг: dcgm-exporter, node-exporter, Prometheus, Grafana, **Loki**, **Promtail**, **Langfuse** (UI + self-host БД/окно трейсинга), **LiteLLM** (шлюз OpenAI → vLLM) — отдельно от движка vLLM/SGLang. Логи: **Grafana → Explore → Loki** (источник в provisioning). Langfuse: \`http://<хост>:\$LANGFUSE_PORT\` (по умолч. 3001), LiteLLM: порт LITELLM_PORT (по умолч. 4000); upstream прокси = LITELLM_LLM_ID или **SLGPU_SERVED_MODEL_NAME** (часто **devllm**, как у vLLM в /v1/models).
+Мониторинг: dcgm-exporter, node-exporter, Prometheus, Grafana, **Loki**, **Promtail**, **Langfuse** (UI + self-host БД/окно трейсинга), **LiteLLM** (шлюз OpenAI → vLLM) — отдельно от движка vLLM/SGLang. Логи: **Grafana → Explore → Loki** (источник в provisioning). Langfuse: \`http://<хост>:\$LANGFUSE_PORT\` (по умолч. 3001), LiteLLM: порт LITELLM_PORT (по умолч. 4000); вызовы LiteLLM — см. `monitoring/litellm/config.yaml` (часто **devllm** = `SLGPU_SERVED_MODEL_NAME`).
 
 Один раз на хост (или после reboot, если не включён restart: unless-stopped):
   ./slgpu monitoring up
@@ -39,7 +39,7 @@ case "${SUB}" in
     slgpu_load_server_env
     echo "Поднимаю мониторинг (slgpu-monitoring)…"
     docker compose -f docker-compose.monitoring.yml --env-file main.env up -d
-    echo "Проверка: Prometheus /targets (http://<хост>:9090/targets) · Grafana: GRAFANA_PORT · Loki: Explore → Loki · Langfuse: :${LANGFUSE_PORT:-3001} · LiteLLM: :${LITELLM_PORT:-4000} (vLLM LLM_API_PORT; имя devllm — main.env SLGPU_SERVED_MODEL_NAME / LITELLM_LLM_ID)"
+    echo "Проверка: Prometheus /targets (http://<хост>:9090/targets) · Grafana: GRAFANA_PORT · Loki: Explore → Loki · Langfuse: :${LANGFUSE_PORT:-3001} · LiteLLM: :${LITELLM_PORT:-4000} (vLLM: LLM_API_PORT → monitoring/litellm/config.yaml, devllm = SLGPU_SERVED_MODEL_NAME)"
     ;;
   down)
     echo "Останавливаю мониторинг…"

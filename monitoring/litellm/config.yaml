@@ -1,0 +1,14 @@
+# LiteLLM Proxy — рабочий конфиг (репозиторий). vLLM на хосте: host.docker.internal:__LLM_API_PORT__ (entrypoint → LLM_API_PORT).
+# Клиент: "model": "devllm", заголовок x-api-key: LITELLM_MASTER_KEY. Upstream: openai/devllm = SLGPU_SERVED_MODEL_NAME.
+
+model_list:
+  - model_name: devllm
+    litellm_params:
+      model: openai/devllm
+      api_base: http://host.docker.internal:__LLM_API_PORT__/v1
+      api_key: "EMPTY"
+      timeout: 600
+
+litellm_settings:
+  set_verbose: false
+# LITELLM_MASTER_KEY — из main.env (окружение контейнера)

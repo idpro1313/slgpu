@@ -392,7 +392,7 @@ services:
       - "${LITELLM_BIND:-0.0.0.0}:${LITELLM_PORT:-4000}:4000"
     volumes:
       - ./monitoring/litellm/litellm-entrypoint.sh:/etc/slgpu/litellm-entrypoint.sh:ro
-      - ./monitoring/litellm/config.yaml.template:/etc/slgpu/litellm.config.yaml.template:ro
+      - ./monitoring/litellm/config.yaml:/etc/slgpu/config.yaml:ro
     logging:
       driver: json-file
       options:
