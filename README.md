@@ -90,7 +90,7 @@
 ./slgpu help
 ./slgpu prepare [1–6]
 ./slgpu pull <HF_ID|preset> [опции]
-./slgpu up <vllm|sglang> -m <preset> [--tp <N>]
+./slgpu up [<vllm|sglang>] [-m <preset>] [-p <порт>] [--tp <N>]   # без арг. — интерактив (TTY)
 ./slgpu down [--all]
 ./slgpu restart -m <preset> [--tp <N>]
 ./slgpu bench [vllm|sglang] [-m <preset>]
@@ -104,7 +104,7 @@
 | **`help`** | Краткая справка по всем подкомандам и примерам вызова (то же, что и `./slgpu` без аргументов с подсказкой). |
 | **`prepare`** | **Один раз при создании ВМ** (или после переустановки ОС): проверка драйвера NVIDIA, установка Docker и Compose v2, NVIDIA Container Toolkit, при желании persistence mode GPU, создание каталога `MODELS_DIR`, sysctl (`vm.swappiness`), лимиты `nofile`, напоминание про firewall. Запуск от root: `sudo ./slgpu prepare` или шаг `sudo ./slgpu prepare 1` … `6`; выборочно: `STEPS=2,4 sudo -E ./slgpu prepare`. |
 | **`pull`** | **Скачивание весов** в `${MODELS_DIR}/<MODEL_ID>` через `hf download`. **Файл пресета не создаётся.** Аргумент **с `/`** — HF id: если есть `configs/models/<slug>.env` (slug из имени репо), подхватывается `MODEL_ID` и т.д.; если пресета **нет** — скачивание только по HF id, для `./slgpu up` заведите `configs/models/<slug>.env`. Аргумент **без `/`** — имя существующего пресета. Опция **`--revision`**: пин ревизии (переопределяет `MODEL_REVISION` при загрузке с пресетом). Токен: [`configs/secrets/hf.env`](configs/secrets/hf.env) (`HF_TOKEN`). |
-| **`up`** | **Запуск движка**: останавливает и удаляет контейнеры другого движка (vllm/sglang), поднимает **один** выбранный профиль — `vllm` или `sglang` (см. `./slgpu up -h`) с **`-m <preset>`**. Мониторинг (Prometheus, Grafana) **отдельно**: **`./slgpu monitoring up`** (один раз на хост). **Не ждёт** `GET /v1/models` — `curl` вручную. |
+| **`up`** | **Запуск движка**: останавливает и удаляет контейнеры другого движка (vllm/sglang), поднимает **один** выбранный профиль — `vllm` или `sglang` (см. `./slgpu up -h`) с **`-m <preset>`** (в неинтерактивном вызове). **`./slgpu up` без аргументов** при **TTY** сначала предлагает выбрать движок, затем пресет из `configs/models/*.env`; **без TTY** укажите `vllm`/`sglang` и **`-m`** явно. Мониторинг (Prometheus, Grafana) **отдельно**: **`./slgpu monitoring up`** (один раз на хост). **Не ждёт** `GET /v1/models` — `curl` вручную. |
 | **`monitoring`** | **`up` / `down` / `restart` / `fix-perms`**: стек в [`docker-compose.monitoring.yml`](docker-compose.monitoring.yml); **`fix-perms`** — chown каталогов `PROMETHEUS_DATA_DIR` / `GRAFANA_DATA_DIR` по uid:gid из образов (см. [monitoring/README](monitoring/README.md)). |
 | **`down`** | **Остановка инференса**: по умолчанию — **только** `vllm` и `sglang`. С флагом **`--all`** — ещё и стек мониторинга. Тома метрик/дашбордов не удаляются. |
 | **`restart`** | **Перезапуск с новым пресетом без смены движка**: определяет, какой сервис сейчас в статусе *running* (`vllm` или `sglang`), и выполняет для него ту же последовательность, что и `up`, с новым **`-m <preset>`**; опционально **`--tp`**, как у `up`. Если ни один LLM-контейнер не запущен — сообщение об ошибке; тогда используйте `up`. |
@@ -117,7 +117,7 @@
 ## 5. Конфигурация
 
 - **[`main.env`](main.env)** — **дефолты хоста и движка** (пути, `MODELS_DIR`, `VLLM_DOCKER_IMAGE`, `MAX_MODEL_LEN`, `TP`, NCCL, мониторинг, …); секреты и редкие per-host поля — в комментариях-заготовках внизу файла или через `export` (см. шапку `main.env`).
-- **`configs/models/<preset>.env`** — модель: `MODEL_ID`, `MAX_MODEL_LEN`, **`TP`** (в шаблонах репозитория **8**; на 4 GPU — **4**), парсеры, KV и т.д. Обязателен для `up` / `bench` / `restart` (флаг **`-m`**).
+- **`configs/models/<preset>.env`** — модель: `MODEL_ID`, `MAX_MODEL_LEN`, **`TP`** (в шаблонах репозитория **8**; на 4 GPU — **4**), парсеры, KV и т.д. Для **`bench` / `restart`** — флаг **`-m`** обязателен. Для **`up`** пресет задаётся через **`-m`** **или** интерактивным выбором при **`./slgpu up`** без аргументов (TTY).
 - Все **дефолты движка** (listen vLLM/SGLang, `VLLM_LOGGING_LEVEL`, **Triton/TorchInductor** для SGLang, NCCL, и т.д.) — в [`main.env`](main.env); в контейнер — **`env_file: main.env`** в [`docker-compose.yml`](docker-compose.yml) (движок) и в [`docker-compose.monitoring.yml`](docker-compose.monitoring.yml). Сырой `docker compose`: **`docker compose -f docker-compose.yml --env-file main.env`**, для мониторинга — **`-f docker-compose.monitoring.yml`**. См. [`./slgpu monitoring -h`](scripts/cmd_monitoring.sh).
 - **CLI движка**: единый [`scripts/serve.sh`](scripts/serve.sh) (`SLGPU_ENGINE=vllm|sglang` задаёт `docker-compose`; в контейнере — `/etc/slgpu/serve.sh`).
 

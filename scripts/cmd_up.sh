@@ -9,7 +9,10 @@ source "${ROOT}/scripts/_lib.sh"
 usage() {
   cat <<EOF
 Использование:
-  ./slgpu up <vllm|sglang> -m|--model <preset> [-p|--port <порт>] [--tp <N>] [-h|--help]
+  ./slgpu up [<vllm|sglang>] [-m|--model <пресет>] [-p|--port <порт>] [--tp <N>] [-h|--help]
+
+  Без аргументов (нужен TTY): сначала выбор движка (vLLM / SGLang), затем выбор пресета из списка configs/models/*.env.
+  Можно указать только движок — тогда запросят пресет. Только -m <пресет> без движка — запросят движок.
 
   -p, --port   порт API на хосте (vLLM: по умолчанию 8111; SGLang: 8222)
   --tp <N>     tensor parallel на этот запуск (переопределяет TP из пресета; по умолчанию — из файла, иначе 8 в serve.sh)
@@ -66,8 +69,16 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "${MODE}" ]]; then
-  usage >&2
-  exit 1
+  if ! MODE="$(slgpu_interactive_choose_engine)"; then
+    usage >&2
+    exit 1
+  fi
+fi
+
+if [[ -z "${MODEL_SLUG}" ]]; then
+  if ! MODEL_SLUG="$(slgpu_interactive_choose_preset)"; then
+    exit 1
+  fi
 fi
 
 if [[ "${PORT_GIVEN}" != "1" ]]; then

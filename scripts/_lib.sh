@@ -33,6 +33,73 @@ slgpu_fail_if_missing_preset_arg() {
   fi
 }
 
+# Интерактив: выбор vllm | sglang. В stdout печатается одно слово. Код != 0 — TTY нет / отмена.
+slgpu_interactive_choose_engine() {
+  local choice
+  if ! [[ -r /dev/tty ]]; then
+    echo "Интерактивный выбор невозможен: нет TTY. Укажите явно: ./slgpu up <vllm|sglang> -m <пресет>" >&2
+    return 1
+  fi
+  while true; do
+    echo "" >&2
+    echo "Выберите движок инференса:" >&2
+    echo "  1) vLLM" >&2
+    echo "  2) SGLang" >&2
+    read -r -p "Введите номер (1 или 2) либо vllm / sglang: " choice </dev/tty || return 1
+    choice="${choice//[[:space:]]/}"
+    case "${choice}" in
+      1|vllm|VLLM) echo vllm; return 0 ;;
+      2|sglang|SGLang) echo sglang; return 0 ;;
+      v|V) echo vllm; return 0 ;;
+      s|S) echo sglang; return 0 ;;
+      q|Q|exit) echo "Отмена." >&2; return 1 ;;
+      *) echo "Введите 1, 2, vllm или sglang (или q — выход)." >&2 ;;
+    esac
+  done
+}
+
+# Интерактив: выбор пресета по списку configs/models/*.env. В stdout — slug. Код != 0 — TTY нет / нет пресетов.
+slgpu_interactive_choose_preset() {
+  local pres line i pick root
+  root="$(slgpu_root)"
+  pres=()
+  while IFS= read -r line; do
+    [[ -n "${line}" ]] && pres+=("$line")
+  done < <(slgpu_list_presets)
+  if [[ ${#pres[@]} -eq 0 ]]; then
+    echo "Нет пресетов: добавьте файлы configs/models/<имя>.env" >&2
+    return 1
+  fi
+  if ! [[ -r /dev/tty ]]; then
+    echo "Интерактивный выбор невозможен: нет TTY. Укажите: -m <пресет>" >&2
+    return 1
+  fi
+  echo "" >&2
+  echo "Доступные пресеты:" >&2
+  for i in "${!pres[@]}"; do
+    echo "  $((i + 1))) ${pres[i]}" >&2
+  done
+  while true; do
+    read -r -p "Введите номер списка или имя пресета: " pick </dev/tty || return 1
+    pick="${pick//[$'\t\r\n']/}"
+    [[ -z "${pick}" ]] && { echo "Пустой ввод; повторите или q — выход." >&2; continue; }
+    [[ "${pick}" == "q" || "${pick}" == "Q" ]] && { echo "Отмена." >&2; return 1; }
+    if [[ "${pick}" =~ ^[0-9]+$ ]]; then
+      if (( pick >= 1 && pick <= ${#pres[@]} )); then
+        echo "${pres[$((pick - 1))]}"
+        return 0
+      fi
+      echo "Номер от 1 до ${#pres[@]}." >&2
+      continue
+    fi
+    if [[ -f "${root}/configs/models/${pick}.env" ]]; then
+      echo "${pick}"
+      return 0
+    fi
+    echo "Пресет не найден: configs/models/${pick}.env" >&2
+  done
+}
+
 # Дефолты репозитория: `main.env` в корне (если есть), до движка и пресетов.
 slgpu_source_main_env() {
   local root
