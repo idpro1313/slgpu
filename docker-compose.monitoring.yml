@@ -382,7 +382,8 @@ services:
     env_file:
       - main.env
     environment:
-      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-slgpu-change-me}
+      # Пустой LITELLM_MASTER_KEY в main.env = прокси без обязательного x-api-key (см. доку LiteLLM; не для публичного интернета)
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
       LANGFUSE_HOST: http://langfuse-web:3000
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
