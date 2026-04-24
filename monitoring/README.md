@@ -1,5 +1,7 @@
 # Мониторинг
 
+**Логи всех контейнеров в одно место (journald, Loki, syslog):** см. [LOGS.md](LOGS.md).
+
 Сервисы: [`docker-compose.monitoring.yml`](../docker-compose.monitoring.yml) (подъём: **`../slgpu monitoring up`**, **не** в `./slgpu up`). Сеть **`slgpu`** общая с [`docker-compose.yml`](../docker-compose.yml) для **dcgm / node-exporter** и контейнеров в одной сети. **vLLM и SGLang** в [`prometheus.yml`](prometheus.yml) скрейпятся **не** по имени `vllm:8111` (между проектами `slgpu` и `slgpu-monitoring` внутренний DNS краткого имени `vllm` часто даёт *lookup vllm … server misbehaving*), а через **`host.docker.internal:<порт_на_хосте>`** (мост в хост, где опубликованы `LLM_API_PORT` → 8111 / 8222). У сервиса `prometheus` в compose задано `extra_hosts: host.docker.internal:host-gateway` (Linux). Метка **`instance`** для рядов — **`vllm:8111`** / **`sglang:8222`** (Grafana, переменные).
 
 - **Prometheus** (по умолч. **`0.0.0.0:9090`** на хосте, см. `PROMETHEUS_BIND` в [`main.env`](../main.env)): UI и HTTP API **без аутентификации** — в проде закройте фаерволом или поставьте `PROMETHEUS_BIND=127.0.0.1` и ходите по SSH tunnel. Скрейп vLLM/SGLang: **см. выше**; плюс `dcgm-exporter:9400`, **`node-exporter:9100`**. **Нестандартный `LLM_API_PORT`:** поправьте **хостовый** порт в `targets` в [`prometheus.yml`](prometheus.yml) (должен совпадать с левой частью `ports` в `docker-compose.yml` для выбранного движка).
