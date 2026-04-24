@@ -125,6 +125,22 @@ sudo chown -R 472:0 /opt/mon/grafana
 
 **SELinux (RHEL и др.):** если контейнер не видит файлы, для bind mount в compose иногда добавляют суффикс **`:Z`** (или `:z`) к путям; см. документацию Docker/SELinux.
 
+## Сеть `slgpu`: «incorrect label com.docker.compose.network»
+
+Если **`./slgpu up`** или **`./slgpu monitoring up`** падает с сообщением, что сеть `slgpu` уже есть, но метка `com.docker.compose.network` пустая или не та, значит сеть когда‑то создана **вручную** (`docker network create slgpu`) **до** исправления в репо: Compose v2 ждёт метки `com.docker.compose.project=slgpu` и `com.docker.compose.network=slgpu`.
+
+**Починка:** остановить стеки, удалить сеть, поднять снова (сеть пересоздастся с метками):
+
+```bash
+cd /opt/slgpu   # корень клона
+docker compose -f docker-compose.monitoring.yml down
+docker compose -f docker-compose.yml down
+docker network rm slgpu
+./slgpu up vllm -m <пресет>   # или sglang; при необходимости затем: ./slgpu monitoring up
+```
+
+(Если `docker network rm` ругается на «active endpoints» — сначала `docker compose down` для всех проектов, использующих эту сеть, либо остановите контейнеры вручную.)
+
 ## Диск заполнился: `no space left on device` / ошибки WAL Prometheus
 
 Сообщения вида `write /prometheus/wal/...: no space left on device` значат, что **на хосте или в разделе Docker закончилось свободное место**. Prometheus не может писать WAL и TSDB — скрейпы и правила падают.

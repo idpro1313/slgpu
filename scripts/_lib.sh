@@ -7,8 +7,29 @@ slgpu_root() {
 }
 
 # Общая сеть vLLM/SGLang ↔ Prometheus/DCGM/… (см. docker-compose.yml, docker-compose.monitoring.yml).
+# Раньше: «голый» `docker network create slgpu` без меток — docker compose v2 ожидает
+# com.docker.compose.project / com.docker.compose.network и падает с
+# "network ... has incorrect label com.docker.compose.network set to \"\"".
 slgpu_ensure_slgpu_network() {
-  docker network inspect slgpu &>/dev/null || docker network create slgpu
+  local want_net proj lbl_net lbl_proj
+  want_net="slgpu"
+  proj="slgpu"
+  if docker network inspect "${want_net}" &>/dev/null; then
+    lbl_net="$(docker network inspect "${want_net}" -f '{{index .Labels "com.docker.compose.network"}}' 2>/dev/null | tr -d '\r' || true)"
+    lbl_proj="$(docker network inspect "${want_net}" -f '{{index .Labels "com.docker.compose.project"}}' 2>/dev/null | tr -d '\r' || true)"
+    if [[ "${lbl_net}" != "${want_net}" || "${lbl_proj}" != "${proj}" ]]; then
+      echo "Сеть ${want_net} уже есть, но создана не через «этот» docker compose (нет меток com.docker.compose.*)." >&2
+      echo "Починка: остановить контейнеры, удалить сеть, поднять заново:" >&2
+      echo "  cd $(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd) && docker compose -f docker-compose.yml down && docker network rm ${want_net}" >&2
+      echo "  (если slgpu-monitoring: также docker compose -f docker-compose.monitoring.yml down)" >&2
+      return 1
+    fi
+    return 0
+  fi
+  docker network create --driver bridge \
+    --label "com.docker.compose.project=${proj}" \
+    --label "com.docker.compose.network=${want_net}" \
+    "${want_net}"
 }
 
 slgpu_list_presets() {
