@@ -421,13 +421,14 @@ services:
       DATABASE_URL: postgresql://${LANGFUSE_POSTGRES_USER:-postgres}:${LANGFUSE_POSTGRES_PASSWORD:-postgres}@postgres:5432/${LITELLM_POSTGRES_DB:-litellm}
       # Langfuse v3: LiteLLM шлёт трейсы через OTEL (не классический SDK).
       LANGFUSE_OTEL_HOST: http://langfuse-web:3000
+      # UI: управление моделями в БД (иначе «Set STORE_MODEL_IN_DB…»)
+      STORE_MODEL_IN_DB: ${STORE_MODEL_IN_DB:-True}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
       - "${LITELLM_BIND:-0.0.0.0}:${LITELLM_PORT:-4000}:4000"
     volumes:
       - ./monitoring/litellm/litellm-entrypoint.sh:/etc/slgpu/litellm-entrypoint.sh:ro
-      - ./monitoring/litellm/slgpu_litellm_entry.py:/etc/slgpu/slgpu_litellm_entry.py:ro
       - ./monitoring/litellm/config.yaml:/etc/slgpu/config.yaml:ro
     logging:
       driver: json-file

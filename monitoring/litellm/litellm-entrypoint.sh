@@ -12,5 +12,4 @@ fi
 if [ -z "${LITELLM_MASTER_KEY:-}" ]; then
   unset LITELLM_MASTER_KEY
 fi
-# python-обёртка: добавляет x-langfuse-ingestion-version к OTEL-заголовкам (Langfuse 3).
-exec python3 /etc/slgpu/slgpu_litellm_entry.py --config /tmp/litellm.config.yaml --host 0.0.0.0 --port 4000 "$@"
+exec litellm --config /tmp/litellm.config.yaml --host 0.0.0.0 --port 4000 "$@"
