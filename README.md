@@ -79,7 +79,7 @@
 | **dcgm-exporter** | `nvidia/dcgm-exporter:latest` | **9400** (`DCGM_BIND`) |
 | **node-exporter** | `prom/node-exporter:latest` | **9100** (`NODE_EXPORTER_BIND`) |
 | **Langfuse** | `langfuse/langfuse:3` и `langfuse/langfuse-worker:3` (Postgres, ClickHouse, Redis, MinIO) | **3001** на хосте (`LANGFUSE_PORT`, **не** 3000 — Grafana) |
-| **LiteLLM** | `ghcr.io/berriai/litellm:main-latest` (или `SLGPU_LITELLM_IMAGE`) | **4000** (`LITELLM_PORT`); vLLM — `host.docker.internal:${LLM_API_PORT}`; **`x-api-key`** — если задан **`LITELLM_MASTER_KEY`** в `main.env` (пусто = без ключа, только в закрытой сети) |
+| **LiteLLM** | `ghcr.io/berriai/litellm:main-latest` (или `SLGPU_LITELLM_IMAGE`) | **4000** (`LITELLM_PORT`); vLLM — `host.docker.internal:${LLM_API_PORT}`; **Admin UI** — `http://<хост>:4000/ui`, **`UI_USERNAME` / `UI_PASSWORD`** в `main.env`; **`x-api-key`** — если задан **`LITELLM_MASTER_KEY`** (пусто = без ключа, только в закрытой сети) |
 
 Образ **vLLM** задаётся **в пресете** (семейные теги `*-cu130` и т.д.); остальные сервисы в compose в основном на **`latest`**, **Loki/Promtail** зафиксированы **2.9.8** — при `docker compose pull` меняется состав `latest`. Для продакшена задайте **тег** или **digest** в compose / `main.env` (`SLGPU_*_IMAGE`, см. комментарии в [`main.env`](main.env)).
 
