@@ -56,6 +56,9 @@ slgpu_run_vllm() {
   if [[ -n "${SLGPU_VLLM_COMPILATION_CONFIG:-}" ]]; then
     cmd+=(--compilation-config "${SLGPU_VLLM_COMPILATION_CONFIG}")
   fi
+  if [[ -n "${SLGPU_VLLM_SPECULATIVE_CONFIG:-}" ]]; then
+    cmd+=(--speculative-config "${SLGPU_VLLM_SPECULATIVE_CONFIG}")
+  fi
   if [[ "${SLGPU_ENABLE_EXPERT_PARALLEL:-0}" == "1" ]]; then
     cmd+=(--enable-expert-parallel)
   fi

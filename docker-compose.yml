@@ -42,6 +42,8 @@ services:
       CHAT_TEMPLATE_CONTENT_FORMAT: ${CHAT_TEMPLATE_CONTENT_FORMAT:-}
       # MiniMax M2: JSON для --compilation-config; см. MiniMax/MiniMax-M2.md
       SLGPU_VLLM_COMPILATION_CONFIG: ${SLGPU_VLLM_COMPILATION_CONFIG:-}
+      # GLM-5.1-FP8 и др.: JSON для --speculative-config (напр. MTP); см. GLM/GLM5.md
+      SLGPU_VLLM_SPECULATIVE_CONFIG: ${SLGPU_VLLM_SPECULATIVE_CONFIG:-}
       # 1 = --enable-expert-parallel (8×GPU при TP4); 0 = не передавать
       SLGPU_ENABLE_EXPERT_PARALLEL: ${SLGPU_ENABLE_EXPERT_PARALLEL:-0}
       # опционально: --data-parallel-size (сценарий DP8+EP в рецепте MiniMax)

@@ -26,6 +26,7 @@
 - **`REASONING_PARSER`**, **`TOOL_CALL_PARSER`** — vLLM и SGLang (`launch_server`); см. таблицу ниже.
 - **`CHAT_TEMPLATE_CONTENT_FORMAT`** — только vLLM (`--chat-template-content-format`); у **GLM-5.1-FP8** в пресете [`glm-5.1-fp8.env`](glm-5.1-fp8.env) задано **`string`**, как в [рецепте vLLM GLM5](https://github.com/vllm-project/recipes/blob/main/GLM/GLM5.md).
 - **`SLGPU_VLLM_COMPILATION_CONFIG`** — только vLLM: JSON для **`--compilation-config`**; у **MiniMax M2** см. [`minimax-m2.7.env`](minimax-m2.7.env) и [рецепт MiniMax-M2](https://github.com/vllm-project/recipes/blob/main/MiniMax/MiniMax-M2.md) (`fuse_minimax_qk_norm`).
+- **`SLGPU_VLLM_SPECULATIVE_CONFIG`** — только vLLM: JSON для **`--speculative-config`**; у **GLM-5.1-FP8** в [`glm-5.1-fp8.env`](glm-5.1-fp8.env) задано **MTP** (`method` + `num_speculative_tokens`) по [GLM/GLM5.md](https://github.com/vllm-project/recipes/blob/main/GLM/GLM5.md).
 - **`SLGPU_ENABLE_EXPERT_PARALLEL`** — только vLLM: **`1`** → **`--enable-expert-parallel`** (типично 8×GPU при **TP=4** для M2.7).
 - **`SLGPU_VLLM_DATA_PARALLEL_SIZE`** — только vLLM: при необходимости **`--data-parallel-size`** (сценарий **DP8+EP** в рецепте MiniMax).
 - **`MM_ENCODER_TP_MODE`** — только vLLM (`--mm-encoder-tp-mode`); для **moonshotai/Kimi-K2.6** в репозитории в пресете задано **`data`** (референс Moonshot).
