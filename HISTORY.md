@@ -123,6 +123,7 @@
 | 2.1.11 | **Скрейп vLLM/SGLang:** [prometheus.yml](monitoring/prometheus.yml) — `host.docker.internal` + relabel `instance` → `vllm:8111` / `sglang:8222` (обход DNS *lookup vllm* между compose-проектами); [docker-compose.monitoring.yml](docker-compose.monitoring.yml) — `extra_hosts` у Prometheus; [monitoring/README.md](monitoring/README.md). |
 | 2.2.0 | **Пресет DeepSeek-V4-Flash:** [`configs/models/deepseek-v4-flash.env`](configs/models/deepseek-v4-flash.env); таблица парсеров в [configs/models/README.md](configs/models/README.md). |
 | 2.2.1 | **DeepSeek-V4-Flash:** `MAX_MODEL_LEN=393216` (384K) в [deepseek-v4-flash.env](configs/models/deepseek-v4-flash.env). |
+| 2.2.2 | **DeepSeek-V4-Flash:** `KV_CACHE_DTYPE=auto` в [deepseek-v4-flash.env](configs/models/deepseek-v4-flash.env). |
 
 ### Документация и gpt-oss (исправления)
 
