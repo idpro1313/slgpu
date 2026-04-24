@@ -382,7 +382,7 @@ services:
     env_file:
       - main.env
     environment:
-      # Пустой LITELLM_MASTER_KEY в main.env = прокси без обязательного x-api-key (см. доку LiteLLM; не для публичного интернета)
+      # Пустое значение передаётся в контейнер; entrypoint (litellm-entrypoint.sh) делает unset — иначе 401
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
       LANGFUSE_HOST: http://langfuse-web:3000
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}

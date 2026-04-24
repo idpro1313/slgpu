@@ -1,5 +1,5 @@
 # LiteLLM Proxy. vLLM: host.docker.internal:__LLM_API_PORT__. Клиент: "model": "devllm".
-# Ключ: если LITELLM_MASTER_KEY пуст в main.env — x-api-key не обязателен (только в закрытой сети).
+# Ключ: пустой LITELLM_MASTER_KEY (entrypoint снимает var) — без x-api-key (только доверенная сеть).
 
 model_list:
   - model_name: devllm
