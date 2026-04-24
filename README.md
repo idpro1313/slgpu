@@ -116,8 +116,8 @@
 
 ## 5. Конфигурация
 
-- **[`main.env`](main.env)** — **дефолты хоста и движка** (пути, `MODELS_DIR`, `VLLM_DOCKER_IMAGE`, `MAX_MODEL_LEN`, `TP`, NCCL, мониторинг, …); секреты и редкие per-host поля — в комментариях-заготовках внизу файла или через `export` (см. шапку `main.env`).
-- **`configs/models/<preset>.env`** — модель: `MODEL_ID`, `MAX_MODEL_LEN`, **`TP`** (в шаблонах репозитория **8**; на 4 GPU — **4**), парсеры, KV и т.д. Для **`bench` / `restart`** — флаг **`-m`** обязателен. Для **`up`** пресет задаётся через **`-m`** **или** интерактивным выбором при **`./slgpu up`** без аргументов (TTY).
+- **[`main.env`](main.env)** — **дефолты хоста и движка** (пути, `MODELS_DIR`, `MAX_MODEL_LEN`, `TP`, NCCL, мониторинг, …); **образ vLLM** — в пресете (`VLLM_DOCKER_IMAGE`); секреты и редкие per-host поля — в комментариях-заготовках внизу файла или через `export` (см. шапку `main.env`).
+- **`configs/models/<preset>.env`** — модель: `MODEL_ID`, **`VLLM_DOCKER_IMAGE`**, `MAX_MODEL_LEN`, **`TP`** (в шаблонах репозитория **8**; на 4 GPU — **4**), парсеры, KV и т.д. Для **`bench` / `restart`** — флаг **`-m`** обязателен. Для **`up`** пресет задаётся через **`-m`** **или** интерактивным выбором при **`./slgpu up`** без аргументов (TTY).
 - Все **дефолты движка** (listen vLLM/SGLang, `VLLM_LOGGING_LEVEL`, **Triton/TorchInductor** для SGLang, NCCL, и т.д.) — в [`main.env`](main.env); в контейнер — **`env_file: main.env`** в [`docker-compose.yml`](docker-compose.yml) (движок) и в [`docker-compose.monitoring.yml`](docker-compose.monitoring.yml). Сырой `docker compose`: **`docker compose -f docker-compose.yml --env-file main.env`**, для мониторинга — **`-f docker-compose.monitoring.yml`**. См. [`./slgpu monitoring -h`](scripts/cmd_monitoring.sh).
 - **CLI движка**: единый [`scripts/serve.sh`](scripts/serve.sh) (`SLGPU_ENGINE=vllm|sglang` задаёт `docker-compose`; в контейнере — `/etc/slgpu/serve.sh`).
 
@@ -130,10 +130,11 @@
 | Переменная | Где задаётся | Назначение |
 |------------|--------------|------------|
 | `HF_TOKEN` | [`configs/secrets/hf.env`](configs/secrets/hf.env) | Только для `./slgpu pull` |
-| `MODELS_DIR`, `VLLM_DOCKER_IMAGE`, `LLM_API_BIND`, `PROMETHEUS_DATA_DIR`, `GRAFANA_DATA_DIR`, `GRAFANA_BIND`, `GRAFANA_PORT`, `GRAFANA_ADMIN_USER`, `PROMETHEUS_*`, `DCGM_BIND`, `NODE_EXPORTER_BIND` и пр. | [`main.env`](main.env) | Дефолты в репозитории; данные Prom/Grafana — bind mount, см. [monitoring/README](monitoring/README.md) |
+| `MODELS_DIR`, `LLM_API_BIND`, `PROMETHEUS_DATA_DIR`, `GRAFANA_DATA_DIR`, `GRAFANA_BIND`, `GRAFANA_PORT`, `GRAFANA_ADMIN_USER`, `PROMETHEUS_*`, `DCGM_BIND`, `NODE_EXPORTER_BIND` и пр. | [`main.env`](main.env) | Дефолты в репозитории; данные Prom/Grafana — bind mount, см. [monitoring/README](monitoring/README.md) |
+| `VLLM_DOCKER_IMAGE` | пресет [`configs/models/<slug>.env`](configs/models/) | Семейные теги vLLM (`*-cu130` и т.д.); fallback в [`docker-compose.yml`](docker-compose.yml) |
 | `GRAFANA_ADMIN_PASSWORD` | `main.env` (локально) или `export` | Секрет; см. шаблон внизу [`main.env`](main.env) |
 | `GF_SERVER_ROOT_URL`, `LLM_API_PORT`, `SLGPU_NVIDIA_VISIBLE_DEVICES` (опц.) | `main.env` или `export` | В [`main.env`](main.env) — закомментированные заготовки |
-| `MODEL_ID`, `MODEL_REVISION`, `MAX_MODEL_LEN`, `TP`, `GPU_MEM_UTIL`, `KV_CACHE_DTYPE`, `SLGPU_MAX_NUM_BATCHED_TOKENS`, `SLGPU_DISABLE_CUSTOM_ALL_REDUCE`, `SLGPU_ENABLE_PREFIX_CACHING`, `SGLANG_MEM_FRACTION_STATIC`, `REASONING_PARSER`, `TOOL_CALL_PARSER`, `MM_ENCODER_TP_MODE`, `BENCH_MODEL_NAME`, `VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS` | пресет + `docker-compose` | Параметры инференса; **каждая** нужная для `serve.sh` переменная должна быть в [`docker-compose.yml`](docker-compose.yml) (см. `SLGPU_ENABLE_PREFIX_CACHING`). |
+| `MODEL_ID`, `MODEL_REVISION`, `VLLM_DOCKER_IMAGE`, `MAX_MODEL_LEN`, `TP`, `GPU_MEM_UTIL`, `KV_CACHE_DTYPE`, `SLGPU_MAX_NUM_BATCHED_TOKENS`, `SLGPU_DISABLE_CUSTOM_ALL_REDUCE`, `SLGPU_ENABLE_PREFIX_CACHING`, `SGLANG_MEM_FRACTION_STATIC`, `REASONING_PARSER`, `TOOL_CALL_PARSER`, `MM_ENCODER_TP_MODE`, `BENCH_MODEL_NAME`, `VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS` | пресет + `docker-compose` | Параметры инференса; **каждая** нужная для `serve.sh` переменная должна быть в [`docker-compose.yml`](docker-compose.yml) (см. `SLGPU_ENABLE_PREFIX_CACHING`). |
 
 ---
 
@@ -252,11 +253,11 @@ M=qwen3.6-35b-a3b
 ./slgpu up vllm -m kimi-k2.6
 # ./slgpu up sglang -m kimi-k2.6
 
-# MiniMax-M2.7 (рецепт vLLM: TP4+EP; VLLM_DOCKER_IMAGE=minimax27 — в main.env; см. minimax-m2.7.env)
+# MiniMax-M2.7 (рецепт vLLM: TP4+EP; образ minimax27 — в пресете minimax-m2.7.env)
 ./slgpu pull MiniMaxAI/MiniMax-M2.7
 ./slgpu up vllm -m minimax-m2.7
 
-# GLM-5.1 / GLM-5.1-FP8 (см. glm-5.1.env, glm-5.1-fp8.env; для FP8: VLLM_DOCKER_IMAGE в main.env, образ glm51)
+# GLM-5.1 / GLM-5.1-FP8 (см. glm-5.1.env, glm-5.1-fp8.env; образ glm51 — в пресете)
 ./slgpu pull zai-org/GLM-5.1
 ./slgpu up vllm -m glm-5.1
 ./slgpu pull zai-org/GLM-5.1-FP8
@@ -305,9 +306,9 @@ curl -s http://127.0.0.1:8111/v1/chat/completions \
 | Симптом | Что сделать |
 |---------|-------------|
 | **Qwen3 Next / Qwen3.6:** assert / `fp8_e5m2` | В пресете: `KV_CACHE_DTYPE=fp8_e4m3` или `fp8`, пересоздать контейнер |
-| **MiniMax-M2.7 (vLLM):** нельзя только **TP8**; ошибки распределения / рекомендации vLLM | [Рецепт](https://github.com/vllm-project/recipes/blob/main/MiniMax/MiniMax-M2.md): **TP4**; на 8×GPU — **`SLGPU_ENABLE_EXPERT_PARALLEL=1`**, `TP=4`, маска **всех** GPU в **`SLGPU_NVIDIA_VISIBLE_DEVICES`** (см. [`minimax-m2.7.env`](configs/models/minimax-m2.7.env)); образ **`vllm/vllm-openai:minimax27`**, **`SLGPU_VLLM_COMPILATION_CONFIG`** с `fuse_minimax_qk_norm` |
+| **MiniMax-M2.7 (vLLM):** нельзя только **TP8**; ошибки распределения / рекомендации vLLM | [Рецепт](https://github.com/vllm-project/recipes/blob/main/MiniMax/MiniMax-M2.md): **TP4**; на 8×GPU — **`SLGPU_ENABLE_EXPERT_PARALLEL=1`**, `TP=4`, маска **всех** GPU в **`SLGPU_NVIDIA_VISIBLE_DEVICES`** (см. [`minimax-m2.7.env`](configs/models/minimax-m2.7.env)); образ в пресете — **`minimax27-…-cu130`**, **`SLGPU_VLLM_COMPILATION_CONFIG`** с `fuse_minimax_qk_norm` |
 | **GLM-5.1 (vLLM):** `No valid attention backend` / `FLASHMLA_SPARSE: [kv_cache_dtype not supported]` | `KV_CACHE_DTYPE=auto` (в пресете [`configs/models/glm-5.1.env`](configs/models/glm-5.1.env)); не `fp8_e4m3` для sparse MLA+KV |
-| **GLM-5.1 (bf16):** `OutOfMemoryError` / `SharedFusedMoE` / `unquantized_fused_moe` при `load_model` | Снизить **`GPU_MEM_UTIL`** (в пресете **0.75**; при повторе — **0.72–0.70**) — vLLM резервирует меньше под KV, больше остаётся под веса. Плюс **`MAX_MODEL_LEN`**, **`SLGPU_MAX_NUM_BATCHED_TOKENS`**, **`SLGPU_ENABLE_PREFIX_CACHING=0`**. Предпочтительно: чекпоинт **FP8** — пресет [`glm-5.1-fp8`](configs/models/glm-5.1-fp8.env) и в **`main.env`** **`VLLM_DOCKER_IMAGE=vllm/vllm-openai:glm51`**, см. [GLM/GLM5.md](https://github.com/vllm-project/recipes/blob/main/GLM/GLM5.md). Если в логе prefix cache `True` при `0` в пресете — в **`docker-compose.yml`** у vLLM должен быть **`SLGPU_ENABLE_PREFIX_CACHING`**. Дальше: **больше GPU** (`TP`). |
+| **GLM-5.1 (bf16):** `OutOfMemoryError` / `SharedFusedMoE` / `unquantized_fused_moe` при `load_model` | Снизить **`GPU_MEM_UTIL`** (в пресете **0.75**; при повторе — **0.72–0.70**) — vLLM резервирует меньше под KV, больше остаётся под веса. Плюс **`MAX_MODEL_LEN`**, **`SLGPU_MAX_NUM_BATCHED_TOKENS`**, **`SLGPU_ENABLE_PREFIX_CACHING=0`**. Предпочтительно: чекпоинт **FP8** — пресет [`glm-5.1-fp8`](configs/models/glm-5.1-fp8.env) (**`VLLM_DOCKER_IMAGE`** с **glm51** — там же), см. [GLM/GLM5.md](https://github.com/vllm-project/recipes/blob/main/GLM/GLM5.md). Если в логе prefix cache `True` при `0` в пресете — в **`docker-compose.yml`** у vLLM должен быть **`SLGPU_ENABLE_PREFIX_CACHING`**. Дальше: **больше GPU** (`TP`). |
 | **`ContextOverflowError`** | Увеличить `MAX_MODEL_LEN` или уменьшить `max_tokens` |
 | **OOM при старте** | Снизить `MAX_MODEL_LEN`, `GPU_MEM_UTIL`, `SGLANG_MEM_FRACTION_STATIC`, увеличить `TP`, квантованный чекпоинт |
 | **OOM MoE при загрузке весов** | Часто не спасает только снижение контекста; **TP=8**, другой чекпоинт HF или квант |
@@ -320,7 +321,7 @@ curl -s http://127.0.0.1:8111/v1/chat/completions \
 
 ## 15. Ограничения
 
-- В **`docker-compose.yml`** для vLLM задайте тег/дижест через **`VLLM_DOCKER_IMAGE`** (по умолчанию `vllm/vllm-openai:latest`); для SGLang, Prometheus, Grafana, node-exporter и dcgm-exporter сейчас **`latest`**: содержимое образов меняется без bump версии в репозитории; для продакшена зафиксируйте **digest** или явный **тег** версии.
+- В пресетах vLLM задайте тег/дижест через **`VLLM_DOCKER_IMAGE`** (в compose — fallback, по умолчанию зафиксированный `v0.19.1-cu130`); для SGLang, Prometheus, Grafana, node-exporter и dcgm-exporter сейчас **`latest`**: содержимое образов меняется без bump версии в репозитории; для продакшена зафиксируйте **digest** или явный **тег** версии.
 - SGLang может не знать те же `--reasoning-parser`, что vLLM.
 - Сервисы LLM используют **`gpus: all`**, а реальная маска GPU — **`NVIDIA_VISIBLE_DEVICES`**: по умолчанию **первые `TP` карт** (`0`…`TP-1` через [`./slgpu up`](scripts/cmd_up.sh)). На хосте с **4** GPU задайте **`TP=4`** (или `--tp 4`); маппинг вручную — **`SLGPU_NVIDIA_VISIBLE_DEVICES`** в `main.env` или `export`.
 

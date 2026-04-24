@@ -13,6 +13,7 @@
 
 ## Параметры пресета (справочник)
 
+- **`VLLM_DOCKER_IMAGE`** — образ vLLM для `docker compose` (см. [`docker-compose.yml`](../docker-compose.yml)); в репозитории задаётся **в пресете**, не в `main.env` (теги вида `*-cu130` — CUDA 13.x **в контейнере**; ориентиры на [vllm/vllm-openai](https://hub.docker.com/r/vllm/vllm-openai/tags), семейные теги `qwen3_5_…`, `glm51_…`, `deepseekv4_…`, `minimax27_…` и т.д.). Fallback в compose, если переменная не задана.
 - **`MODEL_ID`** — репозиторий Hugging Face и подкаталог в `MODELS_DIR` после `./slgpu pull`.
 - **`MODEL_REVISION`** — SHA/тег на HF; пусто — ветка по умолчанию.
 - **`MAX_MODEL_LEN`** — окно контекста (`--max-model-len` / `--context-length`). Задаёте **вручную** (ориентиры: **262144** у многих 256k-моделей; **131072** — Qwen3-30B / gpt-oss; **202752** / **200704** — GLM / MiniMax M2 — см. репозитарии и [рецепты](https://github.com/vllm-project/recipes) vLLM). **GLM-5.1** bf16 на 8×~140 GB — в [`glm-5.1.env`](glm-5.1.env) **65536**; **GLM-5.1-FP8** — [`glm-5.1-fp8.env`](glm-5.1-fp8.env). **`SLGPU_ENABLE_PREFIX_CACHING=0`** в пресетах GLM; при OOM снижайте `MAX_MODEL_LEN` / `GPU_MEM_UTIL` / batched tokens.
@@ -70,4 +71,4 @@ $EDITOR configs/models/my-model.env
 ./slgpu up vllm -m my-model
 ```
 
-**`MAX_MODEL_LEN`**, как и парсеры, задаёте **в пресете** (скопируйте пример и отредактируйте), ориентируясь на `config.json` / карточку HF и рецепты vLLM. До пресета: [`main.env`](../../main.env) (дефолты хоста и движка), затем пресет.
+**`MAX_MODEL_LEN`**, **`VLLM_DOCKER_IMAGE`**, как и парсеры, задаёте **в пресете** (скопируйте пример и отредактируйте), ориентируясь на `config.json` / карточку HF и рецепты vLLM. До пресета: [`main.env`](../../main.env) (дефолты хоста и движка, **без** образа vLLM), затем пресет.

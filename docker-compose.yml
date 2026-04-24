@@ -7,7 +7,7 @@ name: slgpu
 
 services:
   vllm:
-    image: ${VLLM_DOCKER_IMAGE:-vllm/vllm-openai:latest}
+    image: ${VLLM_DOCKER_IMAGE:-vllm/vllm-openai:v0.19.1-cu130}
     profiles: ["vllm"]
     restart: unless-stopped
     # Список физических GPU задаётся через NVIDIA_VISIBLE_DEVICES (0..TP-1 от ./slgpu up), см. cmd_up.sh
