@@ -1,5 +1,5 @@
 # dcgm, node-exporter, Prometheus, Grafana, Loki, Promtail, Langfuse, LiteLLM — отдельно (./slgpu monitoring up).
-# Сеть `slgpu` с docker-compose.yml: метрики, логи, шлюз к vLLM. Данные: main.env
+# Все сервисы в одной внешней сети `slgpu` (с docker-compose.yml: метрики, логи, Langfuse, MinIO, LiteLLM). Данные: main.env
 # (PROMETHEUS_*, GRAFANA_*, LOKI_*, PROMTAIL_*, тайные Langfuse, LITELLM_*).
 
 name: slgpu-monitoring
@@ -154,7 +154,7 @@ services:
     restart: unless-stopped
     user: "101:101"
     networks:
-      - langfuse
+      - slgpu
     environment:
       CLICKHOUSE_DB: default
       CLICKHOUSE_USER: ${LANGFUSE_CLICKHOUSE_USER:-clickhouse}
@@ -184,7 +184,7 @@ services:
     restart: unless-stopped
     command: server /data --console-address ":9001"
     networks:
-      - langfuse
+      - slgpu
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-miniosecret}
@@ -209,7 +209,7 @@ services:
     image: ${SLGPU_LANGFUSE_REDIS_IMAGE:-redis:7}
     restart: unless-stopped
     networks:
-      - langfuse
+      - slgpu
     command:
       - redis-server
       - --requirepass
@@ -235,7 +235,7 @@ services:
     image: ${SLGPU_LANGFUSE_POSTGRES_IMAGE:-postgres:17}
     restart: unless-stopped
     networks:
-      - langfuse
+      - slgpu
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${LANGFUSE_POSTGRES_USER:-postgres}"]
       interval: 3s
@@ -260,7 +260,6 @@ services:
     restart: unless-stopped
     networks:
       - slgpu
-      - langfuse
     depends_on:
       postgres:
         condition: service_healthy
@@ -318,7 +317,6 @@ services:
     restart: unless-stopped
     networks:
       - slgpu
-      - langfuse
     depends_on:
       postgres:
         condition: service_healthy
@@ -379,7 +377,7 @@ services:
     image: ${SLGPU_LANGFUSE_POSTGRES_IMAGE:-postgres:17}
     restart: "no"
     networks:
-      - langfuse
+      - slgpu
     depends_on:
       postgres:
         condition: service_healthy
@@ -398,7 +396,7 @@ services:
 
   litellm:
     # OpenAI-совместимый шлюз → vLLM (host.docker.internal, см. extra_hosts, как у Prometheus)
-    # Admin UI / Prisma: DATABASE_URL — отдельная БД `litellm` (сеть langfuse → postgres)
+    # Admin UI / Prisma: DATABASE_URL — отдельная БД `litellm` (та же сеть slgpu → postgres)
     image: ${SLGPU_LITELLM_IMAGE:-ghcr.io/berriai/litellm:main-latest}
     restart: unless-stopped
     depends_on:
@@ -408,7 +406,6 @@ services:
         condition: service_completed_successfully
     networks:
       - slgpu
-      - langfuse
     entrypoint: ["/bin/sh", "/etc/slgpu/litellm-entrypoint.sh"]
     env_file:
       - main.env
@@ -440,6 +437,3 @@ networks:
   slgpu:
     name: slgpu
     external: true
-  langfuse:
-    name: slgpu-monitoring-langfuse
-    driver: bridge
