@@ -1,18 +1,8 @@
-# LiteLLM Proxy. vLLM: host.docker.internal:__LLM_API_PORT__. Клиент: "model": "devllm".
+# LiteLLM Proxy. Модели — в БД (STORE_MODEL_IN_DB) / Admin UI /ui, не в этом файле.
 # Ключ: пустой LITELLM_MASTER_KEY (entrypoint снимает var) — без x-api-key (только доверенная сеть).
 # Langfuse v3: callbacks langfuse_otel (не классический langfuse — ломается с v3). См. docs.litellm.ai — langfuse_otel_integration
 
-model_list:
-  - model_name: devllm
-    litellm_params:
-      model: openai/devllm
-      api_base: http://host.docker.internal:__LLM_API_PORT__/v1
-      api_key: "EMPTY"
-      timeout: 600
-    # Учёт spend в прокси: docs.litellm.ai — proxy/custom_pricing
-    model_info:
-      input_cost_per_1m_token: 1.0
-      output_cost_per_1m_token: 3.0
+model_list: []
 
 litellm_settings:
   set_verbose: false
