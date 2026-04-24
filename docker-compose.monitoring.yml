@@ -333,6 +333,8 @@ services:
     env_file:
       - main.env
     environment:
+      # Next.js: иначе часто listen только на hostname контейнера — с хоста будет RST/refused (см. FAQ Langfuse: HOSTNAME=0.0.0.0)
+      HOSTNAME: "0.0.0.0"
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://127.0.0.1:3001}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-slgpu-nextauth}
       SALT: ${LANGFUSE_SALT:-slgpu-salt}
