@@ -86,7 +86,7 @@ curl -X POST "http://127.0.0.1:9090/-/reload"
 
 ## Данные на локальном диске (не в томе Docker)
 
-Пути в [`main.env`](../main.env): **`PROMETHEUS_DATA_DIR`**, **`GRAFANA_DATA_DIR`**. С bind mount каталоги на **хосте** должны принадлежать **тому же uid:gid, под которым процесс внутри образа** (иначе `GF_PATHS_DATA not writable`, `plugins: Permission denied`, panics Prometheus). Теги **`latest` меняют** предположения — не полагайтесь только на «472:0 в документации».
+Пути в [`main.env`](../main.env): **`PROMETHEUS_DATA_DIR`**, **`GRAFANA_DATA_DIR`**, **`LOKI_DATA_DIR`**, **`PROMTAIL_DATA_DIR`**, а для **Langfuse** (Postgres, ClickHouse, логи ClickHouse, MinIO, Redis) — **`LANGFUSE_POSTGRES_DATA_DIR`**, **`LANGFUSE_CLICKHOUSE_DATA_DIR`**, **`LANGFUSE_CLICKHOUSE_LOGS_DIR`**, **`LANGFUSE_MINIO_DATA_DIR`**, **`LANGFUSE_REDIS_DATA_DIR`** (по умолчанию подкаталоги **`/opt/mon/langfuse/...`** на хосте, не named volumes Docker). С bind mount каталоги на **хосте** должны принадлежать **тому же uid:gid, под которым процесс внутри образа** (иначе `GF_PATHS_DATA not writable`, `plugins: Permission denied`, panics Prometheus, Postgres «data directory has wrong ownership»). Теги **`latest` меняют** предположения — не полагайтесь только на «472:0 в документации».
 
 ### Рекомендуется: автоматически по образам
 
@@ -95,7 +95,7 @@ curl -X POST "http://127.0.0.1:9090/-/reload"
 ./slgpu monitoring up
 ```
 
-Скрипт [`scripts/monitoring_fix_permissions.sh`](../scripts/monitoring_fix_permissions.sh) читает `id -u` / `id -g` в `grafana/grafana` и `prom/prometheus` (или задайте в [`main.env`](../main.env): **`SLGPU_GRAFANA_IMAGE`**, **`SLGPU_PROMETHEUS_IMAGE`**) и делает **`chown -R`** на `GRAFANA_DATA_DIR` и `PROMETHEUS_DATA_DIR`. Нужны **docker** и **sudo** (скрипт сам вызывает `sudo`, если не root).
+Скрипт [`scripts/monitoring_fix_permissions.sh`](../scripts/monitoring_fix_permissions.sh) читает uid/gid из образов Grafana, Prometheus, Loki, Postgres, MinIO, Redis и фиксированные **101:101** для ClickHouse; делает **`chown -R`** на все перечисленные каталоги. В [`main.env`](../main.env) при необходимости задайте **`SLGPU_*_IMAGE`** для совпадения с compose. Нужны **docker** и **sudo** (скрипт сам вызывает `sudo`, если не root).
 
 **Вручную:** см. [оф. Grafana (docker)](https://grafana.com/docs/grafana/latest/setup-grafana/installation/docker/) и проверяйте `docker run --rm --entrypoint sh grafana/grafana -c 'id'`.
 
@@ -116,6 +116,15 @@ sudo chown -R 472:0 /opt/mon/grafana
 
 1. **`./slgpu monitoring fix-perms`**
 2. **`./slgpu monitoring restart`**
+
+**Перенос Langfuse с named volumes** (старые версии compose: `slgpu_lf_postgres_data`, `slgpu_lf_clickhouse_data`, …):
+
+1. **`./slgpu monitoring down`**
+2. Для каждого тома: `docker volume inspect <имя>` → поле **`Mountpoint`**, внутри **`_data/`** (у Postgres — содержимое `PG_VERSION` и т.д.)
+3. Создать каталоги из `main.env` (`LANGFUSE_*_DATA_DIR`), **остановленные** данные скопировать:  
+   `sudo rsync -a <mountpoint>/_data/ "${LANGFUSE_POSTGRES_DATA_DIR}/"` (и аналогично для clickhouse, minio, redis — смотрите точку монтирования в старом compose).
+4. **`./slgpu monitoring fix-perms`** → **`./slgpu monitoring up`**
+5. После проверки: `docker volume rm` старые `slgpu_lf_*` (только если данные на диске работают).
 
 **Перенос из старых named volumes** (`slgpu_prometheus-data`, `slgpu_grafana-data` — до смены на bind):
 

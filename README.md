@@ -137,7 +137,7 @@
 | Переменная | Где задаётся | Назначение |
 |------------|--------------|------------|
 | `HF_TOKEN` | [`configs/secrets/hf.env`](configs/secrets/hf.env) | Только для `./slgpu pull` |
-| `MODELS_DIR`, `LLM_API_BIND`, `PROMETHEUS_DATA_DIR`, `GRAFANA_DATA_DIR`, `LOKI_DATA_DIR`, `PROMTAIL_DATA_DIR`, `GRAFANA_BIND`, `GRAFANA_PORT`, `GRAFANA_ADMIN_USER`, `PROMETHEUS_*`, `DCGM_BIND`, `NODE_EXPORTER_BIND` и пр. | [`main.env`](main.env) | Дефолты в репозитории; данные Prom/Grafana/Loki — bind mount, см. [monitoring/README](monitoring/README.md) |
+| `MODELS_DIR`, `LLM_API_BIND`, `PROMETHEUS_DATA_DIR`, `GRAFANA_DATA_DIR`, `LOKI_DATA_DIR`, `PROMTAIL_DATA_DIR`, `LANGFUSE_*_DATA_DIR` (Postgres/ClickHouse/MinIO/Redis), `GRAFANA_BIND`, `GRAFANA_PORT`, `GRAFANA_ADMIN_USER`, `PROMETHEUS_*`, `DCGM_BIND`, `NODE_EXPORTER_BIND` и пр. | [`main.env`](main.env) | Дефолты в репозитории; данные на хосте — bind mount, см. [monitoring/README](monitoring/README.md) |
 | `LANGFUSE_PORT`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `LITELLM_MASTER_KEY`, `LANGFUSE_POSTGRES_*`, `LANGFUSE_REDIS_AUTH`, `MINIO_ROOT_*` и т.д. | [`main.env`](main.env) | Langfuse + LiteLLM в [monitoring compose](docker-compose.monitoring.yml); маршруты LiteLLM — [`monitoring/litellm/config.yaml`](monitoring/litellm/config.yaml); ключи `LANGFUSE_*_KEY` в Langfuse UI |
 | `VLLM_DOCKER_IMAGE` | пресет [`configs/models/<slug>.env`](configs/models/) | Семейные теги vLLM (`*-cu130` и т.д.); fallback в [`docker-compose.yml`](docker-compose.yml) |
 | `GRAFANA_ADMIN_PASSWORD` | `main.env` (локально) или `export` | Секрет; см. шаблон внизу [`main.env`](main.env) |
@@ -333,7 +333,7 @@ curl -s http://127.0.0.1:8111/v1/chat/completions \
 ## 15. Ограничения
 
 - В пресетах vLLM задайте тег/дижест через **`VLLM_DOCKER_IMAGE`** (в compose — fallback, по умолчанию `v0.19.1-cu130`); **Loki** и **Promtail** в [`docker-compose.monitoring.yml`](docker-compose.monitoring.yml) зафиксированы **2.9.8** (переопределяемые через **`SLGPU_LOKI_IMAGE`** / **`SLGPU_PROMTAIL_IMAGE`** в `main.env`); **Langfuse 3** и **LiteLLM** — в основном **`:3` / `main-*`**; для SGLang, Prometheus, Grafana, node-exporter, MinIO, Postgres, dcgm-exporter в compose в основом **`latest`** — при необходимости зафиксируйте **digest** или явный **тег** (`SLGPU_*_IMAGE` в `main.env`).
-- **Langfuse** (Postgres, MinIO, секреты `NEXTAUTH_*` / `LANGFUSE_ENCRYPTION_KEY`) — для **прод** смените пароли и `NEXTAUTH_URL`; данные в **named volumes** `slgpu_lf_*`. **LiteLLM** — при запущенном vLLM; согласуйте [`monitoring/litellm/config.yaml`](monitoring/litellm/config.yaml) с **`SLGPU_SERVED_MODEL_NAME`** / `GET /v1/models` к vLLM.
+- **Langfuse** (Postgres, MinIO, секреты `NEXTAUTH_*` / `LANGFUSE_ENCRYPTION_KEY`) — для **прод** смените пароли и `NEXTAUTH_URL`; данные в **`LANGFUSE_*_DATA_DIR`** на диске (см. [monitoring/README](monitoring/README.md), `fix-perms`). **LiteLLM** — при запущенном vLLM; согласуйте [`monitoring/litellm/config.yaml`](monitoring/litellm/config.yaml) с **`SLGPU_SERVED_MODEL_NAME`** / `GET /v1/models` к vLLM.
 - SGLang может не знать те же `--reasoning-parser`, что vLLM.
 - Сервисы LLM используют **`gpus: all`**, а реальная маска GPU — **`NVIDIA_VISIBLE_DEVICES`**: по умолчанию **первые `TP` карт** (`0`…`TP-1` через [`./slgpu up`](scripts/cmd_up.sh)). На хосте с **4** GPU задайте **`TP=4`** (или `--tp 4`); маппинг вручную — **`SLGPU_NVIDIA_VISIBLE_DEVICES`** в `main.env` или `export`.
 

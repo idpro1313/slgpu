@@ -160,8 +160,8 @@ services:
       CLICKHOUSE_USER: ${LANGFUSE_CLICKHOUSE_USER:-clickhouse}
       CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-clickhouse}
     volumes:
-      - slgpu_lf_clickhouse_data:/var/lib/clickhouse
-      - slgpu_lf_clickhouse_logs:/var/log/clickhouse-server
+      - ${LANGFUSE_CLICKHOUSE_DATA_DIR:-/opt/mon/langfuse/clickhouse}:/var/lib/clickhouse
+      - ${LANGFUSE_CLICKHOUSE_LOGS_DIR:-/opt/mon/langfuse/clickhouse-logs}:/var/log/clickhouse-server
     ulimits:
       nofile:
         soft: 262144
@@ -192,7 +192,7 @@ services:
       - "${MINIO_API_BIND:-127.0.0.1}:${MINIO_API_HOST_PORT:-9010}:9000"
       - "${MINIO_CONSOLE_BIND:-127.0.0.1}:${MINIO_CONSOLE_HOST_PORT:-9011}:9001"
     volumes:
-      - slgpu_lf_minio_data:/data
+      - ${LANGFUSE_MINIO_DATA_DIR:-/opt/mon/langfuse/minio}:/data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/minio/health/live"]
       interval: 5s
@@ -224,7 +224,7 @@ services:
     environment:
       REDIS_PASS: ${LANGFUSE_REDIS_AUTH:-slgpu-redis}
     volumes:
-      - slgpu_lf_redis_data:/data
+      - ${LANGFUSE_REDIS_DATA_DIR:-/opt/mon/langfuse/redis}:/data
     logging:
       driver: json-file
       options:
@@ -248,7 +248,7 @@ services:
       TZ: UTC
       PGTZ: UTC
     volumes:
-      - slgpu_lf_postgres_data:/var/lib/postgresql/data
+      - ${LANGFUSE_POSTGRES_DATA_DIR:-/opt/mon/langfuse/postgres}:/var/lib/postgresql/data
     logging:
       driver: json-file
       options:
@@ -398,13 +398,6 @@ services:
       options:
         max-size: "100m"
         max-file: "5"
-
-volumes:
-  slgpu_lf_postgres_data:
-  slgpu_lf_clickhouse_data:
-  slgpu_lf_clickhouse_logs:
-  slgpu_lf_minio_data:
-  slgpu_lf_redis_data:
 
 networks:
   slgpu:

@@ -21,7 +21,7 @@ usage() {
 
 Права на каталоги данных (bind mount: Grafana, Prometheus, **Loki**, **Promtail**/positions): по uid:gid **из образов** (рекомендуется до up или при ошибках):
   ./slgpu monitoring fix-perms
-  (см. scripts/monitoring_fix_permissions.sh, main.env: GRAFANA_DATA_DIR, PROMETHEUS_DATA_DIR, LOKI_DATA_DIR, PROMTAIL_DATA_DIR)
+  (см. scripts/monitoring_fix_permissions.sh, main.env: GRAFANA_DATA_DIR, PROMETHEUS_DATA_DIR, LOKI_DATA_DIR, PROMTAIL_DATA_DIR, LANGFUSE_*_DATA_DIR)
 
 Конфиг: docker-compose.monitoring.yml, сеть \`slgpu\` — общая с docker-compose.yml (Prometheus → vllm:8111 / sglang:8222).
 
