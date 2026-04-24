@@ -118,6 +118,7 @@
 | 2.1.6 | SGLang Grafana: **Model** — `includeAll` + `allValue: ".*"` в `sglangdash2-slgpu` / `sglang-dashboard-slgpu` (без пустого `model_name`); [monitoring/README](monitoring/README.md). |
 | 2.1.7 | **Документация:** полный обзор `git log` (приложение ниже), эпоха 20.04–22.04.2026 между «ранними» коммитами и нумерованными релизами, раздел **«Диалоги и инциденты запуска»** (транскрипты сессий Cursor + соответствие правкам в репо). |
 | 2.1.8 | **Аналитика в `HISTORY.md`:** крупный раздел **«что делали → что произошло → что поменяли»** — vLLM `SLGPU_*`, KV Qwen, custom AR Qwen3.6, tool parsers, gpt-oss, Kimi, пошагово GLM-5.1 (262k→202k, fp8 KV, MoE OOM, prefix cache, compose), MiniMax, порты SGLang/compose, мониторинг (uid, mmap, Grafana variables), CLI 2.0, бенч; **шпаргалка** по файлам. |
+| 2.1.9 | **Мониторинг / vLLM Grafana V2:** в [monitoring/README.md](monitoring/README.md) — раздел **«vLLM V2: все панели No data»** (чеклист: только vLLM vs SGLang, Targets UP, `curl /metrics`, опционально **`VLLM_USE_V1=0`**, трафик); в [main.env](main.env) — закомментированный **`VLLM_USE_V1=0`** и ссылка на vLLM #16348. |
 
 ### Документация и gpt-oss (исправления)
 
