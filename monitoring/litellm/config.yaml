@@ -9,6 +9,10 @@ model_list:
       api_base: http://host.docker.internal:__LLM_API_PORT__/v1
       api_key: "EMPTY"
       timeout: 600
+    # Учёт spend в прокси: docs.litellm.ai — proxy/custom_pricing
+    model_info:
+      input_cost_per_1m_token: 1.0
+      output_cost_per_1m_token: 3.0
 
 litellm_settings:
   set_verbose: false
