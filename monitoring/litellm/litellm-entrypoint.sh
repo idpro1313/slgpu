@@ -1,20 +1,18 @@
 #!/bin/sh
 # shellcheck disable=SC2039
 # Генерация /tmp/litellm.config.yaml и запуск litellm (образ BerriAI).
+# Upstream id: LITELLM_LLM_ID → иначе SLGPU_SERVED_MODEL_NAME → иначе devllm
 set -e
 export LLM_API_PORT="${LLM_API_PORT:-8111}"
-MID="${LITELLM_LLM_ID:-}"
-if [ -z "${MID}" ] || [ "${MID}" = "" ]; then
-  echo "litellm: LITELLM_LLM_ID пуст в main.env — подставляю плейсхолдер «unknown-model»." >&2
-  echo "  Задайте LITELLM_LLM_ID = id из curl http://127.0.0.1:\${LLM_API_PORT}/v1/models" >&2
-  MID="unknown-model"
-fi
-export LITELLM_LLM_ID="${MID}"
 # host.docker.internal + extra_hosts (как у Prometheus) — vLLM на хосте
 python3 - <<'PY'
 import os
 from pathlib import Path
-mid = os.environ.get("LITELLM_LLM_ID", "unknown-model")
+mid = (os.environ.get("LITELLM_LLM_ID") or "").strip()
+if not mid:
+    mid = (os.environ.get("SLGPU_SERVED_MODEL_NAME") or "").strip()
+if not mid:
+    mid = "devllm"
 p = int(os.environ.get("LLM_API_PORT", "8111"))
 base = f"http://host.docker.internal:{p}/v1"
 src = Path("/etc/slgpu/litellm.config.yaml.template").read_text()

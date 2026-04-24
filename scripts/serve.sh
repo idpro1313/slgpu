@@ -5,9 +5,11 @@ set -euo pipefail
 
 slgpu_run_vllm() {
   # Служебные listen/batch — SLGPU_* (см. main.env), чтобы vLLM 0.19+ не предупреждало о «Unknown VLLM_*».
-  local MODEL_PATH HOST PORT TP GPU_MEM MAX_LEN KV BATCH TOOL REASON DISABLE_CAR PREFIX_CACHE \
+  local MODEL_PATH SERVED_NAME HOST PORT TP GPU_MEM MAX_LEN KV BATCH TOOL REASON DISABLE_CAR PREFIX_CACHE \
     TRUST CR_PREFILL AUTO_TOOL cmd
   MODEL_PATH="${SLGPU_MODEL_ROOT:-/models}/${MODEL_ID}"
+  # Имя в OpenAI API (/v1/models, choice.model). Пусто/не задано → MODEL_ID; задайте devllm для фиксированного имени.
+  SERVED_NAME="${SLGPU_SERVED_MODEL_NAME:-$MODEL_ID}"
   HOST="${SLGPU_VLLM_HOST:-0.0.0.0}"
   PORT="${SLGPU_VLLM_PORT:-8111}"
   TP="${TP:-8}"
@@ -25,7 +27,7 @@ slgpu_run_vllm() {
 
   cmd=(
     vllm serve "${MODEL_PATH}"
-    --served-model-name "${MODEL_ID}"
+    --served-model-name "${SERVED_NAME}"
     --host "${HOST}"
     --port "${PORT}"
     --tensor-parallel-size "${TP}"
@@ -77,8 +79,9 @@ slgpu_run_vllm() {
 }
 
 slgpu_run_sglang() {
-  local MODEL_PATH HOST PORT TP MEM_FRAC MAX_LEN KV REASON TOOL SGL_TORCH SGL_NO_CG SGL_NO_CAR SGL_METRICS SGL_MFU cmd
+  local MODEL_PATH SERVED_NAME HOST PORT TP MEM_FRAC MAX_LEN KV REASON TOOL SGL_TORCH SGL_NO_CG SGL_NO_CAR SGL_METRICS SGL_MFU cmd
   MODEL_PATH="${SLGPU_MODEL_ROOT:-/models}/${MODEL_ID}"
+  SERVED_NAME="${SLGPU_SERVED_MODEL_NAME:-$MODEL_ID}"
   HOST="${SGLANG_LISTEN_HOST:-0.0.0.0}"
   PORT="${SGLANG_LISTEN_PORT:-8222}"
   TP="${TP:-8}"
@@ -97,7 +100,7 @@ slgpu_run_sglang() {
   cmd=(
     python3 -m sglang.launch_server
     --model-path "${MODEL_PATH}"
-    --served-model-name "${MODEL_ID}"
+    --served-model-name "${SERVED_NAME}"
     --tp "${TP}"
     --host "${HOST}"
     --port "${PORT}"
