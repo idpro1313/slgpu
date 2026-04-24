@@ -1,0 +1,24 @@
+# LiteLLM Proxy (шаблон: подставляется в litellm-entrypoint.sh).
+# Клиенты вызывают model «gpt-3.5-turbo» → на vLLM уходит LITELLM_LLM_ID (как openai/…).
+# Задайте LITELLM_LLM_ID в main.env = id из /v1/models (должен совпадать с обслуживаемой моделью vLLM).
+
+model_list:
+  - model_name: gpt-3.5-turbo
+    litellm_params:
+      model: openai/__LITELLM_LLM_ID__
+      api_base: __LITELLM_VLLM_API_BASE__
+      api_key: "EMPTY"
+      # Не вешать строгий таймаут на первый long-context прогон
+      timeout: 600
+
+# Доп. алиас — то же бэкенд, другое имя в запросе к LiteLLM
+  - model_name: slgpu
+    litellm_params:
+      model: openai/__LITELLM_LLM_ID__
+      api_base: __LITELLM_VLLM_API_BASE__
+      api_key: "EMPTY"
+      timeout: 600
+
+litellm_settings:
+  set_verbose: false
+# master_key: LITELLM_MASTER_KEY в main.env (см. docs.litellm.ai proxy docker)

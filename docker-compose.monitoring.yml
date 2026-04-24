@@ -1,6 +1,6 @@
-# dcgm, node-exporter, Prometheus, Grafana, Loki, Promtail — отдельно (./slgpu monitoring up).
-# Сеть `slgpu` с docker-compose.yml: метрики и логи контейнеров. Данные на хосте: main.env
-# (PROMETHEUS_DATA_DIR, GRAFANA_DATA_DIR, LOKI_DATA_DIR, PROMTAIL_DATA_DIR).
+# dcgm, node-exporter, Prometheus, Grafana, Loki, Promtail, Langfuse, LiteLLM — отдельно (./slgpu monitoring up).
+# Сеть `slgpu` с docker-compose.yml: метрики, логи, шлюз к vLLM. Данные: main.env
+# (PROMETHEUS_*, GRAFANA_*, LOKI_*, PROMTAIL_*, тайные Langfuse, LITELLM_*).
 
 name: slgpu-monitoring
 
@@ -146,7 +146,270 @@ services:
         max-size: "100m"
         max-file: "5"
 
+  # ---------------------------------------------------------------------------
+  # Langfuse v3 (Postgres, ClickHouse, Redis, MinIO) + воркер; UI на LANGFUSE_PORT (не 3000 — Grafana)
+  # ---------------------------------------------------------------------------
+  clickhouse:
+    image: ${SLGPU_LANGFUSE_CLICKHOUSE_IMAGE:-clickhouse/clickhouse-server:24.3}
+    restart: unless-stopped
+    user: "101:101"
+    networks:
+      - langfuse
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: ${LANGFUSE_CLICKHOUSE_USER:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-clickhouse}
+    volumes:
+      - slgpu_lf_clickhouse_data:/var/lib/clickhouse
+      - slgpu_lf_clickhouse_logs:/var/log/clickhouse-server
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8123/ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+  minio:
+    # S3-совместимое хранилище для Langfuse. Порты на хосте: не 9090 (Prometheus) — MINIO_API_HOST_PORT
+    image: ${SLGPU_MINIO_IMAGE:-minio/minio:latest}
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    networks:
+      - langfuse
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-miniosecret}
+    ports:
+      - "${MINIO_API_BIND:-127.0.0.1}:${MINIO_API_HOST_PORT:-9010}:9000"
+      - "${MINIO_CONSOLE_BIND:-127.0.0.1}:${MINIO_CONSOLE_HOST_PORT:-9011}:9001"
+    volumes:
+      - slgpu_lf_minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+  redis:
+    image: ${SLGPU_LANGFUSE_REDIS_IMAGE:-redis:7}
+    restart: unless-stopped
+    networks:
+      - langfuse
+    command:
+      - redis-server
+      - --requirepass
+      - ${LANGFUSE_REDIS_AUTH:-slgpu-redis}
+      - --maxmemory-policy
+      - noeviction
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASS\" ping | grep -q PONG"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+    environment:
+      REDIS_PASS: ${LANGFUSE_REDIS_AUTH:-slgpu-redis}
+    volumes:
+      - slgpu_lf_redis_data:/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+  postgres:
+    image: ${SLGPU_LANGFUSE_POSTGRES_IMAGE:-postgres:17}
+    restart: unless-stopped
+    networks:
+      - langfuse
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${LANGFUSE_POSTGRES_USER:-postgres}"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+    environment:
+      POSTGRES_USER: ${LANGFUSE_POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${LANGFUSE_POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${LANGFUSE_POSTGRES_DB:-postgres}
+      TZ: UTC
+      PGTZ: UTC
+    volumes:
+      - slgpu_lf_postgres_data:/var/lib/postgresql/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+  langfuse-worker:
+    image: ${SLGPU_LANGFUSE_WORKER_IMAGE:-langfuse/langfuse-worker:3}
+    restart: unless-stopped
+    networks:
+      - slgpu
+      - langfuse
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    ports:
+      - "${LANGFUSE_WORKER_BIND:-127.0.0.1}:${LANGFUSE_WORKER_PORT:-3030}:3030"
+    env_file:
+      - main.env
+    environment:
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://127.0.0.1:3001}
+      SALT: ${LANGFUSE_SALT:-slgpu-salt}
+      ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
+      TELEMETRY_ENABLED: ${LANGFUSE_TELEMETRY:-false}
+      LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: "false"
+      LANGFUSE_USE_AZURE_BLOB: "false"
+      LANGFUSE_USE_OCI_NATIVE_OBJECT_STORAGE: "false"
+      DATABASE_URL: postgresql://${LANGFUSE_POSTGRES_USER:-postgres}:${LANGFUSE_POSTGRES_PASSWORD:-postgres}@postgres:5432/${LANGFUSE_POSTGRES_DB:-postgres}
+      CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_USER: ${LANGFUSE_CLICKHOUSE_USER:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-clickhouse}
+      CLICKHOUSE_CLUSTER_ENABLED: "false"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_AUTH: ${LANGFUSE_REDIS_AUTH:-slgpu-redis}
+      REDIS_TLS_ENABLED: "false"
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: ${LANGFUSE_S3_EVENT_UPLOAD_BUCKET:-langfuse}
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minio}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+      LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: ${LANGFUSE_S3_MEDIA_BUCKET:-langfuse}
+      LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
+      LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minio}
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://minio:9000
+      LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
+      LANGFUSE_S3_BATCH_EXPORT_ENABLED: "false"
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "5"
+
+  langfuse-web:
+    image: ${SLGPU_LANGFUSE_IMAGE:-langfuse/langfuse:3}
+    restart: unless-stopped
+    networks:
+      - slgpu
+      - langfuse
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    ports:
+      - "${LANGFUSE_BIND:-0.0.0.0}:${LANGFUSE_PORT:-3001}:3000"
+    env_file:
+      - main.env
+    environment:
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://127.0.0.1:3001}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-slgpu-nextauth}
+      SALT: ${LANGFUSE_SALT:-slgpu-salt}
+      ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
+      TELEMETRY_ENABLED: ${LANGFUSE_TELEMETRY:-false}
+      LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: "false"
+      LANGFUSE_USE_AZURE_BLOB: "false"
+      LANGFUSE_USE_OCI_NATIVE_OBJECT_STORAGE: "false"
+      DATABASE_URL: postgresql://${LANGFUSE_POSTGRES_USER:-postgres}:${LANGFUSE_POSTGRES_PASSWORD:-postgres}@postgres:5432/${LANGFUSE_POSTGRES_DB:-postgres}
+      CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_USER: ${LANGFUSE_CLICKHOUSE_USER:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-clickhouse}
+      CLICKHOUSE_CLUSTER_ENABLED: "false"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_AUTH: ${LANGFUSE_REDIS_AUTH:-slgpu-redis}
+      REDIS_TLS_ENABLED: "false"
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: ${LANGFUSE_S3_EVENT_UPLOAD_BUCKET:-langfuse}
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minio}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+      LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: ${LANGFUSE_S3_MEDIA_BUCKET:-langfuse}
+      LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
+      LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minio}
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://minio:9000
+      LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
+      LANGFUSE_S3_BATCH_EXPORT_ENABLED: "false"
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "5"
+
+  litellm:
+    # OpenAI-совместимый шлюз → vLLM (host.docker.internal, см. extra_hosts, как у Prometheus)
+    image: ${SLGPU_LITELLM_IMAGE:-ghcr.io/berriai/litellm:main-latest}
+    restart: unless-stopped
+    networks:
+      - slgpu
+    entrypoint: ["/bin/sh", "/etc/slgpu/litellm-entrypoint.sh"]
+    env_file:
+      - main.env
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-slgpu-change-me}
+      LANGFUSE_HOST: http://langfuse-web:3000
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${LITELLM_BIND:-0.0.0.0}:${LITELLM_PORT:-4000}:4000"
+    volumes:
+      - ./monitoring/litellm/litellm-entrypoint.sh:/etc/slgpu/litellm-entrypoint.sh:ro
+      - ./monitoring/litellm/config.yaml.template:/etc/slgpu/litellm.config.yaml.template:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "5"
+
+volumes:
+  slgpu_lf_postgres_data:
+  slgpu_lf_clickhouse_data:
+  slgpu_lf_clickhouse_logs:
+  slgpu_lf_minio_data:
+  slgpu_lf_redis_data:
+
 networks:
   slgpu:
     name: slgpu
     external: true
+  langfuse:
+    name: slgpu-monitoring-langfuse
+    driver: bridge
