@@ -205,6 +205,29 @@ services:
         max-size: "100m"
         max-file: "3"
 
+  # Бакеты Langfuse в MinIO (иначе NoSuchBucket при upload в events/otel/…). Идемпотентно.
+  minio-bucket-init:
+    image: ${SLGPU_MINIO_MC_IMAGE:-minio/mc:latest}
+    restart: "no"
+    networks:
+      - slgpu
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      BUCKET_EVENT: ${LANGFUSE_S3_EVENT_UPLOAD_BUCKET:-langfuse}
+      BUCKET_MEDIA: ${LANGFUSE_S3_MEDIA_BUCKET:-langfuse}
+    volumes:
+      - ./monitoring/langfuse/minio-bucket-init.sh:/init/minio-bucket-init.sh:ro
+    entrypoint: ["/bin/sh", "/init/minio-bucket-init.sh"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "2"
+
   redis:
     image: ${SLGPU_LANGFUSE_REDIS_IMAGE:-redis:7}
     restart: unless-stopped
@@ -265,6 +288,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      minio-bucket-init:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
       clickhouse:
@@ -322,6 +347,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      minio-bucket-init:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
       clickhouse:
