@@ -374,12 +374,41 @@ services:
         max-size: "100m"
         max-file: "5"
 
+  # БД `litellm` в общем postgres (Prisma, Admin UI / виртуальные ключи). Идемпотентно, без `profiles`.
+  litellm-pg-init:
+    image: ${SLGPU_LANGFUSE_POSTGRES_IMAGE:-postgres:17}
+    restart: "no"
+    networks:
+      - langfuse
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_USER: ${LANGFUSE_POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${LANGFUSE_POSTGRES_PASSWORD:-postgres}
+      LITELLM_DB_NAME: ${LITELLM_POSTGRES_DB:-litellm}
+    volumes:
+      - ./monitoring/litellm/init-litellm-db.sh:/init/init-litellm-db.sh:ro
+    entrypoint: ["/bin/sh", "/init/init-litellm-db.sh"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "2"
+
   litellm:
     # OpenAI-совместимый шлюз → vLLM (host.docker.internal, см. extra_hosts, как у Prometheus)
+    # Admin UI / Prisma: DATABASE_URL — отдельная БД `litellm` (сеть langfuse → postgres)
     image: ${SLGPU_LITELLM_IMAGE:-ghcr.io/berriai/litellm:main-latest}
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      litellm-pg-init:
+        condition: service_completed_successfully
     networks:
       - slgpu
+      - langfuse
     entrypoint: ["/bin/sh", "/etc/slgpu/litellm-entrypoint.sh"]
     env_file:
       - main.env
@@ -388,6 +417,8 @@ services:
     environment:
       # Пустое значение передаётся в контейнер; entrypoint (litellm-entrypoint.sh) делает unset — иначе 401
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
+      # Prisma, /ui (иначе «Not connected to DB!»). Та же машина postgres, другое имя БД: LITELLM_POSTGRES_DB
+      DATABASE_URL: postgresql://${LANGFUSE_POSTGRES_USER:-postgres}:${LANGFUSE_POSTGRES_PASSWORD:-postgres}@postgres:5432/${LITELLM_POSTGRES_DB:-litellm}
       # Langfuse v3: LiteLLM шлёт трейсы через OTEL (не классический SDK).
       LANGFUSE_OTEL_HOST: http://langfuse-web:3000
     extra_hosts:
