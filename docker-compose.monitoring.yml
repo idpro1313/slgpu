@@ -69,7 +69,7 @@ services:
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
-      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION_TIME:-15d}
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION_TIME:-100y}
       - --storage.tsdb.retention.size=${PROMETHEUS_RETENTION_SIZE:-0}
       - --web.enable-lifecycle
     logging:

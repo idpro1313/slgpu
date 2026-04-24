@@ -133,7 +133,7 @@ sudo chown -R 472:0 /opt/mon/grafana
 
 1. Посмотреть место: `df -h`, `docker system df` (образы, build cache, тома).
 2. Освободить диск: удалить неиспользуемые образы/кэш (`docker system prune` — осторожно), почистить логи, перенести модели/данные на другой раздел.
-3. Ограничить рост TSDB в [`main.env`](../main.env): уменьшить **`PROMETHEUS_RETENTION_TIME`** (например `7d`) и/или задать **`PROMETHEUS_RETENTION_SIZE`** (например `20GB`). Перезапустить: `./slgpu monitoring restart` или `docker compose -f ../docker-compose.monitoring.yml up -d prometheus`.
+3. Ограничить рост TSDB в [`main.env`](../main.env): сократить **`PROMETHEUS_RETENTION_TIME`** (по репозиторию по умолчанию **100y** — практически без срока; раньше было 15d) и/или задать ненулевой **`PROMETHEUS_RETENTION_SIZE`** (например `20GB`). **`PROMETHEUS_RETENTION_SIZE=0`** — без лимита по размеру (только по времени). Перезапустить: `./slgpu monitoring restart` или `docker compose -f ../docker-compose.monitoring.yml up -d prometheus`.
 
 TSDB и WAL лежат в каталоге **`PROMETHEUS_DATA_DIR`** на хосте (см. [выше](#данные-на-локальном-диске-не-в-томе-docker)).
 
