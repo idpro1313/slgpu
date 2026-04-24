@@ -388,8 +388,8 @@ services:
     environment:
       # Пустое значение передаётся в контейнер; entrypoint (litellm-entrypoint.sh) делает unset — иначе 401
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
-      # LANGFUSE_PUBLIC_KEY / SECRET — только из env_file (см. выше), не ${…} с хоста, иначе затирают env_file.
-      LANGFUSE_HOST: http://langfuse-web:3000
+      # Langfuse v3: LiteLLM шлёт трейсы через OTEL (не классический SDK).
+      LANGFUSE_OTEL_HOST: http://langfuse-web:3000
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:

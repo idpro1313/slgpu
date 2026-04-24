@@ -1,6 +1,6 @@
 # LiteLLM Proxy. vLLM: host.docker.internal:__LLM_API_PORT__. Клиент: "model": "devllm".
 # Ключ: пустой LITELLM_MASTER_KEY (entrypoint снимает var) — без x-api-key (только доверенная сеть).
-# Langfuse: env LANGFUSE_* + success_callback ниже; см. https://docs.litellm.ai/docs/proxy/logging
+# Langfuse v3: callbacks langfuse_otel (не классический langfuse — ломается с v3). См. docs.litellm.ai — langfuse_otel_integration
 
 model_list:
   - model_name: devllm
@@ -14,6 +14,5 @@ litellm_settings:
   set_verbose: false
   # Клиенты (Cursor и др.) шлют reasoning_effort; vLLM OpenAI-API — нет. Иначе UnsupportedParamsError.
   drop_params: true
-  # Без этого трейсы в Langfuse не отправляются (нужны LANGFUSE_PUBLIC_KEY/SECRET_KEY в configs/secrets/langfuse-litellm.env).
-  success_callback: ["langfuse"]
-  failure_callback: ["langfuse"]
+  # OTEL → Langfuse /api/public/otel; ключи в configs/secrets/langfuse-litellm.env; LANGFUSE_OTEL_HOST в compose.
+  callbacks: ["langfuse_otel"]
