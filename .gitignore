@@ -1,5 +1,6 @@
 .env
 configs/secrets/hf.env
+configs/secrets/langfuse-litellm.env
 bench/results/*/*/
 !bench/results/.gitkeep
 __pycache__/

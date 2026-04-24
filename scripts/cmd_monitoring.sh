@@ -33,9 +33,23 @@ EOF
 SUB="${1:-}"
 shift || true
 
+slgpu_ensure_langfuse_litellm_secrets() {
+  local s="${ROOT}/configs/secrets/langfuse-litellm.env"
+  local ex="${ROOT}/configs/secrets/langfuse-litellm.env.example"
+  if [[ ! -f "${s}" ]]; then
+    if [[ -f "${ex}" ]]; then
+      cp "${ex}" "${s}"
+      echo "Создан ${s} из примера — при необходимости вставьте LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY (Langfuse → Project → API keys)."
+    else
+      echo "Предупреждение: нет ${ex}, не могу создать ${s}" >&2
+    fi
+  fi
+}
+
 case "${SUB}" in
   up)
     slgpu_ensure_slgpu_network
+    slgpu_ensure_langfuse_litellm_secrets
     slgpu_load_server_env
     echo "Поднимаю мониторинг (slgpu-monitoring)…"
     docker compose -f docker-compose.monitoring.yml --env-file main.env up -d
@@ -48,6 +62,7 @@ case "${SUB}" in
     ;;
   restart)
     slgpu_ensure_slgpu_network
+    slgpu_ensure_langfuse_litellm_secrets
     slgpu_load_server_env
     echo "Перезапуск мониторинга…"
     docker compose -f docker-compose.monitoring.yml --env-file main.env up -d --force-recreate
