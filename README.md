@@ -280,7 +280,7 @@ M=qwen3.6-35b-a3b
 
 ---
 
-## 12. Reasoning / thinking
+## 13. Reasoning / thinking
 
 - vLLM: `--reasoning-parser` и `--tool-call-parser` из пресета (см. [`scripts/serve.sh`](scripts/serve.sh) → `slgpu_run_vllm`).
 - SGLang: `--reasoning-parser` из пресета ([`scripts/serve.sh`](scripts/serve.sh) → `slgpu_run_sglang`).
@@ -300,7 +300,7 @@ curl -s http://127.0.0.1:8111/v1/chat/completions \
 
 ---
 
-## 13. Устранение неполадок
+## 14. Устранение неполадок
 
 | Симптом | Что сделать |
 |---------|-------------|
@@ -318,7 +318,7 @@ curl -s http://127.0.0.1:8111/v1/chat/completions \
 
 ---
 
-## 14. Ограничения
+## 15. Ограничения
 
 - В **`docker-compose.yml`** для vLLM задайте тег/дижест через **`VLLM_DOCKER_IMAGE`** (по умолчанию `vllm/vllm-openai:latest`); для SGLang, Prometheus, Grafana, node-exporter и dcgm-exporter сейчас **`latest`**: содержимое образов меняется без bump версии в репозитории; для продакшена зафиксируйте **digest** или явный **тег** версии.
 - SGLang может не знать те же `--reasoning-parser`, что vLLM.
@@ -328,13 +328,13 @@ curl -s http://127.0.0.1:8111/v1/chat/completions \
 
 ## 16. Структура репозитория
 
-Каталоги **`docs/`**, **`grace/`**, **`.cursor/`**, **`.kilo/`** в **git** не входят (игнорируются); на другой машине создайте их при необходимости или скопируйте с рабочей среды.
+Каталоги **`docs/`**, **`grace/`**, **`.cursor/`**, **`.kilo/`** в **git** не входят (см. [`.gitignore`](.gitignore)); после **`git clone`** их в дереве не будет — перенесите с рабочей машины или создайте заново. Корневые **[`AGENTS.md`](AGENTS.md)** и **[`HISTORY.md`](HISTORY.md)** в репозитории есть: краткие указатели; полная история и семантическая карта — в локальном **`docs/`** (если вы его ведёте).
 
 ```
 slgpu/
 ├── slgpu                       # CLI-диспетчер
 ├── VERSION                     # SemVer
-├── AGENTS.md                   # Указатель на правила (AGENTS.md → docs/)
+├── AGENTS.md                   # Короткий указатель: docs/grace/.cursor/.kilo — только локально
 ├── docker-compose.yml
 ├── main.env                    # дефолты (в т.ч. vLLM/SGLang); затем пресет
 ├── README.md

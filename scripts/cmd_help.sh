@@ -12,8 +12,8 @@ slgpu — стенд vLLM vs SGLang в Docker (Linux VM).
   monitoring up|down|restart|fix-perms   Мониторинг; fix-perms — chown каталогов данных (bind mount)
   down [--all]           Остановить vllm/sglang; --all — ещё и мониторинг
   restart -m <preset> [--tp <N>]  Перезапуск running vllm|sglang с новым пресетом
-  bench <vllm|sglang> -m <preset>
-  load <vllm|sglang> -m <preset> [опции]
+  bench [vllm|sglang] [-m <preset>]
+  load [vllm|sglang] [-m <preset>] [опции]
                          Длительный нагрузочный тест (200-300 пользователей, 15-20 мин)
   help                  Эта справка
 
