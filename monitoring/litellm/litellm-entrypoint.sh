@@ -12,4 +12,10 @@ fi
 if [ -z "${LITELLM_MASTER_KEY:-}" ]; then
   unset LITELLM_MASTER_KEY
 fi
-exec litellm --config /tmp/litellm.config.yaml --host 0.0.0.0 --port 4000 "$@"
+# LITELLM_LOG=DEBUG в env — подробные логи (дублируем --detailed_debug из docs)
+_extra=""
+if [ "${LITELLM_LOG:-}" = "DEBUG" ] || [ "${LITELLM_LOG:-}" = "debug" ]; then
+  _extra="--detailed_debug"
+fi
+# shellcheck disable=SC2086
+exec litellm --config /tmp/litellm.config.yaml --host 0.0.0.0 --port 4000 ${_extra} "$@"
