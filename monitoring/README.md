@@ -8,6 +8,15 @@
 
 В [`main.env`](../main.env) задайте **`LITELLM_LOG=DEBUG`**, пересоздайте контейнер `litellm` (эквивалент CLI **`--detailed_debug`**: больше деталей по запросам к vLLM и по ошибкам). По умолчанию **`LITELLM_LOG=INFO`**. См. [Debugging | LiteLLM](https://docs.litellm.ai/docs/proxy/debugging). Для диагностики OTEL-экспорта (Langfuse) можно временно **`OTEL_LOG_LEVEL=debug`** в `main.env`.
 
+### Langfuse: HTTP 500 — object storage (MinIO / S3), не путать с OTEL
+
+**Два разных источника 500:**
+
+1. **LiteLLM** шлёт спаны в Langfuse по OTLP — в логах **контейнера `litellm`** бывает `Transient error … exporting span` (см. раздел «подробные логи» выше, заголовок `x-langfuse-ingestion-version`, сеть до `langfuse-web`).
+2. **Langfuse** не может залить события/медиа в настроенное **blob-хранилище** (S3, MinIO, Azure…) — приём может отвечать **500**; в логах **`langfuse-web`** или **`langfuse-worker`** чаще видно ошибку **credentials / endpoint / bucket**, а не OTLP.
+
+**В этом репо** объектное хранилище — **MinIO** в compose (`minio:9000` в сети `langfuse`); в [`docker-compose.monitoring.yml`](../docker-compose.monitoring.yml) у web/worker заданы **`LANGFUSE_S3_*`** (бакет по умолч. **`langfuse`**, `FORCE_PATH_STYLE`, endpoint `http://minio:9000`) и **`MINIO_ROOT_USER`** / **`MINIO_ROOT_PASSWORD`** из [`main.env`](../main.env). Проверьте: контейнер **`minio` healthy**; **ключи** совпадают; **диск** `LANGFUSE_MINIO_DATA_DIR` с корректными правами; сеть до MinIO не «отрезана» после смены firewall/VPN. Для деталей по причине — временно **`LANGFUSE_LOG_LEVEL=debug`** в `main.env` и пересоздание **`langfuse-web`** и **`langfuse-worker`**. Оф. переменные: [Configuration (self-hosted)](https://langfuse.com/self-hosting/configuration), общий troubleshooting: [Troubleshooting & FAQ](https://langfuse.com/self-hosting/troubleshooting-and-faq).
+
 ### LiteLLM: «Authentication Error, Not connected to DB!»
 
 Нужен **PostgreSQL** для Prisma (Admin UI `/ui`, виртуальные ключи). В stanz: сервис **`litellm-pg-init`** создаёт БД **`litellm`** (имя: **`LITELLM_POSTGRES_DB`** в `main.env`, по умолч. `litellm`) в **том же** `postgres`, что Langfuse; у **`litellm`** в compose задан **`DATABASE_URL`**. После `git pull` — **`./slgpu monitoring up`** (или `docker compose ... up -d` с `--env-file main.env`).
