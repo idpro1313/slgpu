@@ -124,6 +124,7 @@
 | 2.2.0 | **Пресет DeepSeek-V4-Flash:** [`configs/models/deepseek-v4-flash.env`](configs/models/deepseek-v4-flash.env); таблица парсеров в [configs/models/README.md](configs/models/README.md). |
 | 2.2.1 | **DeepSeek-V4-Flash:** `MAX_MODEL_LEN=393216` (384K) в [deepseek-v4-flash.env](configs/models/deepseek-v4-flash.env). |
 | 2.2.2 | **DeepSeek-V4-Flash:** `KV_CACHE_DTYPE=auto` в [deepseek-v4-flash.env](configs/models/deepseek-v4-flash.env). |
+| 2.3.0 | **Пресет DeepSeek-V4-Pro:** [`configs/models/deepseek-v4-pro.env`](configs/models/deepseek-v4-pro.env). |
 
 ### Документация и gpt-oss (исправления)
 
