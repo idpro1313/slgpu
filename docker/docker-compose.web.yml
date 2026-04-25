@@ -6,7 +6,7 @@ name: slgpu-web
 # What this compose file mounts and why:
 #   - .  -> /slgpu         repository root (CLI, configs, jobs)
 #   - WEB_DATA_DIR -> /data   SQLite (default ./data/web)
-#   - MODELS_DIR (host) -> same path: weights (default ./data/models, как в main.env и root compose)
+#   - MODELS_DIR (host) -> /slgpu/data/models: веса (default ./data/models); путь в контейнере всегда абсолютный
 #   - /var/run/docker.sock so backend can read container statuses (read-only)
 #
 # It joins the existing `slgpu` bridge network (declared by
@@ -44,7 +44,7 @@ services:
     volumes:
       - .:/slgpu
       - ${WEB_DATA_DIR:-./data/web}:/data
-      - ${MODELS_DIR:-./data/models}:${MODELS_DIR:-./data/models}:rw
+      - ${MODELS_DIR:-./data/models}:/slgpu/data/models:rw
       - /var/run/docker.sock:/var/run/docker.sock:ro
     ports:
       - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-8089}:8000"

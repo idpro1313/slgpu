@@ -83,7 +83,7 @@ cd /path/to/slgpu
 ```
 
 Скрипт [`../scripts/cmd_web.sh`](../scripts/cmd_web.sh) вызывает
-`docker compose` с `project directory` = корень репо (тома `./data/web`, `./data/models`).
+`docker compose` с `project directory` = корень репо: том `./data/web` → `/data` в контейнере, **`MODELS_DIR` с хоста** → **`/slgpu/data/models`** (абсолютный путь в контейнере; см. `docker/docker-compose.web.yml`).
 
 **Вариант вручную (из корня репо):** подставьте те же переменные, что и `./slgpu web up` — `docker compose -f docker/docker-compose.web.yml --project-directory . --env-file main.env up --build -d`. Пути в compose рассчитаны на корень репозитория.
 

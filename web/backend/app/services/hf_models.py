@@ -27,17 +27,28 @@ def _models_root() -> Path:
 
     Reads `MODELS_DIR` from `main.env` if present, otherwise defaults
     to `/opt/models` to match the slgpu README.
+
+    Relative paths (e.g. ``./data/models``) are resolved from ``slgpu_root``
+    (``/slgpu`` in the web container), so they match the bind mount in
+    ``docker/docker-compose.web.yml``.
     """
 
     settings = get_settings()
     main_env = settings.main_env_path
+    root = settings.slgpu_root
     if main_env.exists():
         for line in main_env.read_text(encoding="utf-8").splitlines():
             stripped = line.strip()
             if stripped.startswith("MODELS_DIR=") and not stripped.startswith("#"):
                 value = stripped.split("=", 1)[1].strip()
-                if value:
-                    return Path(value)
+                if not value:
+                    break
+                if value.startswith("./"):
+                    return (root / value[2:]).resolve()
+                p = Path(value)
+                if p.is_absolute():
+                    return p
+                return (root / value).resolve()
     return Path("/opt/models")
 
 
