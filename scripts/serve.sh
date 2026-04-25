@@ -34,6 +34,9 @@ slgpu_run_vllm() {
     --gpu-memory-utilization "${GPU_MEM}"
     --max-model-len "${MAX_LEN}"
   )
+  if [[ -n "${SLGPU_VLLM_BLOCK_SIZE:-}" ]] && [[ "${SLGPU_VLLM_BLOCK_SIZE}" =~ ^[1-9][0-9]*$ ]]; then
+    cmd+=(--block-size "${SLGPU_VLLM_BLOCK_SIZE}")
+  fi
   if [[ "${TRUST}" == "1" ]]; then
     cmd+=(--trust-remote-code)
   fi

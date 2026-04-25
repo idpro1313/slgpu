@@ -27,6 +27,8 @@ services:
       MODEL_ID: ${MODEL_ID:-}
       MODEL_REVISION: ${MODEL_REVISION:-}
       MAX_MODEL_LEN: ${MAX_MODEL_LEN:-32768}
+      # опционально: --block-size (DeepSeek V4: 256 в блоге vLLM)
+      SLGPU_VLLM_BLOCK_SIZE: ${SLGPU_VLLM_BLOCK_SIZE:-}
       TP: ${TP:-8}
       GPU_MEM_UTIL: ${GPU_MEM_UTIL:-0.92}
       KV_CACHE_DTYPE: ${KV_CACHE_DTYPE:-fp8_e4m3}
