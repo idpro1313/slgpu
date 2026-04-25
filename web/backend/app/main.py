@@ -71,7 +71,11 @@ def _mask_db_url(url: str) -> str:
 def _mount_spa(app: FastAPI, static_dir) -> None:
     app.mount("/assets", StaticFiles(directory=static_dir / "assets"), name="assets")
 
-    @app.get("/{full_path:path}", include_in_schema=False)
+    @app.get(
+        "/{full_path:path}",
+        include_in_schema=False,
+        response_model=None,
+    )
     async def spa_fallback(full_path: str, request: Request) -> FileResponse | JSONResponse:
         if full_path.startswith("api/"):
             return JSONResponse({"detail": "not found"}, status_code=404)
