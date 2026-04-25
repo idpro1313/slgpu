@@ -40,7 +40,13 @@ class DockerInspector:
         try:
             self._client = docker.DockerClient(base_url=settings.docker_socket)
         except DockerException as exc:
-            logger.warning("[docker_client][__init__] cannot connect: %s", exc)
+            msg = f"[docker_client][__init__] cannot connect: {exc}"
+            if "Permission" in str(exc) or "PermissionError" in type(exc).__name__:
+                msg += (
+                    " — for bind-mounted /var/run/docker.sock, the app user (10001) needs "
+                    "a supplementary group with the same GID as the socket; see web/docker-entrypoint.sh."
+                )
+            logger.warning(msg)
             self._client = None
 
     @property

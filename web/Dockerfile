@@ -27,7 +27,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # `docker compose` against the host daemon mounted via /var/run/docker.sock.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-        ca-certificates curl gnupg bash tini \
+        ca-certificates curl gnupg bash tini util-linux \
  && install -m 0755 -d /etc/apt/keyrings \
  && curl -fsSL https://download.docker.com/linux/debian/gpg \
         | gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
@@ -56,8 +56,8 @@ RUN useradd --uid 10001 --user-group --shell /usr/sbin/nologin slgpuweb \
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh
 
-# PID 1 runs as root so the entrypoint can chown a bind-mounted /data, then
-# exec tini+uvicorn as slgpuweb (setpriv in docker-entrypoint.sh).
+# PID 1 runs as root so the entrypoint can chown /data and align docker.sock GID,
+# then runuser(1) → tini+uvicorn as slgpuweb (see docker-entrypoint.sh).
 EXPOSE 8000
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
