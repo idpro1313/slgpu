@@ -11,7 +11,7 @@ usage() {
   cat <<'EOF'
 Web UI (FastAPI + React) для управления slgpu: `./slgpu web up` из корня репозитория.
 
-Сеть: внешняя `slgpu` (сначала `docker compose -f docker/docker-compose.yml` или любой up, создавший сеть).
+Сеть: внешняя `slgpu` (сначала `docker compose -f docker/docker-compose.llm.yml` или любой up, создавший сеть).
 
 Переменные: `main.env` (порты LLM, monitoring, `MODELS_DIR`, `WEB_DATA_DIR` и т.д.).
 

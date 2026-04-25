@@ -118,7 +118,7 @@ fi
 
 echo "Модель: ${MODEL_ID}  TP=${TP} (${tp_src})  NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES}  (MAX_MODEL_LEN=${MAX_MODEL_LEN:-<default>}, KV=${KV_CACHE_DTYPE:-<default>}, reasoning=${REASONING_PARSER:-<off>})"
 
-# Для docker compose: подстановка ${VAR} в docker/docker-compose.yml берётся из окружения
+# Для docker compose: подстановка ${VAR} в docker/docker-compose.llm.yml берётся из окружения
 # процесса `docker compose`. Файл `.env` в корне репо (gitignore) тоже участвует в
 # подстановке и часто переопределяет GPU_MEM_UTIL / MAX_MODEL_LEN — с пресетом из
 # `./slgpu up` тогда несоответствие. Явно прокидываем критичные для образа/инференса
@@ -150,17 +150,17 @@ slgpu_ensure_slgpu_network
 slgpu_ensure_data_dirs
 
 echo "Останавливаю vllm/sglang (если были)…"
-compose_llm_env -f docker/docker-compose.yml stop vllm sglang 2>/dev/null || true
-compose_llm_env -f docker/docker-compose.yml rm -f vllm sglang 2>/dev/null || true
+compose_llm_env -f docker/docker-compose.llm.yml stop vllm sglang 2>/dev/null || true
+compose_llm_env -f docker/docker-compose.llm.yml rm -f vllm sglang 2>/dev/null || true
 
 case "${MODE}" in
   vllm)
     echo "Поднимаю vLLM (TP=${TP:-8}, GPU ${NVIDIA_VISIBLE_DEVICES}), API :${API_PORT}…"
-    compose_llm_env -f docker/docker-compose.yml --profile vllm up -d
+    compose_llm_env -f docker/docker-compose.llm.yml --profile vllm up -d
     ;;
   sglang)
     echo "Поднимаю SGLang (TP=${TP:-8}, GPU ${NVIDIA_VISIBLE_DEVICES}), API :${API_PORT}…"
-    compose_llm_env -f docker/docker-compose.yml --profile sglang up -d
+    compose_llm_env -f docker/docker-compose.llm.yml --profile sglang up -d
     ;;
 esac
 
@@ -168,7 +168,7 @@ sleep 2
 # Внутри контейнера: vLLM 8111, SGLang 8222 (см. docker-compose, SGLANG_LISTEN_PORT).
 llm_in_port=8111
 [[ "${MODE}" == sglang ]] && llm_in_port=8222
-mapped="$(compose_llm_env -f docker/docker-compose.yml port "${MODE}" "${llm_in_port}" 2>/dev/null | head -1 || true)"
+mapped="$(compose_llm_env -f docker/docker-compose.llm.yml port "${MODE}" "${llm_in_port}" 2>/dev/null | head -1 || true)"
 if [[ -n "${mapped}" ]]; then
   echo "Проброс порта ${llm_in_port} (внутри контейнера) → хост: ${mapped}"
   if [[ "${mapped}" =~ :([0-9]+)$ ]]; then
@@ -181,5 +181,5 @@ else
 fi
 
 echo ""
-echo "Готовность модели: curl -s http://127.0.0.1:${API_PORT}/v1/models  ·  логи: cd <корень репо> && docker compose -f docker/docker-compose.yml logs -f ${MODE}"
+echo "Готовность модели: curl -s http://127.0.0.1:${API_PORT}/v1/models  ·  логи: cd <корень репо> && docker compose -f docker/docker-compose.llm.yml logs -f ${MODE}"
 echo "Мониторинг: ./slgpu monitoring up  ·  web UI: ./slgpu web up  ·  ./slgpu help"

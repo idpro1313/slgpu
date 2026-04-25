@@ -1,6 +1,6 @@
 # Собрать логи всех контейнеров в одно место
 
-Сейчас в slgpu у сервисов задан драйвер **`json-file`** с ротацией (см. `logging` в [`docker/docker-compose.yml`](../../docker/docker-compose.yml) и [`docker/docker-compose.monitoring.yml`](../../docker/docker-compose.monitoring.yml)). Физически это **отдельные файлы** на диске Docker:  
+Сейчас в slgpu у сервисов задан драйвер **`json-file`** с ротацией (см. `logging` в [`docker/docker-compose.llm.yml`](../../docker/docker-compose.llm.yml) и [`docker/docker-compose.monitoring.yml`](../../docker/docker-compose.monitoring.yml)). Физически это **отдельные файлы** на диске Docker:  
 `/var/lib/docker/containers/<container_id>/<container_id>-json.log` — «одна папка», но не один файл и неудобно для поиска.
 
 Ниже — как получить **единую точку просмотра** или **единый поток** на хосте.

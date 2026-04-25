@@ -7,7 +7,7 @@
 ## 1. Назначение
 
 Web-приложение `slgpu-web` — control plane поверх существующего bash CLI
-[`./slgpu`](../slgpu) и Docker-стека ([`docker/docker-compose.yml`](../docker/docker-compose.yml),
+[`./slgpu`](../slgpu) и Docker-стека ([`docker/docker-compose.llm.yml`](../docker/docker-compose.llm.yml),
 [`docker/docker-compose.monitoring.yml`](../docker/docker-compose.monitoring.yml)). Оно
 выполняет пять задач из ТЗ пользователя:
 
@@ -149,7 +149,7 @@ Mutations контейнеров идут только через CLI allowlist.
 
 - Windows-машина — только разработка. Все эксплуатационные команды
   выполняются на Linux VM с Docker и драйвером NVIDIA.
-- Корневые [`docker/docker-compose.yml`](../docker/docker-compose.yml) и
+- Корневые [`docker/docker-compose.llm.yml`](../docker/docker-compose.llm.yml) и
   [`docker/docker-compose.monitoring.yml`](../docker/docker-compose.monitoring.yml) задают
   стабильные **`container_name`** (префиксы `slgpu-` / `slgpu-monitoring-`); конфиги
   стека мониторинга (Prometheus, Grafana, Loki, …) — в

@@ -4,7 +4,7 @@
 
 | Файл | Назначение |
 |------|------------|
-| `docker-compose.yml` | vLLM / SGLang (`./slgpu up`) |
+| `docker-compose.llm.yml` | vLLM / SGLang (`./slgpu up`) |
 | `docker-compose.monitoring.yml` | мониторинг, Langfuse, LiteLLM (`./slgpu monitoring up`) |
 | `docker-compose.web.yml` | slgpu-web UI (`./slgpu web up`; сборка: `web/Dockerfile`, `context: ./web`) |
 

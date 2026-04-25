@@ -1,5 +1,5 @@
 # dcgm, node-exporter, Prometheus, Grafana, Loki, Promtail, Langfuse, LiteLLM — отдельно (./slgpu monitoring up).
-# Все сервисы в одной внешней сети `slgpu` (с `docker/docker-compose.yml`: метрики, логи, Langfuse, MinIO, LiteLLM). Данные: main.env
+# Все сервисы в одной внешней сети `slgpu` (с `docker/docker-compose.llm.yml`: метрики, логи, Langfuse, MinIO, LiteLLM). Данные: main.env
 # (PROMETHEUS_*, GRAFANA_*, LOKI_*, PROMTAIL_*, тайные Langfuse, LITELLM_*).
 
 name: slgpu-monitoring

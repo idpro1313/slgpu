@@ -10,7 +10,7 @@ name: slgpu-web
 #   - /var/run/docker.sock so backend can read container statuses (read-only)
 #
 # It joins the existing `slgpu` bridge network (declared by
-# `docker/docker-compose.yml` as `name: slgpu`) so DNS to vllm/sglang/litellm by
+# `docker/docker-compose.llm.yml` as `name: slgpu`) so DNS to vllm/sglang/litellm by
 # service name works when the upstream stack is up.
 # Build: context `./web` и Dockerfile в каталоге `web/` (корень репо = --project-directory).
 

@@ -23,7 +23,7 @@ usage() {
   ./slgpu monitoring fix-perms
   (см. scripts/monitoring_fix_permissions.sh, main.env: GRAFANA_DATA_DIR, PROMETHEUS_DATA_DIR, LOKI_DATA_DIR, PROMTAIL_DATA_DIR, LANGFUSE_*_DATA_DIR)
 
-Конфиг: `docker/docker-compose.monitoring.yml`, сеть \`slgpu\` — общая с `docker/docker-compose.yml` (Prometheus → vllm:8111 / sglang:8222).
+Конфиг: `docker/docker-compose.monitoring.yml`, сеть \`slgpu\` — общая с `docker/docker-compose.llm.yml` (Prometheus → vllm:8111 / sglang:8222).
 
 Переменные портов и ретенции — main.env (как раньше).
 
