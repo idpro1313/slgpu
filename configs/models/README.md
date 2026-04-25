@@ -43,7 +43,7 @@
 | Qwen3-Coder / Qwen3.6      | `qwen3`            | `qwen3_xml` (или `qwen3_coder`)    |
 | Qwen3-*-Thinking           | `qwen3-thinking`   | `hermes`                           |
 | DeepSeek R1              | `deepseek_r1`      | `pythonic`         |
-| deepseek-ai/DeepSeek-V4-* (Flash/Pro) | `deepseek_r1` | `pythonic` (при смене формата — список парсеров в образе) |
+| deepseek-ai/DeepSeek-V4-* (Flash/Pro) | `deepseek_v4` | `deepseek_v4` (рецепт [vLLM DeepSeek V4](https://vllm.ai/blog/deepseek-v4); не путать с `deepseek_r1` для R1) |
 | openai/gpt-oss-*         | `openai_gptoss`    | `openai`           |
 | zai-org/GLM* (bf16)     | `glm45`            | `glm45`            |
 | zai-org/GLM*FP8         | `glm45`            | `glm47`            |

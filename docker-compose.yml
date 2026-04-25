@@ -52,6 +52,8 @@ services:
       MM_ENCODER_TP_MODE: ${MM_ENCODER_TP_MODE:-}
       # Опционально: --attention-backend (DeepSeek V4: см. INFO fp8_ds_mla vs FLASHINFER_MLA_SPARSE в serve.sh)
       SLGPU_VLLM_ATTENTION_BACKEND: ${SLGPU_VLLM_ATTENTION_BACKEND:-}
+      # Опционально: --tokenizer-mode (DeepSeek V4: deepseek_v4, см. vllm.ai/blog/deepseek-v4)
+      SLGPU_VLLM_TOKENIZER_MODE: ${SLGPU_VLLM_TOKENIZER_MODE:-}
       VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS: ${VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS:-1}
       # Согласовано с TP: первые N GPU (0..TP-1), выставляет ./slgpu up
       NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-0,1,2,3,4,5,6,7}

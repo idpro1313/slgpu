@@ -49,6 +49,9 @@ slgpu_run_vllm() {
   if [[ -n "${SLGPU_VLLM_ATTENTION_BACKEND:-}" ]]; then
     cmd+=(--attention-backend "${SLGPU_VLLM_ATTENTION_BACKEND}")
   fi
+  if [[ -n "${SLGPU_VLLM_TOKENIZER_MODE:-}" ]]; then
+    cmd+=(--tokenizer-mode "${SLGPU_VLLM_TOKENIZER_MODE}")
+  fi
   if [[ "${CR_PREFILL}" == "1" ]]; then
     cmd+=(--enable-chunked-prefill)
   fi
