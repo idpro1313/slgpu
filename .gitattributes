@@ -1,0 +1,2 @@
+# Shell used in Linux images must be LF (avoid /bin/sh^M in entrypoints).
+web/docker-entrypoint.sh text eol=lf

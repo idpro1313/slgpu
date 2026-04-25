@@ -8,8 +8,10 @@ session, so the laziness is invisible at runtime.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -21,14 +23,47 @@ from sqlalchemy.ext.asyncio import (
 from app.core.config import get_settings
 from app.db.base import Base
 
+logger = logging.getLogger(__name__)
+
 _engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
+
+
+def _ensure_sqlite_parent_dir(database_url: str) -> None:
+    """Create parent directory for a file-based SQLite URL if missing.
+
+    (Does not fix permission errors on a root-owned bind mount; see
+    `web/docker-entrypoint.sh`.)
+    """
+    from sqlalchemy.engine.url import make_url
+
+    try:
+        u = make_url(database_url)
+    except Exception:  # noqa: BLE001 - best-effort only
+        return
+    if "sqlite" not in u.drivername:
+        return
+    db = (u.database or "").strip()
+    if not db or db == ":memory:":
+        return
+    path = Path(db)
+    if not path.is_absolute():
+        return
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        logger.warning(
+            "could not create parent directory for SQLite: %s",
+            path.parent,
+            exc_info=True,
+        )
 
 
 def get_engine() -> AsyncEngine:
     global _engine
     if _engine is None:
         settings = get_settings()
+        _ensure_sqlite_parent_dir(settings.database_url)
         _engine = create_async_engine(
             settings.database_url,
             future=True,

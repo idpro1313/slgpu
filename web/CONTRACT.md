@@ -110,6 +110,9 @@ Mutations контейнеров идут только через CLI allowlist.
     `main.env`);
   - локальный диск под БД → `/data`;
   - `/var/run/docker.sock` → `/var/run/docker.sock` (read-only).
+- Entrypoint образа (`web/docker-entrypoint.sh`): PID 1 кратко под root,
+  `chown` на смонтированный `/data` под UID приложения (10001), затем uvicorn
+  не от root (чтобы SQLite на bind-mount не упирался в «root-only» каталог).
 - Сеть: подключение к существующей `slgpu` (external) для опционального
   доступа к именам сервисов.
 

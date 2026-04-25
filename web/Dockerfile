@@ -53,8 +53,12 @@ RUN useradd --uid 10001 --user-group --shell /usr/sbin/nologin slgpuweb \
  && mkdir -p /data \
  && chown -R slgpuweb:slgpuweb /data /srv
 
-USER slgpuweb
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh
+
+# PID 1 runs as root so the entrypoint can chown a bind-mounted /data, then
+# exec tini+uvicorn as slgpuweb (setpriv in docker-entrypoint.sh).
 EXPOSE 8000
 
-ENTRYPOINT ["/usr/bin/tini", "--"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

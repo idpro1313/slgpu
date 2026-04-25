@@ -19,7 +19,7 @@ services:
       dockerfile: Dockerfile
     container_name: slgpu-web
     restart: unless-stopped
-    user: "10001:10001"
+    # user: not set — entrypoint starts as root, chown /data, then runs app as 10001
     environment:
       WEB_APP_NAME: slgpu-web
       WEB_SLGPU_ROOT: /slgpu
