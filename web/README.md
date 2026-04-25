@@ -100,7 +100,10 @@ daemon не нашёл бы файлы по `/slgpu/...` и создал бы п
 
 **Зависимости в образе для CLI-задач:**
 - `huggingface_hub[cli]` (команда `hf`) и `hf_transfer` ставятся в [`../docker/Dockerfile.web`](../docker/Dockerfile.web);
-  без них `slgpu pull` из web падает с `Не найдена команда «hf»`.
+  без них `slgpu pull` из web падает с `Не найдена команда «hf»`. В образе также есть
+  writable `/home/slgpuweb`, а `HF_HOME=/data/huggingface`; [`../scripts/cmd_pull.sh`](../scripts/cmd_pull.sh)
+  переводит `MODELS_DIR=./data/models` в абсолютный путь и при отсутствующем/wrong `$HOME`
+  использует writable `WEB_DATA_DIR`, чтобы `hf download` не писал в недоступный `/home/slgpuweb`.
 - `monitoring fix-perms` использует короткоживущий root-контейнер (`docker run --rm -u 0:0`,
   образ из переменной **`SLGPU_FIXPERMS_HELPER_IMAGE`**, по умолчанию `alpine:latest`)
   для `mkdir`/`chown`. `sudo` **не нужен** ни на хосте, ни внутри web.

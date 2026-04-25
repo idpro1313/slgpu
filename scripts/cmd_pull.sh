@@ -72,6 +72,15 @@ fi
 
 slgpu_load_server_env
 
+slgpu_abs_path_from_root() {
+  local path="$1"
+  if [[ "${path}" == /* ]]; then
+    printf '%s\n' "${path}"
+  else
+    printf '%s/%s\n' "${ROOT}" "${path#./}"
+  fi
+}
+
 HF_ENV="${ROOT}/configs/secrets/hf.env"
 if [[ -f "${HF_ENV}" ]]; then
   set -a
@@ -89,7 +98,21 @@ if [[ -z "${HF_TOKEN:-}" ]]; then
   echo "Предупреждение: HF_TOKEN пуст — приватные репо не скачаются." >&2
 fi
 
-MODELS_DIR="${MODELS_DIR:-${ROOT}/data/models}"
+MODELS_DIR="$(slgpu_abs_path_from_root "${MODELS_DIR:-${ROOT}/data/models}")"
+mkdir -p "${MODELS_DIR}"
+WEB_DATA_DIR_ABS="$(slgpu_abs_path_from_root "${WEB_DATA_DIR:-${ROOT}/data/web}")"
+
+# Hugging Face CLI writes metadata/cache even when --local-dir is used.
+# In slgpu-web the process runs as slgpuweb; HOME may point to a missing
+# /home/slgpuweb in older images. Keep cache on the writable web data mount.
+if [[ -z "${HOME:-}" || ! -d "${HOME}" || ! -w "${HOME}" ]]; then
+  export HOME="${WEB_DATA_DIR_ABS}"
+fi
+mkdir -p "${HOME}"
+if [[ -z "${HF_HOME:-}" ]]; then
+  export HF_HOME="${WEB_DATA_DIR_ABS}/huggingface"
+fi
+mkdir -p "${HF_HOME}"
 
 if ! command -v hf >/dev/null 2>&1; then
   cat <<'EOF' >&2

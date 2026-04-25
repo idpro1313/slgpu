@@ -70,6 +70,11 @@ TP, revision. `shell=False` всегда.
 Зависимости job runner’а в образе web (`docker/Dockerfile.web`):
 - `huggingface_hub[cli]` (команда `hf`) и `hf_transfer` — для `cli.pull`
   (см. [`scripts/cmd_pull.sh`](../scripts/cmd_pull.sh): требует `hf` в `PATH`).
+  `cmd_pull.sh` нормализует относительный `MODELS_DIR=./data/models` в абсолютный
+  путь от корня репозитория и создаёт writable cache/home для Hugging Face:
+  `HF_HOME` по умолчанию указывает на `/data/huggingface` в web-образе; если
+  `$HOME` отсутствует или не writable, CLI использует `WEB_DATA_DIR` (абсолютный
+  путь) вместо `/home/slgpuweb`, чтобы не падать на `Permission denied`.
 - Сам `docker` CLI и доступ к `/var/run/docker.sock` — для `cli.up/down/restart` и
   `cli.monitoring.*`. `cli.monitoring.fix-perms` использует короткоживущий root-контейнер
   (`docker run --rm -u 0:0` с образом `SLGPU_FIXPERMS_HELPER_IMAGE`, по умолчанию
@@ -152,7 +157,10 @@ Mutations контейнеров идут только через CLI allowlist.
   по умолчанию `slgpu` (инференс) и `slgpu-monitoring` (мониторинг); при
   другом `COMPOSE_PROJECT_NAME` задайте `WEB_COMPOSE_PROJECT_INFER` и
   `WEB_COMPOSE_PROJECT_MONITORING` (см. `main.env` в корне репо).
-- **Наблюдаемость:** логи в **stdout** в JSON (`app.core.logging`); в сообщениях
+- **Наблюдаемость:** логи в **stdout** в JSON (`app.core.logging`); один
+  `LogRecord` должен давать ровно одну строку. `configure_logging()` заменяет
+  handlers у `root`, `app`, `httpx`, `uvicorn*` и отключает `propagate`, чтобы
+  не получать дубли вроде `INFO INFO ... ts=... logger=... msg=...`. В сообщениях
   якоря вроде `[runtime][snapshot][BLOCK_RESOLVE]`, `[monitoring][probe_all]`, `[api][dashboard]`.
   `WEB_LOG_LEVEL=DEBUG` включает, в частности, отсутствие контейнера по
   лейблам `com.docker.compose.project` / `…service` (`get_by_service`).
