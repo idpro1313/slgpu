@@ -31,13 +31,13 @@
 
 **После регистрации редирект на `http://127.0.0.1:3001`:** в [`main.env`](../../main.env) задан непубличный `NEXTAUTH_URL`. Исправьте на тот URL, с которого открываете UI (например `http://<ваш-IP>:3001`), **без** слэша в конце, затем `docker compose -f docker/docker-compose.monitoring.yml --env-file main.env up -d` или `./slgpu monitoring restart`, очистите cookies для сайта и снова зайдите.
 
-Сервисы: [`docker/docker-compose.monitoring.yml`](../../docker/docker-compose.monitoring.yml) (подъём: **`./slgpu monitoring up`**, **не** в `./slgpu up`). Сеть **`slgpu`** общая с [`docker/docker-compose.llm.yml`](../../docker/docker-compose.llm.yml) — в неё же входят **Langfuse, MinIO, LiteLLM** и остальные сервисы monitoring (отдельной bridge-сети `langfuse` больше нет). **vLLM и SGLang** в [`prometheus.yml`](prometheus.yml) скрейпятся **не** по имени `vllm:8111` (между разными compose-проектами краткое имя `vllm` часто не резолвится), а через **`host.docker.internal:<порт_на_хосте>`** (мост в хост, где опубликованы `LLM_API_PORT` → 8111 / 8222). У сервиса `prometheus` в compose задано `extra_hosts: host.docker.internal:host-gateway` (Linux). Метка **`instance`** для рядов — **`vllm:8111`** / **`sglang:8222`** (Grafana, переменные).
+Сервисы: [`docker/docker-compose.monitoring.yml`](../../docker/docker-compose.monitoring.yml) (подъём: **`./slgpu monitoring up`**, **не** в `./slgpu up`). Сеть **`slgpu`** общая с [`docker/docker-compose.llm.yml`](../../docker/docker-compose.llm.yml) — в неё же входят **Langfuse, MinIO, LiteLLM** и остальные сервисы monitoring (отдельной bridge-сети `langfuse` больше нет). **vLLM и SGLang** в [`prometheus/prometheus.yml`](prometheus/prometheus.yml) скрейпятся **не** по имени `vllm:8111` (между разными compose-проектами краткое имя `vllm` часто не резолвится), а через **`host.docker.internal:<порт_на_хосте>`** (мост в хост, где опубликованы `LLM_API_PORT` → 8111 / 8222). У сервиса `prometheus` в compose задано `extra_hosts: host.docker.internal:host-gateway` (Linux). Метка **`instance`** для рядов — **`vllm:8111`** / **`sglang:8222`** (Grafana, переменные).
 
-- **Prometheus** (по умолч. **`0.0.0.0:9090`** на хосте, см. `PROMETHEUS_BIND` в [`main.env`](../../main.env)): UI и HTTP API **без аутентификации** — в проде закройте фаерволом или поставьте `PROMETHEUS_BIND=127.0.0.1` и ходите по SSH tunnel. Скрейп vLLM/SGLang: **см. выше**; плюс `dcgm-exporter:9400`, **`node-exporter:9100`**. **Нестандартный `LLM_API_PORT`:** поправьте **хостовый** порт в `targets` в [`prometheus.yml`](prometheus.yml) (должен совпадать с левой частью `ports` в `docker/docker-compose.llm.yml` для выбранного движка).
+- **Prometheus** (по умолч. **`0.0.0.0:9090`** на хосте, см. `PROMETHEUS_BIND` в [`main.env`](../../main.env)): UI и HTTP API **без аутентификации** — в проде закройте фаерволом или поставьте `PROMETHEUS_BIND=127.0.0.1` и ходите по SSH tunnel. Скрейп vLLM/SGLang: **см. выше**; плюс `dcgm-exporter:9400`, **`node-exporter:9100`**. **Нестандартный `LLM_API_PORT`:** поправьте **хостовый** порт в `targets` в [`prometheus/prometheus.yml`](prometheus/prometheus.yml) (должен совпадать с левой частью `ports` в `docker/docker-compose.llm.yml` для выбранного движка).
   - **SGLang:** для наполнения оф. Grafana «SGLang Dashboard» сервер должен запускаться с **`--enable-metrics`** (в slgpu: по умолчанию через `SGLANG_ENABLE_METRICS=1` в `serve.sh`). Иначе панели по `sglang:*` часто пустые.
   - Когда контейнер vLLM или SGLang **не поднят** (другой профиль compose) — на хосте **нет** слушателя на 8111/8222, target будет **DOWN**. Это ожидаемо для A/B; смотрите метрики активного движка.
 - **Grafana** (`127.0.0.1:3000`): datasource Prometheus подключён автоматически.
-- **Алерты**: [prometheus-alerts.yml](prometheus-alerts.yml) (пороги при необходимости ослабьте, если метрики в вашей версии vLLM называются иначе).
+- **Алерты**: [prometheus/prometheus-alerts.yml](prometheus/prometheus-alerts.yml) (пороги при необходимости ослабьте, если метрики в вашей версии vLLM называются иначе).
 
 ## Рекомендуемые дашборды (импорт в UI Grafana)
 
@@ -46,7 +46,7 @@
    - **Dashboards → Import →** вставьте `1860` → Load.  
    - Datasource: **Prometheus** (как в provisioning, uid `prometheus`).  
    - Убедитесь, что контейнер **`node-exporter`** запущен: **`./slgpu monitoring up`** (или `docker compose -f docker/docker-compose.monitoring.yml up -d node-exporter`).  
-   - В выпадающих списках вверху дашборда выберите **Datasource: Prometheus**, **job = `node-exporter`**, **instance** — обычно **`host`** (так задан label в [`prometheus.yml`](prometheus.yml)); в других ревизиях дашборда может быть `node-exporter:9100`.
+   - В выпадающих списках вверху дашборда выберите **Datasource: Prometheus**, **job = `node-exporter`**, **instance** — обычно **`host`** (так задан label в [`prometheus/prometheus.yml`](prometheus/prometheus.yml)); в других ревизиях дашборда может быть `node-exporter:9100`.
 3. **vLLM** — поиск на grafana.com по `vllm` (ID зависят от версии; импорт через **Dashboards → Import**). В репозитории: [`vllmdash2.json`](grafana/provisioning/dashboards/json/vllmdash2.json) — **V2**; datasource **`prometheus`**, переменные **`instance`** / **`Model`** (с **All**), в запросах `job="vllm"`, `model_name=~"$model_name"`. **Данные только при запущенном контейнере vLLM** — если поднят только SGLang, метрик `vllm:*` в Prometheus нет, дашборд будет пустым (смотрите SGLang-дашборды). Если vLLM запущен, а **Model** пуст — сделайте запросы к API или выберите **All** / нужную модель и обновите переменные.
 
 ### vLLM V2: все панели «No data» (и Success Rate, и Latency)
@@ -56,7 +56,7 @@
 | Проверка | Что должно быть |
 |----------|-----------------|
 | **1. Поднят движок vLLM** | `./slgpu up vllm -m <пресет>` (профиль **vllm**). Только SGLang → на **8111** ничего не слушает, скрейп **host.docker.internal:8111** → **DOWN** → **0** рядов `vllm:*`. Откройте SGLang-дашборды, не vLLM V2. |
-| **2. Target vLLM в UP** | **Prometheus** → **Status → Targets** → job **`vllm`**, URL вроде **`http://host.docker.internal:8111/metrics`** → **State: UP** (после `git pull` и **`./slgpu monitoring restart`**). Старый экран **lookup vllm** — смена в [`prometheus.yml`](prometheus.yml). Если **DOWN** — vLLM не слушает на хосте (не тот `LLM_API_PORT`, контейнер остановлен) или `host.docker.internal` не резолвится (проверьте `extra_hosts` у `prometheus` в compose). |
+| **2. Target vLLM в UP** | **Prometheus** → **Status → Targets** → job **`vllm`**, URL вроде **`http://host.docker.internal:8111/metrics`** → **State: UP** (после `git pull` и **`./slgpu monitoring restart`**). Старый экран **lookup vllm** — смена в [`prometheus/prometheus.yml`](prometheus/prometheus.yml). Если **DOWN** — vLLM не слушает на хосте (не тот `LLM_API_PORT`, контейнер остановлен) или `host.docker.internal` не резолвится (проверьте `extra_hosts` у `prometheus` в compose). |
 | **3. Эндпоинт /metrics** | С хоста: `curl -sS "http://127.0.0.1:${LLM_API_PORT:-8111}/metrics" \| head -n 40` (для vLLM наружу по умолчанию **8111**). Должны быть строки вида **`vllm:request_success_total`**, **`vllm:num_requests_running`**. Если **HTTP 200, но `vllm:` почти нет** (или другие имена) — возможна **движок v1** / смена имён в вашей версии образа. **Explore** в Prometheus: `{__name__=~"vllm:.*"}` — пусто при «живом» API значит, дашборд V2 **не** совпадает с версией vLLM. |
 | **4. Обход: `VLLM_USE_V1=0`**| В [main.env](../../main.env) раскомментируйте **`VLLM_USE_V1=0`**, пересоздайте vLLM (`./slgpu down` / `up` или `restart`) и снова проверьте `/metrics` (см. п.3). Подбор под **Grafana V2** и старые имена; на новых vLLM движок v0 могут **убрать** — тогда смотрите **Explore** и подстраивайте PromQL/импорт другого дашборда под ваш `/metrics`. Ссылка: [vLLM #16348](https://github.com/vllm-project/vllm/issues/16348) (обсуждение метрик v1). |
 | **5. Диапазон времени** | **Last 3h** пуст, если **не было трафика** — часть **stat** всё равно может показать 0, но **rate(...[5m])** остаётся пустой до первых запросов. Минимум: один `chat/completions`, подождать 1–2 окна скрейпа (15s). |
@@ -77,8 +77,8 @@
 
 | Конфигурация | В Grafana **instance** |
 |--------------|-------------------------|
-| Текущий [`prometheus.yml`](prometheus.yml): скрейп `host.docker.internal:8222`, relabel `instance=sglang:8222` | **`sglang:8222`** |
-| Меняли порт SGLang на хосте (`LLM_API_PORT`) — обновите `targets` в `prometheus.yml` | Иначе target **DOWN**; instance по-прежнему **`sglang:8222`** в метках (если relabel не трогали) |
+| Текущий [`prometheus/prometheus.yml`](prometheus/prometheus.yml): скрейп `host.docker.internal:8222`, relabel `instance=sglang:8222` | **`sglang:8222`** |
+| Меняли порт SGLang на хосте (`LLM_API_PORT`) — обновите `targets` в `prometheus/prometheus.yml` | Иначе target **DOWN**; instance по-прежнему **`sglang:8222`** в метках (если relabel не трогали) |
 
 Если выбрать **`sglang:8111`**, а Prometheus уже скрейпит **`:8222`**, в выборке **нет** метрик с нужным `instance` → **пустые панели** и **ошибка/предупреждение** на панелях.
 
@@ -97,11 +97,11 @@
 5. **Время на графике.** Установите диапазон **Last 15 minutes** (или больше), если только что подняли стек.
 6. **Версия дашборда.** На grafana.com у **1860** несколько ревизий; при полном «No data» попробуйте импортировать **последнюю ревизию** или дропдаун **job** переключите на все доступные значения по очереди.
 
-После смены [`prometheus.yml`](prometheus.yml) перезагрузите конфиг (см. ниже) или `docker compose -f docker/docker-compose.monitoring.yml up -d prometheus` (из **корня** репо).
+После смены [`prometheus/prometheus.yml`](prometheus/prometheus.yml) перезагрузите конфиг (см. ниже) или `docker compose -f docker/docker-compose.monitoring.yml up -d prometheus` (из **корня** репо).
 
 ## Перезагрузка конфигурации Prometheus
 
-После правки `prometheus.yml`:
+После правки `prometheus/prometheus.yml`:
 
 ```bash
 curl -X POST "http://127.0.0.1:9090/-/reload"

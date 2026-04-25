@@ -114,8 +114,8 @@ services:
       - slgpu
     volumes:
       - ${PROMETHEUS_DATA_DIR:-./data/monitoring/prometheus}:/prometheus
-      - ./configs/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./configs/monitoring/prometheus-alerts.yml:/etc/prometheus/prometheus-alerts.yml:ro
+      # Каталог целиком (как Loki): иначе при «пустом» пути Docker создаёт каталог вместо .yml.
+      - ./configs/monitoring/prometheus:/etc/prometheus:ro
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
