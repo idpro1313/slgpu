@@ -1,6 +1,7 @@
 #!/bin/sh
 # Bind mount at /data often arrives root-owned; app runs as slgpuweb (10001). Fix
-# when we start as root, then drop privileges (tini + uvicorn in CMD).
+# when we start as root, then drop privileges. tini(1) is in Dockerfile
+# ENTRYPOINT, not in this script — avoids "tini is not running as PID 1" warnings.
 # On some Docker Desktop / NTFS bind mounts, chown may be ignored — use a named
 # volume (see web/docker-compose.yml) or a Linux-native path for /data.
 #
@@ -21,6 +22,6 @@ if [ "$(id -u)" = "0" ]; then
       usermod -aG "$GNAME" slgpuweb 2>/dev/null || true
     fi
   fi
-  exec runuser -u slgpuweb -- /usr/bin/tini -g -- "$@"
+  exec runuser -u slgpuweb -- "$@"
 fi
-exec /usr/bin/tini -g -- "$@"
+exec "$@"

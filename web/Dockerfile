@@ -56,9 +56,8 @@ RUN useradd --uid 10001 --user-group --shell /usr/sbin/nologin slgpuweb \
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh
 
-# PID 1 runs as root so the entrypoint can chown /data and align docker.sock GID,
-# then runuser(1) → tini+uvicorn as slgpuweb (see docker-entrypoint.sh).
+# tini = PID 1 (init + reaping). Script: root → chown/docker group → runuser slgpuweb.
 EXPOSE 8000
 
-ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+ENTRYPOINT ["/usr/bin/tini", "-g", "--", "/usr/local/bin/docker-entrypoint.sh"]
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

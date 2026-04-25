@@ -114,7 +114,8 @@ Mutations контейнеров идут только через CLI allowlist.
   `chown` на смонтированный `/data` под UID приложения (10001);
   сокет Docker при монтировании часто `root:docker` (660) — создаётся/используется
   группа с GID, совпадающим с `stat` сокета, в неё добавляется `slgpuweb`, затем
-  `runuser` → tini+uvicorn (доступ к API Docker без `PermissionError` на сокете).
+  `tini` (PID 1) → entrypoint → `runuser` (uvicorn), группа = GID `docker.sock`
+  (доступ к API Docker без `PermissionError` на сокете).
 - Сеть: подключение к существующей `slgpu` (external) для опционального
   доступа к именам сервисов.
 - Имена стеков Compose для **опроса Docker** (`com.docker.compose.project`):
