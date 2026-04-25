@@ -24,6 +24,9 @@ services:
       WEB_APP_NAME: slgpu-web
       WEB_SLGPU_ROOT: /slgpu
       WEB_DATA_DIR: /data
+      # Имена `com.docker.compose.project` — если `docker compose` поднят с другим COMPOSE_PROJECT_NAME
+      WEB_COMPOSE_PROJECT_INFER: ${WEB_COMPOSE_PROJECT_INFER:-slgpu}
+      WEB_COMPOSE_PROJECT_MONITORING: ${WEB_COMPOSE_PROJECT_MONITORING:-slgpu-monitoring}
       WEB_DATABASE_URL: sqlite+aiosqlite:////data/slgpu-web.db
       WEB_STATIC_DIR: /srv/static
       WEB_DOCKER_SOCKET: unix:///var/run/docker.sock

@@ -13,8 +13,6 @@ from app.services.docker_client import DockerInspector
 
 logger = logging.getLogger(__name__)
 
-_PROJECT = "slgpu"
-
 
 @dataclass
 class RuntimeSnapshot:
@@ -34,8 +32,9 @@ async def snapshot() -> RuntimeSnapshot:
     container_status: str | None = None
     api_port: int | None = None
 
+    project = settings.compose_project_infer
     for candidate in ("vllm", "sglang"):
-        container = inspector.get_by_service(_PROJECT, candidate)
+        container = inspector.get_by_service(project, candidate)
         if container is None:
             continue
         if container.status == "running":

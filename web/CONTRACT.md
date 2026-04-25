@@ -115,6 +115,10 @@ Mutations контейнеров идут только через CLI allowlist.
   не от root (чтобы SQLite на bind-mount не упирался в «root-only» каталог).
 - Сеть: подключение к существующей `slgpu` (external) для опционального
   доступа к именам сервисов.
+- Имена стеков Compose для **опроса Docker** (`com.docker.compose.project`):
+  по умолчанию `slgpu` (инференс) и `slgpu-monitoring` (мониторинг); при
+  другом `COMPOSE_PROJECT_NAME` задайте `WEB_COMPOSE_PROJECT_INFER` и
+  `WEB_COMPOSE_PROJECT_MONITORING` (см. `web/.env.example`).
 
 ## 6. Совместимость
 

@@ -15,10 +15,6 @@ from app.services.docker_client import ContainerSummary, DockerInspector
 logger = logging.getLogger(__name__)
 
 
-_PROJECT_INFER = "slgpu"
-_PROJECT_MONITORING = "slgpu-monitoring"
-
-
 @dataclass
 class ServiceProbe:
     key: str
@@ -32,12 +28,13 @@ class ServiceProbe:
 
 def _settings_probes() -> list[ServiceProbe]:
     s = get_settings()
+    mon = s.compose_project_monitoring
     return [
         ServiceProbe(
             key="prometheus",
             display_name="Prometheus",
             category="monitoring",
-            project=_PROJECT_MONITORING,
+            project=mon,
             service="prometheus",
             health_url=f"http://127.0.0.1:{s.prometheus_port}/-/healthy",
             web_url=f"http://127.0.0.1:{s.prometheus_port}",
@@ -46,7 +43,7 @@ def _settings_probes() -> list[ServiceProbe]:
             key="grafana",
             display_name="Grafana",
             category="monitoring",
-            project=_PROJECT_MONITORING,
+            project=mon,
             service="grafana",
             health_url=f"http://127.0.0.1:{s.grafana_port}/api/health",
             web_url=f"http://127.0.0.1:{s.grafana_port}",
@@ -55,7 +52,7 @@ def _settings_probes() -> list[ServiceProbe]:
             key="loki",
             display_name="Loki",
             category="monitoring",
-            project=_PROJECT_MONITORING,
+            project=mon,
             service="loki",
             health_url=None,
             web_url=None,
@@ -64,7 +61,7 @@ def _settings_probes() -> list[ServiceProbe]:
             key="promtail",
             display_name="Promtail",
             category="monitoring",
-            project=_PROJECT_MONITORING,
+            project=mon,
             service="promtail",
             health_url=None,
             web_url=None,
@@ -73,7 +70,7 @@ def _settings_probes() -> list[ServiceProbe]:
             key="dcgm-exporter",
             display_name="NVIDIA DCGM Exporter",
             category="monitoring",
-            project=_PROJECT_MONITORING,
+            project=mon,
             service="dcgm-exporter",
             health_url=None,
             web_url=None,
@@ -82,7 +79,7 @@ def _settings_probes() -> list[ServiceProbe]:
             key="node-exporter",
             display_name="Node Exporter",
             category="monitoring",
-            project=_PROJECT_MONITORING,
+            project=mon,
             service="node-exporter",
             health_url=None,
             web_url=None,
@@ -91,7 +88,7 @@ def _settings_probes() -> list[ServiceProbe]:
             key="langfuse",
             display_name="Langfuse",
             category="monitoring",
-            project=_PROJECT_MONITORING,
+            project=mon,
             service="langfuse-web",
             health_url=f"http://127.0.0.1:{s.langfuse_port}/api/public/health",
             web_url=f"http://127.0.0.1:{s.langfuse_port}",
@@ -100,7 +97,7 @@ def _settings_probes() -> list[ServiceProbe]:
             key="litellm",
             display_name="LiteLLM Proxy",
             category="gateway",
-            project=_PROJECT_MONITORING,
+            project=mon,
             service="litellm",
             health_url=f"http://127.0.0.1:{s.litellm_port}/health/liveliness",
             web_url=f"http://127.0.0.1:{s.litellm_port}/ui",

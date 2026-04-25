@@ -22,6 +22,15 @@ class Settings(BaseSettings):
 
     slgpu_root: Path = Field(default=Path("/slgpu"))
     data_dir: Path = Field(default=Path("/data"))
+    # Must match Docker label com.docker.compose.project for each stack (see `docker ps --format '{{.Label "com.docker.compose.project"}}'`)
+    compose_project_infer: str = Field(
+        default="slgpu",
+        description="Compose project name for the vLLM/SGLang stack",
+    )
+    compose_project_monitoring: str = Field(
+        default="slgpu-monitoring",
+        description="Compose project name for docker-compose.monitoring stack",
+    )
     database_url: str = Field(
         default="sqlite+aiosqlite:////data/slgpu-web.db",
         description="SQLAlchemy async URL. Use absolute path inside the container.",
