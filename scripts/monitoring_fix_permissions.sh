@@ -31,16 +31,36 @@ PGSQL_IMG="${SLGPU_LANGFUSE_POSTGRES_IMAGE:-postgres:17}"
 MINIO_IMG="${SLGPU_MINIO_IMAGE:-minio/minio:latest}"
 REDIS_IMG="${SLGPU_LANGFUSE_REDIS_IMAGE:-redis:7}"
 
-SUDO=()
-if [[ "${EUID:-0}" -ne 0 ]]; then
-  SUDO=(sudo)
-fi
+# Образ-помощник для root-операций (mkdir/chown). Должен иметь `sh` и `chown` —
+# `alpine:latest` минимален и работает и на хосте, и из контейнера web (через docker.sock).
+SLGPU_FIXPERMS_HELPER_IMAGE="${SLGPU_FIXPERMS_HELPER_IMAGE:-alpine:latest}"
 
 need_docker() {
   if ! command -v docker &>/dev/null; then
     echo "Нужен docker в PATH." >&2
     exit 1
   fi
+}
+
+# Создать каталог и сменить владельца через короткоживущий root-контейнер.
+# Так работает и на хосте от обычного пользователя, и из slgpu-web (без sudo).
+# $1 = uid:gid, $2 = абсолютный путь.
+slgpu_root_chown_dir() {
+  local uidgid="$1" abs="$2"
+  if [[ -z "${abs}" ]]; then return 0; fi
+  local parent base
+  parent="$(dirname "${abs}")"
+  base="$(basename "${abs}")"
+  if [[ ! -d "${parent}" ]]; then
+    docker run --rm --user 0:0 \
+      -v "$(dirname "${parent}"):/pp" \
+      --entrypoint sh "${SLGPU_FIXPERMS_HELPER_IMAGE}" \
+      -c "mkdir -p '/pp/$(basename "${parent}")/${base}'" >/dev/null
+  fi
+  docker run --rm --user 0:0 \
+    -v "${parent}:/p" \
+    --entrypoint sh "${SLGPU_FIXPERMS_HELPER_IMAGE}" \
+    -c "mkdir -p '/p/${base}' && chown -R ${uidgid} '/p/${base}'" >/dev/null
 }
 
 id_from_image() {
@@ -127,14 +147,13 @@ echo "Langfuse Postgres (${PGSQL_IMG}): uid=${PGU} gid=${PGG}  →  ${LF_PDIR}"
 echo "Langfuse ClickHouse: uid=${CHU} gid=${CHG}  →  ${LF_CDIR}  и  ${LF_CLDIR}"
 echo "Langfuse MinIO (${MINIO_IMG}): uid=${MU} gid=${MG}  →  ${LF_MDIR}"
 echo "Langfuse Redis (${REDIS_IMG}): uid=${RU} gid=${RG}  →  ${LF_RDIR}"
-"${SUDO[@]}" mkdir -p "${GDIR}" "${PDIR}" "${LDIR}" "${PTDIR}" \
-  "${LF_PDIR}" "${LF_CDIR}" "${LF_CLDIR}" "${LF_MDIR}" "${LF_RDIR}"
-"${SUDO[@]}" chown -R "${GU}:${GG}" "${GDIR}"
-"${SUDO[@]}" chown -R "${PU}:${PG}" "${PDIR}"
-"${SUDO[@]}" chown -R "${LU}:${LG}" "${LDIR}"
-"${SUDO[@]}" chown -R root:root "${PTDIR}"
-"${SUDO[@]}" chown -R "${PGU}:${PGG}" "${LF_PDIR}"
-"${SUDO[@]}" chown -R "${CHU}:${CHG}" "${LF_CDIR}" "${LF_CLDIR}"
-"${SUDO[@]}" chown -R "${MU}:${MG}" "${LF_MDIR}"
-"${SUDO[@]}" chown -R "${RU}:${RG}" "${LF_RDIR}"
+slgpu_root_chown_dir "${GU}:${GG}" "${GDIR}"
+slgpu_root_chown_dir "${PU}:${PG}" "${PDIR}"
+slgpu_root_chown_dir "${LU}:${LG}" "${LDIR}"
+slgpu_root_chown_dir "0:0" "${PTDIR}"
+slgpu_root_chown_dir "${PGU}:${PGG}" "${LF_PDIR}"
+slgpu_root_chown_dir "${CHU}:${CHG}" "${LF_CDIR}"
+slgpu_root_chown_dir "${CHU}:${CHG}" "${LF_CLDIR}"
+slgpu_root_chown_dir "${MU}:${MG}" "${LF_MDIR}"
+slgpu_root_chown_dir "${RU}:${RG}" "${LF_RDIR}"
 echo "Готово. Далее: ./slgpu monitoring up  или  ./slgpu monitoring restart"

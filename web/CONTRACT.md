@@ -67,6 +67,14 @@ Web-приложение `slgpu-web` — control plane поверх сущест
 Аргументы валидируются регулярными выражениями: slug, hf-id, port,
 TP, revision. `shell=False` всегда.
 
+Зависимости job runner’а в образе web (`docker/Dockerfile.web`):
+- `huggingface_hub[cli]` (команда `hf`) и `hf_transfer` — для `cli.pull`
+  (см. [`scripts/cmd_pull.sh`](../scripts/cmd_pull.sh): требует `hf` в `PATH`).
+- Сам `docker` CLI и доступ к `/var/run/docker.sock` — для `cli.up/down/restart` и
+  `cli.monitoring.*`. `cli.monitoring.fix-perms` использует короткоживущий root-контейнер
+  (`docker run --rm -u 0:0` с образом `SLGPU_FIXPERMS_HELPER_IMAGE`, по умолчанию
+  `alpine:latest`) и **не требует `sudo`** ни на хосте, ни в web-контейнере.
+
 ### Docker API (read-only)
 
 Приложение использует Docker socket только для чтения:
@@ -118,7 +126,11 @@ Mutations контейнеров идут только через CLI allowlist.
     которые web запускает в стек мониторинга (`docker compose -f docker/docker-compose.monitoring.yml up`),
     отдавали docker daemon **хостовые** пути для bind-маунтов конфигов
     и скриптов; иначе daemon при отсутствующем source создаёт пустые
-    каталоги (Loki/Prometheus/`minio-bucket-init` падают);
+    каталоги (Loki/Prometheus/`minio-bucket-init` падают).
+    `working_dir` в compose **не задаём** — uvicorn должен стартовать из
+    `WORKDIR /srv/app` ([`docker/Dockerfile.web`](../docker/Dockerfile.web)),
+    где лежит пакет `app/`; для CLI-вызовов backend сам выставляет
+    `cwd=settings.slgpu_root` в `app/services/jobs.py`;
   - локальный диск под БД → `/data`;
   - **веса HF** с хоста: `${MODELS_DIR}` (должно совпадать с `MODELS_DIR` в
     `main.env`, по умолчанию **`./data/models`**). Target в контейнере

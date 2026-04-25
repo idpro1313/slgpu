@@ -43,7 +43,10 @@ WORKDIR /srv/app
 COPY backend/pyproject.toml ./pyproject.toml
 RUN pip install --upgrade pip \
  && pip install . \
- && pip install --no-deps -e .
+ && pip install --no-deps -e . \
+ && pip install --no-cache-dir "huggingface_hub[cli]" hf_transfer
+# `hf` нужен job runner’у при `slgpu pull` (см. scripts/cmd_pull.sh).
+# `hf_transfer` ускоряет скачивание (HF_HUB_ENABLE_HF_TRANSFER=1 в pull).
 
 COPY backend/ ./
 

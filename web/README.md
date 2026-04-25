@@ -84,7 +84,11 @@ cd /path/to/slgpu
 
 Скрипт [`../scripts/cmd_web.sh`](../scripts/cmd_web.sh) вызывает
 `docker compose` с `project directory` = корень репо и **экспортирует `SLGPU_HOST_REPO=$(pwd)`** —
-этот **же абсолютный хостовой путь** монтируется в контейнере и задаётся как `WEB_SLGPU_ROOT`/`working_dir`.
+этот **же абсолютный хостовой путь** монтируется в контейнере и задаётся как `WEB_SLGPU_ROOT`.
+`working_dir` для контейнера в compose **не задаётся**: uvicorn должен стартовать из
+`WORKDIR /srv/app` ([`../docker/Dockerfile.web`](../docker/Dockerfile.web)), где лежит пакет `app/`,
+иначе будет `ModuleNotFoundError: No module named 'app'`. Для CLI-вызовов backend сам выставляет
+`cwd=settings.slgpu_root` в `app/services/jobs.py`.
 Тома: `./data/web` → `/data`; **`MODELS_DIR` с хоста** → **`${SLGPU_HOST_REPO}/data/models`** (тот же абсолютный
 путь, что и в CLI на хосте; см. [`docker/docker-compose.web.yml`](../docker/docker-compose.web.yml)).
 
@@ -93,6 +97,13 @@ cd /path/to/slgpu
 daemon трактует как **хостовые**. Если бы внутри web репо лежало в `/slgpu`, а на хосте — в `/srv/slgpu`,
 daemon не нашёл бы файлы по `/slgpu/...` и создал бы пустые каталоги (типичные ошибки: Prometheus mount
 «not a directory», `minio-bucket-init` exit 126, Loki «is a directory»).
+
+**Зависимости в образе для CLI-задач:**
+- `huggingface_hub[cli]` (команда `hf`) и `hf_transfer` ставятся в [`../docker/Dockerfile.web`](../docker/Dockerfile.web);
+  без них `slgpu pull` из web падает с `Не найдена команда «hf»`.
+- `monitoring fix-perms` использует короткоживущий root-контейнер (`docker run --rm -u 0:0`,
+  образ из переменной **`SLGPU_FIXPERMS_HELPER_IMAGE`**, по умолчанию `alpine:latest`)
+  для `mkdir`/`chown`. `sudo` **не нужен** ни на хосте, ни внутри web.
 
 **Вариант вручную (из корня репо):** `SLGPU_HOST_REPO="$(pwd)" docker compose -f docker/docker-compose.web.yml --project-directory . --env-file main.env up --build -d`. Без `SLGPU_HOST_REPO` compose уйдёт в fallback `.:/slgpu` (старая схема — с известной проблемой mount-маунтов из web).
 

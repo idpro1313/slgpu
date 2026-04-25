@@ -122,7 +122,7 @@ curl -X POST "http://127.0.0.1:9090/-/reload"
 ./slgpu monitoring up
 ```
 
-Скрипт [`scripts/monitoring_fix_permissions.sh`](../../scripts/monitoring_fix_permissions.sh) читает uid/gid из образов Grafana, Prometheus, Loki, Postgres, MinIO, Redis и фиксированные **101:101** для ClickHouse; делает **`chown -R`** на все перечисленные каталоги. В [`main.env`](../../main.env) при необходимости задайте **`SLGPU_*_IMAGE`** для совпадения с compose. Нужны **docker** и **sudo** (скрипт сам вызывает `sudo`, если не root).
+Скрипт [`scripts/monitoring_fix_permissions.sh`](../../scripts/monitoring_fix_permissions.sh) читает uid/gid из образов Grafana, Prometheus, Loki, Postgres, MinIO, Redis и фиксированные **101:101** для ClickHouse; делает **`mkdir -p`** и **`chown -R`** на все перечисленные каталоги. В [`main.env`](../../main.env) при необходимости задайте **`SLGPU_*_IMAGE`** для совпадения с compose. Нужен только **docker** (CLI и доступ к daemon): `mkdir`/`chown` выполняются через короткоживущий root-контейнер `docker run --rm -u 0:0` с образом из переменной **`SLGPU_FIXPERMS_HELPER_IMAGE`** (по умолчанию `alpine:latest`); это работает и от обычного пользователя на хосте, и из web-контейнера через `docker.sock`. **`sudo` не требуется.**
 
 **Вручную:** см. [оф. Grafana (docker)](https://grafana.com/docs/grafana/latest/setup-grafana/installation/docker/) и проверяйте `docker run --rm --entrypoint sh grafana/grafana -c 'id'`.
 
