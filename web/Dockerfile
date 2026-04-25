@@ -1,0 +1,60 @@
+# syntax=docker/dockerfile:1.7
+
+# --- Stage 1: build the React/Vite frontend ----------------------------------
+FROM node:20-bookworm-slim AS frontend
+WORKDIR /app
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN --mount=type=cache,target=/root/.npm \
+    npm install --no-audit --no-fund --loglevel=error
+COPY frontend/ ./
+ENV NODE_ENV=production
+RUN npm run build
+
+
+# --- Stage 2: Python runtime + docker CLI ------------------------------------
+FROM python:3.12-slim-bookworm AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1 \
+    WEB_SLGPU_ROOT=/slgpu \
+    WEB_DATA_DIR=/data \
+    WEB_DATABASE_URL=sqlite+aiosqlite:////data/slgpu-web.db \
+    WEB_STATIC_DIR=/srv/static
+
+# docker CLI + compose plugin from docker.com so the container can invoke
+# `docker compose` against the host daemon mounted via /var/run/docker.sock.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+        ca-certificates curl gnupg bash tini \
+ && install -m 0755 -d /etc/apt/keyrings \
+ && curl -fsSL https://download.docker.com/linux/debian/gpg \
+        | gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
+ && chmod a+r /etc/apt/keyrings/docker.gpg \
+ && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian bookworm stable" \
+        > /etc/apt/sources.list.d/docker.list \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends docker-ce-cli docker-compose-plugin \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /srv/app
+
+COPY backend/pyproject.toml ./pyproject.toml
+RUN pip install --upgrade pip \
+ && pip install . \
+ && pip install --no-deps -e .
+
+COPY backend/ ./
+
+COPY --from=frontend /app/dist /srv/static
+
+RUN useradd --uid 10001 --user-group --shell /usr/sbin/nologin slgpuweb \
+ && mkdir -p /data \
+ && chown -R slgpuweb:slgpuweb /data /srv
+
+USER slgpuweb
+EXPOSE 8000
+
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

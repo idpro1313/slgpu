@@ -1,0 +1,56 @@
+name: slgpu-web
+
+# Single-container web control plane for the slgpu LLM bench.
+#
+# What this compose file mounts and why:
+#   - ../  -> /slgpu       so backend can call ./slgpu CLI and read configs/main.env
+#   - ./data -> /data      SQLite database persists on the host
+#   - /var/run/docker.sock so backend can read container statuses (read-only)
+#
+# It joins the existing `slgpu` bridge network (declared by the root
+# docker-compose.yml as `name: slgpu`) so DNS to vllm/sglang/litellm by service
+# name works when the upstream stack is up.
+
+services:
+  slgpu-web:
+    image: slgpu-web:dev
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: slgpu-web
+    restart: unless-stopped
+    user: "10001:10001"
+    environment:
+      WEB_APP_NAME: slgpu-web
+      WEB_SLGPU_ROOT: /slgpu
+      WEB_DATA_DIR: /data
+      WEB_DATABASE_URL: sqlite+aiosqlite:////data/slgpu-web.db
+      WEB_STATIC_DIR: /srv/static
+      WEB_DOCKER_SOCKET: unix:///var/run/docker.sock
+      WEB_LLM_DEFAULT_VLLM_PORT: "${LLM_API_PORT:-8111}"
+      WEB_LLM_DEFAULT_SGLANG_PORT: "${LLM_API_PORT_SGLANG:-8222}"
+      WEB_GRAFANA_PORT: "${GRAFANA_PORT:-3000}"
+      WEB_PROMETHEUS_PORT: "${PROMETHEUS_PORT:-9090}"
+      WEB_LANGFUSE_PORT: "${LANGFUSE_PORT:-3001}"
+      WEB_LITELLM_PORT: "${LITELLM_PORT:-4000}"
+      WEB_LOKI_PORT: "${LOKI_PORT:-3100}"
+    volumes:
+      - ../:/slgpu
+      - ${WEB_DATA_DIR:-./data}:/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-8089}:8000"
+    networks:
+      - slgpu
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+networks:
+  slgpu:
+    external: true
+    name: slgpu

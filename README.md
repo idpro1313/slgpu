@@ -385,9 +385,12 @@ slgpu/
 │   ├── plan/development-plan.xml
 │   ├── verification/verification-plan.xml
 │   └── knowledge-graph/knowledge-graph.xml
+├── web/                        # Web Control Plane (FastAPI + React/Vite, см. web/README.md)
 ├── .cursor/rules/*.mdc         # Правила Cursor (GRACE)
 └── .kilo/agent/rules.md        # Правила Kilo
 ```
+
+> **Web Control Plane**: отдельное приложение в каталоге [`web/`](web/) на FastAPI + React/Vite, запускается одним контейнером и хранит состояние в SQLite. Управляет загрузкой моделей с Hugging Face, пресетами, инференсом vLLM/SGLang, мониторингом и LiteLLM поверх существующего `./slgpu` CLI и Docker API. Контракт — [`web/CONTRACT.md`](web/CONTRACT.md), документация — [`web/README.md`](web/README.md).
 
 ---
 
