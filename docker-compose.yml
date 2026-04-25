@@ -32,6 +32,8 @@ services:
       KV_CACHE_DTYPE: ${KV_CACHE_DTYPE:-fp8_e4m3}
       # SLGPU_* не сканируется vLLM как неизвестный VLLM_* (см. main.env, serve.sh). Для старых пресетов допускается VLLM_MAX_NUM_BATCHED_TOKENS на хосте.
       SLGPU_MAX_NUM_BATCHED_TOKENS: ${SLGPU_MAX_NUM_BATCHED_TOKENS:-${VLLM_MAX_NUM_BATCHED_TOKENS:-8192}}
+      # опционально: --max-num-seqs (одновременные последовательности; упирается в KV, см. README)
+      SLGPU_VLLM_MAX_NUM_SEQS: ${SLGPU_VLLM_MAX_NUM_SEQS:-}
       # 1 (по умолчанию) = --disable-custom-all-reduce (NCCL). 0 = custom all-reduce; см. serve.sh
       SLGPU_DISABLE_CUSTOM_ALL_REDUCE: ${SLGPU_DISABLE_CUSTOM_ALL_REDUCE:-1}
       # 1 = --enable-prefix-caching, 0 = --no-enable-prefix-caching; иначе из пресета в контейнер не попадёт (см. sglang: «обязаны быть здесь»).

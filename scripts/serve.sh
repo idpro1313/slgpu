@@ -46,6 +46,9 @@ slgpu_run_vllm() {
     --tool-call-parser "${TOOL}"
     --reasoning-parser "${REASON}"
   )
+  if [[ -n "${SLGPU_VLLM_MAX_NUM_SEQS:-}" ]] && [[ "${SLGPU_VLLM_MAX_NUM_SEQS}" =~ ^[1-9][0-9]*$ ]]; then
+    cmd+=(--max-num-seqs "${SLGPU_VLLM_MAX_NUM_SEQS}")
+  fi
   if [[ -n "${SLGPU_VLLM_ATTENTION_BACKEND:-}" ]]; then
     cmd+=(--attention-backend "${SLGPU_VLLM_ATTENTION_BACKEND}")
   fi

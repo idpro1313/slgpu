@@ -21,6 +21,7 @@
 - **`SLGPU_VLLM_ATTENTION_BACKEND`** (только vLLM, опционально) — если задано, в `serve.sh` передаётся `--attention-backend`. У **DeepSeek V4** по умолчанию в логе: fp8_ds_mla KV; для пути с «стандартным» fp8 vLLM подсказывает `FLASHINFER_MLA_SPARSE` (см. [`scripts/serve.sh`](../scripts/serve.sh), пресеты deepseek-v4-*.env).
 - **`GPU_MEM_UTIL`** — vLLM `--gpu-memory-utilization`.
 - **`SLGPU_MAX_NUM_BATCHED_TOKENS`** — только vLLM (chunked prefill; не `VLLM_*`, чтобы vLLM 0.19+ не предупреждал о неизвестных переменных).
+- **`SLGPU_VLLM_MAX_NUM_SEQS`** — только vLLM: **`--max-num-seqs`**; верхняя граница одновременных последовательностей (упирается в KV; сначала снизьте **`MAX_MODEL_LEN`** под реальный контекст).
 - **`SLGPU_DISABLE_CUSTOM_ALL_REDUCE`** — только vLLM: `1` (дефолт) — `--disable-custom-all-reduce` (NCCL); `0` — custom all-reduce (иногда быстрее, но на части моделей/образов vLLM — `custom_all_reduce.cuh` / `invalid argument` при graph capture; тогда оставьте `1`) (см. `serve.sh`, `docker-compose`).
 - **`SGLANG_MEM_FRACTION_STATIC`** — только SGLang.
 - **`SGLANG_CUDA_GRAPH_MAX_BS`**, **`SGLANG_ENABLE_TORCH_COMPILE`**, **`SGLANG_DISABLE_CUDA_GRAPH`**, **`SGLANG_DISABLE_CUSTOM_ALL_REDUCE`** — только SGLang: обход OOM/ошибок **CUDA graph capture** и сбоев **custom all-reduce** (см. `main.env`, `scripts/serve.sh`); при «Capture cuda graph failed» SGLang подсказывает понижать mem / max-bs, отключать torch compile, в крайнем случае граф; при ошибках в `custom_all_reduce` — `SGLANG_DISABLE_CUSTOM_ALL_REDUCE=1` (откат на NCCL).
