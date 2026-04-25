@@ -109,7 +109,14 @@ Mutations контейнеров идут только через CLI allowlist.
   - репозиторий slgpu → `/slgpu` (для CLI и чтения `configs/models/*.env`,
     `main.env`);
   - локальный диск под БД → `/data`;
+  - **веса HF** с хоста: `${MODELS_DIR}` (должно совпадать с `MODELS_DIR` в
+    `main.env`, чаще всего **`/opt/models`**) — тот же путь **внутри** контейнера,
+    что в `main.env`, иначе скан/скачивание не видит каталог. Права **rw** (pull
+    и скан);
   - `/var/run/docker.sock` → `/var/run/docker.sock` (read-only).
+- Данные **мониторинга** (Prometheus, Grafana, Loki, Langfuse и т.д.) вынесены в
+  отдельный `docker-compose.monitoring.yml` и **не** монтируются в web-контейнер:
+  UI опрашивает их по HTTP/ Docker API, не по путям на диске.
 - Entrypoint образа (`web/docker-entrypoint.sh`): PID 1 кратко под root,
   `chown` на смонтированный `/data` под UID приложения (10001);
   сокет Docker при монтировании часто `root:docker` (660) — создаётся/используется

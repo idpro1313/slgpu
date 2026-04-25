@@ -27,6 +27,10 @@ Web control plane поверх существующего CLI [`./slgpu`](../slg
   статику.
 - **БД**: SQLite, путь приходит из переменной `WEB_DATABASE_URL`,
   по умолчанию `/data/slgpu-web.db`. Папка `/data` всегда bind-mount.
+- **Веса моделей**: `MODELS_DIR` с хоста (см. `../main.env`, чаще `/opt/models`)
+  — тот же путь **в** контейнере, `rw` (скан, `./slgpu pull` из job runner). Остальные
+  данные стека (рост контейнеров, мониторинг) — отдельные bind в корневых compose,
+  в web-образ они не дублируются.
 
 ## Структура
 
@@ -75,7 +79,7 @@ web/
 ```bash
 cd web
 cp .env.example .env
-# при необходимости подправьте WEB_PORT и пути к данным
+# при необходимости подправьте WEB_PORT, WEB_DATA_DIR, MODELS_DIR (синхронно с ../main.env)
 docker compose up --build -d
 ```
 
