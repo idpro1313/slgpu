@@ -23,7 +23,7 @@ usage() {
   ./slgpu monitoring fix-perms
   (см. scripts/monitoring_fix_permissions.sh, main.env: GRAFANA_DATA_DIR, PROMETHEUS_DATA_DIR, LOKI_DATA_DIR, PROMTAIL_DATA_DIR, LANGFUSE_*_DATA_DIR)
 
-Конфиг: docker-compose.monitoring.yml, сеть \`slgpu\` — общая с docker-compose.yml (Prometheus → vllm:8111 / sglang:8222).
+Конфиг: `docker/docker-compose.monitoring.yml`, сеть \`slgpu\` — общая с `docker/docker-compose.yml` (Prometheus → vllm:8111 / sglang:8222).
 
 Переменные портов и ретенции — main.env (как раньше).
 
@@ -53,12 +53,12 @@ case "${SUB}" in
     slgpu_load_server_env
     slgpu_ensure_data_dirs
     echo "Поднимаю мониторинг (slgpu-monitoring)…"
-    slgpu_docker_compose -f docker-compose.monitoring.yml --env-file main.env up -d
+    slgpu_docker_compose -f docker/docker-compose.monitoring.yml --env-file main.env up -d
     echo "Проверка: Prometheus /targets (http://<хост>:9090/targets) · Grafana: GRAFANA_PORT · Loki: Explore → Loki · Langfuse: :${LANGFUSE_PORT:-3001} · LiteLLM: :${LITELLM_PORT:-4000} (vLLM: LLM_API_PORT → configs/monitoring/litellm/config.yaml, devllm = SLGPU_SERVED_MODEL_NAME)"
     ;;
   down)
     echo "Останавливаю мониторинг…"
-    slgpu_docker_compose -f docker-compose.monitoring.yml down
+    slgpu_docker_compose -f docker/docker-compose.monitoring.yml down
     echo "Готово."
     ;;
   restart)
@@ -66,7 +66,7 @@ case "${SUB}" in
     slgpu_ensure_langfuse_litellm_secrets
     slgpu_load_server_env
     echo "Перезапуск мониторинга…"
-    slgpu_docker_compose -f docker-compose.monitoring.yml --env-file main.env up -d --force-recreate
+    slgpu_docker_compose -f docker/docker-compose.monitoring.yml --env-file main.env up -d --force-recreate
     echo "Готово."
     ;;
   fix-perms|fix_permissions)

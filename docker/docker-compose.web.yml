@@ -9,15 +9,16 @@ name: slgpu-web
 #   - MODELS_DIR (host) -> same path: weights (default ./data/models, как в main.env и root compose)
 #   - /var/run/docker.sock so backend can read container statuses (read-only)
 #
-# It joins the existing `slgpu` bridge network (declared by the root
-# docker-compose.yml as `name: slgpu`) so DNS to vllm/sglang/litellm by service
-# name works when the upstream stack is up.
+# It joins the existing `slgpu` bridge network (declared by
+# `docker/docker-compose.yml` as `name: slgpu`) so DNS to vllm/sglang/litellm by
+# service name works when the upstream stack is up.
+# Build: context `./web` и Dockerfile в каталоге `web/` (корень репо = --project-directory).
 
 services:
   slgpu-web:
     image: slgpu-web:dev
     build:
-      context: .
+      context: ./web
       dockerfile: Dockerfile
     container_name: slgpu-web
     restart: unless-stopped

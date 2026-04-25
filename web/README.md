@@ -37,8 +37,7 @@ Web control plane поверх существующего CLI [`./slgpu`](../slg
 ```text
 web/
 ├── CONTRACT.md
-├── Dockerfile
-├── docker-compose.yml
+├── Dockerfile            # сборка slgpu-web (compose: ../docker/docker-compose.web.yml)
 ├── data/                 # SQLite на хосте (bind mount → /data в контейнере)
 ├── backend/
 │   ├── pyproject.toml
@@ -86,7 +85,7 @@ cd /path/to/slgpu
 Скрипт [`../scripts/cmd_web.sh`](../scripts/cmd_web.sh) вызывает
 `docker compose` с `project directory` = корень репо (тома `./data/web`, `./data/models`).
 
-**Вариант вручную (из корня репо):** подставьте те же переменные, что и `./slgpu web up` — `docker compose -f web/docker-compose.yml --project-directory . --env-file main.env up --build -d`. Пути в compose рассчитаны на корень репозитория.
+**Вариант вручную (из корня репо):** подставьте те же переменные, что и `./slgpu web up` — `docker compose -f docker/docker-compose.web.yml --project-directory . --env-file main.env up --build -d`. Пути в compose рассчитаны на корень репозитория.
 
 После старта UI: `http://${WEB_BIND:-127.0.0.1}:${WEB_PORT:-8089}/` (см. `../main.env`).
 
@@ -139,5 +138,5 @@ npm run typecheck
 Дополнительная статическая проверка для compose-файла:
 
 ```bash
-docker compose -f web/docker-compose.yml config
+docker compose -f docker/docker-compose.web.yml config
 ```

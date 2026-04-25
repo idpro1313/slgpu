@@ -7,8 +7,8 @@
 ## 1. Назначение
 
 Web-приложение `slgpu-web` — control plane поверх существующего bash CLI
-[`./slgpu`](../slgpu) и Docker-стека ([`docker-compose.yml`](../docker-compose.yml),
-[`docker-compose.monitoring.yml`](../docker-compose.monitoring.yml)). Оно
+[`./slgpu`](../slgpu) и Docker-стека ([`docker/docker-compose.yml`](../docker/docker-compose.yml),
+[`docker/docker-compose.monitoring.yml`](../docker/docker-compose.monitoring.yml)). Оно
 выполняет пять задач из ТЗ пользователя:
 
 1. Скачивание моделей с Hugging Face по ID, контроль процесса,
@@ -101,7 +101,7 @@ Mutations контейнеров идут только через CLI allowlist.
 ## 5. Развёртывание
 
 - Подъём **с хоста (Linux VM) из корня репозитория:** **`./slgpu web up`** (обёртка над
-  `docker compose -f web/docker-compose.yml --env-file main.env` с
+  `docker compose -f docker/docker-compose.web.yml --env-file main.env` с
   `--project-directory` = корень репо; см. `scripts/cmd_web.sh`). Остановка:
   **`./slgpu web down`**. Переменные `WEB_DATA_DIR`, `MODELS_DIR`, `WEB_BIND`, `WEB_PORT` —
   в [`main.env`](../main.env).
@@ -120,7 +120,7 @@ Mutations контейнеров идут только через CLI allowlist.
     и скан);
   - `/var/run/docker.sock` → `/var/run/docker.sock` (read-only).
 - Данные **мониторинга** (Prometheus, Grafana, Loki, Langfuse и т.д.) вынесены в
-  отдельный `docker-compose.monitoring.yml` и **не** монтируются в web-контейнер:
+  отдельный `docker/docker-compose.monitoring.yml` и **не** монтируются в web-контейнер:
   UI опрашивает их по HTTP/ Docker API, не по путям на диске.
 - Entrypoint образа (`web/docker-entrypoint.sh`): PID 1 кратко под root,
   `chown` на смонтированный `/data` под UID приложения (10001);
@@ -149,12 +149,12 @@ Mutations контейнеров идут только через CLI allowlist.
 
 - Windows-машина — только разработка. Все эксплуатационные команды
   выполняются на Linux VM с Docker и драйвером NVIDIA.
-- Корневые [`docker-compose.yml`](../docker-compose.yml) и
-  [`docker-compose.monitoring.yml`](../docker-compose.monitoring.yml) задают
+- Корневые [`docker/docker-compose.yml`](../docker/docker-compose.yml) и
+  [`docker/docker-compose.monitoring.yml`](../docker/docker-compose.monitoring.yml) задают
   стабильные **`container_name`** (префиксы `slgpu-` / `slgpu-monitoring-`); конфиги
   стека мониторинга (Prometheus, Grafana, Loki, …) — в
   [`configs/monitoring/`](../configs/monitoring/).
-  web-приложение поднимается отдельным [`web/docker-compose.yml`](docker-compose.yml).
+  web-приложение поднимается отдельным [`docker/docker-compose.web.yml`](../docker/docker-compose.web.yml).
 
 ## 7. Журнал изменений контракта
 

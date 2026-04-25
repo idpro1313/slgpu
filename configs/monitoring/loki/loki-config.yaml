@@ -1,4 +1,4 @@
-# Монолит Loki, локальное хранение на /loki (bind: LOKI_DATA_DIR на хосте, см. main.env, docker-compose.monitoring.yml).
+# Монолит Loki, локальное хранение на /loki (bind: LOKI_DATA_DIR на хосте, см. main.env, docker/docker-compose.monitoring.yml).
 # Образ: grafana/loki:2.9.8
 auth_enabled: false
 

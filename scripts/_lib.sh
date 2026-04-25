@@ -6,7 +6,7 @@ slgpu_root() {
   cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd
 }
 
-# Общая сеть vLLM/SGLang ↔ Prometheus/DCGM/… (см. docker-compose.yml, docker-compose.monitoring.yml).
+# Общая сеть vLLM/SGLang ↔ Prometheus/DCGM/… (см. docker/docker-compose.yml, docker/docker-compose.monitoring.yml).
 # Раньше: «голый» `docker network create slgpu` без меток — docker compose v2 ожидает
 # com.docker.compose.project / com.docker.compose.network и падает с
 # "network ... has incorrect label com.docker.compose.network set to \"\"".
@@ -20,8 +20,8 @@ slgpu_ensure_slgpu_network() {
     if [[ "${lbl_net}" != "${want_net}" || "${lbl_proj}" != "${proj}" ]]; then
       echo "Сеть ${want_net} уже есть, но создана не через «этот» docker compose (нет меток com.docker.compose.*)." >&2
       echo "Починка: остановить контейнеры, удалить сеть, поднять заново:" >&2
-      echo "  cd $(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd) && docker compose -f docker-compose.yml down && docker network rm ${want_net}" >&2
-      echo "  (если slgpu-monitoring: также docker compose -f docker-compose.monitoring.yml down)" >&2
+      echo "  cd $(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd) && docker compose -f docker/docker-compose.yml down && docker network rm ${want_net}" >&2
+      echo "  (если slgpu-monitoring: также docker compose -f docker/docker-compose.monitoring.yml down)" >&2
       return 1
     fi
     return 0
@@ -224,11 +224,11 @@ slgpu_detect_running_engine() {
   local root
   root="$(slgpu_root)"
   cd "${root}" || return 1
-  if slgpu_docker_compose -f docker-compose.yml ps --status running --services 2>/dev/null | grep -qx 'vllm'; then
+  if slgpu_docker_compose -f docker/docker-compose.yml ps --status running --services 2>/dev/null | grep -qx 'vllm'; then
     echo vllm
     return 0
   fi
-  if slgpu_docker_compose -f docker-compose.yml ps --status running --services 2>/dev/null | grep -qx 'sglang'; then
+  if slgpu_docker_compose -f docker/docker-compose.yml ps --status running --services 2>/dev/null | grep -qx 'sglang'; then
     echo sglang
     return 0
   fi
@@ -256,7 +256,7 @@ slgpu_openai_base_url() {
     sglang) in_p=8222 ;;
     *) echo "slgpu_openai_base_url: ожидается vllm|sglang" >&2; return 1 ;;
   esac
-  mapped="$(slgpu_docker_compose -f docker-compose.yml port "${e}" "${in_p}" 2>/dev/null | head -1 || true)"
+  mapped="$(slgpu_docker_compose -f docker/docker-compose.yml port "${e}" "${in_p}" 2>/dev/null | head -1 || true)"
   host_port=""
   if [[ -n "${mapped}" ]] && [[ "${mapped}" =~ :([0-9]+)$ ]]; then
     host_port="${BASH_REMATCH[1]}"

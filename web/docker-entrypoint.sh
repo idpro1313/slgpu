@@ -3,7 +3,7 @@
 # when we start as root, then drop privileges. tini(1) is in Dockerfile
 # ENTRYPOINT, not in this script — avoids "tini is not running as PID 1" warnings.
 # On some Docker Desktop / NTFS bind mounts, chown may be ignored — use a named
-# volume (see web/docker-compose.yml) or a Linux-native path for /data.
+# volume (see docker/docker-compose.web.yml) or a Linux-native path for /data.
 #
 # Docker socket is typically mode 660 root:docker. After setpriv|runuser as 10001
 # the process must be in a group with the *same* GID as the mounted socket, or

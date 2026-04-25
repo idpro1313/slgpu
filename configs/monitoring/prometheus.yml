@@ -12,7 +12,7 @@ scrape_configs:
 
   # vLLM/SGLang: не targets вида vllm:8111 — в разных compose-проектах (slgpu vs slgpu-monitoring) DNS
   # краткого имени vllm часто нет (lookup vllm … server misbehaving). Скрейп через порт, опубликованный на
-  # хосте: host.docker.internal (см. extra_hosts в docker-compose.monitoring.yml). Метка instance
+  # хосте: host.docker.internal (см. extra_hosts в docker/docker-compose.monitoring.yml). Метка instance
   # выровнена с Grafana (vllmdash2). Нестандартный LLM_API_PORT: поменяйте порт в targets ниже.
   - job_name: vllm
     metrics_path: /metrics

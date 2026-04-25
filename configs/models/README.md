@@ -13,7 +13,7 @@
 
 ## Параметры пресета (справочник)
 
-- **`VLLM_DOCKER_IMAGE`** — образ vLLM для `docker compose` (см. [`docker-compose.yml`](../docker-compose.yml)); в репозитории задаётся **в пресете**, не в `main.env` (теги вида `*-cu130` — CUDA 13.x **в контейнере**; ориентиры на [vllm/vllm-openai](https://hub.docker.com/r/vllm/vllm-openai/tags), семейные теги `qwen3_5_…`, `glm51_…`, `deepseekv4_…`, `minimax27_…` и т.д.). Fallback в compose, если переменная не задана.
+- **`VLLM_DOCKER_IMAGE`** — образ vLLM для `docker compose` (см. [`docker/docker-compose.yml`](../docker/docker-compose.yml)); в репозитории задаётся **в пресете**, не в `main.env` (теги вида `*-cu130` — CUDA 13.x **в контейнере**; ориентиры на [vllm/vllm-openai](https://hub.docker.com/r/vllm/vllm-openai/tags), семейные теги `qwen3_5_…`, `glm51_…`, `deepseekv4_…`, `minimax27_…` и т.д.). Fallback в compose, если переменная не задана.
 - **`MODEL_ID`** — репозиторий Hugging Face и подкаталог в `MODELS_DIR` после `./slgpu pull`.
 - **`MODEL_REVISION`** — SHA/тег на HF; пусто — ветка по умолчанию.
 - **`MAX_MODEL_LEN`** — окно контекста (`--max-model-len` / `--context-length`). Задаёте **вручную** (ориентиры: **262144** у многих 256k-моделей; **131072** — Qwen3-30B / gpt-oss; **202752** / **200704** — GLM / MiniMax M2 — см. репозитарии и [рецепты](https://github.com/vllm-project/recipes) vLLM). **GLM-5.1** bf16 на 8×~140 GB — в [`glm-5.1.env`](glm-5.1.env) **65536**; **GLM-5.1-FP8** — [`glm-5.1-fp8.env`](glm-5.1-fp8.env). **`SLGPU_ENABLE_PREFIX_CACHING=0`** в пресетах GLM; при OOM снижайте `MAX_MODEL_LEN` / `GPU_MEM_UTIL` / batched tokens.
@@ -60,13 +60,13 @@
 **Qwen3.6 / Qwen3-Coder**: семейство эмитит tool calls в XML-формате (`<tool_call><function=…><parameter=…>…</tool_call>`). Парсер `hermes` ждёт JSON и падает `JSONDecodeError` на таких ответах — стрим не закрывается, клиент получает таймаут. Рекомендация vLLM docs (≥0.12, `qwen3_xml`, streaming-safe, см. vllm-project/vllm#25028); официальная карточка [Qwen/Qwen3.6-27B](https://huggingface.co/Qwen/Qwen3.6-27B) предлагает `qwen3_coder` (non-streaming fallback). Проверить список доступных tool-парсеров в образе:
 
 ```bash
-docker compose -f docker-compose.yml exec vllm python -c "from vllm.entrypoints.openai.tool_parsers import ToolParserManager; print(list(ToolParserManager.tool_parsers))"
+docker compose -f docker/docker-compose.yml exec vllm python -c "from vllm.entrypoints.openai.tool_parsers import ToolParserManager; print(list(ToolParserManager.tool_parsers))"
 ```
 
 Проверка списка reasoning-парсеров в образе vLLM:
 
 ```bash
-docker compose -f docker-compose.yml exec vllm python -c "from vllm.reasoning import ReasoningParserManager; print(list(ReasoningParserManager.reasoning_parsers))"
+docker compose -f docker/docker-compose.yml exec vllm python -c "from vllm.reasoning import ReasoningParserManager; print(list(ReasoningParserManager.reasoning_parsers))"
 ```
 
 ## Добавить свой пресет

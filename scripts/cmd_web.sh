@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Web control plane (slgpu-web): тот же compose, что `web/docker-compose.yml`, с корнем проекта = корень репо.
+# Web control plane (slgpu-web): `docker/docker-compose.web.yml`, корень проекта = корень репо.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -11,7 +11,7 @@ usage() {
   cat <<'EOF'
 Web UI (FastAPI + React) для управления slgpu: `./slgpu web up` из корня репозитория.
 
-Сеть: внешняя `slgpu` (сначала `docker compose -f docker-compose.yml` или любой up, создавший сеть).
+Сеть: внешняя `slgpu` (сначала `docker compose -f docker/docker-compose.yml` или любой up, создавший сеть).
 
 Переменные: `main.env` (порты LLM, monitoring, `MODELS_DIR`, `WEB_DATA_DIR` и т.д.).
 
@@ -34,27 +34,27 @@ case "${SUB}" in
     slgpu_load_server_env
     slgpu_ensure_data_dirs
     echo "Поднимаю slgpu-web…"
-    slgpu_docker_compose -f web/docker-compose.yml --env-file main.env up -d --build
+    slgpu_docker_compose -f docker/docker-compose.web.yml --env-file main.env up -d --build
     echo "UI: http://${WEB_BIND:-127.0.0.1}:${WEB_PORT:-8089}/  (WEB_BIND, WEB_PORT в main.env или окружении)"
     ;;
   down)
     echo "Останавливаю slgpu-web…"
-    slgpu_docker_compose -f web/docker-compose.yml --env-file main.env down
+    slgpu_docker_compose -f docker/docker-compose.web.yml --env-file main.env down
     echo "Готово."
     ;;
   restart)
     slgpu_ensure_slgpu_network
     slgpu_load_server_env
     echo "Перезапуск slgpu-web…"
-    slgpu_docker_compose -f web/docker-compose.yml --env-file main.env up -d --build --force-recreate
+    slgpu_docker_compose -f docker/docker-compose.web.yml --env-file main.env up -d --build --force-recreate
     echo "Готово."
     ;;
   logs)
-    slgpu_docker_compose -f web/docker-compose.yml --env-file main.env logs -f --tail=200
+    slgpu_docker_compose -f docker/docker-compose.web.yml --env-file main.env logs -f --tail=200
     ;;
   build)
     slgpu_load_server_env
-    slgpu_docker_compose -f web/docker-compose.yml --env-file main.env build
+    slgpu_docker_compose -f docker/docker-compose.web.yml --env-file main.env build
     ;;
   -h|--help|help) usage ;;
   "")

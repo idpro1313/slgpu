@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     )
     compose_project_monitoring: str = Field(
         default="slgpu-monitoring",
-        description="Compose project name for docker-compose.monitoring stack",
+        description="Compose project name for docker/docker-compose.monitoring.yml stack",
     )
     database_url: str = Field(
         default="sqlite+aiosqlite:////data/slgpu-web.db",
