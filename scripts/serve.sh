@@ -46,6 +46,9 @@ slgpu_run_vllm() {
     --tool-call-parser "${TOOL}"
     --reasoning-parser "${REASON}"
   )
+  if [[ -n "${SLGPU_VLLM_ATTENTION_BACKEND:-}" ]]; then
+    cmd+=(--attention-backend "${SLGPU_VLLM_ATTENTION_BACKEND}")
+  fi
   if [[ "${CR_PREFILL}" == "1" ]]; then
     cmd+=(--enable-chunked-prefill)
   fi
