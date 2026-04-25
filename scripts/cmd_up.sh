@@ -118,10 +118,31 @@ fi
 
 echo "Модель: ${MODEL_ID}  TP=${TP} (${tp_src})  NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES}  (MAX_MODEL_LEN=${MAX_MODEL_LEN:-<default>}, KV=${KV_CACHE_DTYPE:-<default>}, reasoning=${REASONING_PARSER:-<off>})"
 
-# Для docker compose: явно передаём LLM_API_PORT/LLM_API_BIND, чтобы подстановка в
-# docker-compose.yml не взяла устаревшее значение из shell без учёта -p.
+# Для docker compose: подстановка ${VAR} в docker-compose.yml берётся из окружения
+# процесса `docker compose`. Файл `.env` в корне репо (gitignore) тоже участвует в
+# подстановке и часто переопределяет GPU_MEM_UTIL / MAX_MODEL_LEN — с пресетом из
+# `./slgpu up` тогда несоответствие. Явно прокидываем критичные для образа/инференса
+# (JSON в SLGPU_VLLM_COMPILATION_CONFIG — только через унаследованный export после source).
 compose_llm_env() {
-  env LLM_API_PORT="${API_PORT}" LLM_API_BIND="${LLM_API_BIND:-0.0.0.0}" TP="${TP}" NVIDIA_VISIBLE_DEVICES="${NVIDIA_VISIBLE_DEVICES}" "$@"
+  env \
+    LLM_API_PORT="${API_PORT}" \
+    LLM_API_BIND="${LLM_API_BIND:-0.0.0.0}" \
+    TP="${TP}" \
+    NVIDIA_VISIBLE_DEVICES="${NVIDIA_VISIBLE_DEVICES}" \
+    VLLM_DOCKER_IMAGE="${VLLM_DOCKER_IMAGE:-}" \
+    MODEL_ID="${MODEL_ID}" \
+    MODEL_REVISION="${MODEL_REVISION:-}" \
+    MAX_MODEL_LEN="${MAX_MODEL_LEN:-32768}" \
+    GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.92}" \
+    KV_CACHE_DTYPE="${KV_CACHE_DTYPE}" \
+    SLGPU_VLLM_BLOCK_SIZE="${SLGPU_VLLM_BLOCK_SIZE:-}" \
+    SLGPU_MAX_NUM_BATCHED_TOKENS="${SLGPU_MAX_NUM_BATCHED_TOKENS:-${VLLM_MAX_NUM_BATCHED_TOKENS:-8192}}" \
+    SLGPU_VLLM_MAX_NUM_SEQS="${SLGPU_VLLM_MAX_NUM_SEQS:-}" \
+    TOOL_CALL_PARSER="${TOOL_CALL_PARSER:-hermes}" \
+    REASONING_PARSER="${REASONING_PARSER:-qwen3}" \
+    VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS="${VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS:-1}" \
+    SGLANG_MEM_FRACTION_STATIC="${SGLANG_MEM_FRACTION_STATIC:-0.90}" \
+    "$@"
 }
 
 slgpu_ensure_slgpu_network
