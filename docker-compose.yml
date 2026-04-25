@@ -46,6 +46,8 @@ services:
       CHAT_TEMPLATE_CONTENT_FORMAT: ${CHAT_TEMPLATE_CONTENT_FORMAT:-}
       # MiniMax M2: JSON для --compilation-config; см. MiniMax/MiniMax-M2.md
       SLGPU_VLLM_COMPILATION_CONFIG: ${SLGPU_VLLM_COMPILATION_CONFIG:-}
+      # 1 = --enforce-eager (Inductor/CUDA graph issues на части MoE+compile)
+      SLGPU_VLLM_ENFORCE_EAGER: ${SLGPU_VLLM_ENFORCE_EAGER:-0}
       # GLM-5.1-FP8 и др.: JSON для --speculative-config (напр. MTP); см. GLM/GLM5.md
       SLGPU_VLLM_SPECULATIVE_CONFIG: ${SLGPU_VLLM_SPECULATIVE_CONFIG:-}
       # 1 = --enable-expert-parallel (8×GPU при TP4); 0 = не передавать

@@ -70,6 +70,9 @@ slgpu_run_vllm() {
   if [[ -n "${SLGPU_VLLM_COMPILATION_CONFIG:-}" ]]; then
     cmd+=(--compilation-config "${SLGPU_VLLM_COMPILATION_CONFIG}")
   fi
+  if [[ "${SLGPU_VLLM_ENFORCE_EAGER:-0}" == "1" ]]; then
+    cmd+=(--enforce-eager)
+  fi
   if [[ -n "${SLGPU_VLLM_SPECULATIVE_CONFIG:-}" ]]; then
     cmd+=(--speculative-config "${SLGPU_VLLM_SPECULATIVE_CONFIG}")
   fi
