@@ -135,15 +135,19 @@ Mutations контейнеров идут только через CLI allowlist.
   лейблам `com.docker.compose.project` / `…service` (`get_by_service`).
 - **Поиск контейнеров в Docker:** помимо точного фильтра по лейблам — нормализация
   (`-`/`_`, регистр) и имя в стиле Compose v2 (`<project>-<service>-N`) / v1
-  (`<project>_<service>_N`), если Portainer/стек отдаёт нестандартные лейблы.
+  (`<project>_<service>_N`), если Portainer/стек отдаёт нестандартные лейблы;
+  дополнительно — по жёстким `container_name` из репозитория: **`slgpu-<service>`**
+  (инференс) и **`slgpu-monitoring-<service>`** (стек мониторинга), если
+  `COMPOSE_PROJECT_NAME` не совпадает с ожидаемым.
 
 ## 6. Совместимость
 
 - Windows-машина — только разработка. Все эксплуатационные команды
   выполняются на Linux VM с Docker и драйвером NVIDIA.
-- Корневые `docker-compose.yml` и `docker-compose.monitoring.yml` не
-  изменяются. Web-приложение поднимается отдельным
-  [`web/docker-compose.yml`](docker-compose.yml).
+- Корневые [`docker-compose.yml`](../docker-compose.yml) и
+  [`docker-compose.monitoring.yml`](../docker-compose.monitoring.yml) задают
+  стабильные **`container_name`** (префиксы `slgpu-` / `slgpu-monitoring-`);
+  web-приложение поднимается отдельным [`web/docker-compose.yml`](docker-compose.yml).
 
 ## 7. Журнал изменений контракта
 

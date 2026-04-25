@@ -7,6 +7,8 @@ name: slgpu
 
 services:
   vllm:
+    # Жёсткое имя: без автоматического …-1 (масштабирование >1 несовместимо с container_name)
+    container_name: slgpu-vllm
     image: ${VLLM_DOCKER_IMAGE:-vllm/vllm-openai:v0.19.1-cu130}
     profiles: ["vllm"]
     restart: unless-stopped
@@ -77,6 +79,7 @@ services:
         max-file: "5"
 
   sglang:
+    container_name: slgpu-sglang
     image: lmsysorg/sglang:latest
     profiles: ["sglang"]
     restart: unless-stopped
