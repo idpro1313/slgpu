@@ -29,6 +29,7 @@ class ServiceProbe:
 def _settings_probes() -> list[ServiceProbe]:
     s = get_settings()
     mon = s.compose_project_monitoring
+    h = s.monitoring_http_host
     return [
         ServiceProbe(
             key="prometheus",
@@ -36,8 +37,8 @@ def _settings_probes() -> list[ServiceProbe]:
             category="monitoring",
             project=mon,
             service="prometheus",
-            health_url=f"http://127.0.0.1:{s.prometheus_port}/-/healthy",
-            web_url=f"http://127.0.0.1:{s.prometheus_port}",
+            health_url=f"http://{h}:{s.prometheus_port}/-/healthy",
+            web_url=f"http://{h}:{s.prometheus_port}",
         ),
         ServiceProbe(
             key="grafana",
@@ -45,8 +46,8 @@ def _settings_probes() -> list[ServiceProbe]:
             category="monitoring",
             project=mon,
             service="grafana",
-            health_url=f"http://127.0.0.1:{s.grafana_port}/api/health",
-            web_url=f"http://127.0.0.1:{s.grafana_port}",
+            health_url=f"http://{h}:{s.grafana_port}/api/health",
+            web_url=f"http://{h}:{s.grafana_port}",
         ),
         ServiceProbe(
             key="loki",
@@ -90,8 +91,8 @@ def _settings_probes() -> list[ServiceProbe]:
             category="monitoring",
             project=mon,
             service="langfuse-web",
-            health_url=f"http://127.0.0.1:{s.langfuse_port}/api/public/health",
-            web_url=f"http://127.0.0.1:{s.langfuse_port}",
+            health_url=f"http://{h}:{s.langfuse_port}/api/public/health",
+            web_url=f"http://{h}:{s.langfuse_port}",
         ),
         ServiceProbe(
             key="litellm",
@@ -99,8 +100,8 @@ def _settings_probes() -> list[ServiceProbe]:
             category="gateway",
             project=mon,
             service="litellm",
-            health_url=f"http://127.0.0.1:{s.litellm_port}/health/liveliness",
-            web_url=f"http://127.0.0.1:{s.litellm_port}/ui",
+            health_url=f"http://{h}:{s.litellm_port}/health/liveliness",
+            web_url=f"http://{h}:{s.litellm_port}/ui",
         ),
     ]
 

@@ -71,6 +71,12 @@ class Settings(BaseSettings):
     litellm_port: int = 4000
     loki_port: int = 3100
 
+    # Из контейнера slgpu-web 127.0.0.1 — не хост; published-порты — через host.docker.internal (см. docker-compose.web.yml).
+    monitoring_http_host: str = Field(
+        default="127.0.0.1",
+        description="Host for HTTP health checks to monitoring services (Prometheus, Grafana, Langfuse, LiteLLM).",
+    )
+
     cors_origins: list[str] = Field(default_factory=lambda: ["*"])
     static_dir: Path | None = None
 

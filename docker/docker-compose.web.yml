@@ -41,6 +41,8 @@ services:
       WEB_LANGFUSE_PORT: "${LANGFUSE_PORT:-3001}"
       WEB_LITELLM_PORT: "${LITELLM_PORT:-4000}"
       WEB_LOKI_PORT: "${LOKI_PORT:-3100}"
+      # HTTP-пробы из slgpu-web к стеку monitoring (порты на хосте, не 127.0.0.1 внутри контейнера)
+      WEB_MONITORING_HTTP_HOST: host.docker.internal
     volumes:
       - .:/slgpu
       - ${WEB_DATA_DIR:-./data/web}:/data
