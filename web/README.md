@@ -27,7 +27,7 @@ Web control plane поверх существующего CLI [`./slgpu`](../slg
   статику.
 - **БД**: SQLite, путь приходит из переменной `WEB_DATABASE_URL`,
   по умолчанию `/data/slgpu-web.db`. Папка `/data` всегда bind-mount.
-- **Веса моделей**: `MODELS_DIR` с хоста (см. `../main.env`, чаще `/opt/models`)
+- **Веса моделей**: `MODELS_DIR` с хоста (см. `../main.env`, по умолчанию **`../data/models`**)
   — тот же путь **в** контейнере, `rw` (скан, `./slgpu pull` из job runner). Остальные
   данные стека (рост контейнеров, мониторинг) — отдельные bind в корневых compose,
   в web-образ они не дублируются.
@@ -76,15 +76,22 @@ web/
 > работающим стендом slgpu. На Windows-машине разработки запускать
 > только сборку фронтенда и unit-тесты backend.
 
+**Рекомендуемо (из корня репозитория):** подъём согласован с `../main.env` и каталогом **`../data/`**:
+
 ```bash
-cd web
-cp .env.example .env
-# при необходимости подправьте WEB_PORT, WEB_DATA_DIR, MODELS_DIR (синхронно с ../main.env)
-docker compose up --build -d
+cd /path/to/slgpu
+# при необходимости отредактируйте main.env: WEB_DATA_DIR, MODELS_DIR, WEB_BIND, WEB_PORT
+./slgpu web up
 ```
 
-После старта UI доступен на `http://${WEB_BIND}:${WEB_PORT}`. По
-умолчанию это `http://127.0.0.1:8089`.
+Скрипт [`../scripts/cmd_web.sh`](../scripts/cmd_web.sh) вызывает
+`docker compose` с `project directory` = корень репо (тома `./data/web`, `./data/models`).
+
+**Вариант вручную (из каталога `web/`):** `cp .env.example .env`, затем
+`docker compose up --build -d` — при этом пути в compose рассчитаны на
+запуск с **`--project-directory` у корня репо**; иначе скорректируйте тома.
+
+После старта UI: `http://${WEB_BIND:-127.0.0.1}:${WEB_PORT:-8089}/` (см. `../main.env`).
 
 ## API
 

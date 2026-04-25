@@ -62,8 +62,8 @@ services:
     networks:
       - slgpu
     volumes:
-      - ${LOKI_DATA_DIR:-/opt/mon/loki}:/loki
-      - ./monitoring/loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - ${LOKI_DATA_DIR:-./data/monitoring/loki}:/loki
+      - ./configs/monitoring/loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
     logging:
       driver: json-file
       options:
@@ -86,8 +86,8 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - ${PROMTAIL_DATA_DIR:-/opt/mon/promtail}:/data
-      - ./monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - ${PROMTAIL_DATA_DIR:-./data/monitoring/promtail}:/data
+      - ./configs/monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
     logging:
       driver: json-file
       options:
@@ -110,9 +110,9 @@ services:
     networks:
       - slgpu
     volumes:
-      - ${PROMETHEUS_DATA_DIR:-/opt/mon/prometheus}:/prometheus
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./monitoring/prometheus-alerts.yml:/etc/prometheus/prometheus-alerts.yml:ro
+      - ${PROMETHEUS_DATA_DIR:-./data/monitoring/prometheus}:/prometheus
+      - ./configs/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./configs/monitoring/prometheus-alerts.yml:/etc/prometheus/prometheus-alerts.yml:ro
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
@@ -145,8 +145,8 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_SERVER_ROOT_URL: ${GF_SERVER_ROOT_URL:-}
     volumes:
-      - ${GRAFANA_DATA_DIR:-/opt/mon/grafana}:/var/lib/grafana
-      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ${GRAFANA_DATA_DIR:-./data/monitoring/grafana}:/var/lib/grafana
+      - ./configs/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
     logging:
       driver: json-file
       options:
@@ -168,8 +168,8 @@ services:
       CLICKHOUSE_USER: ${LANGFUSE_CLICKHOUSE_USER:-clickhouse}
       CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-clickhouse}
     volumes:
-      - ${LANGFUSE_CLICKHOUSE_DATA_DIR:-/opt/mon/langfuse/clickhouse}:/var/lib/clickhouse
-      - ${LANGFUSE_CLICKHOUSE_LOGS_DIR:-/opt/mon/langfuse/clickhouse-logs}:/var/log/clickhouse-server
+      - ${LANGFUSE_CLICKHOUSE_DATA_DIR:-./data/monitoring/langfuse/clickhouse}:/var/lib/clickhouse
+      - ${LANGFUSE_CLICKHOUSE_LOGS_DIR:-./data/monitoring/langfuse/clickhouse-logs}:/var/log/clickhouse-server
     ulimits:
       nofile:
         soft: 262144
@@ -201,7 +201,7 @@ services:
       - "${MINIO_API_BIND:-127.0.0.1}:${MINIO_API_HOST_PORT:-9010}:9000"
       - "${MINIO_CONSOLE_BIND:-127.0.0.1}:${MINIO_CONSOLE_HOST_PORT:-9011}:9001"
     volumes:
-      - ${LANGFUSE_MINIO_DATA_DIR:-/opt/mon/langfuse/minio}:/data
+      - ${LANGFUSE_MINIO_DATA_DIR:-./data/monitoring/langfuse/minio}:/data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/minio/health/live"]
       interval: 5s
@@ -230,7 +230,7 @@ services:
       BUCKET_EVENT: ${LANGFUSE_S3_EVENT_UPLOAD_BUCKET:-langfuse}
       BUCKET_MEDIA: ${LANGFUSE_S3_MEDIA_BUCKET:-langfuse}
     volumes:
-      - ./monitoring/langfuse/minio-bucket-init.sh:/init/minio-bucket-init.sh:ro
+      - ./configs/monitoring/langfuse/minio-bucket-init.sh:/init/minio-bucket-init.sh:ro
     entrypoint: ["/bin/sh", "/init/minio-bucket-init.sh"]
     logging:
       driver: json-file
@@ -258,7 +258,7 @@ services:
     environment:
       REDIS_PASS: ${LANGFUSE_REDIS_AUTH:-slgpu-redis}
     volumes:
-      - ${LANGFUSE_REDIS_DATA_DIR:-/opt/mon/langfuse/redis}:/data
+      - ${LANGFUSE_REDIS_DATA_DIR:-./data/monitoring/langfuse/redis}:/data
     logging:
       driver: json-file
       options:
@@ -283,7 +283,7 @@ services:
       TZ: UTC
       PGTZ: UTC
     volumes:
-      - ${LANGFUSE_POSTGRES_DATA_DIR:-/opt/mon/langfuse/postgres}:/var/lib/postgresql/data
+      - ${LANGFUSE_POSTGRES_DATA_DIR:-./data/monitoring/langfuse/postgres}:/var/lib/postgresql/data
     logging:
       driver: json-file
       options:
@@ -428,7 +428,7 @@ services:
       POSTGRES_PASSWORD: ${LANGFUSE_POSTGRES_PASSWORD:-postgres}
       LITELLM_DB_NAME: ${LITELLM_POSTGRES_DB:-litellm}
     volumes:
-      - ./monitoring/litellm/init-litellm-db.sh:/init/init-litellm-db.sh:ro
+      - ./configs/monitoring/litellm/init-litellm-db.sh:/init/init-litellm-db.sh:ro
     entrypoint: ["/bin/sh", "/init/init-litellm-db.sh"]
     logging:
       driver: json-file
@@ -468,8 +468,8 @@ services:
     ports:
       - "${LITELLM_BIND:-0.0.0.0}:${LITELLM_PORT:-4000}:4000"
     volumes:
-      - ./monitoring/litellm/litellm-entrypoint.sh:/etc/slgpu/litellm-entrypoint.sh:ro
-      - ./monitoring/litellm/config.yaml:/etc/slgpu/config.yaml:ro
+      - ./configs/monitoring/litellm/litellm-entrypoint.sh:/etc/slgpu/litellm-entrypoint.sh:ro
+      - ./configs/monitoring/litellm/config.yaml:/etc/slgpu/config.yaml:ro
     logging:
       driver: json-file
       options:

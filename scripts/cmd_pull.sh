@@ -89,7 +89,7 @@ if [[ -z "${HF_TOKEN:-}" ]]; then
   echo "Предупреждение: HF_TOKEN пуст — приватные репо не скачаются." >&2
 fi
 
-MODELS_DIR="${MODELS_DIR:-/opt/models}"
+MODELS_DIR="${MODELS_DIR:-${ROOT}/data/models}"
 
 if ! command -v hf >/dev/null 2>&1; then
   cat <<'EOF' >&2

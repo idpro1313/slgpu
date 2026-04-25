@@ -1,6 +1,6 @@
 # slgpu
 
-Репозиторий **стенда для сравнения LLM-инференса** на Linux-сервере с GPU: два движка (**vLLM** и **SGLang**) в Docker, общий локальный кэш моделей, OpenAI-совместимый HTTP API, нагрузочный бенчмарк, **Prometheus + Grafana Loki (логи) + Promtail + Langfuse (трейсинг) + LiteLLM Proxy (шлюз) + NVIDIA DCGM Exporter** (см. [§3](#3-сервисы-и-порты), [`monitoring/README.md`](monitoring/README.md)).
+Репозиторий **стенда для сравнения LLM-инференса** на Linux-сервере с GPU: два движка (**vLLM** и **SGLang**) в Docker, общий локальный кэш моделей, OpenAI-совместимый HTTP API, нагрузочный бенчмарк, **Prometheus + Grafana Loki (логи) + Promtail + Langfuse (трейсинг) + LiteLLM Proxy (шлюз) + NVIDIA DCGM Exporter** (см. [§3](#3-сервисы-и-порты), [`configs/monitoring/README.md`](configs/monitoring/README.md)).
 
 Целевая конфигурация при разработке: **8× NVIDIA H200**. **Tensor parallel по умолчанию `TP=8`**: в пресетах [`configs/models/*.env`](configs/models/) и в [`serve.sh`](scripts/serve.sh) при отсутствии переменной. При [`./slgpu up`](scripts/cmd_up.sh) в контейнеры выставляется **`NVIDIA_VISIBLE_DEVICES=0,1,…,TP-1`**, так что число видимых GPU согласовано с `TP` (ручной список в `docker-compose` не нужен; нестандартная нумерация — `SLGPU_NVIDIA_VISIBLE_DEVICES` в `main.env` или `export`). Проект рассчитан на один хост без Kubernetes.
 
@@ -32,7 +32,7 @@
 ## 1. Назначение
 
 - Сравнение **vLLM** и **SGLang** на одной модели и одинаковых сценариях нагрузки.
-- Локальные веса на хосте (`MODELS_DIR`, по умолчанию `/opt/models`).
+- Локальные веса на хосте (`MODELS_DIR`, по умолчанию **`./data/models`** в корне репо; см. [`data/README.md`](data/README.md)).
 - Один движок за раз; **vLLM: порт 8111**, **SGLang: 8222** (по умолчанию на хосте и в контейнере, см. `docker-compose.yml`).
 - Пресеты моделей в `configs/models/<slug>.env` — **создаются вручную** (или берутся из репозитория); **`./slgpu pull`** только скачивает веса.
 
@@ -43,7 +43,7 @@
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                         Linux host                               │
-│  /opt/models  ──bind mount──►  /models (ro) в контейнерах        │
+│  data/models (MODELS_DIR)  ──bind──►  /models (ro) в контейнерах │
 └─────────────────────────────────────────────────────────────────┘
          │                    │
          ▼                    ▼
@@ -60,7 +60,7 @@
          dcgm-exporter :9400 · node-exporter :9100
 ```
 
-Логи контейнеров: **Grafana → Explore → Loki**; данные Loki на диске: `LOKI_DATA_DIR` (см. [monitoring/LOGS.md](monitoring/LOGS.md)).
+Логи контейнеров: **Grafana → Explore → Loki**; данные Loki на диске: `LOKI_DATA_DIR` (см. [configs/monitoring/LOGS.md](configs/monitoring/LOGS.md)).
 
 Переменные модели передаются в контейнер через блок **`environment`** в `docker-compose.yml` и значения, экспортированные в shell командой **`./slgpu up`** (после слияния [`main.env`](main.env) + пресет). Файл **`.env`** в корне репозитория (в `.gitignore`) Docker Compose использует для **подстановки** `${VAR}` в YAML: старый **`GPU_MEM_UTIL`** там может перебить пресет — **`./slgpu up`** прокидывает критичные переменные в `docker compose` явно (см. [`scripts/cmd_up.sh`](scripts/cmd_up.sh)).
 
@@ -112,7 +112,8 @@
 | **`prepare`** | **Один раз при создании ВМ** (или после переустановки ОС): проверка драйвера NVIDIA, установка Docker и Compose v2, NVIDIA Container Toolkit, при желании persistence mode GPU, создание каталога `MODELS_DIR`, sysctl (`vm.swappiness`), лимиты `nofile`, напоминание про firewall. Запуск от root: `sudo ./slgpu prepare` или шаг `sudo ./slgpu prepare 1` … `6`; выборочно: `STEPS=2,4 sudo -E ./slgpu prepare`. |
 | **`pull`** | **Скачивание весов** в `${MODELS_DIR}/<MODEL_ID>` через `hf download`. **Файл пресета не создаётся.** Аргумент **с `/`** — HF id: если есть `configs/models/<slug>.env` (slug из имени репо), подхватывается `MODEL_ID` и т.д.; если пресета **нет** — скачивание только по HF id, для `./slgpu up` заведите `configs/models/<slug>.env`. Аргумент **без `/`** — имя существующего пресета. Опция **`--revision`**: пин ревизии (переопределяет `MODEL_REVISION` при загрузке с пресетом). Токен: [`configs/secrets/hf.env`](configs/secrets/hf.env) (`HF_TOKEN`). |
 | **`up`** | **Запуск движка**: останавливает и удаляет контейнеры другого движка (vllm/sglang), поднимает **один** выбранный профиль — `vllm` или `sglang` (см. `./slgpu up -h`) с **`-m <preset>`** (в неинтерактивном вызове). **`./slgpu up` без аргументов** при **TTY** сначала предлагает выбрать движок, затем пресет из `configs/models/*.env`; **без TTY** укажите `vllm`/`sglang` и **`-m`** явно. Мониторинг (Prometheus, Grafana) **отдельно**: **`./slgpu monitoring up`** (один раз на хост). **Не ждёт** `GET /v1/models` — `curl` вручную. |
-| **`monitoring`** | **`up` / `down` / `restart` / `fix-perms`**: стек в [`docker-compose.monitoring.yml`](docker-compose.monitoring.yml); **`fix-perms`** — chown каталогов `PROMETHEUS_DATA_DIR`, `GRAFANA_DATA_DIR`, `LOKI_DATA_DIR`, `PROMTAIL_DATA_DIR` по uid:gid из образов (см. [monitoring/README](monitoring/README.md)). |
+| **`monitoring`** | **`up` / `down` / `restart` / `fix-perms`**: стек в [`docker-compose.monitoring.yml`](docker-compose.monitoring.yml); **`fix-perms`** — chown каталогов `PROMETHEUS_DATA_DIR`, `GRAFANA_DATA_DIR`, `LOKI_DATA_DIR`, `PROMTAIL_DATA_DIR` по uid:gid из образов (см. [configs/monitoring/README](configs/monitoring/README.md)). |
+| **`web`** | **`up` / `down` / `restart` / `logs` / `build`**: образ **slgpu-web** ([`web/docker-compose.yml`](web/docker-compose.yml)), сеть `slgpu`; тома `data/web`, `data/models` по [`main.env`](main.env). |
 | **`down`** | **Остановка инференса**: по умолчанию — **только** `vllm` и `sglang`. С флагом **`--all`** — ещё и стек мониторинга. Тома метрик/дашбордов не удаляются. |
 | **`restart`** | **Перезапуск с новым пресетом без смены движка**: определяет, какой сервис сейчас в статусе *running* (`vllm` или `sglang`), и выполняет для него ту же последовательность, что и `up`, с новым **`-m <preset>`**; опционально **`--tp`**, как у `up`. Если ни один LLM-контейнер не запущен — сообщение об ошибке; тогда используйте `up`. |
 | **`bench`** | **Нагрузочный тест** против уже поднятого API (порт vLLM 8111 / SGLang 8222 по умолчанию, см. `docker compose -f docker-compose.yml port`): запускает [`scripts/bench_openai.py`](scripts/bench_openai.py). Модель и engine **автоматически определяются** из запущенного API (`/v1/models`) и docker compose. Пресет **`-m`** опционален — используется только для `MAX_MODEL_LEN` и `BENCH_MODEL_NAME`, если указан. Пишет артефакты в `bench/results/<engine>/<timestamp>/`. |
@@ -137,8 +138,8 @@
 | Переменная | Где задаётся | Назначение |
 |------------|--------------|------------|
 | `HF_TOKEN` | [`configs/secrets/hf.env`](configs/secrets/hf.env) | Только для `./slgpu pull` |
-| `MODELS_DIR`, `LLM_API_BIND`, `PROMETHEUS_DATA_DIR`, `GRAFANA_DATA_DIR`, `LOKI_DATA_DIR`, `PROMTAIL_DATA_DIR`, `LANGFUSE_*_DATA_DIR` (Postgres/ClickHouse/MinIO/Redis), `GRAFANA_BIND`, `GRAFANA_PORT`, `GRAFANA_ADMIN_USER`, `PROMETHEUS_*`, `DCGM_BIND`, `NODE_EXPORTER_BIND` и пр. | [`main.env`](main.env) | Дефолты в репозитории; данные на хосте — bind mount, см. [monitoring/README](monitoring/README.md) |
-| `LANGFUSE_PORT`, `NEXTAUTH_URL`, `LANGFUSE_BIND`, `NEXTAUTH_SECRET`, `LITELLM_MASTER_KEY`, `LANGFUSE_POSTGRES_*`, `LANGFUSE_REDIS_AUTH`, `MINIO_ROOT_*` и т.д. | [`main.env`](main.env) | Langfuse + LiteLLM в [monitoring compose](docker-compose.monitoring.yml); **трейсинг LiteLLM → Langfuse:** [`configs/secrets/langfuse-litellm.env`](configs/secrets/langfuse-litellm.env.example) (не в git); **доступ к UI извне:** `NEXTAUTH_URL` (см. [monitoring/README](monitoring/README.md)); LiteLLM — глоб. настройки в [`monitoring/litellm/config.yaml`](monitoring/litellm/config.yaml), модели в **/ui** |
+| `MODELS_DIR`, `LLM_API_BIND`, `PROMETHEUS_DATA_DIR`, `GRAFANA_DATA_DIR`, `LOKI_DATA_DIR`, `PROMTAIL_DATA_DIR`, `LANGFUSE_*_DATA_DIR` (Postgres/ClickHouse/MinIO/Redis), `GRAFANA_BIND`, `GRAFANA_PORT`, `GRAFANA_ADMIN_USER`, `PROMETHEUS_*`, `DCGM_BIND`, `NODE_EXPORTER_BIND` и пр. | [`main.env`](main.env) | Дефолты в репозитории; данные на хосте — bind mount, см. [configs/monitoring/README](configs/monitoring/README.md) |
+| `LANGFUSE_PORT`, `NEXTAUTH_URL`, `LANGFUSE_BIND`, `NEXTAUTH_SECRET`, `LITELLM_MASTER_KEY`, `LANGFUSE_POSTGRES_*`, `LANGFUSE_REDIS_AUTH`, `MINIO_ROOT_*` и т.д. | [`main.env`](main.env) | Langfuse + LiteLLM в [monitoring compose](docker-compose.monitoring.yml); **трейсинг LiteLLM → Langfuse:** [`configs/secrets/langfuse-litellm.env`](configs/secrets/langfuse-litellm.env.example) (не в git); **доступ к UI извне:** `NEXTAUTH_URL` (см. [configs/monitoring/README](configs/monitoring/README.md)); LiteLLM — глоб. настройки в [`configs/monitoring/litellm/config.yaml`](configs/monitoring/litellm/config.yaml), модели в **/ui** |
 | `VLLM_DOCKER_IMAGE` | пресет [`configs/models/<slug>.env`](configs/models/) | Семейные теги vLLM (`*-cu130` и т.д.); fallback в [`docker-compose.yml`](docker-compose.yml) |
 | `GRAFANA_ADMIN_PASSWORD` | `main.env` (локально) или `export` | Секрет; см. шаблон внизу [`main.env`](main.env) |
 | `GF_SERVER_ROOT_URL`, `LLM_API_PORT`, `SLGPU_NVIDIA_VISIBLE_DEVICES` (опц.) | `main.env` или `export` | В [`main.env`](main.env) — закомментированные заготовки |
@@ -178,7 +179,7 @@ pip install -U "huggingface_hub[cli]"
 curl -s http://127.0.0.1:8111/v1/models
 ```
 
-Полный стек мониторинга и логов (Prometheus, Grafana, Loki, Promtail): сначала **`sudo ./slgpu monitoring fix-perms`**, чтобы каталоги `LOKI_DATA_DIR` / `PROMTAIL_DATA_DIR` и т.д. существовали с правами для контейнеров, затем **`./slgpu monitoring up`**; подробности — [monitoring/README.md](monitoring/README.md), логи — [monitoring/LOGS.md](monitoring/LOGS.md).
+Полный стек мониторинга и логов (Prometheus, Grafana, Loki, Promtail): сначала **`sudo ./slgpu monitoring fix-perms`**, чтобы каталоги `LOKI_DATA_DIR` / `PROMTAIL_DATA_DIR` и т.д. существовали с правами для контейнеров, затем **`./slgpu monitoring up`**; подробности — [configs/monitoring/README.md](configs/monitoring/README.md), логи — [configs/monitoring/LOGS.md](configs/monitoring/LOGS.md).
 
 Готовые примеры пресетов в репозитории: `qwen3.6-35b-a3b`, `qwen3-30b-a3b` и др. Для новой модели: добавьте `configs/models/<slug>.env` (см. соседние пресеты), затем **`./slgpu pull <slug>`** или **`./slgpu pull <HF id>`** при совпадении slug.
 
@@ -284,8 +285,8 @@ M=qwen3.6-35b-a3b
 
 ## 12. Мониторинг и безопасность
 
-- **Поднять стек** (если ещё не поднимали): по желанию сначала **`./slgpu monitoring fix-perms`**, затем **`./slgpu monitoring up`**. Движок и мониторинг — разные `docker compose` (сеть `slgpu`, скрейп из [`monitoring/prometheus.yml`](monitoring/prometheus.yml)). Неактивный движок (vllm/sglang) в targets — норма. **Langfuse** (трейсинг) и **LiteLLM** (шлюз к vLLM) — в [`monitoring/README.md`](monitoring/README.md) и `main.env` (`LANGFUSE_PORT` по умолч. 3001, `LITELLM_PORT` 4000); vLLM при этом должен быть поднят; **имя модели** в запросах — как в **LiteLLM /ui** (часто **`devllm`**, как **`SLGPU_SERVED_MODEL_NAME`**); маршрут — в БД, глобальные настройки — [`monitoring/litellm/config.yaml`](monitoring/litellm/config.yaml).
-- **Grafana** (`127.0.0.1:3000`), дашборды: в [`monitoring/grafana/provisioning/dashboards/json/`](monitoring/grafana/provisioning/dashboards/json/) лежат JSON с provisioning (Prometheus, uid `prometheus`): краткий **SGLang** (`sglang-dashboard-slgpu.json`), расширенный **SGLang по мотивам vLLM V2** (`sglangdash2-slgpu.json`, сборка из `vllmdash2.json` скриптом `_build_sglangdash2.py`), плюс эталон **vLLM** для ручного импорта (`vllmdash2.json`). Подробности, переменные `instance` / `model_name` и типичные сбои — в [`monitoring/README.md`](monitoring/README.md). **Логи контейнеров:** datasource **Loki** (uid `loki`) — **Explore → Loki**; хранение на диске, см. `LOKI_DATA_DIR` / [monitoring/LOGS.md](monitoring/LOGS.md).
+- **Поднять стек** (если ещё не поднимали): по желанию сначала **`./slgpu monitoring fix-perms`**, затем **`./slgpu monitoring up`**. Движок и мониторинг — разные `docker compose` (сеть `slgpu`, скрейп из [`configs/monitoring/prometheus.yml`](configs/monitoring/prometheus.yml)). Неактивный движок (vllm/sglang) в targets — норма. **Langfuse** (трейсинг) и **LiteLLM** (шлюз к vLLM) — в [`configs/monitoring/README.md`](configs/monitoring/README.md) и `main.env` (`LANGFUSE_PORT` по умолч. 3001, `LITELLM_PORT` 4000); vLLM при этом должен быть поднят; **имя модели** в запросах — как в **LiteLLM /ui** (часто **`devllm`**, как **`SLGPU_SERVED_MODEL_NAME`**); маршрут — в БД, глобальные настройки — [`configs/monitoring/litellm/config.yaml`](configs/monitoring/litellm/config.yaml).
+- **Grafana** (`127.0.0.1:3000`), дашборды: в [`configs/monitoring/grafana/provisioning/dashboards/json/`](configs/monitoring/grafana/provisioning/dashboards/json/) лежат JSON с provisioning (Prometheus, uid `prometheus`): краткий **SGLang** (`sglang-dashboard-slgpu.json`), расширенный **SGLang по мотивам vLLM V2** (`sglangdash2-slgpu.json`, сборка из `vllmdash2.json` скриптом `_build_sglangdash2.py`), плюс эталон **vLLM** для ручного импорта (`vllmdash2.json`). Подробности, переменные `instance` / `model_name` и типичные сбои — в [`configs/monitoring/README.md`](configs/monitoring/README.md). **Логи контейнеров:** datasource **Loki** (uid `loki`) — **Explore → Loki**; хранение на диске, см. `LOKI_DATA_DIR` / [configs/monitoring/LOGS.md](configs/monitoring/LOGS.md).
 - Сырые логи: **`docker compose -f docker-compose.yml logs -f vllm`**; **`docker compose -f docker-compose.monitoring.yml logs -f prometheus`**. Ротация **json-file** (100 MiB × 5) в обоих compose.
 
 **Безопасность:** смените пароль Grafana; не коммитьте `main.env` с реальными секретами в публичный репозиторий.
@@ -341,7 +342,7 @@ curl -s http://127.0.0.1:8111/v1/chat/completions \
 ## 15. Ограничения
 
 - В пресетах vLLM задайте тег/дижест через **`VLLM_DOCKER_IMAGE`** (в compose — fallback, по умолчанию `v0.19.1-cu130`); **Loki** и **Promtail** в [`docker-compose.monitoring.yml`](docker-compose.monitoring.yml) зафиксированы **2.9.8** (переопределяемые через **`SLGPU_LOKI_IMAGE`** / **`SLGPU_PROMTAIL_IMAGE`** в `main.env`); **Langfuse 3** и **LiteLLM** — в основном **`:3` / `main-*`**; для SGLang, Prometheus, Grafana, node-exporter, MinIO, Postgres, dcgm-exporter в compose в основом **`latest`** — при необходимости зафиксируйте **digest** или явный **тег** (`SLGPU_*_IMAGE` в `main.env`).
-- **Langfuse** (Postgres, MinIO, секреты `NEXTAUTH_*` / `LANGFUSE_ENCRYPTION_KEY`) — для **прод** смените пароли и `NEXTAUTH_URL`; данные в **`LANGFUSE_*_DATA_DIR`** на диске (см. [monitoring/README](monitoring/README.md), `fix-perms`). **LiteLLM** — при запущенном vLLM; в **/ui** задайте тот же **`model`**, что отдаёт vLLM (**`SLGPU_SERVED_MODEL_NAME`**, `GET /v1/models`).
+- **Langfuse** (Postgres, MinIO, секреты `NEXTAUTH_*` / `LANGFUSE_ENCRYPTION_KEY`) — для **прод** смените пароли и `NEXTAUTH_URL`; данные в **`LANGFUSE_*_DATA_DIR`** на диске (см. [configs/monitoring/README](configs/monitoring/README.md), `fix-perms`). **LiteLLM** — при запущенном vLLM; в **/ui** задайте тот же **`model`**, что отдаёт vLLM (**`SLGPU_SERVED_MODEL_NAME`**, `GET /v1/models`).
 - SGLang может не знать те же `--reasoning-parser`, что vLLM.
 - Сервисы LLM используют **`gpus: all`**, а реальная маска GPU — **`NVIDIA_VISIBLE_DEVICES`**: по умолчанию **первые `TP` карт** (`0`…`TP-1` через [`./slgpu up`](scripts/cmd_up.sh)). На хосте с **4** GPU задайте **`TP=4`** (или `--tp 4`); маппинг вручную — **`SLGPU_NVIDIA_VISIBLE_DEVICES`** в `main.env` или `export`.
 
@@ -364,21 +365,15 @@ slgpu/
 │   └── HISTORY.md              # Хронология репо и журнал сессий
 ├── configs/
 │   ├── secrets/hf.env.example
-│   └── models/*.env
+│   ├── models/*.env
+│   └── monitoring/             # Prometheus, Grafana, Loki, Langfuse, LiteLLM (compose-файлы в корне)
+├── data/                       # локальные данные на сервере (веса, web, TSDB — см. data/README.md)
 ├── scripts/
 │   ├── serve.sh                # vLLM + SGLang (SLGPU_ENGINE) → /etc/slgpu/serve.sh в контейнере
 │   ├── _lib.sh
 │   ├── cmd_*.sh
 │   ├── bench_openai.py
 │   └── bench_load.py           # Длительный нагрузочный тест
-├── monitoring/
-│   ├── LOGS.md                   # Loki + Promtail, Explore, пути на диске
-│   ├── README.md
-│   ├── prometheus.yml
-│   ├── loki/loki-config.yaml
-│   ├── promtail/promtail-config.yml
-│   ├── litellm/                # config.yaml + entrypoint (LiteLLM → vLLM, Langfuse)
-│   └── grafana/provisioning/   # в dashboards/json/ — vLLM/SGLang Grafana JSON, datasource Loki
 ├── bench/
 │   └── results/{vllm,sglang}/
 ├── grace/                      # GRACE-артефакты

@@ -143,23 +143,24 @@ compose_llm_env() {
     VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS="${VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS:-1}" \
     SGLANG_MEM_FRACTION_STATIC="${SGLANG_MEM_FRACTION_STATIC:-0.90}" \
     SLGPU_VLLM_ENFORCE_EAGER="${SLGPU_VLLM_ENFORCE_EAGER:-0}" \
-    "$@"
+    docker compose --project-directory "${ROOT}" "$@"
 }
 
 slgpu_ensure_slgpu_network
+slgpu_ensure_data_dirs
 
 echo "Останавливаю vllm/sglang (если были)…"
-compose_llm_env docker compose -f docker-compose.yml stop vllm sglang 2>/dev/null || true
-compose_llm_env docker compose -f docker-compose.yml rm -f vllm sglang 2>/dev/null || true
+compose_llm_env -f docker-compose.yml stop vllm sglang 2>/dev/null || true
+compose_llm_env -f docker-compose.yml rm -f vllm sglang 2>/dev/null || true
 
 case "${MODE}" in
   vllm)
     echo "Поднимаю vLLM (TP=${TP:-8}, GPU ${NVIDIA_VISIBLE_DEVICES}), API :${API_PORT}…"
-    compose_llm_env docker compose -f docker-compose.yml --profile vllm up -d
+    compose_llm_env -f docker-compose.yml --profile vllm up -d
     ;;
   sglang)
     echo "Поднимаю SGLang (TP=${TP:-8}, GPU ${NVIDIA_VISIBLE_DEVICES}), API :${API_PORT}…"
-    compose_llm_env docker compose -f docker-compose.yml --profile sglang up -d
+    compose_llm_env -f docker-compose.yml --profile sglang up -d
     ;;
 esac
 
@@ -167,7 +168,7 @@ sleep 2
 # Внутри контейнера: vLLM 8111, SGLang 8222 (см. docker-compose, SGLANG_LISTEN_PORT).
 llm_in_port=8111
 [[ "${MODE}" == sglang ]] && llm_in_port=8222
-mapped="$(compose_llm_env docker compose -f docker-compose.yml port "${MODE}" "${llm_in_port}" 2>/dev/null | head -1 || true)"
+mapped="$(compose_llm_env -f docker-compose.yml port "${MODE}" "${llm_in_port}" 2>/dev/null | head -1 || true)"
 if [[ -n "${mapped}" ]]; then
   echo "Проброс порта ${llm_in_port} (внутри контейнера) → хост: ${mapped}"
   if [[ "${mapped}" =~ :([0-9]+)$ ]]; then
@@ -180,5 +181,5 @@ else
 fi
 
 echo ""
-echo "Готовность модели: curl -s http://127.0.0.1:${API_PORT}/v1/models  ·  логи: docker compose -f docker-compose.yml logs -f ${MODE}"
-echo "Мониторинг: ./slgpu monitoring up  (один раз на хост; см. ./slgpu monitoring -h)"
+echo "Готовность модели: curl -s http://127.0.0.1:${API_PORT}/v1/models  ·  логи: cd <корень репо> && docker compose -f docker-compose.yml logs -f ${MODE}"
+echo "Мониторинг: ./slgpu monitoring up  ·  web UI: ./slgpu web up  ·  ./slgpu help"

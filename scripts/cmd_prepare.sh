@@ -10,7 +10,6 @@
 set -euo pipefail
 
 MIN_DRIVER_MAJOR=560
-MODELS_DIR="${MODELS_DIR:-/opt/models}"
 
 if [[ "${EUID:-0}" -ne 0 ]]; then
   exec sudo -E bash "$0" "$@"
@@ -18,6 +17,14 @@ fi
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+
+if [[ -f "${ROOT}/main.env" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "${ROOT}/main.env"
+  set +a
+fi
+MODELS_DIR="${MODELS_DIR:-${ROOT}/data/models}"
 
 log() { printf '\n[%s] %s\n' "$(date -Iseconds)" "$*"; }
 

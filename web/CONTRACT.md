@@ -28,7 +28,7 @@ Web-приложение `slgpu-web` — control plane поверх сущест
 
 | Сущность | Источник правды |
 |---|---|
-| Веса моделей на диске | `${MODELS_DIR}` (по умолчанию `/opt/models`) |
+| Веса моделей на диске | `${MODELS_DIR}` (по умолчанию **`./data/models`**, см. `data/README.md`) |
 | Параметры движка для запуска | `main.env` + `configs/models/<slug>.env` |
 | Состояние контейнеров | Docker daemon (через socket) |
 | Метрики и серии | Prometheus TSDB |
@@ -100,6 +100,11 @@ Mutations контейнеров идут только через CLI allowlist.
 
 ## 5. Развёртывание
 
+- Подъём **с хоста (Linux VM) из корня репозитория:** **`./slgpu web up`** (обёртка над
+  `docker compose -f web/docker-compose.yml --env-file main.env` с
+  `--project-directory` = корень репо; см. `scripts/cmd_web.sh`). Остановка:
+  **`./slgpu web down`**. Переменные `WEB_DATA_DIR`, `MODELS_DIR`, `WEB_BIND`, `WEB_PORT` —
+  в [`main.env`](../main.env).
 - Один контейнер `slgpu-web`. Внутри: FastAPI (uvicorn) + статика
   собранного React в одном бинаре. Backend отдаёт `/api/*` и фронт
   как fallback.
@@ -110,7 +115,7 @@ Mutations контейнеров идут только через CLI allowlist.
     `main.env`);
   - локальный диск под БД → `/data`;
   - **веса HF** с хоста: `${MODELS_DIR}` (должно совпадать с `MODELS_DIR` в
-    `main.env`, чаще всего **`/opt/models`**) — тот же путь **внутри** контейнера,
+    `main.env`, по умолчанию **`./data/models`**) — тот же путь **внутри** контейнера,
     что в `main.env`, иначе скан/скачивание не видит каталог. Права **rw** (pull
     и скан);
   - `/var/run/docker.sock` → `/var/run/docker.sock` (read-only).
@@ -146,7 +151,9 @@ Mutations контейнеров идут только через CLI allowlist.
   выполняются на Linux VM с Docker и драйвером NVIDIA.
 - Корневые [`docker-compose.yml`](../docker-compose.yml) и
   [`docker-compose.monitoring.yml`](../docker-compose.monitoring.yml) задают
-  стабильные **`container_name`** (префиксы `slgpu-` / `slgpu-monitoring-`);
+  стабильные **`container_name`** (префиксы `slgpu-` / `slgpu-monitoring-`); конфиги
+  стека мониторинга (Prometheus, Grafana, Loki, …) — в
+  [`configs/monitoring/`](../configs/monitoring/).
   web-приложение поднимается отдельным [`web/docker-compose.yml`](docker-compose.yml).
 
 ## 7. Журнал изменений контракта

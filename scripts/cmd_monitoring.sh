@@ -8,7 +8,7 @@ source "${ROOT}/scripts/_lib.sh"
 
 usage() {
   cat <<EOF
-Мониторинг: dcgm-exporter, node-exporter, Prometheus, Grafana, **Loki**, **Promtail**, **Langfuse** (UI + self-host БД/окно трейсинга), **LiteLLM** (шлюз OpenAI → vLLM) — отдельно от движка vLLM/SGLang. Логи: **Grafana → Explore → Loki** (источник в provisioning). Langfuse: \`http://<хост>:\$LANGFUSE_PORT\` (по умолч. 3001), LiteLLM: порт LITELLM_PORT (по умолч. 4000); вызовы LiteLLM — см. `monitoring/litellm/config.yaml` (часто **devllm** = `SLGPU_SERVED_MODEL_NAME`).
+Мониторинг: dcgm-exporter, node-exporter, Prometheus, Grafana, **Loki**, **Promtail**, **Langfuse** (UI + self-host БД/окно трейсинга), **LiteLLM** (шлюз OpenAI → vLLM) — отдельно от движка vLLM/SGLang. Логи: **Grafana → Explore → Loki** (источник в provisioning). Langfuse: \`http://<хост>:\$LANGFUSE_PORT\` (по умолч. 3001), LiteLLM: порт LITELLM_PORT (по умолч. 4000); вызовы LiteLLM — см. `configs/monitoring/litellm/config.yaml` (часто **devllm** = `SLGPU_SERVED_MODEL_NAME`).
 
 Один раз на хост (или после reboot, если не включён restart: unless-stopped):
   ./slgpu monitoring up
@@ -51,13 +51,14 @@ case "${SUB}" in
     slgpu_ensure_slgpu_network
     slgpu_ensure_langfuse_litellm_secrets
     slgpu_load_server_env
+    slgpu_ensure_data_dirs
     echo "Поднимаю мониторинг (slgpu-monitoring)…"
-    docker compose -f docker-compose.monitoring.yml --env-file main.env up -d
-    echo "Проверка: Prometheus /targets (http://<хост>:9090/targets) · Grafana: GRAFANA_PORT · Loki: Explore → Loki · Langfuse: :${LANGFUSE_PORT:-3001} · LiteLLM: :${LITELLM_PORT:-4000} (vLLM: LLM_API_PORT → monitoring/litellm/config.yaml, devllm = SLGPU_SERVED_MODEL_NAME)"
+    slgpu_docker_compose -f docker-compose.monitoring.yml --env-file main.env up -d
+    echo "Проверка: Prometheus /targets (http://<хост>:9090/targets) · Grafana: GRAFANA_PORT · Loki: Explore → Loki · Langfuse: :${LANGFUSE_PORT:-3001} · LiteLLM: :${LITELLM_PORT:-4000} (vLLM: LLM_API_PORT → configs/monitoring/litellm/config.yaml, devllm = SLGPU_SERVED_MODEL_NAME)"
     ;;
   down)
     echo "Останавливаю мониторинг…"
-    docker compose -f docker-compose.monitoring.yml down
+    slgpu_docker_compose -f docker-compose.monitoring.yml down
     echo "Готово."
     ;;
   restart)
@@ -65,7 +66,7 @@ case "${SUB}" in
     slgpu_ensure_langfuse_litellm_secrets
     slgpu_load_server_env
     echo "Перезапуск мониторинга…"
-    docker compose -f docker-compose.monitoring.yml --env-file main.env up -d --force-recreate
+    slgpu_docker_compose -f docker-compose.monitoring.yml --env-file main.env up -d --force-recreate
     echo "Готово."
     ;;
   fix-perms|fix_permissions)

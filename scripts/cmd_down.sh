@@ -3,6 +3,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+# shellcheck disable=SC1091
+source "${ROOT}/scripts/_lib.sh"
 
 ALL=0
 while [[ $# -gt 0 ]]; do
@@ -25,11 +27,11 @@ done
 
 if [[ "${ALL}" -eq 1 ]]; then
   echo "Останавливаю vllm, sglang и мониторинг…"
-  docker compose -f docker-compose.yml stop 2>/dev/null || true
-  docker compose -f docker-compose.monitoring.yml stop 2>/dev/null || true
+  slgpu_docker_compose -f docker-compose.yml stop 2>/dev/null || true
+  slgpu_docker_compose -f docker-compose.monitoring.yml stop 2>/dev/null || true
 else
   echo "Останавливаю vllm и sglang…"
-  docker compose -f docker-compose.yml stop vllm sglang 2>/dev/null || true
-  docker compose -f docker-compose.yml rm -f vllm sglang 2>/dev/null || true
+  slgpu_docker_compose -f docker-compose.yml stop vllm sglang 2>/dev/null || true
+  slgpu_docker_compose -f docker-compose.yml rm -f vllm sglang 2>/dev/null || true
 fi
 echo "Готово."

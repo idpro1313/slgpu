@@ -224,11 +224,11 @@ slgpu_detect_running_engine() {
   local root
   root="$(slgpu_root)"
   cd "${root}" || return 1
-  if docker compose -f docker-compose.yml ps --status running --services 2>/dev/null | grep -qx 'vllm'; then
+  if slgpu_docker_compose -f docker-compose.yml ps --status running --services 2>/dev/null | grep -qx 'vllm'; then
     echo vllm
     return 0
   fi
-  if docker compose -f docker-compose.yml ps --status running --services 2>/dev/null | grep -qx 'sglang'; then
+  if slgpu_docker_compose -f docker-compose.yml ps --status running --services 2>/dev/null | grep -qx 'sglang'; then
     echo sglang
     return 0
   fi
@@ -256,7 +256,7 @@ slgpu_openai_base_url() {
     sglang) in_p=8222 ;;
     *) echo "slgpu_openai_base_url: ожидается vllm|sglang" >&2; return 1 ;;
   esac
-  mapped="$(docker compose -f docker-compose.yml port "${e}" "${in_p}" 2>/dev/null | head -1 || true)"
+  mapped="$(slgpu_docker_compose -f docker-compose.yml port "${e}" "${in_p}" 2>/dev/null | head -1 || true)"
   host_port=""
   if [[ -n "${mapped}" ]] && [[ "${mapped}" =~ :([0-9]+)$ ]]; then
     host_port="${BASH_REMATCH[1]}"
@@ -291,4 +291,41 @@ slgpu_validate_running_config() {
 
   echo "[VALIDATE] OK: engine=${running_engine}"
   return 0
+}
+
+# Унифицированный `docker compose`: project directory = корень репо (тома и `main.env` с путями `./data/...`).
+slgpu_docker_compose() {
+  local _here _root
+  _here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  _root="$(cd "${_here}/.." && pwd)"
+  (cd "${_root}" && docker compose --project-directory "${_root}" "$@")
+}
+
+# Создать каталоги для относительных путей из main.env (./data/…), если файла нет — no-op.
+slgpu_ensure_data_dirs() {
+  local root _p
+  root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  if [[ ! -f "${root}/main.env" ]]; then
+    return 0
+  fi
+  set -a
+  # shellcheck disable=SC1091
+  source "${root}/main.env"
+  set +a
+  for _p in \
+    "${MODELS_DIR:-}" \
+    "${WEB_DATA_DIR:-}" \
+    "${PROMETHEUS_DATA_DIR:-}" \
+    "${GRAFANA_DATA_DIR:-}" \
+    "${LOKI_DATA_DIR:-}" \
+    "${PROMTAIL_DATA_DIR:-}" \
+    "${LANGFUSE_POSTGRES_DATA_DIR:-}" \
+    "${LANGFUSE_CLICKHOUSE_DATA_DIR:-}" \
+    "${LANGFUSE_CLICKHOUSE_LOGS_DIR:-}" \
+    "${LANGFUSE_MINIO_DATA_DIR:-}" \
+    "${LANGFUSE_REDIS_DATA_DIR:-}"; do
+    if [[ -n "${_p}" && "${_p}" == ./* ]]; then
+      mkdir -p "${root}/${_p#./}"
+    fi
+  done
 }
