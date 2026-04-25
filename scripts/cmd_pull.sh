@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Скачивание модели: hf download в MODELS_DIR по полям пресета или по HF id.
-# Файл пресета не создаётся — задавайте configs/models/<slug>.env вручную (см. README).
+# Файл пресета не создаётся — задайте <PRESETS_DIR>/<slug>.env вручную (см. README, data/presets по умолчанию).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -15,11 +15,11 @@ usage() {
   ./slgpu pull -m <HF_ID|preset> [опции]
 
 HF id с «/» (например Qwen/Qwen3.6-35B-A3B): веса в \${MODELS_DIR}/<HF_ID>.
-  Если существует configs/models/<slug>.env (slug = имя репозитария, нижний регистр, _ → -),
+  Если существует <PRESETS_DIR>/<slug>.env (slug = имя репозитария, нижний регистр, _ → -),
   подгружаются MODEL_ID, MODEL_REVISION и т.д.
-  Если пресета нет — скачивание только по HF id; для ./slgpu up заведите пресет configs/models/<slug>.env.
+  Если пресета нет — скачивание только по HF id; для ./slgpu up заведите пресет в каталоге пресетов (см. main.env: PRESETS_DIR).
 
-Аргумент без «/» — имя существующего пресета configs/models/<name>.env.
+Аргумент без «/» — имя существующего пресета (файл <name>.env в PRESETS_DIR).
 
 Опции:
   --revision REV   ревизия HF; при загрузке по пресету переопределяет MODEL_REVISION
@@ -134,7 +134,7 @@ slug=""
 if is_hf_id "${TARGET}"; then
   HF_ID="${TARGET}"
   slug="$(slgpu_hf_id_to_slug "${HF_ID}")"
-  preset_file="${ROOT}/configs/models/${slug}.env"
+  preset_file="$(slgpu_presets_dir)/${slug}.env"
 
   if [[ -f "${preset_file}" ]]; then
     slgpu_load_env "${slug}"
@@ -148,7 +148,7 @@ if is_hf_id "${TARGET}"; then
     do_hf_download
     have_preset=0
     echo "" >&2
-    echo "Пресет отсутствует: configs/models/${slug}.env" >&2
+    echo "Пресет отсутствует: ${preset_file#${ROOT}/}" >&2
     echo "Создайте его вручную (см. configs/models/README.md), MODEL_ID=${HF_ID}." >&2
   fi
 else
@@ -162,10 +162,11 @@ fi
 
 du_out="$(du -sh "${MODELS_DIR}/${MODEL_ID}" 2>/dev/null | awk '{print $1}' || echo "?")"
 echo ""
+_pd="$(slgpu_presets_dir)"
 if [[ "${have_preset}" == "1" ]]; then
-  echo "Пресет: configs/models/${slug}.env"
+  echo "Пресет: ${_pd#${ROOT}/}/${slug}.env"
 else
-  echo "Пресет: (ожидается) configs/models/${slug}.env"
+  echo "Пресет: (ожидается) ${_pd#${ROOT}/}/${slug}.env"
 fi
 echo "Модель: ${MODELS_DIR}/${MODEL_ID} (${du_out})"
 if [[ "${have_preset}" == "1" ]]; then

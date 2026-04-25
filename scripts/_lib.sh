@@ -6,6 +6,25 @@ slgpu_root() {
   cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd
 }
 
+# stdout: абсолютный путь к каталогу пресетов *.env (PRESETS_DIR в main.env или data/presets).
+slgpu_presets_dir() {
+  local root p
+  root="$(slgpu_root)"
+  p=""
+  if [[ -f "${root}/main.env" ]]; then
+    set -a
+    # shellcheck disable=SC1091
+    source "${root}/main.env" 2>/dev/null
+    set +a
+  fi
+  p="${PRESETS_DIR:-./data/presets}"
+  case "${p}" in
+    ./*) echo "${root}/${p#./}" ;;
+    /*) echo "${p}" ;;
+    *) echo "${root}/${p}" ;;
+  esac
+}
+
 # Общая сеть vLLM/SGLang ↔ Prometheus/DCGM/… (см. docker/docker-compose.llm.yml, docker/docker-compose.monitoring.yml).
 # Раньше: «голый» `docker network create slgpu` без меток — docker compose v2 ожидает
 # com.docker.compose.project / com.docker.compose.network и падает с
@@ -33,24 +52,24 @@ slgpu_ensure_slgpu_network() {
 }
 
 slgpu_list_presets() {
-  local root
-  root="$(slgpu_root)"
-  if [[ -d "${root}/configs/models" ]]; then
-    (cd "${root}/configs/models" && ls -1 *.env 2>/dev/null | sed 's/\.env$//' | sort) || true
+  local pdir
+  pdir="$(slgpu_presets_dir)"
+  if [[ -d "${pdir}" ]]; then
+    (cd "${pdir}" && ls -1 *.env 2>/dev/null | sed 's/\.env$//' | sort) || true
   fi
 }
 
 # После -m|--model нет имени (или следующий токен — флаг): подсказка + список пресетов в stderr.
 slgpu_fail_if_missing_preset_arg() {
   local opt="$1"
-  echo "Опция ${opt} требует имя пресета (файл configs/models/<name>.env)." >&2
+  echo "Опция ${opt} требует имя пресета (файл data/presets/<name>.env или PRESETS_DIR в main.env)." >&2
   echo "Доступные пресеты:" >&2
   local list
   list="$(slgpu_list_presets)"
   if [[ -n "${list}" ]]; then
     echo "${list}" | sed 's/^/  /' >&2
   else
-    echo "  (нет файлов *.env в configs/models/)" >&2
+    echo "  (нет файлов *.env в каталоге пресетов)" >&2
   fi
 }
 
@@ -79,16 +98,17 @@ slgpu_interactive_choose_engine() {
   done
 }
 
-# Интерактив: выбор пресета по списку configs/models/*.env. В stdout — slug. Код != 0 — TTY нет / нет пресетов.
+# Интерактив: выбор пресета по списку *.env в PRESETS_DIR. В stdout — slug. Код != 0 — TTY нет / нет пресетов.
 slgpu_interactive_choose_preset() {
-  local pres line i pick root
+  local pres line i pick root pdir
   root="$(slgpu_root)"
+  pdir="$(slgpu_presets_dir)"
   pres=()
   while IFS= read -r line; do
     [[ -n "${line}" ]] && pres+=("$line")
   done < <(slgpu_list_presets)
   if [[ ${#pres[@]} -eq 0 ]]; then
-    echo "Нет пресетов: добавьте файлы configs/models/<имя>.env" >&2
+    echo "Нет пресетов: добавьте *.env в ${pdir#${root}/} (см. PRESETS_DIR в main.env)" >&2
     return 1
   fi
   if ! [[ -r /dev/tty ]]; then
@@ -113,11 +133,11 @@ slgpu_interactive_choose_preset() {
       echo "Номер от 1 до ${#pres[@]}." >&2
       continue
     fi
-    if [[ -f "${root}/configs/models/${pick}.env" ]]; then
+    if [[ -f "${pdir}/${pick}.env" ]]; then
       echo "${pick}"
       return 0
     fi
-    echo "Пресет не найден: configs/models/${pick}.env" >&2
+    echo "Пресет не найден: ${pdir}/${pick}.env" >&2
   done
 }
 
@@ -139,14 +159,15 @@ slgpu_load_server_env() {
   set +a
 }
 
-# main.env + обязательный пресет configs/models/<slug>.env (bench, load, …).
+# main.env + обязательный пресет <PRESETS_DIR>/<slug>.env (bench, load, …).
 slgpu_load_env() {
   local preset="${1:-}"
-  local root
+  local root pdir
   root="$(slgpu_root)"
+  pdir="$(slgpu_presets_dir)"
 
   if [[ -z "${preset}" ]]; then
-    echo "Укажите пресет: -m <slug> (файл configs/models/<slug>.env)" >&2
+    echo "Укажите пресет: -m <slug> (файл в каталоге пресетов, см. PRESETS_DIR в main.env)" >&2
     echo "Доступные пресеты:" >&2
     slgpu_list_presets | sed 's/^/  /' >&2 || true
     return 1
@@ -155,7 +176,7 @@ slgpu_load_env() {
   set -a
   slgpu_source_main_env
 
-  local f="${root}/configs/models/${preset}.env"
+  local f="${pdir}/${preset}.env"
   if [[ ! -f "${f}" ]]; then
     echo "Пресет не найден: ${f}" >&2
     echo "Доступные пресеты:" >&2
@@ -164,7 +185,7 @@ slgpu_load_env() {
     if [[ -n "${presets}" ]]; then
       echo "${presets}" | sed 's/^/  /' >&2
     else
-      echo "  (нет файлов в configs/models/)" >&2
+      echo "  (нет файлов в каталоге пресетов)" >&2
     fi
     set +a
     return 1
@@ -182,8 +203,9 @@ slgpu_load_env() {
 slgpu_load_compose_env() {
   local preset="${1:-}"
   local engine="${2:?укажите vllm или sglang}"
-  local root
+  local root pdir
   root="$(slgpu_root)"
+  pdir="$(slgpu_presets_dir)"
 
   if [[ -z "${preset}" ]]; then
     echo "Укажите пресет: -m <slug>" >&2
@@ -198,7 +220,7 @@ slgpu_load_compose_env() {
   set -a
   slgpu_source_main_env
 
-  local f="${root}/configs/models/${preset}.env"
+  local f="${pdir}/${preset}.env"
   if [[ ! -f "${f}" ]]; then
     echo "Пресет не найден: ${f}" >&2
     set +a
@@ -314,6 +336,7 @@ slgpu_ensure_data_dirs() {
   set +a
   for _p in \
     "${MODELS_DIR:-}" \
+    "${PRESETS_DIR:-}" \
     "${WEB_DATA_DIR:-}" \
     "${PROMETHEUS_DATA_DIR:-}" \
     "${GRAFANA_DATA_DIR:-}" \

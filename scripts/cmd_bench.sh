@@ -16,7 +16,7 @@ usage() {
   -m <preset>      Пресет модели (опционально; для MAX_MODEL_LEN, BENCH_MODEL_NAME)
   -h, --help       Эта справка
 
-Пресеты (configs/models/<name>.env):
+Пресеты (PRESETS_DIR/<name>.env, по умолчанию data/presets):
 $(slgpu_list_presets | sed 's/^/  /')
 EOF
 }

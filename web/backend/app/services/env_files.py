@@ -1,4 +1,4 @@
-"""Read and write `configs/models/<slug>.env` preset files.
+"""Read and write `<PRESETS_DIR>/<slug>.env` preset files (default `data/presets`).
 
 The format is intentionally minimal: lines like `KEY=VALUE`, with
 comments starting at `#`. Values are NOT shell-quoted because the

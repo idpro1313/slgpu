@@ -76,7 +76,7 @@ export function PresetsPage() {
     <>
       <PageHeader
         title="Пресеты запуска"
-        subtitle="CRUD пресетов и двусторонняя синхронизация с configs/models/<slug>.env."
+        subtitle="CRUD пресетов и двусторонняя синхронизация с data/presets/<slug>.env (PRESETS_DIR)."
         actions={
           <button
             type="button"

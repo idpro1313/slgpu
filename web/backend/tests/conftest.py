@@ -17,9 +17,10 @@ import pytest
 @pytest.fixture(autouse=True)
 def _hermetic_settings(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[None]:
     fake_root = tmp_path / "slgpu"
-    (fake_root / "configs" / "models").mkdir(parents=True)
+    (fake_root / "data" / "presets").mkdir(parents=True)
     (fake_root / "main.env").write_text(
-        "MODELS_DIR=" + str(tmp_path / "models") + "\n",
+        "MODELS_DIR=" + str(tmp_path / "models") + "\n"
+        "PRESETS_DIR=./data/presets\n",
         encoding="utf-8",
     )
     (fake_root / "slgpu").write_text("#!/bin/bash\nexit 0\n", encoding="utf-8")

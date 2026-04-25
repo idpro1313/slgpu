@@ -29,7 +29,7 @@ Web-приложение `slgpu-web` — control plane поверх сущест
 | Сущность | Источник правды |
 |---|---|
 | Веса моделей на диске | `${MODELS_DIR}` (по умолчанию **`./data/models`**, см. `data/README.md`) |
-| Параметры движка для запуска | `main.env` + `configs/models/<slug>.env` |
+| Параметры движка для запуска | `main.env` + `data/presets/<slug>.env` (путь: `PRESETS_DIR`) |
 | Состояние контейнеров | Docker daemon (через socket) |
 | Метрики и серии | Prometheus TSDB |
 | Логи контейнеров | Loki / `docker logs` |
@@ -112,7 +112,7 @@ Mutations контейнеров идут только через CLI allowlist.
 - БД: SQLite в `/data/slgpu-web.db`, путь приходит из `WEB_DATABASE_URL`,
   по умолчанию `sqlite+aiosqlite:////data/slgpu-web.db`.
 - Bind mounts:
-  - репозиторий slgpu → `/slgpu` (для CLI и чтения `configs/models/*.env`,
+  - репозиторий slgpu → `/slgpu` (для CLI и чтения `data/presets/*.env` (`PRESETS_DIR` в `main.env`),
     `main.env`);
   - локальный диск под БД → `/data`;
   - **веса HF** с хоста: `${MODELS_DIR}` (должно совпадать с `MODELS_DIR` в

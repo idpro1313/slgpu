@@ -9,6 +9,27 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+def _presets_dir_from_main(slgpu_root: Path) -> Path | None:
+    """Read PRESETS_DIR from main.env; relative paths are resolved from repo root."""
+
+    main = slgpu_root / "main.env"
+    if not main.is_file():
+        return None
+    for line in main.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if stripped.startswith("PRESETS_DIR=") and not stripped.startswith("#"):
+            value = stripped.split("=", 1)[1].strip()
+            if not value or value.startswith("#"):
+                return None
+            if value.startswith("./"):
+                return (slgpu_root / value[2:]).resolve()
+            p = Path(value)
+            if p.is_absolute():
+                return p
+            return (slgpu_root / value).resolve()
+    return None
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="WEB_",
@@ -62,7 +83,10 @@ class Settings(BaseSettings):
 
     @property
     def models_presets_dir(self) -> Path:
-        return self.slgpu_root / "configs" / "models"
+        from_main = _presets_dir_from_main(self.slgpu_root)
+        if from_main is not None:
+            return from_main
+        return self.slgpu_root / "data" / "presets"
 
     @property
     def main_env_path(self) -> Path:

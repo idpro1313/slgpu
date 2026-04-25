@@ -35,7 +35,7 @@ export function DashboardPage() {
         <MetricCard
           label="Пресеты"
           value={data?.metrics.presets_total ?? "—"}
-          hint="из БД и configs/models"
+          hint="из БД и data/presets (PRESETS_DIR)"
         />
         <MetricCard
           label="Активные задачи"

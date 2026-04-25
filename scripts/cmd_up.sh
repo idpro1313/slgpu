@@ -11,7 +11,7 @@ usage() {
 Использование:
   ./slgpu up [<vllm|sglang>] [-m|--model <пресет>] [-p|--port <порт>] [--tp <N>] [-h|--help]
 
-  Без аргументов (нужен TTY): сначала выбор движка (vLLM / SGLang), затем выбор пресета из списка configs/models/*.env.
+  Без аргументов (нужен TTY): сначала выбор движка (vLLM / SGLang), затем выбор пресета из списка *.env в PRESETS_DIR (см. main.env, по умолчанию data/presets).
   Можно указать только движок — тогда запросят пресет. Только -m <пресет> без движка — запросят движок.
 
   -p, --port   порт API на хосте (vLLM: по умолчанию 8111; SGLang: 8222)
@@ -23,7 +23,7 @@ usage() {
   ./slgpu up vllm -m qwen3.6-35b-a3b -p 8222
   ./slgpu up sglang -m qwen3-30b-a3b --tp 4
 
-Пресеты (configs/models/<name>.env):
+Пресеты (каталог PRESETS_DIR, по умолчанию data/presets/<name>.env):
 $(slgpu_list_presets | sed 's/^/  /')
 EOF
 }

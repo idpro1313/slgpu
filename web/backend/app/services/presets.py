@@ -1,4 +1,4 @@
-"""Bridge between DB presets and the slgpu `configs/models/*.env` files."""
+"""Bridge between DB presets and the slgpu `data/presets/*.env` files (PRESETS_DIR)."""
 
 from __future__ import annotations
 
@@ -67,7 +67,7 @@ async def import_files_into_db(
     session: AsyncSession,
     directory: Path | None = None,
 ) -> tuple[int, int, int, list[str]]:
-    """Import all `configs/models/*.env` into DB presets.
+    """Import all `*.env` from the presets directory into DB presets.
 
     Returns (imported, updated, skipped, errors).
     """

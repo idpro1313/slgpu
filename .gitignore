@@ -8,10 +8,12 @@ __pycache__/
 .DS_Store
 template/*
 
-# Локальные данные на сервере (веса, БД, TSDB); в git — README и .gitkeep для пустых каталогов
+# Локальные данные на сервере (веса, БД, TSDB); в git — README, .gitkeep, пресеты data/presets/*.env
 data/**
 !data/README.md
 !data/**/.gitkeep
+!data/presets/
+!data/presets/**
 
 # Доки агентов, GRACE, Kilo, правила Cursor — только локально, не в репозитории
 docs/

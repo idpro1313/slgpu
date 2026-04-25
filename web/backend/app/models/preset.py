@@ -1,4 +1,4 @@
-"""Preset declaration. Synchronised to/from configs/models/<slug>.env."""
+"""Preset declaration. Synchronised to/from <PRESETS_DIR>/<slug>.env (default data/presets)."""
 
 from __future__ import annotations
 

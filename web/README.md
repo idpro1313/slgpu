@@ -5,7 +5,7 @@ Web control plane поверх существующего CLI [`./slgpu`](../slg
 
 - Реестр моделей Hugging Face и инициируемые загрузки.
 - CRUD пресетов с двусторонней синхронизацией с
-  [`configs/models/*.env`](../configs/models/).
+  [`data/presets/*.env`](../data/presets/) (`PRESETS_DIR` в `main.env`).
 - Управление инференсом vLLM/SGLang через `./slgpu up|down|restart`.
 - Управление и наблюдение мониторинг-стека (`./slgpu monitoring …`).
 - Состояние и базовые маршруты LiteLLM Proxy.
@@ -101,7 +101,7 @@ cd /path/to/slgpu
 | GET/POST | `/api/v1/models` | список и регистрация HF моделей |
 | POST | `/api/v1/models/{id}/pull` | `slgpu pull` через job runner |
 | GET/POST | `/api/v1/presets` | пресеты |
-| POST | `/api/v1/presets/sync` | импорт `configs/models/*.env` в БД |
+| POST | `/api/v1/presets/sync` | импорт `data/presets/*.env` (или `PRESETS_DIR`) в БД |
 | POST | `/api/v1/presets/{id}/export` | экспорт пресета в файл |
 | POST | `/api/v1/runtime/up\|down\|restart` | управление движком |
 | GET | `/api/v1/runtime/snapshot` | состояние движка |
