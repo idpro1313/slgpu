@@ -4,9 +4,15 @@ name: slgpu-web
 #
 # Project directory for `docker compose` — корень репозитория (`./slgpu web up` — `--env-file main.env` в корне, отдельный web/.env не нужен).
 # What this compose file mounts and why:
-#   - .  -> /slgpu         repository root (CLI, configs, jobs)
+#   - SLGPU_HOST_REPO (host) -> SLGPU_HOST_REPO (container, тот же абсолютный путь!): репо CLI, configs, jobs.
+#       Это критично для команд, которые из web вызывают `./slgpu monitoring up`: docker compose внутри
+#       контейнера резолвит относительные bind-пути от cwd → отдаёт docker daemon путь, который daemon
+#       трактует как **хостовый**. Если внутри web путь `/slgpu`, а на хосте репо в `/srv/slgpu` — daemon
+#       создаёт пустые каталоги под `/slgpu/...` и монтирует их как пустые dir’ы (yaml/скрипты «исчезают»,
+#       сервисы падают: minio-bucket-init exit 126, prometheus mount error и т.п.). Совпадение пути убирает
+#       это рассогласование. SLGPU_HOST_REPO задаётся `scripts/cmd_web.sh` как `$(pwd)`.
 #   - WEB_DATA_DIR -> /data   SQLite (default ./data/web)
-#   - MODELS_DIR (host) -> /slgpu/data/models: веса (default ./data/models); путь в контейнере всегда абсолютный
+#   - MODELS_DIR (host) -> $SLGPU_HOST_REPO/data/models: веса (default ./data/models)
 #   - /var/run/docker.sock so backend can read container statuses (read-only)
 #
 # It joins the existing `slgpu` bridge network (declared by
@@ -23,10 +29,11 @@ services:
     container_name: slgpu-web
     restart: unless-stopped
     # user: not set — entrypoint starts as root, chown /data, then runs app as 10001
+    working_dir: ${SLGPU_HOST_REPO:-/slgpu}
     environment:
       WEB_APP_NAME: slgpu-web
       WEB_LOG_LEVEL: ${WEB_LOG_LEVEL:-INFO}
-      WEB_SLGPU_ROOT: /slgpu
+      WEB_SLGPU_ROOT: ${SLGPU_HOST_REPO:-/slgpu}
       WEB_DATA_DIR: /data
       # Имена `com.docker.compose.project` — если `docker compose` поднят с другим COMPOSE_PROJECT_NAME
       WEB_COMPOSE_PROJECT_INFER: ${WEB_COMPOSE_PROJECT_INFER:-slgpu}
@@ -44,9 +51,9 @@ services:
       # HTTP-пробы из slgpu-web к стеку monitoring (порты на хосте, не 127.0.0.1 внутри контейнера)
       WEB_MONITORING_HTTP_HOST: host.docker.internal
     volumes:
-      - .:/slgpu
+      - ${SLGPU_HOST_REPO:-.}:${SLGPU_HOST_REPO:-/slgpu}
       - ${WEB_DATA_DIR:-./data/web}:/data
-      - ${MODELS_DIR:-./data/models}:/slgpu/data/models:rw
+      - ${MODELS_DIR:-./data/models}:${SLGPU_HOST_REPO:-/slgpu}/data/models:rw
       - /var/run/docker.sock:/var/run/docker.sock:ro
     ports:
       - "${WEB_BIND:-0.0.0.0}:${WEB_PORT:-8089}:8000"

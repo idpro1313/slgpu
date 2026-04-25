@@ -112,13 +112,18 @@ Mutations контейнеров идут только через CLI allowlist.
 - БД: SQLite в `/data/slgpu-web.db`, путь приходит из `WEB_DATABASE_URL`,
   по умолчанию `sqlite+aiosqlite:////data/slgpu-web.db`.
 - Bind mounts:
-  - репозиторий slgpu → `/slgpu` (для CLI и чтения `data/presets/*.env` (`PRESETS_DIR` в `main.env`),
-    `main.env`);
+  - репозиторий slgpu → **тот же абсолютный путь, что и на хосте**
+    (`SLGPU_HOST_REPO`, экспортируется из [`scripts/cmd_web.sh`](../scripts/cmd_web.sh) как `$(pwd)`).
+    `WEB_SLGPU_ROOT` тоже = `SLGPU_HOST_REPO`. Это нужно, чтобы команды,
+    которые web запускает в стек мониторинга (`docker compose -f docker/docker-compose.monitoring.yml up`),
+    отдавали docker daemon **хостовые** пути для bind-маунтов конфигов
+    и скриптов; иначе daemon при отсутствующем source создаёт пустые
+    каталоги (Loki/Prometheus/`minio-bucket-init` падают);
   - локальный диск под БД → `/data`;
   - **веса HF** с хоста: `${MODELS_DIR}` (должно совпадать с `MODELS_DIR` в
-    `main.env`, по умолчанию **`./data/models`**) — тот же путь **внутри** контейнера,
-    что в `main.env`, иначе скан/скачивание не видит каталог. Права **rw** (pull
-    и скан);
+    `main.env`, по умолчанию **`./data/models`**). Target в контейнере
+    — `${SLGPU_HOST_REPO}/data/models` (тот же абсолютный путь, что
+    разрешает CLI на хосте). Права **rw** (pull и скан);
   - `/var/run/docker.sock` → `/var/run/docker.sock` (read-only).
 - Данные **мониторинга** (Prometheus, Grafana, Loki, Langfuse и т.д.) вынесены в
   отдельный `docker/docker-compose.monitoring.yml` и **не** монтируются в web-контейнер:

@@ -28,9 +28,9 @@ Web control plane поверх существующего CLI [`./slgpu`](../slg
 - **БД**: SQLite, путь приходит из переменной `WEB_DATABASE_URL`,
   по умолчанию `/data/slgpu-web.db`. Папка `/data` всегда bind-mount.
 - **Веса моделей**: `MODELS_DIR` с хоста (см. `../main.env`, по умолчанию **`../data/models`**)
-  — тот же путь **в** контейнере, `rw` (скан, `./slgpu pull` из job runner). Остальные
-  данные стека (рост контейнеров, мониторинг) — отдельные bind в корневых compose,
-  в web-образ они не дублируются.
+  → `${SLGPU_HOST_REPO}/data/models` в контейнере (тот же абсолютный путь, что разрешает CLI на хосте), `rw`
+  (скан, `./slgpu pull` из job runner). Остальные данные стека (рост контейнеров, мониторинг) —
+  отдельные bind в корневых compose, в web-образ они не дублируются.
 
 ## Структура
 
@@ -83,9 +83,18 @@ cd /path/to/slgpu
 ```
 
 Скрипт [`../scripts/cmd_web.sh`](../scripts/cmd_web.sh) вызывает
-`docker compose` с `project directory` = корень репо: том `./data/web` → `/data` в контейнере, **`MODELS_DIR` с хоста** → **`/slgpu/data/models`** (абсолютный путь в контейнере; см. `docker/docker-compose.web.yml`).
+`docker compose` с `project directory` = корень репо и **экспортирует `SLGPU_HOST_REPO=$(pwd)`** —
+этот **же абсолютный хостовой путь** монтируется в контейнере и задаётся как `WEB_SLGPU_ROOT`/`working_dir`.
+Тома: `./data/web` → `/data`; **`MODELS_DIR` с хоста** → **`${SLGPU_HOST_REPO}/data/models`** (тот же абсолютный
+путь, что и в CLI на хосте; см. [`docker/docker-compose.web.yml`](../docker/docker-compose.web.yml)).
 
-**Вариант вручную (из корня репо):** подставьте те же переменные, что и `./slgpu web up` — `docker compose -f docker/docker-compose.web.yml --project-directory . --env-file main.env up --build -d`. Пути в compose рассчитаны на корень репозитория.
+**Зачем совпадение путей:** когда web запускает `./slgpu monitoring up`, `docker compose` внутри
+контейнера разрешает относительные bind-маунты от `cwd` и отдаёт docker daemon **строки путей**, которые
+daemon трактует как **хостовые**. Если бы внутри web репо лежало в `/slgpu`, а на хосте — в `/srv/slgpu`,
+daemon не нашёл бы файлы по `/slgpu/...` и создал бы пустые каталоги (типичные ошибки: Prometheus mount
+«not a directory», `minio-bucket-init` exit 126, Loki «is a directory»).
+
+**Вариант вручную (из корня репо):** `SLGPU_HOST_REPO="$(pwd)" docker compose -f docker/docker-compose.web.yml --project-directory . --env-file main.env up --build -d`. Без `SLGPU_HOST_REPO` compose уйдёт в fallback `.:/slgpu` (старая схема — с известной проблемой mount-маунтов из web).
 
 По умолчанию **слушает на всех интерфейсах** (`WEB_BIND=0.0.0.0` в `../main.env`): `http://127.0.0.1:8089/` с того же хоста или `http://<IP>:8089/` из сети. Только localhost: `WEB_BIND=127.0.0.1`.
 

@@ -4,6 +4,10 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+# Хостовый абсолютный путь репо. Web bind-mount’ит репо по этому же пути (docker/docker-compose.web.yml),
+# чтобы команды из веб-контейнера (например `slgpu monitoring up`) отдавали docker daemon корректные
+# хостовые пути для bind-маунтов конфигов и скриптов monitoring-стека.
+export SLGPU_HOST_REPO="${ROOT}"
 # shellcheck disable=SC1091
 source "${ROOT}/scripts/_lib.sh"
 

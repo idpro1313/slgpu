@@ -34,6 +34,7 @@ SUB="${1:-}"
 shift || true
 
 slgpu_ensure_monitoring_bind_config_files() {
+  # YAML конфиги (одиночные bind в compose).
   slgpu_ensure_config_yaml_is_file \
     "${ROOT}/configs/monitoring/loki/loki-config.yaml" \
     "configs/monitoring/loki/loki-config.yaml"
@@ -46,6 +47,20 @@ slgpu_ensure_monitoring_bind_config_files() {
   slgpu_ensure_config_yaml_is_file \
     "${ROOT}/configs/monitoring/prometheus/prometheus-alerts.yml" \
     "configs/monitoring/prometheus/prometheus-alerts.yml"
+  # Скрипты-entrypoint (одиночные bind). Если из-за рассогласования путей
+  # docker daemon когда-либо создал на их месте пустые каталоги — лечим заранее.
+  slgpu_ensure_config_yaml_is_file \
+    "${ROOT}/configs/monitoring/langfuse/minio-bucket-init.sh" \
+    "configs/monitoring/langfuse/minio-bucket-init.sh"
+  slgpu_ensure_config_yaml_is_file \
+    "${ROOT}/configs/monitoring/litellm/init-litellm-db.sh" \
+    "configs/monitoring/litellm/init-litellm-db.sh"
+  slgpu_ensure_config_yaml_is_file \
+    "${ROOT}/configs/monitoring/litellm/litellm-entrypoint.sh" \
+    "configs/monitoring/litellm/litellm-entrypoint.sh"
+  slgpu_ensure_config_yaml_is_file \
+    "${ROOT}/configs/monitoring/litellm/config.yaml" \
+    "configs/monitoring/litellm/config.yaml"
 }
 
 slgpu_ensure_langfuse_litellm_secrets() {
