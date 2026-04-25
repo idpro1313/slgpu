@@ -47,7 +47,7 @@ services:
       - ${MODELS_DIR:-./data/models}:/slgpu/data/models:rw
       - /var/run/docker.sock:/var/run/docker.sock:ro
     ports:
-      - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-8089}:8000"
+      - "${WEB_BIND:-0.0.0.0}:${WEB_PORT:-8089}:8000"
     networks:
       - slgpu
     extra_hosts:

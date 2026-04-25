@@ -35,7 +35,7 @@ case "${SUB}" in
     slgpu_ensure_data_dirs
     echo "Поднимаю slgpu-web…"
     slgpu_docker_compose -f docker/docker-compose.web.yml --env-file main.env up -d --build
-    echo "UI: http://${WEB_BIND:-127.0.0.1}:${WEB_PORT:-8089}/  (WEB_BIND, WEB_PORT в main.env или окружении)"
+    echo "slgpu-web: ${WEB_BIND:-0.0.0.0}:${WEB_PORT:-8089} → локально http://127.0.0.1:${WEB_PORT:-8089}/  ·  с других машин: http://<IP>:${WEB_PORT:-8089}/ (закрыть снаружи: WEB_BIND=127.0.0.1 в main.env)"
     ;;
   down)
     echo "Останавливаю slgpu-web…"

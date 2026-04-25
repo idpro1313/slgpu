@@ -87,7 +87,7 @@ cd /path/to/slgpu
 
 **Вариант вручную (из корня репо):** подставьте те же переменные, что и `./slgpu web up` — `docker compose -f docker/docker-compose.web.yml --project-directory . --env-file main.env up --build -d`. Пути в compose рассчитаны на корень репозитория.
 
-После старта UI: `http://${WEB_BIND:-127.0.0.1}:${WEB_PORT:-8089}/` (см. `../main.env`).
+По умолчанию **слушает на всех интерфейсах** (`WEB_BIND=0.0.0.0` в `../main.env`): `http://127.0.0.1:8089/` с того же хоста или `http://<IP>:8089/` из сети. Только localhost: `WEB_BIND=127.0.0.1`.
 
 ## API
 

@@ -104,7 +104,7 @@ Mutations контейнеров идут только через CLI allowlist.
   `docker compose -f docker/docker-compose.web.yml --env-file main.env` с
   `--project-directory` = корень репо; см. `scripts/cmd_web.sh`). Остановка:
   **`./slgpu web down`**. Переменные `WEB_DATA_DIR`, `MODELS_DIR`, `WEB_BIND`, `WEB_PORT` —
-  в [`main.env`](../main.env).
+  в [`main.env`](../main.env). Публикация на хосте: по умолчанию **`WEB_BIND=0.0.0.0`** (доступ извне на `WEB_PORT`); только с localhost — **`WEB_BIND=127.0.0.1`**.
 - Сборка образа: [`docker/Dockerfile.web`](../docker/Dockerfile.web) (context = каталог `web/`).
 - Один контейнер `slgpu-web`. Внутри: FastAPI (uvicorn) + статика
   собранного React в одном бинаре. Backend отдаёт `/api/*` и фронт
