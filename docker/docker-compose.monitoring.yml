@@ -58,12 +58,14 @@ services:
     env_file:
       - main.env
     restart: unless-stopped
+    # Каталог целиком в /etc/loki (не один файл): иначе при отсутствии файла на хосте Docker
+    # может создать каталог `loki-config.yaml` → «is a directory».
     command: -config.file=/etc/loki/loki-config.yaml
     networks:
       - slgpu
     volumes:
       - ${LOKI_DATA_DIR:-./data/monitoring/loki}:/loki
-      - ./configs/monitoring/loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - ./configs/monitoring/loki:/etc/loki:ro
     logging:
       driver: json-file
       options:
@@ -78,6 +80,7 @@ services:
       - main.env
     restart: unless-stopped
     user: root
+    # Аналогично Loki: монтирование каталога, чтобы путь к конфигу оставался файлом.
     command: -config.file=/etc/promtail/promtail-config.yml
     depends_on:
       - loki
@@ -87,7 +90,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - ${PROMTAIL_DATA_DIR:-./data/monitoring/promtail}:/data
-      - ./configs/monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - ./configs/monitoring/promtail:/etc/promtail:ro
     logging:
       driver: json-file
       options:
