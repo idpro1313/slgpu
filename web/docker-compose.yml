@@ -22,6 +22,7 @@ services:
     # user: not set — entrypoint starts as root, chown /data, then runs app as 10001
     environment:
       WEB_APP_NAME: slgpu-web
+      WEB_LOG_LEVEL: ${WEB_LOG_LEVEL:-INFO}
       WEB_SLGPU_ROOT: /slgpu
       WEB_DATA_DIR: /data
       # Имена `com.docker.compose.project` — если `docker compose` поднят с другим COMPOSE_PROJECT_NAME

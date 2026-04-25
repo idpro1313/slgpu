@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from functools import lru_cache
 from typing import Any
 
 import docker
@@ -81,6 +82,11 @@ class DockerInspector:
             logger.warning("[docker_client][get_by_service] %s", exc)
             return None
         if not containers:
+            logger.debug(
+                "[docker_client][get_by_service] no match labels project=%r service=%r",
+                project,
+                service,
+            )
             return None
         return self._summary(containers[0])
 
@@ -126,6 +132,12 @@ class DockerInspector:
             started_at=started_at,
             labels=labels,
         )
+
+
+@lru_cache(maxsize=1)
+def get_docker_inspector() -> DockerInspector:
+    """One shared client per process: avoids log spam and duplicate TCP handshakes to the socket."""
+    return DockerInspector()
 
 
 def _parse_iso(raw: str | None) -> datetime | None:

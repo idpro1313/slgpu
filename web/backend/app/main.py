@@ -29,7 +29,12 @@ logger = logging.getLogger(__name__)
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    configure_logging("INFO")
+    configure_logging(settings.log_level)
+    logger.info(
+        "[main][create_app] log_level=%s app_version=%s",
+        settings.log_level,
+        __version__,
+    )
 
     app = FastAPI(title=settings.app_name, version=__version__)
     app.add_middleware(

@@ -19,6 +19,10 @@ class Settings(BaseSettings):
 
     app_name: str = "slgpu-web"
     api_v1_prefix: str = "/api/v1"
+    log_level: str = Field(
+        default="INFO",
+        description="Root log level: DEBUG, INFO, WARNING, …",
+    )
 
     slgpu_root: Path = Field(default=Path("/slgpu"))
     data_dir: Path = Field(default=Path("/data"))

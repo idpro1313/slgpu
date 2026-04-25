@@ -10,7 +10,7 @@ import httpx
 
 from app.core.config import get_settings
 from app.models.service import ServiceStatus
-from app.services.docker_client import ContainerSummary, DockerInspector
+from app.services.docker_client import ContainerSummary, get_docker_inspector
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +114,8 @@ class ProbeResult:
 
 
 async def probe_all() -> list[ProbeResult]:
-    inspector = DockerInspector()
+    s = get_settings()
+    inspector = get_docker_inspector()
     results: list[ProbeResult] = []
     async with httpx.AsyncClient(timeout=2.0) as client:
         for probe in _settings_probes():
@@ -141,6 +142,28 @@ async def probe_all() -> list[ProbeResult]:
             else:
                 status = ServiceStatus.HEALTHY
             results.append(ProbeResult(probe=probe, status=status, detail=detail, container=container))
+
+    if not inspector.is_available:
+        logger.info(
+            "[monitoring][probe_all][BLOCK_CHECK_DOCKER] result=unavailable "
+            "socket=%s cannot_list_containers=True hint=see_docker_client_warning "
+            "infer_project=%s monitoring_project=%s",
+            s.docker_socket,
+            s.compose_project_infer,
+            s.compose_project_monitoring,
+        )
+    else:
+        not_found = sum(1 for r in results if r.detail == "container not found")
+        healthy = sum(1 for r in results if r.status == ServiceStatus.HEALTHY)
+        logger.info(
+            "[monitoring][probe_all][BLOCK_RESOLVE] docker=ok project=%s "
+            "probes=%s container_not_found=%s healthy=%s "
+            "if_not_found_check_WEB_COMPOSE_PROJECT_MONITORING",
+            s.compose_project_monitoring,
+            len(results),
+            not_found,
+            healthy,
+        )
     return results
 
 

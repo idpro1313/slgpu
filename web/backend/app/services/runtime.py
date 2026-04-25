@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 import httpx
 
 from app.core.config import get_settings
-from app.services.docker_client import DockerInspector
+from app.services.docker_client import get_docker_inspector
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ class RuntimeSnapshot:
 
 async def snapshot() -> RuntimeSnapshot:
     settings = get_settings()
-    inspector = DockerInspector()
+    inspector = get_docker_inspector()
 
     engine: str | None = None
     container_status: str | None = None
@@ -66,6 +66,27 @@ async def snapshot() -> RuntimeSnapshot:
                 metrics_available = metrics.status_code == 200
             except httpx.HTTPError:
                 metrics_available = False
+
+    if not inspector.is_available:
+        logger.info(
+            "[runtime][snapshot][BLOCK_CHECK_DOCKER] result=unavailable "
+            "labels=vllm|sglang project=%s hint=socket_or_permissions",
+            project,
+        )
+    elif engine is None:
+        logger.info(
+            "[runtime][snapshot][BLOCK_RESOLVE] no running container for "
+            "com.docker.compose.project=%r service=vllm|sglang",
+            project,
+        )
+    else:
+        logger.info(
+            "[runtime][snapshot] engine=%s api_port=%s container_status=%s models=%s",
+            engine,
+            api_port,
+            container_status,
+            len(served),
+        )
 
     return RuntimeSnapshot(
         engine=engine,

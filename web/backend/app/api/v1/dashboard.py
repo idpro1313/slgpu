@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends
@@ -12,9 +13,11 @@ from app.api.deps import db_session
 from app.models.job import Job, JobStatus
 from app.models.model import HFModel, ModelDownloadStatus
 from app.models.preset import Preset
+from app.services.docker_client import get_docker_inspector
 from app.services.monitoring import probe_all
 from app.services.runtime import snapshot as runtime_snapshot
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -39,6 +42,17 @@ async def dashboard(session: AsyncSession = Depends(db_session)) -> dict[str, An
     services = await probe_all()
     healthy = sum(1 for s in services if s.status.value == "healthy")
     total = len(services)
+    logger.info(
+        "[api][dashboard][BLOCK_AGGREGATE] docker=%s models=%s presets=%s jobs_active=%s "
+        "services_healthy=%s/%s runtime_engine=%s",
+        "up" if get_docker_inspector().is_available else "down",
+        models_total,
+        presets_total,
+        active_jobs,
+        healthy,
+        total,
+        runtime.engine,
+    )
 
     return {
         "metrics": {
