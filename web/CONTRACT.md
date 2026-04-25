@@ -133,7 +133,7 @@ Mutations контейнеров идут только через CLI allowlist.
 - Имена стеков Compose для **опроса Docker** (`com.docker.compose.project`):
   по умолчанию `slgpu` (инференс) и `slgpu-monitoring` (мониторинг); при
   другом `COMPOSE_PROJECT_NAME` задайте `WEB_COMPOSE_PROJECT_INFER` и
-  `WEB_COMPOSE_PROJECT_MONITORING` (см. `web/.env.example`).
+  `WEB_COMPOSE_PROJECT_MONITORING` (см. `main.env` в корне репо).
 - **Наблюдаемость:** логи в **stdout** в JSON (`app.core.logging`); в сообщениях
   якоря вроде `[runtime][snapshot][BLOCK_RESOLVE]`, `[monitoring][probe_all]`, `[api][dashboard]`.
   `WEB_LOG_LEVEL=DEBUG` включает, в частности, отсутствие контейнера по

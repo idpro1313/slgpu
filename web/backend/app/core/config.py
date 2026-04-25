@@ -1,4 +1,4 @@
-"""Application configuration. Loaded from environment, see web/.env.example."""
+"""Application configuration. Loaded from environment (WEB_* in main.env; compose from repo root)."""
 
 from __future__ import annotations
 
