@@ -361,7 +361,8 @@ slgpu/
 │   ├── README.md                       # список compose-файлов и примечание по --project-directory
 │   ├── docker-compose.llm.yml         # vLLM / SGLang
 │   ├── docker-compose.monitoring.yml   # стек мониторинга
-│   └── docker-compose.web.yml         # slgpu-web (см. web/Dockerfile)
+│   ├── Dockerfile.web                 # slgpu-web (сборка, context: web/)
+│   └── docker-compose.web.yml
 ├── main.env                    # дефолты (в т.ч. vLLM/SGLang); затем пресет
 ├── README.md
 ├── docs/

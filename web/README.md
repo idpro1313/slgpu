@@ -37,7 +37,7 @@ Web control plane поверх существующего CLI [`./slgpu`](../slg
 ```text
 web/
 ├── CONTRACT.md
-├── Dockerfile            # сборка slgpu-web (compose: ../docker/docker-compose.web.yml)
+├── docker-entrypoint.sh  # в образ; инструкции сборки — `../docker/Dockerfile.web` (context = этот каталог)
 ├── data/                 # SQLite на хосте (bind mount → /data в контейнере)
 ├── backend/
 │   ├── pyproject.toml

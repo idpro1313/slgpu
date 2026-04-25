@@ -12,14 +12,14 @@ name: slgpu-web
 # It joins the existing `slgpu` bridge network (declared by
 # `docker/docker-compose.llm.yml` as `name: slgpu`) so DNS to vllm/sglang/litellm by
 # service name works when the upstream stack is up.
-# Build: context `./web` и Dockerfile в каталоге `web/` (корень репо = --project-directory).
+# Build: context `./web`, Dockerfile — `docker/Dockerfile.web` (корень репо = --project-directory).
 
 services:
   slgpu-web:
     image: slgpu-web:dev
     build:
       context: ./web
-      dockerfile: Dockerfile
+      dockerfile: ../docker/Dockerfile.web
     container_name: slgpu-web
     restart: unless-stopped
     # user: not set — entrypoint starts as root, chown /data, then runs app as 10001
