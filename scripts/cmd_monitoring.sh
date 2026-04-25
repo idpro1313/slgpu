@@ -33,6 +33,15 @@ EOF
 SUB="${1:-}"
 shift || true
 
+slgpu_ensure_loki_promtail_config_files() {
+  slgpu_ensure_config_yaml_is_file \
+    "${ROOT}/configs/monitoring/loki/loki-config.yaml" \
+    "configs/monitoring/loki/loki-config.yaml"
+  slgpu_ensure_config_yaml_is_file \
+    "${ROOT}/configs/monitoring/promtail/promtail-config.yml" \
+    "configs/monitoring/promtail/promtail-config.yml"
+}
+
 slgpu_ensure_langfuse_litellm_secrets() {
   local s="${ROOT}/configs/secrets/langfuse-litellm.env"
   local ex="${ROOT}/configs/secrets/langfuse-litellm.env.example"
@@ -52,6 +61,7 @@ case "${SUB}" in
     slgpu_ensure_langfuse_litellm_secrets
     slgpu_load_server_env
     slgpu_ensure_data_dirs
+    slgpu_ensure_loki_promtail_config_files
     echo "Поднимаю мониторинг (slgpu-monitoring)…"
     slgpu_docker_compose -f docker/docker-compose.monitoring.yml --env-file main.env up -d
     echo "Проверка: Prometheus /targets (http://<хост>:9090/targets) · Grafana: GRAFANA_PORT · Loki: Explore → Loki · Langfuse: :${LANGFUSE_PORT:-3001} · LiteLLM: :${LITELLM_PORT:-4000} (vLLM: LLM_API_PORT → configs/monitoring/litellm/config.yaml, devllm = SLGPU_SERVED_MODEL_NAME)"
@@ -65,6 +75,7 @@ case "${SUB}" in
     slgpu_ensure_slgpu_network
     slgpu_ensure_langfuse_litellm_secrets
     slgpu_load_server_env
+    slgpu_ensure_loki_promtail_config_files
     echo "Перезапуск мониторинга…"
     slgpu_docker_compose -f docker/docker-compose.monitoring.yml --env-file main.env up -d --force-recreate
     echo "Готово."

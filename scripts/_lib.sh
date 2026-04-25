@@ -352,3 +352,29 @@ slgpu_ensure_data_dirs() {
     fi
   done
 }
+
+# Если bind-монт в Docker указывал на отсутствующий файл, Docker мог создать каталог с тем же именем → Loki/Promtail: «is a directory».
+# $1 — абсолютный путь к ожидаемому файлу; $2 — путь для «git checkout» от корня репо.
+slgpu_ensure_config_yaml_is_file() {
+  local abs="${1:?}"
+  local gitrel="${2:?}"
+  local root
+  root="$(slgpu_root)"
+  if [[ -d "${abs}" ]]; then
+    echo "Исправление: ${abs#${root}/} — каталог вместо файла; удаляю и восстанавливаю из git…" >&2
+    rm -rf "${abs}"
+  fi
+  if [[ -f "${abs}" ]]; then
+    return 0
+  fi
+  if command -v git &>/dev/null && (cd "${root}" && git rev-parse --is-inside-work-tree &>/dev/null); then
+    if (cd "${root}" && git checkout -- "${gitrel}" 2>/dev/null); then
+      echo "Восстановлено: ${gitrel}" >&2
+    fi
+  fi
+  if [[ ! -f "${abs}" ]]; then
+    echo "Ошибка: нет файла ${abs#${root}/}. Скопируйте из репозитория или: git checkout ${gitrel}" >&2
+    return 1
+  fi
+  return 0
+}
