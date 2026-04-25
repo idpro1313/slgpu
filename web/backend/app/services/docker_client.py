@@ -8,6 +8,7 @@ fetch tail logs.
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -49,6 +50,8 @@ class DockerInspector:
                 )
             logger.warning(msg)
             self._client = None
+        # TTL list cache for get_by_service fallbacks (many probes per /dashboard)
+        self._all_cont_cache: tuple[float, list] | None = None
 
     @property
     def is_available(self) -> bool:
@@ -81,14 +84,69 @@ class DockerInspector:
         except DockerException as exc:
             logger.warning("[docker_client][get_by_service] %s", exc)
             return None
-        if not containers:
+        if containers:
+            return self._summary(containers[0])
+        fb = self._get_by_service_fallback(project, service)
+        if fb is not None:
             logger.debug(
-                "[docker_client][get_by_service] no match labels project=%r service=%r",
+                "[docker_client][get_by_service] fallback project=%r service=%r",
                 project,
                 service,
             )
-            return None
-        return self._summary(containers[0])
+            return fb
+        logger.debug(
+            "[docker_client][get_by_service] no match project=%r service=%r",
+            project,
+            service,
+        )
+        return None
+
+    @staticmethod
+    def _norm_compose_id(value: str) -> str:
+        return (value or "").replace("_", "-").casefold()
+
+    def _all_containers_cached(self) -> list:
+        if not self._client:
+            return []
+        now = time.monotonic()
+        if self._all_cont_cache is not None and now - self._all_cont_cache[0] < 1.5:
+            return self._all_cont_cache[1]
+        try:
+            lst = self._client.containers.list(all=True)
+        except DockerException as exc:
+            logger.warning("[docker_client][_all_containers_cached] %s", exc)
+            return []
+        self._all_cont_cache = (now, lst)
+        return lst
+
+    def _get_by_service_fallback(self, project: str, service: str) -> ContainerSummary | None:
+        """When exact Docker label filter returns nothing, try normalized labels or Compose-style names (Portainer, v1/v2 naming)."""
+        p_w, s_w = self._norm_compose_id(project), self._norm_compose_id(service)
+        hyp = f"{project}-{service}"
+        uproj = project.replace("-", "_")
+        userv = service.replace("-", "_")
+        und = f"{uproj}_{userv}"
+        for c in self._all_containers_cached():
+            c = c if c.attrs else self._client.containers.get(c.id)
+            attrs = c.attrs
+            if not attrs:
+                continue
+            labels: dict[str, str] = (attrs.get("Config") or {}).get("Labels") or {}
+            p = self._norm_compose_id(labels.get("com.docker.compose.project", ""))
+            s = self._norm_compose_id(labels.get("com.docker.compose.service", ""))
+            if p == p_w and s == s_w:
+                return self._summary(c)
+        for c in self._all_containers_cached():
+            c = c if c.attrs else self._client.containers.get(c.id)
+            attrs = c.attrs
+            if not attrs:
+                continue
+            name = (attrs.get("Name") or getattr(c, "name", None) or "").lstrip("/")
+            if name.startswith(f"{hyp}-") or name == hyp:
+                return self._summary(c)
+            if name.startswith(f"{und}_") or name == und:
+                return self._summary(c)
+        return None
 
     def tail_logs(self, container_id: str, tail: int = 200) -> str:
         if not self._client:

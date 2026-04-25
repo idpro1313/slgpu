@@ -133,6 +133,9 @@ Mutations контейнеров идут только через CLI allowlist.
   якоря вроде `[runtime][snapshot][BLOCK_RESOLVE]`, `[monitoring][probe_all]`, `[api][dashboard]`.
   `WEB_LOG_LEVEL=DEBUG` включает, в частности, отсутствие контейнера по
   лейблам `com.docker.compose.project` / `…service` (`get_by_service`).
+- **Поиск контейнеров в Docker:** помимо точного фильтра по лейблам — нормализация
+  (`-`/`_`, регистр) и имя в стиле Compose v2 (`<project>-<service>-N`) / v1
+  (`<project>_<service>_N`), если Portainer/стек отдаёт нестандартные лейблы.
 
 ## 6. Совместимость
 
