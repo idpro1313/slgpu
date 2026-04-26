@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import type { ActivityEntry, Job } from "@/api/types";
 import { formatDate } from "@/components/formatters";
+import { Modal } from "@/components/Modal";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -28,11 +29,25 @@ export function JobsPage() {
     refetchInterval: 4_000,
   });
 
+  const modalOpen = selected !== null;
+  const modalTitle =
+    selected?.source === "job"
+      ? `Задача #${selected.id}`
+      : selected?.source === "ui"
+        ? `Действие UI #${selected.entry.audit_id}`
+        : "";
+  const modalSubtitle =
+    selected?.source === "job"
+      ? (jobDetail.data?.message ?? "Команда и логи.")
+      : selected?.source === "ui"
+        ? (selected.entry.note ?? selected.entry.action)
+        : null;
+
   return (
     <>
       <PageHeader
         title="Задачи"
-        subtitle="Фоновые команды (pull, up, down, monitoring) и отдельные действия в UI: модели, пресеты, настройки, синхронизация пресетов. По клику на строку job — лог; для действия UI — краткие детали."
+        subtitle="Фоновые команды (pull, up, down, monitoring) и отдельные действия в UI: модели, пресеты, настройки, синхронизация пресетов. По клику на строку — подробности в окне; Esc или фон — закрыть."
       />
 
       <Section title="История" subtitle="Объединённая лента по времени, лимит 100.">
@@ -98,21 +113,14 @@ export function JobsPage() {
         )}
       </Section>
 
-      {selected?.source === "job" && selected.id != null ? (
-        <Section
-          title={`Задача #${selected.id}`}
-          subtitle={jobDetail.data?.message ?? "Команда и логи."}
-          actions={
-            <button
-              type="button"
-              className="btn btn--ghost"
-              onClick={() => setSelected(null)}
-            >
-              Закрыть
-            </button>
-          }
-        >
-          {jobDetail.isLoading || !jobDetail.data ? (
+      <Modal
+        isOpen={modalOpen}
+        onClose={() => setSelected(null)}
+        title={modalTitle}
+        subtitle={modalSubtitle}
+      >
+        {selected?.source === "job" ? (
+          jobDetail.isLoading || !jobDetail.data ? (
             <div className="empty-state">Загружаем…</div>
           ) : (
             <div className="flex flex--col flex--gap-md">
@@ -129,24 +137,8 @@ export function JobsPage() {
                 <pre className="code-block">{jobDetail.data.stderr_tail ?? "—"}</pre>
               </div>
             </div>
-          )}
-        </Section>
-      ) : null}
-
-      {selected?.source === "ui" ? (
-        <Section
-          title={`Действие UI #${selected.entry.audit_id}`}
-          subtitle={selected.entry.note ?? selected.entry.action}
-          actions={
-            <button
-              type="button"
-              className="btn btn--ghost"
-              onClick={() => setSelected(null)}
-            >
-              Закрыть
-            </button>
-          }
-        >
+          )
+        ) : selected?.source === "ui" ? (
           <div className="flex flex--col flex--gap-md">
             <div>
               <div className="label">action</div>
@@ -169,8 +161,8 @@ export function JobsPage() {
               </pre>
             </div>
           </div>
-        </Section>
-      ) : null}
+        ) : null}
+      </Modal>
     </>
   );
 }
