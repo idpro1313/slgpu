@@ -142,6 +142,7 @@ export function PresetsPage() {
       setSyncResult(data);
       queryClient.invalidateQueries({ queryKey: ["presets"] });
       queryClient.invalidateQueries({ queryKey: ["models"] });
+      queryClient.invalidateQueries({ queryKey: ["activity"] });
     },
     onError: (err: Error) => setError(err.message),
   });
@@ -178,6 +179,7 @@ export function PresetsPage() {
       setForm(EMPTY);
       setError(null);
       queryClient.invalidateQueries({ queryKey: ["presets"] });
+      queryClient.invalidateQueries({ queryKey: ["activity"] });
     },
     onError: (err: Error) => setError(err.message),
   });
@@ -187,6 +189,7 @@ export function PresetsPage() {
     onSuccess: () => {
       setError(null);
       queryClient.invalidateQueries({ queryKey: ["presets"] });
+      queryClient.invalidateQueries({ queryKey: ["activity"] });
     },
     onError: (err: Error) => setError(err.message),
   });
@@ -209,6 +212,7 @@ export function PresetsPage() {
       setSelectedId(preset.id);
       setEditor(editorFromPreset(preset));
       queryClient.invalidateQueries({ queryKey: ["presets"] });
+      queryClient.invalidateQueries({ queryKey: ["activity"] });
     },
     onError: (err: Error) => setError(err.message),
   });
@@ -221,6 +225,7 @@ export function PresetsPage() {
       setSelectedId(null);
       setEditor(null);
       queryClient.invalidateQueries({ queryKey: ["presets"] });
+      queryClient.invalidateQueries({ queryKey: ["activity"] });
     },
     onError: (err: Error) => setError(err.message),
   });

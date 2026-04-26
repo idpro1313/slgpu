@@ -221,3 +221,27 @@ async def test_public_access_settings_drive_external_ui_links(client: httpx.Asyn
     assert by_key["litellm"]["url"] == "http://llm.example.local:4000/ui"
     assert litellm.status_code == 200
     assert litellm.json()["ui_url"] == "http://llm.example.local:4000/ui"
+
+
+@pytest.mark.asyncio
+async def test_activity_includes_ui_after_preset_and_settings(client: httpx.AsyncClient) -> None:
+    """Лента /activity: UI-события (audit без correlation) + CLI-записи (jobs)."""
+    async with client:
+        await client.post(
+            "/api/v1/presets",
+            json={"name": "act-test", "hf_id": "Qwen/Qwen3-7B", "tp": 1, "parameters": {}},
+        )
+        await client.patch(
+            "/api/v1/settings/public-access",
+            json={"server_host": "example.test"},
+        )
+        act = await client.get("/api/v1/activity?limit=50")
+
+    assert act.status_code == 200
+    body = act.json()
+    assert isinstance(body, list)
+    types = {row["type"] for row in body}
+    assert "ui" in types
+    actions = {row["action"] for row in body if row["type"] == "ui"}
+    assert "preset.create" in actions
+    assert "settings.public_access" in actions

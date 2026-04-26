@@ -64,6 +64,7 @@ export function ModelsPage() {
       setForm(EMPTY_FORM);
       setError(null);
       queryClient.invalidateQueries({ queryKey: ["models"] });
+      queryClient.invalidateQueries({ queryKey: ["activity"] });
     },
     onError: (err: Error) => setError(err.message),
   });
@@ -76,6 +77,7 @@ export function ModelsPage() {
       setError(null);
       queryClient.invalidateQueries({ queryKey: ["models"] });
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["activity"] });
       window.setTimeout(() => setPulling(null), 1500);
     },
     onError: (err: Error) => setError(err.message),
@@ -92,6 +94,7 @@ export function ModelsPage() {
       setSelectedId(model.id);
       setEditor(editorFromModel(model));
       queryClient.invalidateQueries({ queryKey: ["models"] });
+      queryClient.invalidateQueries({ queryKey: ["activity"] });
     },
     onError: (err: Error) => setError(err.message),
   });
@@ -104,6 +107,7 @@ export function ModelsPage() {
       setSelectedId(null);
       setEditor(null);
       queryClient.invalidateQueries({ queryKey: ["models"] });
+      queryClient.invalidateQueries({ queryKey: ["activity"] });
     },
     onError: (err: Error) => setError(err.message),
   });

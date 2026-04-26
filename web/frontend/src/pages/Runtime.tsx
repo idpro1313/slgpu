@@ -46,6 +46,7 @@ export function RuntimePage() {
     onSuccess: () => {
       setError(null);
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["activity"] });
       queryClient.invalidateQueries({ queryKey: ["runtime-snapshot"] });
       queryClient.invalidateQueries({ queryKey: ["runtime-logs"] });
     },
@@ -61,6 +62,7 @@ export function RuntimePage() {
     onSuccess: () => {
       setError(null);
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["activity"] });
       queryClient.invalidateQueries({ queryKey: ["runtime-snapshot"] });
       queryClient.invalidateQueries({ queryKey: ["runtime-logs"] });
     },
@@ -73,6 +75,7 @@ export function RuntimePage() {
     onSuccess: () => {
       setError(null);
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["activity"] });
       queryClient.invalidateQueries({ queryKey: ["runtime-snapshot"] });
       queryClient.invalidateQueries({ queryKey: ["runtime-logs"] });
     },

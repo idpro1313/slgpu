@@ -12,10 +12,11 @@ from app.models.model import HFModel
 from app.models.preset import Preset
 from app.schemas.common import JobAccepted
 from app.schemas.models import HFModelCreate, HFModelOut, HFModelPullRequest, HFModelUpdate
+from app.core.config import get_settings
 from app.services import hf_models as hf_service
 from app.services import jobs as jobs_service
 from app.services.slgpu_cli import cmd_pull
-from app.core.config import get_settings
+from app.services.ui_audit import record_ui_action
 
 router = APIRouter()
 
@@ -35,6 +36,7 @@ async def list_models(session: AsyncSession = Depends(db_session)) -> list[HFMod
 async def create_model(
     payload: HFModelCreate,
     session: AsyncSession = Depends(db_session),
+    actor: str | None = Depends(actor_from_header),
 ) -> HFModel:
     try:
         model = await hf_service.upsert_from_hf_id(
@@ -46,6 +48,14 @@ async def create_model(
     except ValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     await session.flush()
+    await record_ui_action(
+        session,
+        action="model.create",
+        actor=actor,
+        target=model.hf_id,
+        note="registry create",
+        payload={"hf_id": model.hf_id, "id": model.id},
+    )
     return model
 
 
@@ -63,6 +73,7 @@ async def update_model(
     model_id: int,
     payload: HFModelUpdate,
     session: AsyncSession = Depends(db_session),
+    actor: str | None = Depends(actor_from_header),
 ) -> HFModel:
     model = await session.get(HFModel, model_id)
     if model is None:
@@ -71,6 +82,14 @@ async def update_model(
         model.revision = payload.revision
     if payload.notes is not None:
         model.notes = payload.notes
+    await record_ui_action(
+        session,
+        action="model.update",
+        actor=actor,
+        target=model.hf_id,
+        note="revision/notes",
+        payload={"model_id": model_id, "hf_id": model.hf_id},
+    )
     return model
 
 
@@ -79,10 +98,12 @@ async def delete_model(
     model_id: int,
     delete_files: bool = Query(default=False),
     session: AsyncSession = Depends(db_session),
+    actor: str | None = Depends(actor_from_header),
 ) -> dict[str, object]:
     model = await session.get(HFModel, model_id)
     if model is None:
         raise HTTPException(status_code=404, detail="model not found")
+    hf = model.hf_id
     deleted_path = None
     if delete_files:
         try:
@@ -93,6 +114,14 @@ async def delete_model(
     presets = await session.execute(select(Preset).where(Preset.model_id == model.id))
     for preset in presets.scalars().all():
         preset.model_id = None
+    await record_ui_action(
+        session,
+        action="model.delete",
+        actor=actor,
+        target=hf,
+        note=f"delete_files={delete_files}",
+        payload={"model_id": model_id, "hf_id": hf, "delete_files": delete_files},
+    )
     await session.delete(model)
     return {"deleted": True, "deleted_files": delete_files, "deleted_path": deleted_path}
 

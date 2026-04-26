@@ -64,7 +64,7 @@ web-контейнера: к API движка ходим через `WEB_LLM_HTT
 | `runs` | Желаемое и фактическое состояние запуска (engine, preset, HF ID в `extra`, port, TP, started_at). Runtime snapshot показывает последний активный запуск, чтобы UI явно видел запрошенные модель и пресет. |
 | `services` | Состояние сервисов мониторинга и LiteLLM по последнему опросу. |
 | `jobs` | Долгие операции CLI: команда, статус, exit code, stdout/stderr tail, correlation id, инициатор. |
-| `audit_events` | Действия пользователей в UI (mutations). |
+| `audit_events` | Действия: при `jobs.submit` — запись **с** `correlation_id` (дублирует job для трассировки). Отдельно — **только UI** (`correlation_id IS NULL`): пресеты, модель в реестре, настройки public-access. Лента «Задачи» строится из `GET /activity`: `jobs` + UI-`audit` без дубля CLI-строк. |
 | `settings` | Пользовательские настройки UI, включая публичный host сервера для ссылок на monitoring/LiteLLM. |
 
 Footer приложения показывает версию из `/healthz`; backend читает её из
@@ -135,7 +135,7 @@ Mutations контейнеров идут только через CLI allowlist.
   `(scope, resource)`: runtime-команды используют `("engine", "runtime")`,
   monitoring-команды — `("monitoring", "stack")`). UI показывает активную
   job и блокирует повторные конфликтующие кнопки до завершения.
-- Все mutating-эндпоинты пишут запись в `audit_events`.
+- Mutations, **не** порождающие CLI-job, пишут `audit_events` с `correlation_id IS NULL` (см. `app.services.ui_audit`). Команды через `jobs.submit` дополнительно пишут audit **с** `correlation_id`; в ленте `GET /activity` для таких команд показывается только строка `jobs` (лог, exit).
 - Корневой запуск не нужен. Контейнер web-приложения работает от
   не-root пользователя; для CLI он `exec`-ает в slgpu-репозиторий через
   bind-mount.

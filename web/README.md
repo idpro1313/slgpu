@@ -161,7 +161,8 @@ daemon не нашёл бы файлы по `/slgpu/...` и создал бы п
 | GET | `/api/v1/monitoring/services` | состояние сервисов |
 | POST | `/api/v1/monitoring/action` | `slgpu monitoring up\|down\|restart\|fix-perms` |
 | GET | `/api/v1/litellm/health\|info\|models` | LiteLLM proxy |
-| GET | `/api/v1/jobs` | журнал задач |
+| GET | `/api/v1/jobs` | только CLI-задачи (лог, exit) |
+| GET | `/api/v1/activity` | **объединённая** лента: `jobs` + UI-действия (`audit_events` с `correlation_id IS NULL`); страница «Задачи» в UI |
 | GET/PATCH | `/api/v1/settings/public-access` | публичный host сервера и итоговые UI-ссылки |
 
 ## Безопасность

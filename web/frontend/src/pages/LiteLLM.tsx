@@ -33,7 +33,10 @@ export function LiteLLMPage() {
   const action = useMutation({
     mutationFn: (act: string) =>
       api.post<JobAccepted>("/monitoring/action", { action: act }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["jobs"] }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      void queryClient.invalidateQueries({ queryKey: ["activity"] });
+    },
   });
 
   return (

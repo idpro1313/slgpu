@@ -27,6 +27,7 @@ export function MonitoringPage() {
     onSuccess: () => {
       setError(null);
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["activity"] });
       queryClient.invalidateQueries({ queryKey: ["monitoring", "services"] });
     },
     onError: (err: Error) => setError(err.message),

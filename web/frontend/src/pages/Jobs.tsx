@@ -2,25 +2,29 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
-import type { Job } from "@/api/types";
+import type { ActivityEntry, Job } from "@/api/types";
 import { formatDate } from "@/components/formatters";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
 import { StatusBadge } from "@/components/StatusBadge";
 
-export function JobsPage() {
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+type SelectedJob = { source: "job"; id: number };
+type SelectedUi = { source: "ui"; entry: ActivityEntry & { type: "ui" } };
+type Selection = SelectedJob | SelectedUi | null;
 
-  const jobs = useQuery({
-    queryKey: ["jobs"],
-    queryFn: () => api.get<Job[]>("/jobs"),
+export function JobsPage() {
+  const [selected, setSelected] = useState<Selection>(null);
+
+  const activity = useQuery({
+    queryKey: ["activity"],
+    queryFn: () => api.get<ActivityEntry[]>("/activity"),
     refetchInterval: 5_000,
   });
 
-  const detail = useQuery({
-    queryKey: ["jobs", selectedId],
-    queryFn: () => api.get<Job>(`/jobs/${selectedId}`),
-    enabled: selectedId != null,
+  const jobDetail = useQuery({
+    queryKey: ["jobs", selected?.source === "job" ? selected.id : null],
+    queryFn: () => api.get<Job>(`/jobs/${(selected as SelectedJob).id}`),
+    enabled: selected?.source === "job",
     refetchInterval: 4_000,
   });
 
@@ -28,86 +32,143 @@ export function JobsPage() {
     <>
       <PageHeader
         title="Задачи"
-        subtitle="Журнал всех CLI-операций: pull, up, down, restart, monitoring. По клику виден stdout/stderr tail."
+        subtitle="Фоновые команды (pull, up, down, monitoring) и отдельные действия в UI: модели, пресеты, настройки, синхронизация пресетов. По клику на строку job — лог; для действия UI — краткие детали."
       />
 
-      <Section title="История" subtitle="Сортировка по убыванию id, лимит 50.">
-        {jobs.isLoading ? (
+      <Section title="История" subtitle="Объединённая лента по времени, лимит 100.">
+        {activity.isLoading ? (
           <div className="empty-state">Загружаем…</div>
-        ) : !jobs.data || jobs.data.length === 0 ? (
-          <div className="empty-state">Задач пока нет.</div>
+        ) : !activity.data || activity.data.length === 0 ? (
+          <div className="empty-state">Записей пока нет.</div>
         ) : (
           <div style={{ overflowX: "auto" }}>
             <table className="table table--compact">
               <thead>
                 <tr>
-                  <th>ID</th>
-                  <th>Команда</th>
+                  <th>Тип</th>
+                  <th>Команда / действие</th>
                   <th>Цель</th>
                   <th>Актор</th>
                   <th>Статус</th>
                   <th>Exit</th>
-                  <th>Создано</th>
-                  <th>Завершено</th>
+                  <th>Время</th>
                 </tr>
               </thead>
               <tbody>
-                {jobs.data.map((job) => (
-                  <tr
-                    key={job.id}
-                    onClick={() => setSelectedId(job.id)}
-                    style={{ cursor: "pointer" }}
-                  >
-                    <td className="mono">#{job.id}</td>
-                    <td className="mono">{job.kind}</td>
-                    <td className="mono">{job.resource ?? "—"}</td>
-                    <td>{job.actor ?? "—"}</td>
-                    <td>
-                      <StatusBadge status={job.status} />
-                    </td>
-                    <td>{job.exit_code ?? "—"}</td>
-                    <td>{formatDate(job.created_at)}</td>
-                    <td>{formatDate(job.finished_at)}</td>
-                  </tr>
-                ))}
+                {activity.data.map((row) => {
+                  if (row.type === "job") {
+                    const j = row.job;
+                    return (
+                      <tr
+                        key={`job-${j.id}`}
+                        onClick={() => setSelected({ source: "job", id: j.id })}
+                        style={{ cursor: "pointer" }}
+                      >
+                        <td>CLI</td>
+                        <td className="mono">{j.kind}</td>
+                        <td className="mono">{j.resource ?? "—"}</td>
+                        <td>{j.actor ?? "—"}</td>
+                        <td>
+                          <StatusBadge status={j.status} />
+                        </td>
+                        <td>{j.exit_code ?? "—"}</td>
+                        <td>{formatDate(j.created_at)}</td>
+                      </tr>
+                    );
+                  }
+                  return (
+                    <tr
+                      key={`ui-${row.audit_id}`}
+                      onClick={() => setSelected({ source: "ui", entry: row })}
+                      style={{ cursor: "pointer" }}
+                    >
+                      <td>UI</td>
+                      <td className="mono">{row.action}</td>
+                      <td className="mono">{row.target ?? "—"}</td>
+                      <td>{row.actor ?? "—"}</td>
+                      <td>—</td>
+                      <td>—</td>
+                      <td>{formatDate(row.created_at)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
       </Section>
 
-      {selectedId != null ? (
+      {selected?.source === "job" && selected.id != null ? (
         <Section
-          title={`Задача #${selectedId}`}
-          subtitle={detail.data?.message ?? "Команда и логи."}
+          title={`Задача #${selected.id}`}
+          subtitle={jobDetail.data?.message ?? "Команда и логи."}
           actions={
             <button
               type="button"
               className="btn btn--ghost"
-              onClick={() => setSelectedId(null)}
+              onClick={() => setSelected(null)}
             >
               Закрыть
             </button>
           }
         >
-          {detail.isLoading || !detail.data ? (
+          {jobDetail.isLoading || !jobDetail.data ? (
             <div className="empty-state">Загружаем…</div>
           ) : (
             <div className="flex flex--col flex--gap-md">
               <div>
                 <div className="label">argv</div>
-                <pre className="code-block">{detail.data.command.join(" ")}</pre>
+                <pre className="code-block">{jobDetail.data.command.join(" ")}</pre>
               </div>
               <div>
                 <div className="label">stdout (tail)</div>
-                <pre className="code-block">{detail.data.stdout_tail ?? "—"}</pre>
+                <pre className="code-block">{jobDetail.data.stdout_tail ?? "—"}</pre>
               </div>
               <div>
                 <div className="label">stderr (tail)</div>
-                <pre className="code-block">{detail.data.stderr_tail ?? "—"}</pre>
+                <pre className="code-block">{jobDetail.data.stderr_tail ?? "—"}</pre>
               </div>
             </div>
           )}
+        </Section>
+      ) : null}
+
+      {selected?.source === "ui" ? (
+        <Section
+          title={`Действие UI #${selected.entry.audit_id}`}
+          subtitle={selected.entry.note ?? selected.entry.action}
+          actions={
+            <button
+              type="button"
+              className="btn btn--ghost"
+              onClick={() => setSelected(null)}
+            >
+              Закрыть
+            </button>
+          }
+        >
+          <div className="flex flex--col flex--gap-md">
+            <div>
+              <div className="label">action</div>
+              <pre className="code-block">{selected.entry.action}</pre>
+            </div>
+            <div>
+              <div className="label">target</div>
+              <pre className="code-block">{selected.entry.target ?? "—"}</pre>
+            </div>
+            {selected.entry.actor ? (
+              <div>
+                <div className="label">actor</div>
+                <pre className="code-block">{selected.entry.actor}</pre>
+              </div>
+            ) : null}
+            <div>
+              <div className="label">payload</div>
+              <pre className="code-block">
+                {JSON.stringify(selected.entry.payload, null, 2) || "—"}
+              </pre>
+            </div>
+          </div>
         </Section>
       ) : null}
     </>

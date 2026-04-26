@@ -145,6 +145,20 @@ export interface JobAccepted {
   message: string | null;
 }
 
+/** GET /activity: CLI-задача или запись о действии в UI (без дубля с job). */
+export type ActivityEntry =
+  | { type: "job"; created_at: string; job: Job }
+  | {
+      type: "ui";
+      created_at: string;
+      audit_id: number;
+      action: string;
+      target: string | null;
+      actor: string | null;
+      note: string | null;
+      payload: Record<string, unknown>;
+    };
+
 export interface PresetSyncResult {
   imported: number;
   updated: number;
