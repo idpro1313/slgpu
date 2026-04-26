@@ -580,14 +580,21 @@ pre {
   white-space: nowrap;
   width: 1%;
   vertical-align: middle;
+  /* иначе при узкой таблице кнопки в .table-actions переносятся столбцом (flex-wrap) */
+  min-width: 12rem;
 }
 
 .table-actions {
-  display: inline-flex;
-  gap: 8px;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: center;
-  flex-wrap: wrap;
+  gap: 8px;
+  width: max-content;
+  max-width: 100%;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 /* Второе опасное действие: удаление и .env с диска (отличие от «только БД»). */
@@ -602,16 +609,20 @@ button.btn--icon,
   height: 40px;
   padding: 0;
   line-height: 0;
-  /* .btn оставляет justify-content: flex-start — одна иконка уезжала влево */
-  justify-content: center;
-  align-items: center;
+  box-sizing: border-box;
+  /* grid надёжнее centering inline-SVG, чем flex + baseline */
+  display: grid;
+  place-items: center;
+  place-content: center;
+  font-size: 0;
   gap: 0;
 }
 
-/* inline-SVG в кнопке иначе даёт сдвиг по baseline */
 .btn--icon svg {
   display: block;
-  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  margin: 0;
 }
 
 .code-block {
