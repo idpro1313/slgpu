@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
-import type { JobAccepted, Preset, RuntimeSnapshot } from "@/api/types";
+import type { JobAccepted, Preset, RuntimeLogs, RuntimeSnapshot } from "@/api/types";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -23,6 +23,11 @@ export function RuntimePage() {
     queryKey: ["runtime-snapshot"],
     queryFn: () => api.get<RuntimeSnapshot>("/runtime/snapshot"),
     refetchInterval: 8_000,
+  });
+  const logs = useQuery({
+    queryKey: ["runtime-logs"],
+    queryFn: () => api.get<RuntimeLogs>("/runtime/logs?tail=400"),
+    refetchInterval: 5_000,
   });
 
   const upMutation = useMutation({
@@ -93,6 +98,21 @@ export function RuntimePage() {
             <div className="status-card__detail mono">
               port: {snap?.api_port ?? "—"}
             </div>
+          </div>
+          <div className="status-card">
+            <div className="status-card__head">
+              <span className="status-card__name">Запрошенный пресет</span>
+            </div>
+            <div className="status-card__detail mono">
+              {snap?.preset_name ?? "—"}
+              {snap?.tp ? ` • TP ${snap.tp}` : ""}
+            </div>
+          </div>
+          <div className="status-card">
+            <div className="status-card__head">
+              <span className="status-card__name">Модель пресета</span>
+            </div>
+            <div className="status-card__detail mono">{snap?.hf_id ?? "—"}</div>
           </div>
           <div className="status-card">
             <div className="status-card__head">
@@ -204,6 +224,36 @@ export function RuntimePage() {
           </button>
         </div>
         {error ? <p style={{ color: "var(--color-danger)" }}>{error}</p> : null}
+      </Section>
+
+      <Section
+        title="Лог контейнера модели"
+        subtitle="Хвост stdout/stderr текущего контейнера vLLM/SGLang. Обновляется каждые 5 секунд."
+        actions={
+          <button
+            type="button"
+            className="btn"
+            onClick={() => logs.refetch()}
+            disabled={logs.isFetching}
+          >
+            Обновить лог
+          </button>
+        }
+      >
+        <p className="section__subtitle">
+          Контейнер:{" "}
+          <span className="mono">{logs.data?.container_name ?? "не найден"}</span>
+          {logs.data?.engine ? ` • ${logs.data.engine}` : ""}
+          {logs.data?.container_status ? ` • ${logs.data.container_status}` : ""}
+          {logs.data?.tail ? ` • tail ${logs.data.tail}` : ""}
+        </p>
+        <pre className="code-block" style={{ maxHeight: 520, overflow: "auto" }}>
+          {logs.isLoading
+            ? "Загружаем лог…"
+            : logs.data?.logs?.trim()
+              ? logs.data.logs
+              : "Лог пуст или контейнер vLLM/SGLang не найден."}
+        </pre>
       </Section>
     </>
   );

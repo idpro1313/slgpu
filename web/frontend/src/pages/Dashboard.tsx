@@ -84,6 +84,23 @@ export function DashboardPage() {
             </div>
             <div className="status-card">
               <div className="status-card__head">
+                <span className="status-card__name">Пресет запуска</span>
+              </div>
+              <div className="status-card__detail mono">
+                {data.runtime.preset_name ?? "—"}
+                {data.runtime.tp ? ` • TP ${data.runtime.tp}` : ""}
+              </div>
+            </div>
+            <div className="status-card">
+              <div className="status-card__head">
+                <span className="status-card__name">Модель пресета</span>
+              </div>
+              <div className="status-card__detail mono">
+                {data.runtime.hf_id ?? "—"}
+              </div>
+            </div>
+            <div className="status-card">
+              <div className="status-card__head">
                 <span className="status-card__name">Обслуживаемые модели</span>
               </div>
               <div className="status-card__detail mono">

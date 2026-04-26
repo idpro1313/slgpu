@@ -27,6 +27,9 @@ export interface DashboardRuntime {
   engine: string | null;
   api_port: number | null;
   container_status: string | null;
+  preset_name: string | null;
+  hf_id: string | null;
+  tp: number | null;
   served_models: string[];
   metrics_available: boolean;
   last_checked_at: string | null;
@@ -74,7 +77,7 @@ export interface Preset {
   tp: number | null;
   gpu_mask: string | null;
   served_model_name: string | null;
-  parameters: Record<string, string>;
+  parameters: Record<string, unknown>;
   file_path: string | null;
   is_synced: boolean;
   is_active: boolean;
@@ -86,8 +89,20 @@ export interface RuntimeSnapshot {
   engine: string | null;
   api_port: number | null;
   container_status: string | null;
+  preset_name: string | null;
+  hf_id: string | null;
+  tp: number | null;
   served_models: string[];
   metrics_available: boolean;
+  last_checked_at: string | null;
+}
+
+export interface RuntimeLogs {
+  engine: string | null;
+  container_name: string | null;
+  container_status: string | null;
+  tail: number;
+  logs: string;
   last_checked_at: string | null;
 }
 

@@ -14,8 +14,9 @@ from app.models.job import Job, JobStatus
 from app.models.model import HFModel, ModelDownloadStatus
 from app.models.preset import Preset
 from app.services.docker_client import get_docker_inspector
+from app.services.hf_models import sync_local_models
 from app.services.monitoring import probe_all
-from app.services.runtime import snapshot as runtime_snapshot
+from app.services.runtime import attach_run_metadata, snapshot as runtime_snapshot
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -23,6 +24,8 @@ router = APIRouter()
 
 @router.get("")
 async def dashboard(session: AsyncSession = Depends(db_session)) -> dict[str, Any]:
+    await sync_local_models(session)
+    await session.flush()
     models_total = (await session.execute(select(func.count(HFModel.id)))).scalar_one()
     ready_total = (
         await session.execute(
@@ -39,6 +42,7 @@ async def dashboard(session: AsyncSession = Depends(db_session)) -> dict[str, An
     ).scalar_one()
 
     runtime = await runtime_snapshot()
+    await attach_run_metadata(session, runtime)
     services = await probe_all()
     healthy = sum(1 for s in services if s.status.value == "healthy")
     total = len(services)
@@ -67,6 +71,9 @@ async def dashboard(session: AsyncSession = Depends(db_session)) -> dict[str, An
             "engine": runtime.engine,
             "api_port": runtime.api_port,
             "container_status": runtime.container_status,
+            "preset_name": runtime.preset_name,
+            "hf_id": runtime.hf_id,
+            "tp": runtime.tp,
             "served_models": runtime.served_models,
             "metrics_available": runtime.metrics_available,
             "last_checked_at": runtime.last_checked_at,

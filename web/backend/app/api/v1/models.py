@@ -21,6 +21,8 @@ router = APIRouter()
 
 @router.get("", response_model=list[HFModelOut])
 async def list_models(session: AsyncSession = Depends(db_session)) -> list[HFModel]:
+    await hf_service.sync_local_models(session)
+    await session.flush()
     result = await session.execute(select(HFModel).order_by(HFModel.hf_id))
     items = list(result.scalars().all())
     for item in items:

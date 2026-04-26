@@ -40,9 +40,9 @@ Web-приложение `slgpu-web` — control plane поверх сущест
 
 | Таблица | Назначение |
 |---|---|
-| `models` | Реестр HF-моделей: id, revision, slug, локальный путь, статус скачивания, размер, последняя ошибка, attempts. |
-| `presets` | Декларация пресета в БД (имя, движок, model_id, параметры JSON, GPU mask, путь к синхронизированному `.env`). |
-| `runs` | Желаемое и фактическое состояние запуска (engine, preset, port, TP, started_at). |
+| `models` | Кэш реестра HF-моделей: id, revision, slug, локальный путь, статус скачивания, размер, последняя ошибка, attempts. Источник правды для скачанных весов — реальные папки `${MODELS_DIR}/<org>/<repo>`, список моделей синхронизируется с диском при чтении. |
+| `presets` | Декларация пресета в БД (имя, HF ID, движок, model_id, параметры JSON, GPU mask, путь к синхронизированному `.env`). UI умеет просматривать и редактировать запись; запись в файл выполняется отдельным экспортом. |
+| `runs` | Желаемое и фактическое состояние запуска (engine, preset, HF ID в `extra`, port, TP, started_at). Runtime snapshot показывает последний активный запуск, чтобы UI явно видел запрошенные модель и пресет. |
 | `services` | Состояние сервисов мониторинга и LiteLLM по последнему опросу. |
 | `jobs` | Долгие операции CLI: команда, статус, exit code, stdout/stderr tail, correlation id, инициатор. |
 | `audit_events` | Действия пользователей в UI (mutations). |
@@ -75,6 +75,7 @@ TP, revision. `shell=False` всегда.
   `HF_HOME` по умолчанию указывает на `/data/huggingface` в web-образе; если
   `$HOME` отсутствует или не writable, CLI использует `WEB_DATA_DIR` (абсолютный
   путь) вместо `/home/slgpuweb`, чтобы не падать на `Permission denied`.
+  Перед `hf download --local-dir` создаётся каталог модели `${MODELS_DIR}/<org>/<repo>`.
 - Сам `docker` CLI и доступ к `/var/run/docker.sock` — для `cli.up/down/restart` и
   `cli.monitoring.*`. `cli.monitoring.fix-perms` использует короткоживущий root-контейнер
   (`docker run --rm -u 0:0` с образом `SLGPU_FIXPERMS_HELPER_IMAGE`, по умолчанию
@@ -87,7 +88,7 @@ TP, revision. `shell=False` всегда.
 - `containers.list({"label": "com.docker.compose.project=slgpu"})`,
   `+slgpu-monitoring`;
 - `container.attrs` (статус, ports, restart count);
-- `container.logs(tail=N, since=...)` — стрим в UI и в `jobs.stderr_tail`.
+- `container.logs(tail=N, since=...)` — хвост логов текущего vLLM/SGLang на Runtime-странице и `jobs.stderr_tail`.
 
 Mutations контейнеров идут только через CLI allowlist.
 
@@ -140,7 +141,9 @@ Mutations контейнеров идут только через CLI allowlist.
   - **веса HF** с хоста: `${MODELS_DIR}` (должно совпадать с `MODELS_DIR` в
     `main.env`, по умолчанию **`./data/models`**). Target в контейнере
     — `${SLGPU_HOST_REPO}/data/models` (тот же абсолютный путь, что
-    разрешает CLI на хосте). Права **rw** (pull и скан);
+    разрешает CLI на хосте). Права **rw** (pull и скан). Страница моделей
+    перечисляет именно фактические каталоги `${MODELS_DIR}/<org>/<repo>`, а
+    не список пресетов;
   - `/var/run/docker.sock` → `/var/run/docker.sock` (read-only).
 - Данные **мониторинга** (Prometheus, Grafana, Loki, Langfuse и т.д.) вынесены в
   отдельный `docker/docker-compose.monitoring.yml` и **не** монтируются в web-контейнер:

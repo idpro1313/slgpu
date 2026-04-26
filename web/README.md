@@ -3,10 +3,12 @@
 Web control plane поверх существующего CLI [`./slgpu`](../slgpu) и Docker-стека
 проекта [`slgpu`](../README.md). Содержит:
 
-- Реестр моделей Hugging Face и инициируемые загрузки.
+- Реестр моделей Hugging Face по фактическим папкам `MODELS_DIR/<org>/<repo>` и инициируемые загрузки.
 - CRUD пресетов с двусторонней синхронизацией с
   [`data/presets/*.env`](../data/presets/) (`PRESETS_DIR` в `main.env`).
 - Управление инференсом vLLM/SGLang через `./slgpu up|down|restart`.
+  Runtime/Dashboard показывают текущий engine, запрошенный пресет, HF ID модели и TP;
+  Runtime также показывает автообновляемый хвост логов контейнера модели.
 - Управление и наблюдение мониторинг-стека (`./slgpu monitoring …`).
 - Состояние и базовые маршруты LiteLLM Proxy.
 - Журнал всех CLI-операций с stdout/stderr tail.
@@ -29,7 +31,9 @@ Web control plane поверх существующего CLI [`./slgpu`](../slg
   по умолчанию `/data/slgpu-web.db`. Папка `/data` всегда bind-mount.
 - **Веса моделей**: `MODELS_DIR` с хоста (см. `../main.env`, по умолчанию **`../data/models`**)
   → `${SLGPU_HOST_REPO}/data/models` в контейнере (тот же абсолютный путь, что разрешает CLI на хосте), `rw`
-  (скан, `./slgpu pull` из job runner). Остальные данные стека (рост контейнеров, мониторинг) —
+  (скан, `./slgpu pull` из job runner). Страница **Модели** синхронизируется с реальными каталогами
+  `${MODELS_DIR}/<org>/<repo>`; пресеты используются для запуска, но не являются источником списка
+  скачанных моделей. Остальные данные стека (рост контейнеров, мониторинг) —
   отдельные bind в корневых compose, в web-образ они не дублируются.
 
 ## Структура
@@ -103,7 +107,8 @@ daemon не нашёл бы файлы по `/slgpu/...` и создал бы п
   без них `slgpu pull` из web падает с `Не найдена команда «hf»`. В образе также есть
   writable `/home/slgpuweb`, а `HF_HOME=/data/huggingface`; [`../scripts/cmd_pull.sh`](../scripts/cmd_pull.sh)
   переводит `MODELS_DIR=./data/models` в абсолютный путь и при отсутствующем/wrong `$HOME`
-  использует writable `WEB_DATA_DIR`, чтобы `hf download` не писал в недоступный `/home/slgpuweb`.
+  использует writable `WEB_DATA_DIR`, чтобы `hf download` не писал в недоступный `/home/slgpuweb`;
+  перед `hf download --local-dir` создаётся каталог модели.
 - `monitoring fix-perms` использует короткоживущий root-контейнер (`docker run --rm -u 0:0`,
   образ из переменной **`SLGPU_FIXPERMS_HELPER_IMAGE`**, по умолчанию `alpine:latest`)
   для `mkdir`/`chown`. `sudo` **не нужен** ни на хосте, ни внутри web.
@@ -123,13 +128,15 @@ daemon не нашёл бы файлы по `/slgpu/...` и создал бы п
 |---|---|---|
 | GET | `/healthz` | liveness + версия |
 | GET | `/api/v1/dashboard` | сводка для главной страницы |
-| GET/POST | `/api/v1/models` | список и регистрация HF моделей |
+| GET/POST | `/api/v1/models` | список HF моделей по `MODELS_DIR/<org>/<repo>` и регистрация HF моделей |
 | POST | `/api/v1/models/{id}/pull` | `slgpu pull` через job runner |
-| GET/POST | `/api/v1/presets` | пресеты |
+| GET/POST | `/api/v1/presets` | список и создание пресетов |
+| GET/PATCH | `/api/v1/presets/{id}` | просмотр и редактирование пресета в БД |
 | POST | `/api/v1/presets/sync` | импорт `data/presets/*.env` (или `PRESETS_DIR`) в БД |
 | POST | `/api/v1/presets/{id}/export` | экспорт пресета в файл |
 | POST | `/api/v1/runtime/up\|down\|restart` | управление движком |
-| GET | `/api/v1/runtime/snapshot` | состояние движка |
+| GET | `/api/v1/runtime/snapshot` | состояние движка, запрошенный пресет/HF ID/TP и served models |
+| GET | `/api/v1/runtime/logs` | хвост stdout/stderr текущего контейнера vLLM/SGLang |
 | GET | `/api/v1/monitoring/services` | состояние сервисов |
 | POST | `/api/v1/monitoring/action` | `slgpu monitoring up\|down\|restart\|fix-perms` |
 | GET | `/api/v1/litellm/health\|info\|models` | LiteLLM proxy |

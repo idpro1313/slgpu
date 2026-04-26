@@ -50,6 +50,18 @@ class RuntimeSnapshot(BaseModel):
     engine: str | None
     api_port: int | None
     container_status: str | None
+    preset_name: str | None = None
+    hf_id: str | None = None
+    tp: int | None = None
     served_models: list[str] = Field(default_factory=list)
     metrics_available: bool = False
+    last_checked_at: datetime | None
+
+
+class RuntimeLogs(BaseModel):
+    engine: str | None
+    container_name: str | None
+    container_status: str | None
+    tail: int
+    logs: str
     last_checked_at: datetime | None

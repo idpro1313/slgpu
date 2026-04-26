@@ -128,7 +128,8 @@ fi
 
 do_hf_download() {
   local target="${MODELS_DIR}/${MODEL_ID}"
-  mkdir -p "$(dirname "${target}")"
+  # HF CLI writes `.cache/huggingface` under --local-dir before all files exist.
+  mkdir -p "${target}"
   echo "Каталог: ${target}"
   echo "Репозиторий: ${MODEL_ID} revision=${MODEL_REVISION:-<default>}"
   REV_ARGS=()

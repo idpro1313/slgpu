@@ -16,6 +16,17 @@ interface NewPresetForm {
   description: string;
 }
 
+interface PresetEditorForm {
+  hf_id: string;
+  engine: "vllm" | "sglang";
+  tp: string;
+  served_model_name: string;
+  gpu_mask: string;
+  description: string;
+  parameters_json: string;
+  is_active: boolean;
+}
+
 const EMPTY: NewPresetForm = {
   name: "",
   hf_id: "",
@@ -25,9 +36,24 @@ const EMPTY: NewPresetForm = {
   description: "",
 };
 
+function editorFromPreset(preset: Preset): PresetEditorForm {
+  return {
+    hf_id: preset.hf_id,
+    engine: preset.engine === "sglang" ? "sglang" : "vllm",
+    tp: preset.tp == null ? "" : String(preset.tp),
+    served_model_name: preset.served_model_name ?? "",
+    gpu_mask: preset.gpu_mask ?? "",
+    description: preset.description ?? "",
+    parameters_json: JSON.stringify(preset.parameters ?? {}, null, 2),
+    is_active: preset.is_active,
+  };
+}
+
 export function PresetsPage() {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<NewPresetForm>(EMPTY);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [editor, setEditor] = useState<PresetEditorForm | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [syncResult, setSyncResult] = useState<PresetSyncResult | null>(null);
 
@@ -46,6 +72,8 @@ export function PresetsPage() {
     },
     onError: (err: Error) => setError(err.message),
   });
+
+  const selectedPreset = presets.data?.find((preset) => preset.id === selectedId) ?? null;
 
   const create = useMutation({
     mutationFn: (payload: NewPresetForm) =>
@@ -68,7 +96,41 @@ export function PresetsPage() {
 
   const exportPreset = useMutation({
     mutationFn: (id: number) => api.post<Preset>(`/presets/${id}/export`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["presets"] }),
+    onSuccess: () => {
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: ["presets"] });
+    },
+    onError: (err: Error) => setError(err.message),
+  });
+
+  const updatePreset = useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: PresetEditorForm }) => {
+      let parameters: unknown;
+      try {
+        parameters = JSON.parse(payload.parameters_json || "{}");
+      } catch (exc) {
+        throw new Error(`Некорректный JSON параметров: ${String(exc)}`);
+      }
+      if (!parameters || Array.isArray(parameters) || typeof parameters !== "object") {
+        throw new Error("Параметры должны быть JSON-объектом");
+      }
+      return api.patch<Preset>(`/presets/${id}`, {
+        hf_id: payload.hf_id,
+        engine: payload.engine,
+        tp: payload.tp ? Number(payload.tp) : null,
+        served_model_name: payload.served_model_name || null,
+        gpu_mask: payload.gpu_mask || null,
+        description: payload.description || null,
+        parameters,
+        is_active: payload.is_active,
+      });
+    },
+    onSuccess: (preset) => {
+      setError(null);
+      setSelectedId(preset.id);
+      setEditor(editorFromPreset(preset));
+      queryClient.invalidateQueries({ queryKey: ["presets"] });
+    },
     onError: (err: Error) => setError(err.message),
   });
 
@@ -191,6 +253,148 @@ export function PresetsPage() {
       </Section>
 
       <Section
+        title="Просмотр и редактирование"
+        subtitle="Изменения сохраняются в БД; чтобы записать их в data/presets/*.env, нажмите экспорт."
+      >
+        {!selectedPreset || !editor ? (
+          <div className="empty-state">Выберите пресет в таблице ниже.</div>
+        ) : (
+          <>
+            <div className="form-grid">
+              <div>
+                <label className="label">Имя пресета</label>
+                <input className="input mono" value={selectedPreset.name} disabled />
+              </div>
+              <div>
+                <label className="label">HF ID</label>
+                <input
+                  className="input"
+                  value={editor.hf_id}
+                  onChange={(event) => setEditor({ ...editor, hf_id: event.target.value })}
+                />
+              </div>
+              <div>
+                <label className="label">Движок</label>
+                <select
+                  className="select"
+                  value={editor.engine}
+                  onChange={(event) =>
+                    setEditor({
+                      ...editor,
+                      engine: event.target.value as PresetEditorForm["engine"],
+                    })
+                  }
+                >
+                  <option value="vllm">vLLM</option>
+                  <option value="sglang">SGLang</option>
+                </select>
+              </div>
+              <div>
+                <label className="label">TP</label>
+                <input
+                  className="input"
+                  type="number"
+                  min={1}
+                  max={128}
+                  value={editor.tp}
+                  onChange={(event) => setEditor({ ...editor, tp: event.target.value })}
+                />
+              </div>
+              <div>
+                <label className="label">Served model name</label>
+                <input
+                  className="input"
+                  value={editor.served_model_name}
+                  onChange={(event) =>
+                    setEditor({ ...editor, served_model_name: event.target.value })
+                  }
+                />
+              </div>
+              <div>
+                <label className="label">GPU mask</label>
+                <input
+                  className="input"
+                  placeholder="0,1,2,3"
+                  value={editor.gpu_mask}
+                  onChange={(event) => setEditor({ ...editor, gpu_mask: event.target.value })}
+                />
+              </div>
+              <div>
+                <label className="label">Описание</label>
+                <input
+                  className="input"
+                  value={editor.description}
+                  onChange={(event) =>
+                    setEditor({ ...editor, description: event.target.value })
+                  }
+                />
+              </div>
+              <div>
+                <label className="label">Активен</label>
+                <label style={{ display: "flex", gap: 8, alignItems: "center", minHeight: 42 }}>
+                  <input
+                    type="checkbox"
+                    checked={editor.is_active}
+                    onChange={(event) =>
+                      setEditor({ ...editor, is_active: event.target.checked })
+                    }
+                  />
+                  <span>{editor.is_active ? "да" : "нет"}</span>
+                </label>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+              <label className="label" htmlFor="preset-parameters">
+                Parameters JSON
+              </label>
+              <textarea
+                id="preset-parameters"
+                className="input mono"
+                rows={14}
+                spellCheck={false}
+                value={editor.parameters_json}
+                onChange={(event) =>
+                  setEditor({ ...editor, parameters_json: event.target.value })
+                }
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 16 }}>
+              <button
+                type="button"
+                className="btn btn--primary"
+                disabled={updatePreset.isPending || !editor.hf_id}
+                onClick={() => updatePreset.mutate({ id: selectedPreset.id, payload: editor })}
+              >
+                {updatePreset.isPending ? "Сохраняем…" : "Сохранить"}
+              </button>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => exportPreset.mutate(selectedPreset.id)}
+                disabled={exportPreset.isPending}
+              >
+                Экспорт в .env
+              </button>
+              <button
+                type="button"
+                className="btn btn--ghost"
+                onClick={() => setEditor(editorFromPreset(selectedPreset))}
+              >
+                Сбросить форму
+              </button>
+            </div>
+
+            <p className="section__subtitle" style={{ marginTop: 12 }}>
+              Файл: <span className="mono">{selectedPreset.file_path ?? "ещё не экспортирован"}</span>.
+              Sync: {selectedPreset.is_synced ? "synced" : "drift"}.
+            </p>
+          </>
+        )}
+      </Section>
+
+      <Section
         title="Все пресеты"
         subtitle="Колонка Sync показывает, совпадает ли запись в БД с .env-файлом."
       >
@@ -234,6 +438,16 @@ export function PresetsPage() {
                       />
                     </td>
                     <td>
+                      <button
+                        type="button"
+                        className="btn btn--ghost"
+                        onClick={() => {
+                          setSelectedId(preset.id);
+                          setEditor(editorFromPreset(preset));
+                        }}
+                      >
+                        Открыть
+                      </button>{" "}
                       <button
                         type="button"
                         className="btn"

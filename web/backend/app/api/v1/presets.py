@@ -7,7 +7,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import db_session
-from app.core.security import ValidationError, validate_engine, validate_slug, validate_tp
+from app.core.security import (
+    ValidationError,
+    validate_engine,
+    validate_hf_id,
+    validate_slug,
+    validate_tp,
+)
 from app.models.preset import Preset
 from app.schemas.presets import PresetCreate, PresetOut, PresetSyncResult, PresetUpdate
 from app.services import presets as preset_service
@@ -31,6 +37,7 @@ async def sync_presets(session: AsyncSession = Depends(db_session)) -> PresetSyn
 async def create_preset(payload: PresetCreate, session: AsyncSession = Depends(db_session)) -> Preset:
     try:
         validate_slug(payload.name)
+        validate_hf_id(payload.hf_id)
         validate_engine(payload.engine)
         if payload.tp is not None:
             validate_tp(payload.tp)
@@ -75,27 +82,37 @@ async def update_preset(
     preset = await session.get(Preset, preset_id)
     if preset is None:
         raise HTTPException(status_code=404, detail="preset not found")
-    if payload.engine is not None:
+    fields = payload.model_fields_set
+    if "hf_id" in fields and payload.hf_id is not None:
+        try:
+            validate_hf_id(payload.hf_id)
+        except ValidationError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        preset.hf_id = payload.hf_id
+    if "engine" in fields and payload.engine is not None:
         try:
             validate_engine(payload.engine)
         except ValidationError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         preset.engine = payload.engine
-    if payload.tp is not None:
-        try:
-            validate_tp(payload.tp)
-        except ValidationError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        preset.tp = payload.tp
-    if payload.description is not None:
+    if "tp" in fields:
+        if payload.tp is None:
+            preset.tp = None
+        else:
+            try:
+                validate_tp(payload.tp)
+            except ValidationError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            preset.tp = payload.tp
+    if "description" in fields:
         preset.description = payload.description
-    if payload.gpu_mask is not None:
+    if "gpu_mask" in fields:
         preset.gpu_mask = payload.gpu_mask
-    if payload.served_model_name is not None:
+    if "served_model_name" in fields:
         preset.served_model_name = payload.served_model_name
-    if payload.parameters is not None:
-        preset.parameters = payload.parameters
-    if payload.is_active is not None:
+    if "parameters" in fields:
+        preset.parameters = payload.parameters or {}
+    if "is_active" in fields and payload.is_active is not None:
         preset.is_active = payload.is_active
     preset.is_synced = False
     return preset

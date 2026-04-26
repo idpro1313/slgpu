@@ -41,6 +41,7 @@ class PresetCreate(BaseModel):
 
 class PresetUpdate(BaseModel):
     description: str | None = None
+    hf_id: str | None = None
     engine: str | None = None
     tp: int | None = None
     gpu_mask: str | None = None

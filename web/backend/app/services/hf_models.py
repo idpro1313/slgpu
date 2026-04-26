@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.security import validate_hf_id, validate_revision
+from app.core.security import ValidationError, validate_hf_id, validate_revision
 from app.models.model import HFModel, ModelDownloadStatus
 from app.services.env_files import hf_id_to_slug
 
@@ -80,6 +80,59 @@ def _scan_local_state(hf_id: str) -> tuple[ModelDownloadStatus, int | None]:
     if total_size > 0:
         return ModelDownloadStatus.PARTIAL, total_size
     return ModelDownloadStatus.UNKNOWN, None
+
+
+def _iter_local_hf_ids() -> list[str]:
+    root = _models_root()
+    if not root.exists() or not root.is_dir():
+        return []
+
+    hf_ids: list[str] = []
+    for org_dir in sorted(root.iterdir()):
+        if not org_dir.is_dir() or org_dir.name.startswith("."):
+            continue
+        for model_dir in sorted(org_dir.iterdir()):
+            if not model_dir.is_dir() or model_dir.name.startswith("."):
+                continue
+            hf_id = f"{org_dir.name}/{model_dir.name}"
+            try:
+                validate_hf_id(hf_id)
+            except ValidationError:
+                logger.debug("[hf_models][_iter_local_hf_ids] skip invalid local path %s", hf_id)
+                continue
+            hf_ids.append(hf_id)
+    return hf_ids
+
+
+async def sync_local_models(session: AsyncSession) -> list[HFModel]:
+    """Ensure DB registry includes actual folders from MODELS_DIR.
+
+    Presets are launch recipes, not the source of truth for downloaded
+    weights. The local model registry follows the disk layout produced by
+    `./slgpu pull`: MODELS_DIR/<org>/<repo>.
+    """
+
+    models: list[HFModel] = []
+    for hf_id in _iter_local_hf_ids():
+        existing = await session.execute(select(HFModel).where(HFModel.hf_id == hf_id))
+        model = existing.scalar_one_or_none()
+        status, size = _scan_local_state(hf_id)
+        target = _models_root() / hf_id
+        if model is None:
+            model = HFModel(
+                hf_id=hf_id,
+                slug=hf_id_to_slug(hf_id),
+                local_path=str(target),
+                size_bytes=size,
+                download_status=status,
+            )
+            session.add(model)
+        else:
+            model.local_path = str(target)
+            model.size_bytes = size
+            model.download_status = status
+        models.append(model)
+    return models
 
 
 async def upsert_from_hf_id(
