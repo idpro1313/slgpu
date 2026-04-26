@@ -367,6 +367,31 @@ pre {
   max-width: 52rem;
 }
 
+.settings-stack-subgroup {
+  margin-bottom: 28px;
+}
+
+.settings-stack-subgroup:last-child {
+  margin-bottom: 0;
+}
+
+.settings-stack-subgroup__title {
+  font-size: 17px;
+  font-family: var(--font-accent);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0 0 6px 0;
+  color: var(--color-text);
+}
+
+.settings-stack-subgroup__lead {
+  font-size: 14px;
+  color: var(--color-text-muted);
+  line-height: 1.45;
+  margin: 0 0 12px 0;
+  max-width: 48rem;
+}
+
 .cards-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));

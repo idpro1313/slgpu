@@ -19,6 +19,125 @@ function newRowId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `r-${Math.random().toString(36).slice(2)}`;
 }
 
+/** Явные пути и * _DATA_DIR (кроме ключей инференса — их нет с таким суффиксом в типичном стеке). */
+const PATH_KEYS = new Set<string>([
+  "MODELS_DIR",
+  "PRESETS_DIR",
+  "WEB_DATA_DIR",
+  "SLGPU_MODEL_ROOT",
+  "PROMETHEUS_DATA_DIR",
+  "GRAFANA_DATA_DIR",
+  "LOKI_DATA_DIR",
+  "PROMTAIL_DATA_DIR",
+]);
+
+function isPathKey(key: string): boolean {
+  return PATH_KEYS.has(key) || key.endsWith("_DATA_DIR");
+}
+
+const MONITORING_COMPOSE_KEYS = new Set<string>([
+  "PROMETHEUS_PORT",
+  "GRAFANA_PORT",
+  "LANGFUSE_PORT",
+  "LITELLM_PORT",
+  "LOKI_PORT",
+  "WEB_COMPOSE_PROJECT_INFER",
+  "WEB_COMPOSE_PROJECT_MONITORING",
+]);
+
+const WEB_UI_KEYS = new Set<string>(["WEB_PORT", "WEB_BIND", "WEB_LOG_LEVEL"]);
+
+const LLM_API_KEYS = new Set<string>(["LLM_API_BIND", "LLM_API_PORT", "LLM_API_PORT_SGLANG"]);
+
+const INFERENCE_EXACT = new Set<string>([
+  "TP",
+  "GPU_MEM_UTIL",
+  "MAX_MODEL_LEN",
+  "KV_CACHE_DTYPE",
+  "NVIDIA_VISIBLE_DEVICES",
+  "TOOL_CALL_PARSER",
+  "REASONING_PARSER",
+  "SLGPU_SERVED_MODEL_NAME",
+  "MODEL_ID",
+  "MODEL_REVISION",
+]);
+
+function isInferenceKey(key: string): boolean {
+  if (INFERENCE_EXACT.has(key)) return true;
+  if (key.startsWith("SLGPU_") && key !== "SLGPU_MODEL_ROOT") return true;
+  if (key.startsWith("VLLM_")) return true;
+  if (key.startsWith("SGLANG_")) return true;
+  if (key.startsWith("MM_ENCODER_")) return true;
+  if (key.startsWith("CHAT_TEMPLATE_")) return true;
+  return false;
+}
+
+type StackParamGroupId =
+  | "paths"
+  | "web"
+  | "llm_api"
+  | "monitoring"
+  | "inference"
+  | "other"
+  | "secrets";
+
+const STACK_GROUP_ORDER: StackParamGroupId[] = [
+  "paths",
+  "web",
+  "llm_api",
+  "monitoring",
+  "inference",
+  "other",
+  "secrets",
+];
+
+const STACK_GROUP_META: Record<
+  StackParamGroupId,
+  { title: string; subtitle: string }
+> = {
+  paths: {
+    title: "Пути и каталоги",
+    subtitle: "Модели, пресеты, данные web и каталоги мониторинга на хосте.",
+  },
+  web: {
+    title: "Web UI приложения",
+    subtitle: "Порт и bind Develonica.LLM, уровень лога.",
+  },
+  llm_api: {
+    title: "Сеть API движка",
+    subtitle: "Адрес и порты OpenAI-совместимого API vLLM / SGLang.",
+  },
+  monitoring: {
+    title: "Мониторинг и compose",
+    subtitle: "Порты Prometheus, Grafana, Langfuse, LiteLLM, Loki и имена compose-проектов.",
+  },
+  inference: {
+    title: "GPU и инференс",
+    subtitle: "TP, память, KV, видимые GPU, парсеры, переменные SLGPU_ / VLLM_ / SGLANG_ и др.",
+  },
+  other: {
+    title: "Прочие параметры",
+    subtitle: "Ключи вне типовых групп и новые переменные.",
+  },
+  secrets: {
+    title: "Секреты и ключи",
+    subtitle:
+      "Значения не отдаются в API; пустое поле — не менять. Список имён с маской см. ниже формы.",
+  },
+};
+
+function stackParamGroupId(row: StackRow): StackParamGroupId {
+  if (row.isSecret) return "secrets";
+  const k = row.key.trim();
+  if (!k) return "other";
+  if (isPathKey(k)) return "paths";
+  if (MONITORING_COMPOSE_KEYS.has(k)) return "monitoring";
+  if (WEB_UI_KEYS.has(k)) return "web";
+  if (LLM_API_KEYS.has(k)) return "llm_api";
+  if (isInferenceKey(k)) return "inference";
+  return "other";
+}
+
 function rowsFromServer(data: AppConfigStack): StackRow[] {
   const stack = data.stack ?? {};
   const sec = data.secrets ?? {};
@@ -190,7 +309,7 @@ export function SettingsPage() {
       }),
     onSuccess: () => {
       setError(null);
-      setMessage("Настройки сохранены. Ссылки мониторинга обновятся после перезагрузки данных.");
+      setMessage("Настройки сохранены. Ссылки на других страницах обновятся после перезагрузки данных.");
       queryClient.invalidateQueries({ queryKey: ["settings", "public-access"] });
       queryClient.invalidateQueries({ queryKey: ["monitoring", "services"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
@@ -225,7 +344,7 @@ export function SettingsPage() {
     <>
       <PageHeader
         title="Настройки"
-        subtitle="Блоки ниже сгруппированы: как открывать сервисы из браузера, откуда берётся стек (файлы и БД), разовое обслуживание каталогов мониторинга."
+        subtitle="Публичный адрес для ссылок в UI, стек в БД (файлы и таблица параметров по смыслу), обслуживание каталогов мониторинга."
       />
 
       {(cfgMessage || cfgError) && (
@@ -235,10 +354,10 @@ export function SettingsPage() {
       )}
 
       <div className="settings-group">
-        <h2 className="settings-group__heading">Внешний доступ и ссылки</h2>
+        <h2 className="settings-group__heading">Внешний доступ</h2>
         <p className="settings-group__lead">
-          Адрес, который подставляется в URL Grafana, Prometheus, Langfuse и LiteLLM для пользователей.
-          Внутренние проверки из контейнера по-прежнему используют{" "}
+          Host для подстановки в URL Grafana, Prometheus, Langfuse и LiteLLM на Dashboard и смежных
+          страницах. Внутренние проверки из контейнера используют{" "}
           <span className="mono">WEB_MONITORING_HTTP_HOST</span> и порты из стека.
         </p>
 
@@ -277,31 +396,14 @@ export function SettingsPage() {
             {error ? <p style={{ color: "var(--color-danger)" }}>{error}</p> : null}
           </form>
         </Section>
-
-        <Section
-          title="Итоговые ссылки"
-          subtitle="Те же URL, что на Dashboard, Monitoring и LiteLLM (после сохранения адреса — обновите данные на этих страницах при необходимости)."
-        >
-          {publicAccess.isLoading || !data ? (
-            <div className="empty-state">Загружаем...</div>
-          ) : (
-            <div className="cards-grid">
-              <LinkCard title="Grafana" url={data.grafana_url} />
-              <LinkCard title="Prometheus" url={data.prometheus_url} />
-              <LinkCard title="Langfuse" url={data.langfuse_url} />
-              <LinkCard title="LiteLLM Admin UI" url={data.litellm_ui_url} />
-              <LinkCard title="LiteLLM API" url={data.litellm_api_url} />
-            </div>
-          )}
-        </Section>
       </div>
 
       <div className="settings-group">
         <h2 className="settings-group__heading">Стек в базе данных</h2>
         <p className="settings-group__lead">
-          Первичный импорт из <span className="mono">main.env</span> и связанных secret-файлов; дальнейшая
-          правка — таблица параметров (<span className="mono">stack_params</span>). Секреты в API
-          маскируются; новое значение — только в поле строки, не вставляйте <span className="mono">***</span>.
+          Первичный импорт из <span className="mono">main.env</span> и связанных secret-файлов; правка
+          переменных — по группам ниже (<span className="mono">stack_params</span>). Для смены секрета
+          введите новое значение в строке, не вставляйте <span className="mono">***</span>.
         </p>
 
         <Section
@@ -341,109 +443,134 @@ export function SettingsPage() {
 
         <Section
           title="Параметры окружения"
-          subtitle="Каждый параметр — отдельная строка. Галочка «секрет» — значение не отдаётся в API; для существующего секрета пустое поле значит «не менять». Удаление строки удаляет ключ из БД."
+          subtitle="Группы по назначению. Галочка «секрет» переносит ключ в последнюю группу; удаление строки удаляет ключ из БД."
         >
           {appStack.isLoading ? (
             <div className="empty-state">Загружаем…</div>
           ) : (
             <form className="flex flex--col flex--gap-md" onSubmit={onSaveStack}>
-              <div className="flex flex--gap-sm flex--wrap">
-                <button
-                  type="button"
-                  className="btn btn--ghost"
-                  onClick={() =>
-                    setStackRows((prev) => [
-                      ...prev,
-                      { id: newRowId(), key: "", value: "", isSecret: false },
-                    ])
-                  }
-                >
-                  + параметр
-                </button>
-              </div>
-              <div style={{ overflowX: "auto" }}>
-                <table className="table table--compact" style={{ width: "100%", minWidth: "520px" }}>
-                  <thead>
-                    <tr>
-                      <th>Ключ</th>
-                      <th>Значение</th>
-                      <th>Секрет</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {stackRows.map((row) => (
-                      <tr key={row.id}>
-                        <td>
-                          <input
-                            className="input"
-                            value={row.key}
-                            onChange={(e) =>
-                              setStackRows((prev) =>
-                                prev.map((r) =>
-                                  r.id === row.id ? { ...r, key: e.target.value } : r,
-                                ),
-                              )
-                            }
-                            spellCheck={false}
-                            placeholder="VAR_NAME"
-                            disabled={patchStack.isPending}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            className="input"
-                            value={row.value}
-                            onChange={(e) =>
-                              setStackRows((prev) =>
-                                prev.map((r) =>
-                                  r.id === row.id ? { ...r, value: e.target.value } : r,
-                                ),
-                              )
-                            }
-                            spellCheck={false}
-                            placeholder={
-                              row.isSecret ? "новое значение (пусто = не менять)" : ""
-                            }
-                            disabled={patchStack.isPending}
-                            type={row.isSecret ? "password" : "text"}
-                            autoComplete="off"
-                          />
-                        </td>
-                        <td style={{ width: "1%" }}>
-                          <input
-                            type="checkbox"
-                            checked={row.isSecret}
-                            onChange={(e) =>
-                              setStackRows((prev) =>
-                                prev.map((r) =>
-                                  r.id === row.id ? { ...r, isSecret: e.target.checked } : r,
-                                ),
-                              )
-                            }
-                            disabled={patchStack.isPending}
-                            title="Секрет: не показывается в API после сохранения"
-                          />
-                        </td>
-                        <td style={{ width: "1%" }}>
-                          <button
-                            type="button"
-                            className="btn btn--ghost"
-                            disabled={patchStack.isPending}
-                            onClick={() =>
-                              setStackRows((prev) => prev.filter((r) => r.id !== row.id))
-                            }
-                          >
-                            Удалить
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              {STACK_GROUP_ORDER.map((gid) => {
+                const rowsInGroup = stackRows.filter((r) => stackParamGroupId(r) === gid);
+                const meta = STACK_GROUP_META[gid];
+                const showEmptyOther = gid === "other";
+                if (rowsInGroup.length === 0 && !showEmptyOther) return null;
+
+                return (
+                  <div key={gid} className="settings-stack-subgroup">
+                    <h3 className="settings-stack-subgroup__title">{meta.title}</h3>
+                    <p className="settings-stack-subgroup__lead">{meta.subtitle}</p>
+                    {gid === "other" ? (
+                      <div className="flex flex--gap-sm flex--wrap" style={{ marginBottom: 12 }}>
+                        <button
+                          type="button"
+                          className="btn btn--ghost"
+                          onClick={() =>
+                            setStackRows((prev) => [
+                              ...prev,
+                              { id: newRowId(), key: "", value: "", isSecret: false },
+                            ])
+                          }
+                          disabled={patchStack.isPending}
+                        >
+                          + параметр
+                        </button>
+                      </div>
+                    ) : null}
+                    <div style={{ overflowX: "auto" }}>
+                      <table
+                        className="table table--compact"
+                        style={{ width: "100%", minWidth: "520px" }}
+                      >
+                        <thead>
+                          <tr>
+                            <th>Ключ</th>
+                            <th>Значение</th>
+                            <th>Секрет</th>
+                            <th />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rowsInGroup.map((row) => (
+                            <tr key={row.id}>
+                              <td>
+                                <input
+                                  className="input"
+                                  value={row.key}
+                                  onChange={(e) =>
+                                    setStackRows((prev) =>
+                                      prev.map((r) =>
+                                        r.id === row.id ? { ...r, key: e.target.value } : r,
+                                      ),
+                                    )
+                                  }
+                                  spellCheck={false}
+                                  placeholder="VAR_NAME"
+                                  disabled={patchStack.isPending}
+                                />
+                              </td>
+                              <td>
+                                <input
+                                  className="input"
+                                  value={row.value}
+                                  onChange={(e) =>
+                                    setStackRows((prev) =>
+                                      prev.map((r) =>
+                                        r.id === row.id ? { ...r, value: e.target.value } : r,
+                                      ),
+                                    )
+                                  }
+                                  spellCheck={false}
+                                  placeholder={
+                                    row.isSecret ? "новое значение (пусто = не менять)" : ""
+                                  }
+                                  disabled={patchStack.isPending}
+                                  type={row.isSecret ? "password" : "text"}
+                                  autoComplete="off"
+                                />
+                              </td>
+                              <td style={{ width: "1%" }}>
+                                <input
+                                  type="checkbox"
+                                  checked={row.isSecret}
+                                  onChange={(e) =>
+                                    setStackRows((prev) =>
+                                      prev.map((r) =>
+                                        r.id === row.id ? { ...r, isSecret: e.target.checked } : r,
+                                      ),
+                                    )
+                                  }
+                                  disabled={patchStack.isPending}
+                                  title="Секрет: не показывается в API после сохранения"
+                                />
+                              </td>
+                              <td style={{ width: "1%" }}>
+                                <button
+                                  type="button"
+                                  className="btn btn--ghost"
+                                  disabled={patchStack.isPending}
+                                  onClick={() =>
+                                    setStackRows((prev) => prev.filter((r) => r.id !== row.id))
+                                  }
+                                >
+                                  Удалить
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {rowsInGroup.length === 0 && gid === "other" ? (
+                      <p className="section__subtitle" style={{ marginTop: 8 }}>
+                        Нет пользовательских ключей. Добавьте строку кнопкой «+ параметр».
+                      </p>
+                    ) : null}
+                  </div>
+                );
+              })}
+
               <p className="section__subtitle">
-                Ключи с маской в ответе API:{" "}
+                Имена секретов в API (маскированы):{" "}
                 <span className="mono">
                   {appStack.data ? JSON.stringify(Object.keys(appStack.data.secrets).sort()) : "—"}
                 </span>
@@ -486,19 +613,5 @@ export function SettingsPage() {
         </Section>
       </div>
     </>
-  );
-}
-
-function LinkCard({ title, url }: { title: string; url: string }) {
-  return (
-    <div className="status-card">
-      <div className="status-card__head">
-        <span className="status-card__name">{title}</span>
-      </div>
-      <div className="status-card__detail mono">{url}</div>
-      <a className="status-card__link" href={url} target="_blank" rel="noreferrer">
-        Открыть →
-      </a>
-    </div>
   );
 }
