@@ -3,7 +3,8 @@ import json
 from pathlib import Path
 
 HERE = Path(__file__).parent
-SRC = HERE / "vllmdash2.json"
+# Эталон vLLM V2 вне auto-provisioning: ../templates/vllmdash2.json
+SRC = HERE.parents[2] / "templates" / "vllmdash2.json"
 DST = HERE / "sglangdash2-slgpu.json"
 
 SEL = 'job="sglang",instance=~"$instance",model_name=~"$model_name"'

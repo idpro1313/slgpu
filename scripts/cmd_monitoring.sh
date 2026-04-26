@@ -115,6 +115,7 @@ slgpu_monitoring_bootstrap_once() {
 
 case "${SUB}" in
   up)
+    slgpu_require_docker
     slgpu_ensure_slgpu_network
     slgpu_ensure_langfuse_litellm_secrets
     slgpu_load_server_env
@@ -126,11 +127,13 @@ case "${SUB}" in
     echo "Проверка: Prometheus /targets (http://<хост>:9090/targets) · Grafana: GRAFANA_PORT · Loki: Explore → Loki · Langfuse: :${LANGFUSE_PORT:-3001} · LiteLLM: :${LITELLM_PORT:-4000} (vLLM: LLM_API_PORT → configs/monitoring/litellm/config.yaml, devllm = SLGPU_SERVED_MODEL_NAME)"
     ;;
   down)
+    slgpu_require_docker
     echo "Останавливаю мониторинг…"
     slgpu_docker_compose -f docker/docker-compose.monitoring.yml down
     echo "Готово."
     ;;
   restart)
+    slgpu_require_docker
     slgpu_ensure_slgpu_network
     slgpu_ensure_langfuse_litellm_secrets
     slgpu_load_server_env
@@ -140,6 +143,7 @@ case "${SUB}" in
     echo "Готово."
     ;;
   bootstrap)
+    slgpu_require_docker
     slgpu_ensure_slgpu_network
     slgpu_ensure_langfuse_litellm_secrets
     slgpu_load_server_env

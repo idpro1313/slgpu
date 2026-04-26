@@ -369,6 +369,14 @@ slgpu_write_llm_compose_interp_env() {
   } > "${out}"
 }
 
+# Проверка CLI перед любыми вызовами `docker compose` (диагностика на «голой» VM).
+slgpu_require_docker() {
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "slgpu: не найдена команда «docker». Установите Docker Engine и Compose v2 (см. ./slgpu prepare)." >&2
+    exit 1
+  fi
+}
+
 # Унифицированный `docker compose`: project directory = корень репо (тома и `main.env` с путями `./data/...`).
 slgpu_docker_compose() {
   local _here _root

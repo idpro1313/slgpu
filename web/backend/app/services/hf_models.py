@@ -27,7 +27,7 @@ _CONFIG = "config.json"
 
 
 def _models_root() -> Path:
-    """Weights directory from stack config in SQLite (defaults in ``cfg.stack``)."""
+    """Weights directory from ``stack_params`` / merged stack in SQLite (``models_dir_sync``)."""
 
     try:
         return models_dir_sync()

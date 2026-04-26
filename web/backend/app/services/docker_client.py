@@ -48,7 +48,7 @@ class DockerInspector:
                     " — for bind-mounted /var/run/docker.sock, the app user (10001) needs "
                     "a supplementary group with the same GID as the socket; see web/docker-entrypoint.sh."
                 )
-            logger.warning(msg)
+            logger.warning("[docker_client][__init__][BLOCK_CONNECT] %s", msg)
             self._client = None
         # TTL list cache for get_by_service fallbacks (many probes per /dashboard)
         self._all_cont_cache: tuple[float, list] | None = None
@@ -82,7 +82,7 @@ class DockerInspector:
         try:
             containers = self._client.containers.list(all=True, filters=filters)
         except DockerException as exc:
-            logger.warning("[docker_client][get_by_service] %s", exc)
+            logger.warning("[docker_client][get_by_service][BLOCK_DOCKER_ERROR] %s", exc)
             return None
         if containers:
             return self._summary(containers[0])
@@ -114,7 +114,7 @@ class DockerInspector:
         try:
             lst = self._client.containers.list(all=True)
         except DockerException as exc:
-            logger.warning("[docker_client][_all_containers_cached] %s", exc)
+            logger.warning("[docker_client][_all_containers_cached][BLOCK_DOCKER_ERROR] %s", exc)
             return []
         self._all_cont_cache = (now, lst)
         return lst
@@ -166,7 +166,7 @@ class DockerInspector:
         except NotFound:
             return None
         except DockerException as exc:
-            logger.warning("[docker_client][get_by_name] %s", exc)
+            logger.warning("[docker_client][get_by_name][BLOCK_DOCKER_ERROR] %s", exc)
             return None
         return self._summary(c)
 
@@ -180,7 +180,7 @@ class DockerInspector:
         except NotFound:
             return ""
         except DockerException as exc:
-            logger.warning("[docker_client][tail_logs] %s", exc)
+            logger.warning("[docker_client][tail_logs][BLOCK_DOCKER_ERROR] %s", exc)
             return ""
 
     def _summary(self, container: Any) -> ContainerSummary:

@@ -1,12 +1,5 @@
 export type ServiceStatus = "unknown" | "healthy" | "degraded" | "down";
 export type DownloadStatus = "unknown" | "pending" | "downloading" | "ready" | "error" | "partial";
-export type RunStatus =
-  | "requested"
-  | "starting"
-  | "running"
-  | "degraded"
-  | "stopped"
-  | "failed";
 export type JobStatus =
   | "queued"
   | "running"
@@ -229,6 +222,8 @@ export interface Job {
   resource: string | null;
   status: JobStatus;
   command: string[];
+  /** Аргументы native/CLI job (слот, пресет, порты и т.д.). */
+  args: Record<string, unknown>;
   actor: string | null;
   started_at: string | null;
   finished_at: string | null;
@@ -294,6 +289,35 @@ export interface LiteLLMHealth {
   liveliness: boolean;
   readiness: boolean;
   ui: boolean;
+}
+
+/** GET /litellm/info */
+export interface LiteLLMInfo {
+  ui_url: string;
+  api_url: string;
+  port: number;
+  note: string;
+}
+
+/** GET /bench/runs */
+export interface BenchRun {
+  engine: string;
+  timestamp: string;
+  kind: string;
+  path: string;
+}
+
+/** Состояние install из /app-config/install flow */
+export interface AppConfigStatus {
+  installed: boolean;
+  meta: Record<string, unknown>;
+}
+
+/** Legacy-объект стека при импорте JSON (редко) */
+export interface AppConfigStack {
+  stack: Record<string, string>;
+  secrets: Record<string, string>;
+  meta: Record<string, unknown>;
 }
 
 export interface PublicAccessSettings {

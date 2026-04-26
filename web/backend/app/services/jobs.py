@@ -143,7 +143,11 @@ async def _run_job(job_id: int, command: CliCommand) -> None:
     argv = _exec_argv_for_cli(command, cwd)
     slgpu_entry = str(cwd / "slgpu")
     if len(argv) >= 2 and argv[0] == "/bin/bash" and argv[1] == slgpu_entry:
-        logger.info("[jobs] slgpu via bash (cwd=%s): %s", cwd, join_for_display(argv))
+        logger.info(
+            "[jobs][_run_job][BLOCK_SLGPU_BASH] cwd=%s argv=%s",
+            cwd,
+            join_for_display(argv),
+        )
     try:
         process = await asyncio.create_subprocess_exec(
             *argv,
@@ -170,7 +174,7 @@ async def _run_job(job_id: int, command: CliCommand) -> None:
         stderr_tail.append(f"[runner] {exc}")
         exit_code = 127
     except Exception as exc:  # noqa: BLE001
-        logger.exception("[jobs][_run_job] unexpected failure")
+        logger.exception("[jobs][_run_job][BLOCK_UNEXPECTED]")
         stderr_tail.append(f"[runner] {exc}")
         exit_code = 1
     finally:

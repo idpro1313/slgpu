@@ -1,9 +1,8 @@
 #!/bin/sh
 # shellcheck disable=SC2039
-# Подстановка __LLM_API_PORT__ в config.yaml, затем litellm.
+# Копия config.yaml в /tmp (writable); плейсхолдер __LLM_API_PORT__ в репозитории не используется — маршруты в БД / Admin UI.
 set -e
-P="${LLM_API_PORT:-8111}"
-sed "s/__LLM_API_PORT__/${P}/g" /etc/slgpu/config.yaml > /tmp/litellm.config.yaml
+cp /etc/slgpu/config.yaml /tmp/litellm.config.yaml
 if [ -z "${LANGFUSE_SECRET_KEY:-}" ] || [ -z "${LANGFUSE_PUBLIC_KEY:-}" ]; then
   unset LANGFUSE_SECRET_KEY LANGFUSE_PUBLIC_KEY LANGFUSE_HOST LANGFUSE_OTEL_HOST
 fi

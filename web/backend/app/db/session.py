@@ -128,8 +128,8 @@ def _sqlite_drop_runs_table(connection: Connection) -> None:
 async def init_db() -> None:
     """Create tables on first run.
 
-    Production deployments should use Alembic migrations, but for the
-    single-container dev case `create_all` keeps the contract simple.
+    Schema is applied via ``create_all`` and SQLite PRAGMA cleanups; the
+    single-container slgpu-web image does not ship Alembic revision history.
     """
 
     from app.models import (  # noqa: F401  - register mappers
@@ -170,12 +170,6 @@ async def session_scope() -> AsyncIterator[AsyncSession]:
         except Exception:
             await session.rollback()
             raise
-
-
-async def get_session() -> AsyncIterator[AsyncSession]:
-    factory = get_sessionmaker()
-    async with factory() as session:
-        yield session
 
 
 # Backwards-compatible aliases used by the older API surface.

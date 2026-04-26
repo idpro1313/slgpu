@@ -361,7 +361,10 @@ async def migrate_legacy_json_to_rows(session) -> None:
         row = r.scalar_one_or_none()
         if row is not None:
             row.value = {}
-    logger.info("[stack_config] migrated legacy cfg.stack/cfg.secrets JSON to stack_params")
+    logger.info(
+        "[stack_config][migrate_legacy_json_to_rows][BLOCK_MIGRATED] "
+        "legacy cfg.stack/cfg.secrets JSON -> stack_params",
+    )
 
 
 async def ensure_default_settings(session) -> None:

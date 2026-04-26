@@ -1,4 +1,4 @@
-<DevelopmentPlan VERSION="4.0.0">
+<DevelopmentPlan VERSION="4.0.8">
   <!--
     GRACE development plan — methodology: https://github.com/osovv/grace-marketplace
     Upstream ships Agent Skills + optional CLI (@osovv/grace-cli): grace lint | module find | module show | file show.
@@ -269,9 +269,15 @@
       </contract>
       <interface>
         <export-web-image PURPOSE="Docker image slgpu-web:dev" />
-        <export-api-v1 PURPOSE="REST /api/v1: dashboard, models, presets, runtime, monitoring, litellm, jobs, app-config, bench" />
+        <export-api-v1 PURPOSE="REST /api/v1: dashboard, models, presets, runtime, monitoring, litellm, jobs, app-config, bench, settings" />
         <export-spa PURPOSE="React SPA, статика встроена в образ" />
         <export-contract-md PURPOSE="web/CONTRACT.md — границы CLI/Docker API/SQLite" />
+        <export-settings-public-access PURPOSE="/api/v1/settings/public-access — browser host + litellm_api_key в JSON (Bearer к LiteLLM)" />
+        <export-frontend-settings PURPOSE="/settings — install, stack_params, группы стека" />
+        <export-app-config PURPOSE="/api/v1/app-config/*" />
+        <export-bench-ui PURPOSE="/benchmarks — прогоны data/bench, модалка summary.json, native.bench.*" />
+        <export-models-crud PURPOSE="/api/v1/models — sync, PATCH, DELETE" />
+        <export-presets-crud PURPOSE="/api/v1/presets — PATCH, DELETE, clone, import-templates" />
       </interface>
       <depends>M-CLI, M-PULL, M-UP, M-DOWN, M-MONITOR, M-MODELS</depends>
       <target>
@@ -281,6 +287,7 @@
       <observability>
         <log-prefix>[WEB]</log-prefix>
         <critical-block>BLOCK_RUN_JOB</critical-block>
+        <log-format>stdout JSON (`app.core.logging`): один handler на root; `httpx`/`uvicorn*` propagate; `configure_logging` в create_app и в startup.</log-format>
       </observability>
       <verification-ref>V-M-WEB</verification-ref>
     </M-WEB>
@@ -335,12 +342,12 @@
         <export-grafana-slgpu-overview PURPOSE="slgpu-overview (provisioning)" />
         <export-grafana-sglang-dashboard-slgpu PURPOSE="sglang-dashboard-slgpu.json" />
         <export-grafana-sglangdash2-slgpu PURPOSE="sglangdash2-slgpu.json + _build_sglangdash2.py от vllmdash2" />
-        <export-grafana-vllmdash2 PURPOSE="vllmdash2.json — исходник vLLM V2" />
+        <export-grafana-vllmdash2 PURPOSE="grafana/templates/vllmdash2.json — исходник vLLM V2 (ручной импорт)" />
         <export-alerts PURPOSE="Правила алертинга" />
       </interface>
       <depends>M-DOCKER</depends>
       <target>
-        <source>docker/docker-compose.monitoring.yml, configs/monitoring/prometheus/**, configs/monitoring/grafana/provisioning/**, configs/monitoring/README.md</source>
+        <source>docker/docker-compose.monitoring.yml, configs/monitoring/prometheus/**, configs/monitoring/grafana/provisioning/**, configs/monitoring/grafana/templates/**, configs/monitoring/README.md</source>
         <tests>tests/test_monitor.sh</tests>
       </target>
       <observability>
@@ -378,36 +385,6 @@
       <verification-ref>V-M-MODELS</verification-ref>
     </M-MODELS>
 
-    <M-WEB NAME="WebControlPlane" TYPE="ENTRY_POINT" LAYER="2" ORDER="12" STATUS="implemented">
-      <contract>
-        <purpose>Develonica.LLM: FastAPI + React; стек в SQLite (`stack_params` + install); native jobs (`native.slot.*`, bench, pull, monitoring); models/presets/Inference по слотам, GPU state/availability, monitoring/LiteLLM.</purpose>
-        <inputs>
-          <param name="server_host" type="hostname|ip|null" />
-          <param name="api_requests" type="HTTP /api/v1/*" />
-        </inputs>
-        <outputs>
-          <param name="browser_links" type="Grafana/Prometheus/Langfuse/LiteLLM URLs" />
-          <param name="jobs" type="queued CLI operations" />
-        </outputs>
-      </contract>
-      <interface>
-        <export-settings-public-access PURPOSE="/api/v1/settings/public-access хранит публичный host сервера для UI-ссылок; внутренние probes остаются на WEB_MONITORING_HTTP_HOST" />
-        <export-frontend-settings PURPOSE="/settings — public host, install из main.env, правка стека таблицей (stack_params)" />
-        <export-app-config PURPOSE="/api/v1/app-config/*" />
-        <export-bench-ui PURPOSE="/benchmarks — список прогонов, модалка summary.json, запуск scenario/load" />
-        <export-models-crud PURPOSE="/api/v1/models/{id}: PATCH revision/notes, DELETE registry row and optional local weights under MODELS_DIR" />
-        <export-presets-crud PURPOSE="/api/v1/presets/{id}: PATCH structured key/value runtime params, DELETE DB row and optional .env under PRESETS_DIR" />
-      </interface>
-      <depends>M-CLI, M-MONITOR, M-MODELS</depends>
-      <target>
-        <source>web/</source>
-        <tests>web/backend/tests/test_api_smoke.py</tests>
-      </target>
-      <observability>
-        <log-format>stdout JSON (`app.core.logging`): один handler на root; библиотечные логгеры без собственных handlers, propagate к root; `configure_logging` в create_app и повторно в startup (сброс handler'ов uvicorn).</log-format>
-      </observability>
-      <verification-ref>V-M-WEB</verification-ref>
-    </M-WEB>
   </Modules>
 
   <DataFlow>
@@ -442,7 +419,7 @@
     <DF-BENCH NAME="Бенчмарк" TRIGGER="./slgpu bench [vllm|sglang] -m [preset]">
       <step-1>Загрузка env и пресета (M-LIB)</step-1>
       <step-2>Запуск <![CDATA[`bench_openai.py`]]> с матрицей сценариев (M-BENCH)</step-2>
-      <step-3>Запись JSON-артефактов в <![CDATA[`bench/results/{engine}/{timestamp}/`]]></step-3>
+      <step-3>Запись JSON-артефактов в <![CDATA[`data/bench/results/{engine}/{timestamp}/`]]></step-3>
       <evidence>`summary.json` существует и содержит key_metrics</evidence>
     </DF-BENCH>
 
@@ -475,7 +452,7 @@
     </Phase-3>
 
     <Phase-4 name="Benchmark &amp; load" status="done">
-      <goal>Нагрузочные тесты; артефакты в `bench/results/{engine}/{timestamp}/`.</goal>
+      <goal>Нагрузочные тесты; артефакты в `data/bench/results/{engine}/{timestamp}/`.</goal>
       <step-1 module="M-BENCH" status="done" verification="V-M-BENCH">bench_openai.py + cmd_bench.sh</step-1>
       <step-2 module="M-LOAD" status="done" verification="V-M-LOAD">bench_load.py + cmd_load.sh</step-2>
     </Phase-4>

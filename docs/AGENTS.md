@@ -10,7 +10,17 @@ slgpu, vllm, sglang, llm-inference, benchmark, docker-compose, gpu, h200, promet
 
 ## Annotation
 
-**slgpu** — стенд для сравнения движков LLM-инференса **vLLM** и **SGLang** на Linux-сервере с NVIDIA GPU. Единая точка входа `./slgpu` (bash). `docker-compose.yml` — vLLM/SGLang; **мониторинг** — `configs/monitoring/`, `docker-compose.monitoring.yml`, **`./slgpu monitoring up`**. Первый `monitoring up` на новом сервере выполняет одноразовый bootstrap (`minio-bucket-init`, `litellm-pg-init`; markers в `data/monitoring/.bootstrap`), последующие `up/restart` init-контейнеры не пересоздают. **Web UI** — **Develonica.LLM**, запуск **`./slgpu web up`**; frontend оформлен по брендовой рамке [`develonica.ru`](https://develonica.ru/) и [`Материалам бренда`](https://develonica.ru/company/guideline/): Gilroy-first, рубиновый акцент, молочно-белые поверхности, pill-навигация, стрелочный brand mark, SVG favicon; footer показывает версию из корневого `VERSION` через `/healthz` и копирайт `Igor Yatsishen, Develonica`. **Локальные данные на хосте** (модели, БД, TSDB) — в каталоге **`data/`** (см. `data/README.md`), пути в `main.env` по умолчанию `MODELS_DIR=./data/models`, `PRESETS_DIR=./data/presets`, `WEB_DATA_DIR=./data/web`, **`WEB_BIND=0.0.0.0`** (slgpu-web снаружи), **`WEB_MONITORING_HTTP_HOST=host.docker.internal`** (внутренние HTTP-пробы к Prometheus и др. из контейнера; внешние browser-ссылки задаются на странице `Настройки` через `/api/v1/settings/public-access`), `…_DATA_DIR=./data/monitoring/…`. Web entrypoint chown’ит `/data`, `${WEB_SLGPU_ROOT}/data/models` и `${WEB_SLGPU_ROOT}/data/presets` под uid 10001 перед запуском app, чтобы `slgpu pull` и экспорт пресетов из UI могли писать в bind mounts. Web-реестр моделей синхронизируется с фактическими папками `MODELS_DIR/<org>/<repo>`; в **`GET /api/v1/models`** (и карточке модели) поле **`pull_progress`** отражает активную задачу **`native.model.pull`** (прогресс/подпись из job). Модель можно редактировать (revision/notes) и удалять из реестра или вместе с локальной папкой весов внутри `MODELS_DIR`. Рабочие пресеты `data/presets/*.env` (не в git) — рецепты запуска; эталоны в `examples/presets/` (формат — `configs/models/README.md`). В UI пресетов — **«Загрузить шаблоны»** (`POST /api/v1/presets/import-templates`) и **«Копия»** (`POST /api/v1/presets/{id}/clone`, новая запись `is_synced=false` до экспорта). Просмотр/редактирование через key/value, экспорт в `.env`, удаление записи/файла. **Dashboard** — **«Сервер»** (как раньше) плюс **«GPU (live)»** (`GET /api/v1/gpu/state`, ~3 c); к GPU подписывается пресет, если индекс входит в `runtime.slots[].gpu_indices`. **Дашборд** показывает сводку по **слотам** (`runtime.slots`). **Страница Inference** (`/runtime`): матрица GPU, список слотов из `GET /api/v1/runtime/snapshot` (`slots[]`), «Запустить в новом слоте» → `POST /api/v1/runtime/slots` (автоподбор GPU через `GET /api/v1/gpu/availability`); все слоты (включая `default`) — **`native.slot.*`**, lock **`("engine", "slot:{key}")`**; `docker compose` LLM-файл — для bash **`./slgpu`**, web — **docker-py** (`slot_runtime`). **4.0.0:** нет `native.llm.*` и нет lock `("engine","runtime")`. **Стек web:** `stack_params` + `cfg.meta`, **`native.*`**, lock **`(engine, resource)`** по слотам и monitoring. **Бенчмарки:** `/api/v1/bench/*`, `data/bench/results/`, детали — модалка **`summary.json`**, движок/пресет из **`/runtime/snapshot`**. См. `web/CONTRACT.md`.
+**slgpu** — стенд для сравнения движков LLM-инференса **vLLM** и **SGLang** на Linux-сервере с NVIDIA GPU.
+
+- **CLI:** единая точка входа `./slgpu` (bash); LLM-стек — `docker/docker-compose.llm.yml`; мониторинг — каталог **`configs/monitoring/`**, `docker/docker-compose.monitoring.yml`, **`./slgpu monitoring up`**. Первый `monitoring up` на новом сервере — одноразовый bootstrap (`minio-bucket-init`, `litellm-pg-init`; маркеры в `data/monitoring/.bootstrap`).
+- **Web UI — Develonica.LLM:** `./slgpu web up`. Визуал в духе [`develonica.ru`](https://develonica.ru/) / [гайдлайна](https://develonica.ru/company/guideline/): **`IBM Plex Sans`**, **`Finlandica`** для заголовков и чисел, голубая палитра **`#59AFFF`** / hover **`#0A5AA4`**, светлые градиенты, pill-навигация, SVG favicon; footer — версия из корневого **`VERSION`** через **`/healthz`**, копирайт `Igor Yatsishen, Develonica`.
+- **Данные на хосте** — в **`data/`** (`data/README.md`): по умолчанию `MODELS_DIR=./data/models`, `PRESETS_DIR=./data/presets`, `WEB_DATA_DIR=./data/web`, **`WEB_BIND=0.0.0.0`**, **`WEB_MONITORING_HTTP_HOST=host.docker.internal`** (пробы из контейнера web); публичный host для ссылок в браузере — **`/api/v1/settings/public-access`**. Entrypoint web chown’ит `/data`, `…/data/models`, `…/data/presets`, `…/data/bench` под uid приложения.
+- **Модели и пресеты:** реестр в БД синхронизируется с **`MODELS_DIR/<org>/<repo>`**; **`pull_progress`** в **`GET /api/v1/models`** — активная **`native.model.pull`**. Пресеты: рабочие **`data/presets/*.env`**, эталоны **`examples/presets/`**, формат — **`configs/models/README.md`**; в UI — импорт шаблонов и клон пресета.
+- **Инференс (slots-only, 4.0.0+):** только **`native.slot.*`** и lock **`("engine","slot:{key}")`**; страница **`/runtime`** — слоты из **`GET /api/v1/runtime/snapshot`**, создание **`POST /api/v1/runtime/slots`**, GPU — **`GET /api/v1/gpu/state`**, **`/gpu/availability`**. Нет **`native.llm.*`** и глобального lock **`("engine","runtime")`**.
+- **Стек в web:** **`stack_params`** + **`cfg.meta`**, операции мониторинга и бенча через **`native.*`** jobs.
+- **Бенчмарки:** **`/api/v1/bench/*`**, артефакты **`data/bench/results/`**, в UI — модалка по **`summary.json`**.
+
+Контракт web: **`web/CONTRACT.md`**.
 
 ## Core Principles
 
@@ -128,9 +138,10 @@ docs/
 scripts/
   ... cmd_*.sh, _lib.sh, bench_openai.py, bench_load.py with GRACE markup ...
 configs/
-  ... vllm/, sglang/, models/, secrets/ ...
-monitoring/
-  prometheus/ (prometheus.yml, prometheus-alerts.yml), grafana/provisioning/ (dashboards/json: slgpu-overview, sglang-dashboard-slgpu, sglangdash2-slgpu, vllmdash2; _build_sglangdash2.py), README.md, LOGS.md
+  ... vllm/, sglang/, models/ (README формата пресетов), secrets/ ...
+  monitoring/
+    prometheus/, grafana/provisioning/ (dashboards/json: slgpu-overview, sglang-*, sglangdash2; _build_sglangdash2.py),
+    grafana/templates/ (vllmdash2.json — ручной импорт), README.md, …
 data/bench/
   ... results/{engine}/{timestamp}/ (summary.json; локально, не в git) ...
 ```

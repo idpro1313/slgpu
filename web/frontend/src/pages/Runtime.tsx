@@ -16,6 +16,7 @@ import { Modal } from "@/components/Modal";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
 import { StatusBadge } from "@/components/StatusBadge";
+import { VramBar } from "@/components/VramBar";
 
 function isEngineJobActive(j: Job): boolean {
   return j.scope === "engine" && (j.status === "queued" || j.status === "running");
@@ -93,25 +94,7 @@ function GpuMatrixTable({ data }: { data: GpuStateResponse | undefined }) {
                   <div className="mono" style={{ fontSize: 13 }}>
                     {u} / {to} MiB
                   </div>
-                  <div
-                    className="gpu-vram-bar"
-                    style={{
-                      marginTop: 4,
-                      height: 6,
-                      borderRadius: 3,
-                      background: "var(--color-border)",
-                    }}
-                    aria-hidden
-                  >
-                    <div
-                      style={{
-                        width: `${pct}%`,
-                        height: "100%",
-                        borderRadius: 3,
-                        background: "var(--color-accent)",
-                      }}
-                    />
-                  </div>
+                  <VramBar pct={pct} height={6} borderRadius={3} marginTop={4} />
                 </td>
                 <td className="mono">
                   {g.utilization_gpu}%
@@ -198,28 +181,31 @@ export function RuntimePage() {
 
   const presets = useQuery({
     queryKey: ["presets"],
-    queryFn: () => api.get<Preset[]>("/presets"),
+    queryFn: ({ signal }) => api.get<Preset[]>("/presets", { signal }),
   });
   const snapshot = useQuery({
     queryKey: ["runtime-snapshot"],
-    queryFn: () => api.get<RuntimeSnapshot>("/runtime/snapshot"),
+    queryFn: ({ signal }) => api.get<RuntimeSnapshot>("/runtime/snapshot", { signal }),
     refetchInterval: 8_000,
   });
   const slotLogs = useQuery({
     queryKey: ["runtime-logs", logSlotKey],
-    queryFn: () =>
-      api.get<RuntimeLogs>(`/runtime/slots/${encodeURIComponent(logSlotKey!)}/logs?tail=400`),
+    queryFn: ({ signal }) =>
+      api.get<RuntimeLogs>(
+        `/runtime/slots/${encodeURIComponent(logSlotKey!)}/logs?tail=400`,
+        { signal },
+      ),
     enabled: logSlotKey != null,
     refetchInterval: logSlotKey ? 5_000 : false,
   });
   const jobs = useQuery({
     queryKey: ["jobs"],
-    queryFn: () => api.get<Job[]>("/jobs"),
+    queryFn: ({ signal }) => api.get<Job[]>("/jobs", { signal }),
     refetchInterval: 2_000,
   });
   const gpuState = useQuery({
     queryKey: ["gpu-state"],
-    queryFn: () => api.get<GpuStateResponse>("/gpu/state"),
+    queryFn: ({ signal }) => api.get<GpuStateResponse>("/gpu/state", { signal }),
     refetchInterval: 3_000,
   });
 
@@ -237,7 +223,8 @@ export function RuntimePage() {
 
   const availability = useQuery({
     queryKey: ["gpu-availability", effectiveLaunchTp, launchPreset],
-    queryFn: () => api.get<GpuAvailability>(`/gpu/availability?tp=${effectiveLaunchTp}`),
+    queryFn: ({ signal }) =>
+      api.get<GpuAvailability>(`/gpu/availability?tp=${effectiveLaunchTp}`, { signal }),
     enabled: launchOpen && Boolean(launchPreset),
     refetchInterval: launchOpen ? 4_000 : false,
   });

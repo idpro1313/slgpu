@@ -36,6 +36,7 @@ shift || true
 
 case "${SUB}" in
   up)
+    slgpu_require_docker
     slgpu_ensure_slgpu_network
     slgpu_load_server_env
     slgpu_ensure_data_dirs
@@ -49,6 +50,7 @@ case "${SUB}" in
     echo "Готово."
     ;;
   restart)
+    slgpu_require_docker
     slgpu_ensure_slgpu_network
     slgpu_load_server_env
     echo "Перезапуск slgpu-web…"
@@ -56,13 +58,16 @@ case "${SUB}" in
     echo "Готово."
     ;;
   logs)
+    slgpu_require_docker
     slgpu_docker_compose -f docker/docker-compose.web.yml --env-file main.env logs -f --tail=200
     ;;
   build)
+    slgpu_require_docker
     slgpu_load_server_env
     slgpu_docker_compose -f docker/docker-compose.web.yml --env-file main.env build
     ;;
   install)
+    slgpu_require_docker
     slgpu_load_server_env
     _port="${WEB_PORT:-8089}"
     _bind="${WEB_BIND:-0.0.0.0}"

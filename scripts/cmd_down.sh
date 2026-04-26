@@ -6,6 +6,8 @@ cd "$ROOT"
 # shellcheck disable=SC1091
 source "${ROOT}/scripts/_lib.sh"
 
+slgpu_require_docker
+
 ALL=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -14,7 +16,7 @@ while [[ $# -gt 0 ]]; do
       cat <<EOF
 Использование:
   ./slgpu down              # остановить vllm и sglang (docker/docker-compose.llm.yml)
-  ./slgpu down --all        # остановить движок и стек мониторинга
+  ./slgpu down --all        # остановить движок, мониторинг и slgpu-web (docker-compose.web.yml)
 EOF
       exit 0
       ;;
@@ -26,9 +28,10 @@ EOF
 done
 
 if [[ "${ALL}" -eq 1 ]]; then
-  echo "Останавливаю vllm, sglang и мониторинг…"
+  echo "Останавливаю vllm, sglang, мониторинг и slgpu-web…"
   slgpu_docker_compose -f docker/docker-compose.llm.yml stop 2>/dev/null || true
   slgpu_docker_compose -f docker/docker-compose.monitoring.yml stop 2>/dev/null || true
+  slgpu_docker_compose -f docker/docker-compose.web.yml --env-file main.env stop 2>/dev/null || true
 else
   echo "Останавливаю vllm и sglang…"
   slgpu_docker_compose -f docker/docker-compose.llm.yml stop vllm sglang 2>/dev/null || true

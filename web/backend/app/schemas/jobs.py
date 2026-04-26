@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.job import JobStatus
 
@@ -19,6 +20,7 @@ class JobOut(BaseModel):
     resource: str | None
     status: JobStatus
     command: list[str]
+    args: dict[str, Any] = Field(default_factory=dict)
     actor: str | None
     started_at: datetime | None
     finished_at: datetime | None

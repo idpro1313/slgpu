@@ -1,31 +1,25 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
-import type { LiteLLMHealth } from "@/api/types";
+import type { LiteLLMHealth, LiteLLMInfo } from "@/api/types";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
 import { StatusBadge } from "@/components/StatusBadge";
 
-interface LiteLLMInfo {
-  ui_url: string;
-  api_url: string;
-  port: number;
-  note: string;
-}
-
 export function LiteLLMPage() {
   const health = useQuery({
     queryKey: ["litellm", "health"],
-    queryFn: () => api.get<LiteLLMHealth>("/litellm/health"),
+    queryFn: ({ signal }) => api.get<LiteLLMHealth>("/litellm/health", { signal }),
     refetchInterval: 10_000,
   });
   const info = useQuery({
     queryKey: ["litellm", "info"],
-    queryFn: () => api.get<LiteLLMInfo>("/litellm/info"),
+    queryFn: ({ signal }) => api.get<LiteLLMInfo>("/litellm/info", { signal }),
   });
   const models = useQuery({
     queryKey: ["litellm", "models"],
-    queryFn: () => api.get<Array<{ id: string; object?: string }>>("/litellm/models"),
+    queryFn: ({ signal }) =>
+      api.get<Array<{ id: string; object?: string }>>("/litellm/models", { signal }),
     refetchInterval: 15_000,
   });
 
@@ -35,9 +29,15 @@ export function LiteLLMPage() {
         title="LiteLLM Proxy"
         subtitle="Single OpenAI-compatible API в проект slgpu. Маршрутами и ключами управляет Admin UI самого LiteLLM. Подъём стека мониторинга — со страницы «Мониторинг» или CLI."
         actions={
-          <a className="btn" href={info.data?.ui_url} target="_blank" rel="noreferrer">
-            Открыть Admin UI
-          </a>
+          info.data?.ui_url ? (
+            <a className="btn" href={info.data.ui_url} target="_blank" rel="noreferrer">
+              Открыть Admin UI
+            </a>
+          ) : (
+            <span className="btn btn--ghost" aria-disabled="true" title="Дождитесь загрузки URL">
+              Admin UI…
+            </span>
+          )
         }
       />
 

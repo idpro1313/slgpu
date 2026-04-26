@@ -181,6 +181,8 @@ async def create_engine_slot(
         )
     )
     await session.flush()
+    # Commit before background job: native.slot.up reads EngineSlot in a new session.
+    await session.commit()
     try:
         command = cmd_slot_up(
             slot_key=sk,

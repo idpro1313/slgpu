@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type KeyboardEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
@@ -18,16 +18,27 @@ export function JobsPage() {
 
   const activity = useQuery({
     queryKey: ["activity"],
-    queryFn: () => api.get<ActivityEntry[]>("/activity"),
+    queryFn: ({ signal }) => api.get<ActivityEntry[]>("/activity", { signal }),
     refetchInterval: 5_000,
   });
 
   const jobDetail = useQuery({
     queryKey: ["jobs", selected?.source === "job" ? selected.id : null],
-    queryFn: () => api.get<Job>(`/jobs/${(selected as SelectedJob).id}`),
+    queryFn: ({ signal }) => api.get<Job>(`/jobs/${(selected as SelectedJob).id}`, { signal }),
     enabled: selected?.source === "job",
     refetchInterval: 4_000,
   });
+
+  function activateRow(next: Selection) {
+    setSelected(next);
+  }
+
+  function rowKeyActivate(e: KeyboardEvent, next: Selection) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      activateRow(next);
+    }
+  }
 
   const modalOpen = selected !== null;
   const modalTitle =
@@ -47,7 +58,7 @@ export function JobsPage() {
     <>
       <PageHeader
         title="Задачи"
-        subtitle="Фоновые команды (pull, up, down, monitoring) и отдельные действия в UI: модели, пресеты, настройки, синхронизация пресетов. По клику на строку — подробности в окне; Esc или фон — закрыть."
+        subtitle="Фоновые native-задачи (слоты, pull, мониторинг, бенчи) и действия в UI (модели, пресеты, настройки). По строке или Enter/Space — подробности; Esc или фон — закрыть."
       />
 
       <Section title="История" subtitle="Объединённая лента по времени, лимит 100.">
@@ -76,7 +87,12 @@ export function JobsPage() {
                     return (
                       <tr
                         key={`job-${j.id}`}
-                        onClick={() => setSelected({ source: "job", id: j.id })}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => activateRow({ source: "job", id: j.id })}
+                        onKeyDown={(e) =>
+                          rowKeyActivate(e, { source: "job", id: j.id })
+                        }
                         style={{ cursor: "pointer" }}
                       >
                         <td>CLI</td>
@@ -94,7 +110,10 @@ export function JobsPage() {
                   return (
                     <tr
                       key={`ui-${row.audit_id}`}
-                      onClick={() => setSelected({ source: "ui", entry: row })}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => activateRow({ source: "ui", entry: row })}
+                      onKeyDown={(e) => rowKeyActivate(e, { source: "ui", entry: row })}
                       style={{ cursor: "pointer" }}
                     >
                       <td>UI</td>

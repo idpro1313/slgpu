@@ -47,11 +47,11 @@
    - Datasource: **Prometheus** (как в provisioning, uid `prometheus`).  
    - Убедитесь, что контейнер **`node-exporter`** запущен: **`./slgpu monitoring up`** (или `docker compose -f docker/docker-compose.monitoring.yml up -d node-exporter`).  
    - В выпадающих списках вверху дашборда выберите **Datasource: Prometheus**, **job = `node-exporter`**, **instance** — обычно **`host`** (так задан label в [`prometheus/prometheus.yml`](prometheus/prometheus.yml)); в других ревизиях дашборда может быть `node-exporter:9100`.
-3. **vLLM** — поиск на grafana.com по `vllm` (ID зависят от версии; импорт через **Dashboards → Import**). В репозитории: [`vllmdash2.json`](grafana/provisioning/dashboards/json/vllmdash2.json) — **V2**; datasource **`prometheus`**, переменные **`instance`** / **`Model`** (с **All**), в запросах `job="vllm"`, `model_name=~"$model_name"`. **Данные только при запущенном контейнере vLLM** — если поднят только SGLang, метрик `vllm:*` в Prometheus нет, дашборд будет пустым (смотрите SGLang-дашборды). Если vLLM запущен, а **Model** пуст — сделайте запросы к API или выберите **All** / нужную модель и обновите переменные.
+3. **vLLM** — поиск на grafana.com по `vllm` (ID зависят от версии; импорт через **Dashboards → Import**). В репозитории: [`vllmdash2.json`](grafana/templates/vllmdash2.json) — **V2**; datasource **`prometheus`**, переменные **`instance`** / **`Model`** (с **All**), в запросах `job="vllm"`, `model_name=~"$model_name"`. **Данные только при запущенном контейнере vLLM** — если поднят только SGLang, метрик `vllm:*` в Prometheus нет, дашборд будет пустым (смотрите SGLang-дашборды). Если vLLM запущен, а **Model** пуст — сделайте запросы к API или выберите **All** / нужную модель и обновите переменные.
 
 ### vLLM V2: все панели «No data» (и Success Rate, и Latency)
 
-Дашборд [vllmdash2.json](grafana/provisioning/dashboards/json/vllmdash2.json) читает **только** серии `vllm:…` с **job="vllm"** и (через переменные) `instance=~…`, `model_name=~…`. **Пусто на всей странице** значит, что в **Prometheus** сейчас **нет** подходящих рядов — Grafana при этом настроен корректно.
+Дашборд [vllmdash2.json](grafana/templates/vllmdash2.json) читает **только** серии `vllm:…` с **job="vllm"** и (через переменные) `instance=~…`, `model_name=~…`. **Пусто на всей странице** значит, что в **Prometheus** сейчас **нет** подходящих рядов — Grafana при этом настроен корректно.
 
 | Проверка | Что должно быть |
 |----------|-----------------|

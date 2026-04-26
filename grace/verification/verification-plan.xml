@@ -1,4 +1,4 @@
-<VerificationPlan VERSION="2.4.0">
+<VerificationPlan VERSION="2.5.0">
   <GlobalPolicy>
     <log-format>[Module][function][BLOCK_NAME] message</log-format>
     <deterministic-first>true</deterministic-first>
@@ -11,7 +11,7 @@
   <CriticalFlows>
     <VF-001 NAME="CoreHappyPath" USE_CASES="UC-003, UC-005, UC-006" DATA_FLOW="DF-ENGINE-UP, DF-BENCH" PRIORITY="high">
       <scenario>Оператор запускает движок и бенчмаркит.</scenario>
-      <expected-outcome>Создан `bench/results/&lt;engine&gt;/&lt;timestamp&gt;/summary.json`.</expected-outcome>
+      <expected-outcome>Создан `data/bench/results/&lt;engine&gt;/&lt;timestamp&gt;/summary.json`.</expected-outcome>
       <required-signals>
         <log-marker>[BENCH][bench_openai][BLOCK_RUN_SCENARIO] completed</log-marker>
         <trace-sequence>BLOCK_LOAD_ENV -> BLOCK_COMPOSE_UP -> (API вручную) -> BLOCK_RUN_SCENARIO</trace-sequence>
@@ -20,7 +20,7 @@
 
     <VF-003 NAME="ModelPull" USE_CASES="UC-002" DATA_FLOW="DF-MODEL-PULL" PRIORITY="medium">
       <scenario>Загрузка весов по существующему пресету или по HF id (пресет вручную при необходимости).</scenario>
-      <expected-outcome>Веса в `${MODELS_DIR}`; для up — `configs/models/*.env` вручную или из репо.</expected-outcome>
+      <expected-outcome>Веса в `${MODELS_DIR}`; пресет — `data/presets/*.env` (или эталон из `examples/presets/`, импорт в UI).</expected-outcome>
       <required-signals>
         <log-marker>[PULL][cmd_pull][BLOCK_DOWNLOAD] completed</log-marker>
         <trace-sequence>BLOCK_LOAD_ENV? -> BLOCK_DOWNLOAD</trace-sequence>
@@ -74,7 +74,7 @@
         <check-1>shellcheck scripts/cmd_pull.sh</check-1>
       </module-checks>
       <scenarios>
-        <scenario-1 kind="success">HF ID с «/» и существующим `configs/models/&lt;slug&gt;.env` — `hf download` с полями пресета; без пресета — только `hf download` по id (пресет не создаётся).</scenario-1>
+        <scenario-1 kind="success">HF ID с «/» и существующим пресетом в `data/presets/&lt;slug&gt;.env` (или эталоном в `examples/presets/`) — `hf download` с полями пресета; без пресета — только `hf download` по id (пресет не создаётся).</scenario-1>
         <scenario-2 kind="success">Slug без `/` использует существующий пресет.</scenario-2>
         <scenario-3 kind="failure">Отсутствующий slug без `/` сообщает об ошибке.</scenario-3>
       </scenarios>
@@ -148,7 +148,7 @@
       </test-files>
       <module-checks>
         <check-1>promtool check config configs/monitoring/prometheus/prometheus.yml</check-1>
-        <check-2>JSON: валидный parse для grafana/provisioning/dashboards/json/*.json (sglang-dashboard-slgpu, sglangdash2-slgpu, vllmdash2, slgpu-overview)</check-2>
+        <check-2>JSON: валидный parse для grafana/provisioning/dashboards/json/*.json (sglang-dashboard-slgpu, sglangdash2-slgpu, slgpu-overview) и для grafana/templates/vllmdash2.json (эталон vLLM V2 для ручного импорта)</check-2>
         <check-3>python -m py_compile configs/monitoring/grafana/provisioning/dashboards/json/_build_sglangdash2.py</check-3>
       </module-checks>
       <scenarios>
@@ -165,7 +165,7 @@
         <file>tests/test_models.sh</file>
       </test-files>
       <module-checks>
-        <check-1>Каждый `.env` в configs/models/ содержит MODEL_ID и TP</check-1>
+        <check-1>Каждый эталонный `.env` в examples/presets/ содержит MODEL_ID (и согласован с configs/models/README.md)</check-1>
       </module-checks>
       <scenarios>
         <scenario-1 kind="success">Пресет Qwen3.6 (репо) согласован с таблицей парсеров в README.</scenario-1>
@@ -219,7 +219,7 @@
       </module-checks>
       <scenarios>
         <scenario-1 kind="success">Whitelist в app.core.security принимает legitimate slug/HF id и отвергает строки с пробелами/`;`/`&amp;`.</scenario-1>
-        <scenario-2 kind="success">Парсинг существующих configs/models/*.env возвращает MODEL_ID и набор runtime ключей.</scenario-2>
+        <scenario-2 kind="success">Парсинг существующих `data/presets/*.env` (или импортированных из `examples/presets/`) возвращает MODEL_ID и набор runtime ключей.</scenario-2>
         <scenario-3 kind="success">slgpu_cli: kind `native.*`, пустой `argv`; pull, `native.slot.up|down|restart`, monitoring проходят валидацию (4.0.0: без `native.llm.*`).</scenario-3>
         <scenario-4 kind="success">Job runner устанавливает advisory lock и вторая операция на тот же scope/resource падает с JobConflictError (HTTP 409).</scenario-4>
         <scenario-5 kind="success">FastAPI app стартует, /healthz возвращает 200 и версию из app.__version__.</scenario-5>
@@ -238,11 +238,12 @@
         <scenario-18 kind="success">Presets UI редактирует параметры через key/value строки, а не raw JSON; DELETE удаляет запись и опционально файл `.env` внутри PRESETS_DIR.</scenario-18>
         <scenario-19 kind="success">Web entrypoint при старте создаёт/chown’ит `/data`, `${WEB_SLGPU_ROOT}/data/models` и `${WEB_SLGPU_ROOT}/data/presets`; `slgpu pull` из UI может создать `${MODELS_DIR}/&lt;org&gt;/&lt;repo&gt;` без Permission denied.</scenario-19>
         <scenario-20 kind="success">`POST /api/v1/app-config/install` импортирует main.env в таблицу `stack_params`; `GET/PATCH /app-config/stack` отдаёт/обновляет плоский стек (удаление ключа — `null` в `stack` / `secrets`); секреты маскируются.</scenario-20>
-        <scenario-21 kind="success">`GET /api/v1/bench/runs` и `GET /bench/report.md` доступны; `POST /bench/scenario|load` ставит native.bench.* job.</scenario-21>
+        <scenario-21 kind="success">`GET /api/v1/bench/runs` и `GET /api/v1/bench/runs/{engine}/{ts}/summary` доступны; `POST /api/v1/bench/scenario` и `POST /api/v1/bench/load` ставят `native.bench.*` job; агрегированного `bench/report.md` в репозитории нет.</scenario-21>
         <scenario-22 kind="success">`GET /api/v1/dashboard` включает объект `host` (ОС, CPU, RAM, диск по `slgpu_root`, блок `nvidia` с `smi_available`); Dashboard UI отображает секцию «Сервер».</scenario-22>
-        <scenario-23 kind="success">`GET /api/v1/gpu/state` (при моке nvidia-smi) и `GET /api/v1/gpu/availability` (при моке списка GPU на хосте); `GET /dashboard` и `GET /runtime/snapshot` содержат `runtime.slots` (массив); `POST /api/v1/runtime/slots` при валидном пресете и `gpu_indices` — 202 `native.slot.up`; `POST /api/v1/presets/{id}/clone` — 201 и непустой `id` после flush.</scenario-23>
+        <scenario-23 kind="success">`GET /api/v1/gpu/state` (при моке nvidia-smi) и `GET /api/v1/gpu/availability` (при моке списка GPU на хосте); `GET /api/v1/dashboard` и `GET /api/v1/runtime/snapshot` содержат `runtime.slots` (массив); `POST /api/v1/runtime/slots` при валидном пресете и `gpu_indices` — 202 `native.slot.up`; `POST /api/v1/presets/{id}/clone` — 201 и непустой `id` после flush.</scenario-23>
         <scenario-24 kind="failure">4.0.0 race: `POST /runtime/slots` с `gpu_indices`, пересекающимися с busy слотом или внешним `slot_key: external` в `GET /gpu/availability`, — HTTP 400/409; пересечение с другим `requested` в БД — отклонение.</scenario-24>
         <scenario-25 kind="success">4.0.0: `stop_containers_for_slot_key_sync` / `native.slot.down` останавливают контейнеры по label `com.develonica.slgpu.slot={key}`; тест `test_4_0_concurrency` (mock) и unit `_enrich_processes_with_slot_keys` (mock docker top) закрепляют путь без опоры только на `engine` в БД.</scenario-25>
+        <scenario-26 kind="success">`PATCH /api/v1/settings/public-access` с новым `litellm_api_key` пишет в `audit_events` запись с `note`, содержащим `[BLOCK_KEY_ROTATED]`; в ответе — `litellm_api_key_updated`/`key_updated`; `GET` по-прежнему отдаёт только `litellm_api_key_set`, не сам ключ.</scenario-26>
       </scenarios>
       <required-log-markers>
         <marker-1>[WEB][jobs][BLOCK_RUN_JOB]</marker-1>
@@ -270,10 +271,10 @@
     </Gate-Phase-1>
 
     <Gate-Phase-2 PHASE="Phase-2">
-      <goal>Model Management: пресеты корректны, pull работает.</goal>
+      <goal>Model Management: эталонные пресеты в репо, pull работает с `PRESETS_DIR`.</goal>
       <commands>
-        <command-1>test -f configs/models/qwen3.6-35b-a3b.env</command-1>
-        <command-2>grep -q MODEL_ID configs/models/*.env</command-2>
+        <command-1>test -f examples/presets/qwen3.6-35b-a3b.env</command-1>
+        <command-2>grep -q MODEL_ID examples/presets/*.env</command-2>
       </commands>
     </Gate-Phase-2>
 
@@ -285,11 +286,10 @@
     </Gate-Phase-3>
 
     <Gate-Phase-4 PHASE="Phase-4">
-      <goal>Benchmark &amp; Compare: артефакты создаются, отчёт генерируется.</goal>
+      <goal>Benchmark: артефакты в `data/bench/results/{engine}/{timestamp}/` (сравнение — по `summary.json` в UI или вручную).</goal>
       <commands>
-        <command-1>test -f bench/results/vllm/*/summary.json</command-1>
-        <command-2>test -f bench/results/sglang/*/summary.json</command-2>
-        <command-3>test -f bench/report.md</command-3>
+        <command-1>test -f data/bench/results/vllm/*/summary.json</command-1>
+        <command-2>test -f data/bench/results/sglang/*/summary.json</command-2>
       </commands>
     </Gate-Phase-4>
 

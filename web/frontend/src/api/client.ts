@@ -1,3 +1,5 @@
+import type { Healthz } from "@/api/types";
+
 const API_PREFIX = "/api/v1";
 
 export class ApiError extends Error {
@@ -10,6 +12,23 @@ export class ApiError extends Error {
   }
 }
 
+async function parseErrorResponse(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return await response.text();
+  }
+}
+
+function errorMessage(status: number, detail: unknown): string {
+  return typeof detail === "object" &&
+    detail &&
+    "detail" in detail &&
+    typeof (detail as { detail: unknown }).detail === "string"
+    ? (detail as { detail: string }).detail
+    : `HTTP ${status}`;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   if (init?.body && !headers.has("Content-Type")) {
@@ -20,17 +39,21 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers,
   });
   if (!response.ok) {
-    let detail: unknown = null;
-    try {
-      detail = await response.json();
-    } catch {
-      detail = await response.text();
-    }
-    const message =
-      typeof detail === "object" && detail && "detail" in detail && typeof (detail as { detail: unknown }).detail === "string"
-        ? (detail as { detail: string }).detail
-        : `HTTP ${response.status}`;
-    throw new ApiError(response.status, detail, message);
+    const detail = await parseErrorResponse(response);
+    throw new ApiError(response.status, detail, errorMessage(response.status, detail));
+  }
+  if (response.status === 204) {
+    return undefined as T;
+  }
+  return (await response.json()) as T;
+}
+
+/** Корневые пути вне `/api/v1` (например `/healthz` для dev-proxy). */
+async function requestRoot<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(path, { ...init });
+  if (!response.ok) {
+    const detail = await parseErrorResponse(response);
+    throw new ApiError(response.status, detail, errorMessage(response.status, detail));
   }
   if (response.status === 204) {
     return undefined as T;
@@ -39,16 +62,21 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  get: <T,>(path: string) => request<T>(path),
-  post: <T,>(path: string, body?: unknown) =>
+  get: <T>(path: string, init?: RequestInit) =>
+    request<T>(path, { ...init, method: "GET" }),
+  post: <T>(path: string, body?: unknown, init?: RequestInit) =>
     request<T>(path, {
+      ...init,
       method: "POST",
       body: body === undefined ? undefined : JSON.stringify(body),
     }),
-  patch: <T,>(path: string, body?: unknown) =>
+  patch: <T>(path: string, body?: unknown, init?: RequestInit) =>
     request<T>(path, {
+      ...init,
       method: "PATCH",
       body: body === undefined ? undefined : JSON.stringify(body),
     }),
-  delete: <T,>(path: string) => request<T>(path, { method: "DELETE" }),
+  delete: <T>(path: string, init?: RequestInit) =>
+    request<T>(path, { ...init, method: "DELETE" }),
+  healthz: (init?: RequestInit) => requestRoot<Healthz>("/healthz", init),
 };

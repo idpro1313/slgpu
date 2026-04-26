@@ -2,7 +2,7 @@ import type { PropsWithChildren } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { NavLink } from "react-router-dom";
 
-import type { Healthz } from "@/api/types";
+import { api } from "@/api/client";
 
 const NAV_ITEMS = [
   { to: "/dashboard", label: "Dashboard" },
@@ -19,13 +19,7 @@ const NAV_ITEMS = [
 export function Layout({ children }: PropsWithChildren) {
   const health = useQuery({
     queryKey: ["healthz"],
-    queryFn: async () => {
-      const response = await fetch("/healthz");
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      return (await response.json()) as Healthz;
-    },
+    queryFn: ({ signal }) => api.healthz({ signal }),
     staleTime: 60_000,
   });
 

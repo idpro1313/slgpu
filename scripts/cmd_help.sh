@@ -9,9 +9,9 @@ slgpu — стенд vLLM vs SGLang в Docker (Linux VM).
   prepare [1–6]        Подготовка хоста (Docker, NVIDIA toolkit, каталог моделей, …)
   pull <HF_ID|preset>   Скачать веса (hf download); пресет не создаётся — см. configs/models/README.md (эталоны: examples/presets/, рабочие: data/presets/)
   up [vllm|sglang] [-m <preset>] [-p <порт>] [--tp <N>]   (без арг. — выбор в TTY)
-  monitoring up|down|restart|fix-perms   Мониторинг; fix-perms — chown каталогов данных (bind mount)
-  web up|down|restart|logs|build      Web UI (slgpu-web); из корня репо; см. data/README, main.env
-  down [--all]           Остановить vllm/sglang; --all — ещё и мониторинг
+  monitoring up|down|restart|bootstrap|fix-perms   Мониторинг; bootstrap — повтор init MinIO/LiteLLM DB; fix-perms — chown данных
+  web up|down|restart|logs|build|install   Web UI (slgpu-web); install — после up, POST /api/v1/app-config/install
+  down [--all]           Остановить vllm/sglang; --all — мониторинг и slgpu-web
   restart -m <preset> [--tp <N>]  Перезапуск running vllm|sglang с новым пресетом
   bench [vllm|sglang] [-m <preset>]
   load [vllm|sglang] [-m <preset>] [опции]

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
@@ -60,7 +61,7 @@ def _build_activity(
 async def list_activity(
     limit: int = Query(default=100, ge=1, le=500),
     session: AsyncSession = Depends(db_session),
-) -> list[ActivityItem]:
+) -> list[ActivityJobItem | ActivityUiItem]:
     """CLI-операции (таблица `jobs`) + UI-действия (`audit_events` с `correlation_id IS NULL`).
 
     События, созданные `jobs.submit` вместе с job, имеют `correlation_id` и в ленте **не

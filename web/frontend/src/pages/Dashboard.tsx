@@ -7,6 +7,7 @@ import { MetricCard } from "@/components/MetricCard";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
 import { StatusBadge } from "@/components/StatusBadge";
+import { VramBar } from "@/components/VramBar";
 
 function presetForGpuIndex(index: number, slots: RuntimeSlotView[] | undefined): string | null {
   if (!slots?.length) return null;
@@ -30,13 +31,13 @@ function numGpu(v: number | string): number {
 export function DashboardPage() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["dashboard"],
-    queryFn: () => api.get<DashboardData>("/dashboard"),
+    queryFn: ({ signal }) => api.get<DashboardData>("/dashboard", { signal }),
     refetchInterval: 10_000,
   });
 
   const gpuLive = useQuery({
     queryKey: ["gpu-state"],
-    queryFn: () => api.get<GpuStateResponse>("/gpu/state"),
+    queryFn: ({ signal }) => api.get<GpuStateResponse>("/gpu/state", { signal }),
     refetchInterval: 3_000,
   });
 
@@ -240,24 +241,7 @@ export function DashboardPage() {
                     <div className="mono" style={{ fontSize: 12 }}>
                       VRAM {u} / {t} MiB
                     </div>
-                    <div
-                      style={{
-                        marginTop: 6,
-                        height: 8,
-                        borderRadius: 4,
-                        background: "var(--color-border)",
-                      }}
-                      aria-hidden
-                    >
-                      <div
-                        style={{
-                          width: `${vramPct}%`,
-                          height: "100%",
-                          borderRadius: 4,
-                          background: "var(--color-accent)",
-                        }}
-                      />
-                    </div>
+                    <VramBar pct={vramPct} height={8} borderRadius={4} marginTop={6} />
                   </div>
                   {procsOnGpu.length ? (
                     <div className="status-card__detail" style={{ marginTop: 10 }}>

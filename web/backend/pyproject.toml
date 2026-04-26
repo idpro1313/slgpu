@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "slgpu-web"
-version = "4.0.3"
+version = "4.0.8"
 description = "Web control plane for the slgpu LLM inference benchmarking stand."
 requires-python = ">=3.11"
 readme = "../README.md"
@@ -17,11 +17,9 @@ dependencies = [
   "pydantic-settings>=2.4,<3.0",
   "sqlalchemy>=2.0,<3.0",
   "aiosqlite>=0.20,<0.21",
-  "alembic>=1.13,<1.15",
   "anyio>=4.4,<5.0",
   "httpx>=0.27,<0.29",
   "docker>=7.1,<8.0",
-  "python-multipart>=0.0.9,<0.1",
   "huggingface_hub>=0.26,<1.0",
   "tqdm>=4.66,<5.0",
 ]

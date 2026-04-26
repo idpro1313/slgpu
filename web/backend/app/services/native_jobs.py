@@ -164,7 +164,7 @@ async def handle_native_job(job_id: int, command: CliCommand, args: dict[str, An
             log.append(f"[native] unknown kind {command.kind}")
             code = 1
     except Exception as exc:  # noqa: BLE001
-        logger.exception("[native_jobs] failure")
+        logger.exception("[native_jobs][handle_native_job][BLOCK_FAILURE]")
         log.append(f"[native] error: {exc}")
         code = 1
     await _finalize_native_job(job_id, command, code, log)

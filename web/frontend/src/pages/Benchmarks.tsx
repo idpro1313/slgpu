@@ -2,18 +2,11 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
-import type { JobAccepted, RuntimeSnapshot } from "@/api/types";
+import type { BenchRun, JobAccepted, RuntimeSnapshot } from "@/api/types";
 import { BenchSummaryView } from "@/components/BenchSummaryView";
 import { Modal } from "@/components/Modal";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
-
-type BenchRun = {
-  engine: string;
-  timestamp: string;
-  kind: string;
-  path: string;
-};
 
 export function BenchmarksPage() {
   const queryClient = useQueryClient();
@@ -32,7 +25,7 @@ export function BenchmarksPage() {
 
   const runtime = useQuery({
     queryKey: ["runtime-snapshot"],
-    queryFn: () => api.get<RuntimeSnapshot>("/runtime/snapshot"),
+    queryFn: ({ signal }) => api.get<RuntimeSnapshot>("/runtime/snapshot", { signal }),
     refetchInterval: 8_000,
   });
 
@@ -63,15 +56,16 @@ export function BenchmarksPage() {
 
   const runs = useQuery({
     queryKey: ["bench", "runs"],
-    queryFn: () => api.get<BenchRun[]>("/bench/runs"),
+    queryFn: ({ signal }) => api.get<BenchRun[]>("/bench/runs", { signal }),
     refetchInterval: 8_000,
   });
 
   const summary = useQuery({
     queryKey: ["bench", "summary", detailRun?.engine, detailRun?.timestamp],
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.get<Record<string, unknown>>(
         `/bench/runs/${detailRun!.engine}/${detailRun!.timestamp}/summary`,
+        { signal },
       ),
     enabled: Boolean(detailRun),
   });

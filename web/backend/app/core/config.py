@@ -67,9 +67,6 @@ class Settings(BaseSettings):
     cors_origins: list[str] = Field(default_factory=lambda: ["*"])
     static_dir: Path | None = None
 
-    job_log_tail_kb: int = 64
-    health_poll_seconds: float = 8.0
-
     docker_host_probe_image: str = Field(
         default="busybox:1.36",
         description=(

@@ -8,7 +8,7 @@ services:
   dcgm-exporter:
     # Жёсткие имена без …-1; внутри сети `slgpu` обращайтесь по имени сервиса (dcgm-exporter, postgres, …)
     container_name: slgpu-monitoring-dcgm-exporter
-    image: nvidia/dcgm-exporter:latest
+    image: ${SLGPU_DCGM_EXPORTER_IMAGE:-nvidia/dcgm-exporter:3.3.5-3.4.0-ubuntu22.04}
     env_file:
       - main.env
     restart: unless-stopped
@@ -27,7 +27,7 @@ services:
 
   node-exporter:
     container_name: slgpu-monitoring-node-exporter
-    image: prom/node-exporter:latest
+    image: ${SLGPU_NODE_EXPORTER_IMAGE:-prom/node-exporter:v1.8.2}
     env_file:
       - main.env
     restart: unless-stopped
@@ -99,7 +99,7 @@ services:
 
   prometheus:
     container_name: slgpu-monitoring-prometheus
-    image: prom/prometheus:latest
+    image: ${SLGPU_PROMETHEUS_IMAGE:-prom/prometheus:v2.55.1}
     # Права на PROMETHEUS_DATA_DIR: ./scripts/monitoring_fix_permissions.sh или ./slgpu monitoring fix-perms
     # Скрейп vLLM/SGLang идёт на host.docker.internal:порт (см. prometheus.yml) — шлюз в хост, где
     # слушают опубликованные 8111/8222. Нужен для Linux (compose: host-gateway).
@@ -130,7 +130,7 @@ services:
 
   grafana:
     container_name: slgpu-monitoring-grafana
-    image: grafana/grafana:latest
+    image: ${SLGPU_GRAFANA_IMAGE:-grafana/grafana:11.3.0}
     # Права на GRAFANA_DATA_DIR: ./slgpu monitoring fix-perms (uid/gid из образа, без угадывания)
     env_file:
       - main.env
@@ -192,7 +192,7 @@ services:
   minio:
     # S3-совместимое хранилище для Langfuse. Порты на хосте: не 9090 (Prometheus) — MINIO_API_HOST_PORT
     container_name: slgpu-monitoring-minio
-    image: ${SLGPU_MINIO_IMAGE:-minio/minio:latest}
+    image: ${SLGPU_MINIO_IMAGE:-minio/minio:RELEASE.2024-11-07T00-52-20Z}
     restart: unless-stopped
     command: server /data --console-address ":9001"
     networks:
@@ -271,7 +271,7 @@ services:
 
   postgres:
     container_name: slgpu-monitoring-postgres
-    image: ${SLGPU_LANGFUSE_POSTGRES_IMAGE:-postgres:17}
+    image: ${SLGPU_LANGFUSE_POSTGRES_IMAGE:-postgres:17.4}
     restart: unless-stopped
     networks:
       - slgpu
@@ -416,7 +416,7 @@ services:
   # БД `litellm` в общем postgres (Prisma, Admin UI / виртуальные ключи). Идемпотентно, без `profiles`.
   litellm-pg-init:
     container_name: slgpu-monitoring-litellm-pg-init
-    image: ${SLGPU_LANGFUSE_POSTGRES_IMAGE:-postgres:17}
+    image: ${SLGPU_LANGFUSE_POSTGRES_IMAGE:-postgres:17.4}
     profiles: ["bootstrap"]
     restart: "no"
     networks:
@@ -441,6 +441,7 @@ services:
     # OpenAI-совместимый шлюз → vLLM (host.docker.internal, см. extra_hosts, как у Prometheus)
     # Admin UI / Prisma: DATABASE_URL — отдельная БД `litellm` (та же сеть slgpu → postgres)
     container_name: slgpu-monitoring-litellm
+    # В проде задайте SLGPU_LITELLM_IMAGE конкретным тегом (см. ghcr.io/berriai/litellm).
     image: ${SLGPU_LITELLM_IMAGE:-ghcr.io/berriai/litellm:main-latest}
     restart: unless-stopped
     depends_on:

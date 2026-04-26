@@ -37,7 +37,7 @@ async def list_models(session: AsyncSession | None = None) -> list[dict[str, Any
                 return []
             return response.json().get("data", [])
         except httpx.HTTPError as exc:
-            logger.warning("[litellm][list_models] %s", exc)
+            logger.warning("[litellm][list_models][BLOCK_HTTP_ERROR] %s", exc)
             return []
 
 

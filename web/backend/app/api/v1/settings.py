@@ -48,6 +48,7 @@ async def update_public_access(
             await app_settings.set_public_server_host(session, body.get("server_host"))
         except ValidationError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+    key_updated = False
     if "litellm_api_key" in body:
         d = await app_settings.get_public_access_value(session)
         lk = body["litellm_api_key"]
@@ -56,15 +57,20 @@ async def update_public_access(
         else:
             d["litellm_api_key"] = str(lk).strip()[:2000]
         await app_settings.set_public_access_value(session, d)
+        key_updated = True
     await record_ui_action(
         session,
         action="settings.public_access",
         actor=actor,
         target="public_access",
-        note="public links / LiteLLM API key",
+        note=(
+            "[settings][update_public_access][BLOCK_KEY_ROTATED] litellm_api_key"
+            if key_updated
+            else "public links / LiteLLM API settings"
+        ),
         payload={
             "server_host": body.get("server_host") if "server_host" in body else None,
-            "litellm_api_key_updated": "litellm_api_key" in body,
+            "litellm_api_key_updated": key_updated,
         },
     )
     return await get_public_access(request=request, session=session)

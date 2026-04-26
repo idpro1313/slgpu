@@ -1,4 +1,9 @@
-import { useEffect, type PropsWithChildren, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  type PropsWithChildren,
+  type ReactNode,
+} from "react";
 
 interface ModalProps {
   title: string;
@@ -11,6 +16,9 @@ interface ModalProps {
   size?: "default" | "wide";
 }
 
+const FOCUSABLE_SELECTOR =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 export function Modal({
   title,
   subtitle,
@@ -20,6 +28,8 @@ export function Modal({
   size = "default",
   children,
 }: PropsWithChildren<ModalProps>) {
+  const panelRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (!isOpen) return;
     const onKey = (e: KeyboardEvent) => {
@@ -34,6 +44,31 @@ export function Modal({
     };
   }, [isOpen, onClose]);
 
+  useEffect(() => {
+    if (!isOpen || !panelRef.current) return;
+    const root = panelRef.current;
+    const nodes = [...root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)];
+    if (nodes.length === 0) return;
+    const first = nodes[0];
+    const last = nodes[nodes.length - 1];
+    first.focus();
+
+    const onTab = (e: KeyboardEvent) => {
+      if (e.key !== "Tab" || nodes.length === 0) return;
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else if (document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    root.addEventListener("keydown", onTab);
+    return () => root.removeEventListener("keydown", onTab);
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
@@ -45,6 +80,7 @@ export function Modal({
       }}
     >
       <div
+        ref={panelRef}
         className={size === "wide" ? "modal modal--wide" : "modal"}
         role="dialog"
         aria-modal="true"

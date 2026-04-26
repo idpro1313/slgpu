@@ -1,7 +1,10 @@
 # Develonica.LLM
 
 Web control plane поверх существующего CLI [`./slgpu`](../slgpu) и Docker-стека
-проекта [`slgpu`](../README.md). Содержит:
+проекта [`slgpu`](../README.md). **Инференс в UI — только мультислотная модель 4.0.x:**
+jobs **`native.slot.up|down|restart`** (docker-py), без обёрток **`native.llm.*`** и без глобального runtime-lock; bash **`./slgpu up|down|restart`** на хосте остаётся отдельным путём для тех, кто не пользуется web.
+
+Содержит:
 
 - Реестр моделей Hugging Face по фактическим папкам `MODELS_DIR/<org>/<repo>`:
   регистрация, изменение revision/notes, удаление записи или локальной папки весов,
@@ -10,8 +13,8 @@ Web control plane поверх существующего CLI [`./slgpu`](../slg
   рабочий каталог [`data/presets/`](../data/presets/) (`PRESETS_DIR` в `main.env`), эталоны — [`examples/presets/`](../examples/presets/).
   Параметры пресета редактируются через строки `ключ/значение` с подсказками
   типовых runtime-переменных, без ручного JSON.
-- Управление инференсом vLLM/SGLang через `./slgpu up|down|restart`.
-  Runtime/Dashboard показывают текущий engine, запрошенный пресет, HF ID модели и TP;
+- Управление слотами vLLM/SGLang из UI: **`POST /api/v1/runtime/slots`**, остановка/рестарт по ключу слота, хвост логов по слоту.
+  Dashboard/Runtime показывают **`runtime.slots[]`**, engine, пресет, HF ID и TP;
   Runtime также показывает автообновляемый хвост логов контейнера модели и активную job
   запуска/рестарта/остановки, пока кнопки заблокированы.
 - Управление и наблюдение мониторинг-стека (`./slgpu monitoring …`).
@@ -28,7 +31,7 @@ Web control plane поверх существующего CLI [`./slgpu`](../slg
 
 ## Стек
 
-- **Backend**: FastAPI + SQLAlchemy 2.0 (async) + aiosqlite + Alembic +
+- **Backend**: FastAPI + SQLAlchemy 2.0 (async) + aiosqlite + миграции схемы при старте (`init_db`) +
   `docker` SDK + httpx.
 - **Frontend**: React 18 + Vite + TypeScript + React Router + TanStack Query.
   Приложение называется **Develonica.LLM**. Стиль синхронизирован с live CSS
@@ -58,11 +61,6 @@ web/
 ├── data/                 # SQLite на хосте (bind mount → /data в контейнере)
 ├── backend/
 │   ├── pyproject.toml
-│   ├── alembic.ini
-│   ├── alembic/
-│   │   ├── env.py
-│   │   ├── script.py.mako
-│   │   └── versions/
 │   ├── app/
 │   │   ├── main.py
 │   │   ├── api/v1/        # роутеры FastAPI
@@ -166,7 +164,7 @@ daemon не нашёл бы файлы по `/slgpu/...` и создал бы п
 | GET | `/api/v1/litellm/health\|info\|models` | LiteLLM proxy |
 | GET | `/api/v1/jobs` | только CLI-задачи (лог, exit) |
 | GET | `/api/v1/activity` | **объединённая** лента: `jobs` + UI-действия (`audit_events` с `correlation_id IS NULL`); страница «Задачи» — по клику строки детали в модальном окне |
-| GET/PATCH | `/api/v1/settings/public-access` | публичный host сервера и итоговые UI-ссылки |
+| GET/PATCH | `/api/v1/settings/public-access` | публичный `server_host` для ссылок в браузере; **`litellm_api_key_set`** в GET; в PATCH опционально **`litellm_api_key`** (не возвращается; при смене ключа — audit с `[BLOCK_KEY_ROTATED]`) |
 
 Страница **Бенчмарки:** выбранный прогон открывается в **модальном окне** с разбором `summary.json` (load / scenario).
 

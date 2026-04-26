@@ -2,16 +2,15 @@ import { FormEvent, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
-import type { Job, JobAccepted, PublicAccessSettings } from "@/api/types";
+import type {
+  AppConfigStack,
+  AppConfigStatus,
+  Job,
+  JobAccepted,
+  PublicAccessSettings,
+} from "@/api/types";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
-
-type AppConfigStatus = { installed: boolean; meta: Record<string, unknown> };
-type AppConfigStack = {
-  stack: Record<string, string>;
-  secrets: Record<string, string>;
-  meta: Record<string, unknown>;
-};
 
 type StackRow = { id: string; key: string; value: string; isSecret: boolean };
 

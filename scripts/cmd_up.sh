@@ -6,6 +6,8 @@ cd "$ROOT"
 # shellcheck disable=SC1091
 source "${ROOT}/scripts/_lib.sh"
 
+slgpu_require_docker
+
 usage() {
   cat <<EOF
 Использование:

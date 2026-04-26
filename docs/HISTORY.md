@@ -1594,3 +1594,19 @@
 - **Почему:** запрос пользователя — читать данные LiteLLM по API при включённой авторизации на прокси.
 - **Файлы:** `web/backend/app/services/app_settings.py`, `schemas/settings.py`, `api/v1/settings.py`, `services/litellm.py`, `api/v1/litellm.py`, `web/frontend/src/pages/Settings.tsx`, `api/types.ts`, `web/CONTRACT.md`, `grace/knowledge-graph/knowledge-graph.xml`, `VERSION`, `docs/HISTORY.md`.
 - **Решение:** **PATCH** (новые поля API, обратно совместимо).
+
+## Фаза: audit / cleanup 4.0.4–4.0.8
+
+### 4.0.4–4.0.7: Волны плана audit (backend, frontend, CLI/monitoring, env/secrets)
+
+- **Что:** **4.0.4** — типы activity (`datetime`, union job/ui items), **`JobOut.args`**, commit слота до `submit` после flush, единый формат логов `[Module][fn][BLOCK_*]`, вычищены мёртвые `get_session` / env / alembic из зависимостей, docstring `hf_models` про `stack_params`. **4.0.5** — фронт: типы (`BenchRun`, `LiteLLMInfo`, `Job.args`), `/healthz` через клиент + proxy, a11y Jobs, focus trap Modal, `VramBar`, AbortSignal в query. **4.0.6** — `slgpu_require_docker`, help/down/up/web/monitoring, LiteLLM entrypoint без `sed`, комментарии Prometheus, `vllmdash2.json` в `configs/monitoring/grafana/templates/`, pin образов monitoring compose. **4.0.7** — `main.env` / `main.env.example`, audit `[BLOCK_KEY_ROTATED]` при смене ключа LiteLLM, healthcheck web через `GET /healthz`.
+- **Почему:** ревизия 4.0.3 — план приведения кода и документации в порядок (волны 4.0.4–4.0.8).
+- **Файлы:** `web/backend/app/**`, `web/frontend/src/**`, `scripts/cmd_*.sh`, `scripts/_lib.sh`, `configs/monitoring/**`, `docker/docker-compose.*.yml`, `main.env`, `main.env.example`, и др. по волнам.
+- **Решение:** накопительный **MINOR/PATCH** до **4.0.8** после синхронизации GRACE и доки.
+
+### 4.0.8: GRACE + AGENTS + CONTRACT/README + дубль M-WEB
+
+- **Что:** **`grace/plan/development-plan.xml`** v**4.0.8** — слит дубль `<M-WEB>`, пути **`data/bench/`**, экспорт Grafana **`templates/vllmdash2.json`**. Обновлены **`verification-plan.xml`** (2.5.0): `data/bench`, `examples/presets`, сценарий **scenario-26** (LiteLLM key + audit), убраны устаревшие `bench/report.md` / `configs/models` из гейтов. **`requirements.xml`**, **`technology.xml`**, **`knowledge-graph.xml`** (Project **4.0.8**). **`docs/AGENTS.md`** — бренд IBM Plex/Finlandica/синий, структура `configs/monitoring/`. **`web/CONTRACT.md`** §3 — единый префикс `/api/v1`, **`Job.args`**. **`web/README.md`** — ввод slots-only, таблица API для **`litellm_api_key`**, стек без Alembic в описании.
+- **Почему:** закрытие волны 4.0.8 плана audit; выравнивание артефактов GRACE с кодом и репозиторием.
+- **Файлы:** `grace/**/*.xml`, `docs/AGENTS.md`, `web/CONTRACT.md`, `web/README.md`, `VERSION`, `web/backend/pyproject.toml`, `web/backend/app/__init__.py`, `web/frontend/package.json`, `docs/HISTORY.md`.
+- **Решение:** **PATCH 4.0.8** для документации и метаданных версии; функциональные правки предыдущих волон — в тех же коммитах/истории.
