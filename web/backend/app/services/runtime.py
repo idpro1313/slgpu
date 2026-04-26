@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 import httpx
@@ -11,8 +11,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
+from app.db.session import session_scope
 from app.models.run import EngineRun, RunStatus
+from app.models.slot import EngineSlot
 from app.services.docker_client import get_docker_inspector
+from app.services.slot_runtime import slot_container_name
 from app.services.stack_config import ports_for_probes_sync
 
 logger = logging.getLogger(__name__)
@@ -80,6 +83,21 @@ async def _fetch_served_and_metrics(
 
 
 @dataclass
+class RuntimeSlotProbe:
+    slot_key: str
+    engine: str
+    preset_name: str | None
+    hf_id: str | None
+    api_port: int | None
+    tp: int | None
+    gpu_indices: str | None
+    container_status: str | None
+    container_name: str | None
+    served_models: list[str]
+    metrics_available: bool
+
+
+@dataclass
 class RuntimeSnapshot:
     engine: str | None
     api_port: int | None
@@ -90,6 +108,7 @@ class RuntimeSnapshot:
     served_models: list[str]
     metrics_available: bool
     last_checked_at: datetime
+    slots: list[RuntimeSlotProbe] = field(default_factory=list)
 
 
 @dataclass
@@ -106,6 +125,67 @@ async def snapshot() -> RuntimeSnapshot:
     settings = get_settings()
     inspector = get_docker_inspector()
     ports = ports_for_probes_sync()
+    now = datetime.now(timezone.utc)
+
+    active = (RunStatus.RUNNING, RunStatus.DEGRADED, RunStatus.STARTING)
+    slot_rows: list[EngineSlot] = []
+    async with session_scope() as session:
+        res = await session.execute(
+            select(EngineSlot)
+            .where(EngineSlot.observed_status.in_(active))
+            .order_by(EngineSlot.slot_key)
+        )
+        slot_rows = list(res.scalars().all())
+
+    if slot_rows:
+        slot_probes: list[RuntimeSlotProbe] = []
+        for row in slot_rows:
+            eng = row.engine
+            ap = row.host_api_port
+            if ap is None:
+                ap = int(ports["llm_default_vllm_port"]) if eng == "vllm" else int(ports["llm_default_sglang_port"])
+            served: list[str] = []
+            metrics_available = False
+            bases = _llm_probe_bases(settings, eng, int(ap))
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                served, metrics_available, _ = await _fetch_served_and_metrics(client, bases)
+            cname = row.container_name or slot_container_name(eng, row.slot_key)
+            cst: str | None = None
+            if inspector.is_available:
+                csum = inspector.get_by_name(cname) if cname else None
+                cst = csum.status if csum else None
+            slot_probes.append(
+                RuntimeSlotProbe(
+                    slot_key=row.slot_key,
+                    engine=eng,
+                    preset_name=row.preset_name,
+                    hf_id=row.hf_id,
+                    api_port=ap,
+                    tp=row.tp,
+                    gpu_indices=row.gpu_indices,
+                    container_status=cst,
+                    container_name=cname,
+                    served_models=served,
+                    metrics_available=metrics_available,
+                )
+            )
+        def _sort_key(s: RuntimeSlotProbe) -> tuple[int, str]:
+            return (0 if s.slot_key == "default" else 1, s.slot_key)
+
+        slot_probes.sort(key=_sort_key)
+        top = next((p for p in slot_probes if p.slot_key == "default"), slot_probes[0])
+        return RuntimeSnapshot(
+            engine=top.engine,
+            api_port=top.api_port,
+            container_status=top.container_status,
+            preset_name=top.preset_name,
+            hf_id=top.hf_id,
+            tp=top.tp,
+            served_models=top.served_models,
+            metrics_available=top.metrics_available,
+            last_checked_at=now,
+            slots=slot_probes,
+        )
 
     engine: str | None = None
     container_status: str | None = None
@@ -171,6 +251,36 @@ async def snapshot() -> RuntimeSnapshot:
         tp=None,
         served_models=served,
         metrics_available=metrics_available,
+        last_checked_at=now,
+        slots=[],
+    )
+
+
+async def tail_slot_logs(slot_key: str, tail: int = 300) -> RuntimeLogs:
+    """Logs for a named inference slot (``engine_slots``)."""
+    bounded_tail = max(1, min(tail, 2000))
+    async with session_scope() as session:
+        res = await session.execute(select(EngineSlot).where(EngineSlot.slot_key == slot_key))
+        row = res.scalar_one_or_none()
+    inspector = get_docker_inspector()
+    if row is None:
+        return RuntimeLogs(
+            engine=None,
+            container_name=None,
+            container_status=None,
+            tail=bounded_tail,
+            logs="",
+            last_checked_at=datetime.now(timezone.utc),
+        )
+    cname = row.container_name or slot_container_name(row.engine, slot_key)
+    csum = inspector.get_by_name(cname) if inspector.is_available else None
+    logs = inspector.tail_logs(csum.id, tail=bounded_tail) if csum else ""
+    return RuntimeLogs(
+        engine=row.engine,
+        container_name=cname,
+        container_status=csum.status if csum else None,
+        tail=bounded_tail,
+        logs=logs,
         last_checked_at=datetime.now(timezone.utc),
     )
 
@@ -215,8 +325,9 @@ def tail_container_logs(tail: int = 300) -> RuntimeLogs:
 
 
 async def attach_run_metadata(session: AsyncSession, snap: RuntimeSnapshot) -> RuntimeSnapshot:
-    """Attach last web-requested preset/model to a runtime snapshot."""
-
+    """Attach last web-requested preset/model; prefer **engine_slots** when present."""
+    if snap.slots:
+        return snap
     query = select(EngineRun).where(EngineRun.observed_status != RunStatus.STOPPED)
     if snap.engine:
         query = query.where(EngineRun.engine == snap.engine)

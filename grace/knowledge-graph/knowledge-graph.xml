@@ -1,5 +1,5 @@
 <KnowledgeGraph>
-  <Project NAME="slgpu" VERSION="3.3.6">
+  <Project NAME="slgpu" VERSION="3.4.0">
     <keywords>slgpu, vllm, sglang, llm-inference, benchmark, docker-compose, gpu, prometheus, grafana, sglang-dashboard-slgpu, sglangdash2-slgpu</keywords>
     <annotation>Стенд для сравнения движков LLM-инференса vLLM и SGLang на Linux-сервере с NVIDIA GPU.</annotation>
 
@@ -162,7 +162,7 @@
     </M-LOAD>
 
     <M-WEB NAME="WebControlPlane" TYPE="ENTRY_POINT" STATUS="implemented">
-      <purpose>Single-container web control plane: FastAPI + React/Vite, SQLite; стек LLM/monitoring через native docker compose / docker-py; бенч — subprocess scripts; плоский стек в SQLite: таблица stack_params (строка на ключ) + cfg.meta; legacy cfg.stack/cfg.secrets очищаются после миграции; install из main.env.</purpose>
+      <purpose>Single-container web control plane: FastAPI + React/Vite, SQLite; стек LLM: native jobs с docker-py (мультислот vLLM/SGLang, таблица engine_slots) + legacy compose для bash ./slgpu; live GPU: nvidia-smi в эфемерном GPU-контейнере; monitoring — native compose; бенч — subprocess scripts; stack_params + cfg.meta; install из main.env.</purpose>
       <path>web/</path>
       <depends>M-CLI, M-PULL, M-UP, M-DOWN, M-MONITOR</depends>
       <verification-ref>V-M-WEB</verification-ref>
@@ -171,22 +171,29 @@
         <fn-services_stack_config PURPOSE="stack_params (param_key, param_value, is_secret) + cfg.meta; миграция JSON cfg.stack/cfg.secrets → строки; sync_merged_flat (приоритет stack_params), ports_for_probes_sync, presets_dir_sync; init_db: migrate_legacy_json_to_rows, ensure_default_settings, ensure_default_stack_params; ORM app.models.stack_param.StackParam" />
         <fn-api_app_config PURPOSE="GET/POST /app-config/status|install, GET/PATCH /app-config/stack" />
         <fn-api_bench PURPOSE="GET /bench/runs, /runs/{engine}/{ts}/summary; POST scenario|load → native.bench.* jobs" />
-        <fn-api_dashboard PURPOSE="GET /dashboard: metrics, runtime, services, host (collect_host_info: /proc, diskUsage(slgpu_root), nvidia-smi при наличии)" />
+        <fn-api_dashboard PURPOSE="GET /dashboard: metrics, runtime (в т.ч. runtime.slots[]), services, host" />
+        <fn-api_gpu PURPOSE="GET /gpu/state (nvidia-smi CSV + TTL-кэш), GET /gpu/availability (свободные GPU vs engine_slots, suggested блочно)" />
+        <fn-models_engine_slot PURPOSE="app.models.slot.EngineSlot — слот инференса: slot_key, engine, gpu_indices CSV, host_api_port, observed_status" />
+        <fn-services_gpu_state PURPOSE="app.services.gpu_state: nvidia-smi через docker-py DeviceRequest(gpu), invalidate_gpu_state_cache при slot up/down" />
+        <fn-services_gpu_availability PURPOSE="app.services.gpu_availability: available/busy/suggested по host_info + активным EngineSlot" />
+        <fn-services_slot_runtime PURPOSE="app.services.slot_runtime: run_slot_docker, контейнер slgpu-{engine} или slgpu-{engine}-{slot_key}, сеть slgpu" />
         <fn-services_host_info PURPOSE="Снимок ОС/CPU/RAM/диска/NVIDIA для дашборда: docker run с bind /proc,/etc хоста (busybox) и nvidia-smi в GPU-контейнере; fallback — локальный /proc и nvidia-smi в namespace web" />
         <fn-services_compose_exec PURPOSE="async docker compose для LLM и monitoring стеков, subprocess logged" />
-        <fn-services_native_jobs PURPOSE="handle_native_job: llm/monitoring/bench/pull без ./slgpu; native.model.pull — tqdm_class + периодический flush Job.progress/message в SQLite" />
-        <fn-services_slgpu_cli PURPOSE="CliCommand kind=native.* с пустым argv; валидация slug/engine/port/tp" />
+        <fn-services_native_jobs PURPOSE="handle_native_job: native.llm.* → слот default (docker-py); native.slot.up|down|restart с lock resource slot:{key}; native.model.pull, monitoring, bench" />
+        <fn-services_slgpu_cli PURPOSE="CliCommand kind=native.* с пустым argv; resource slot:default|slot:{key}|runtime; валидация slot_key/slug/engine/port/tp" />
         <fn-services_jobs PURPOSE="Job runner: native.* → native_jobs; иначе legacy argv; advisory lock (scope, resource)" />
         <fn-services_docker_client PURPOSE="get_docker_inspector(): get_by_service — label filter, fallback: нормализованные лейблы, имена Compose v1/v2, жёсткие имена slgpu-* и slgpu-monitoring-*" />
         <fn-services_env_files PURPOSE="Парсер и рендер data/presets/<slug>.env, совместимые с serve.sh" />
         <fn-services_presets PURPOSE="Двусторонняя синхронизация Preset DB ↔ data/presets/*.env; POST /presets/import-templates копирует examples/presets/*.env в PRESETS_DIR без перезаписи и импортирует в БД; просмотр/key-value редактирование через GET/PATCH /api/v1/presets/{id}, DELETE удаляет запись и опционально .env, экспорт в .env отдельной операцией" />
         <fn-services_hf_models PURPOSE="Реестр HF моделей и статусы скачивания: GET /models синхронизирует DB с фактическими папками MODELS_DIR/&lt;org&gt;/&lt;repo&gt;; в ответе HFModelOut.pull_progress (активная Job native.model.pull по resource=hf_id); active_pull_jobs_by_resource; PATCH меняет revision/notes, DELETE удаляет запись и опционально локальные веса внутри MODELS_DIR" />
-        <fn-services_runtime PURPOSE="Runtime snapshot/logs: Docker + HTTP пробы; compose project и fallback портов из ports_for_probes_sync(); внутренние URL vllm/sglang с портами из стека" />
+        <fn-services_runtime PURPOSE="snapshot: при активных EngineSlot — пробы по каждому слоту (RuntimeSlotProbe); иначе compose legacy; tail_slot_logs по slot_key; attach_run_metadata" />
+        <fn-api_runtime_slots PURPOSE="GET/POST /runtime/slots, POST /slots/{key}/down|restart, GET slots/{key}/logs; list EngineSlot" />
+        <fn-api_presets_clone PURPOSE="POST /presets/{id}/clone (PresetCloneRequest), flush перед ответом" />
         <fn-services_monitoring PURPOSE="Probe: Docker + HTTP; порта и compose project monitoring из слитого стека (БД)" />
         <fn-services_litellm PURPOSE="LiteLLM HTTP: порт из слитого стека; public URLs из app_settings + ports_for_probes_sync" />
         <fn-services_app_settings PURPOSE="Persistent UI settings в SQLite: /api/v1/settings/public-access хранит публичный server_host для Grafana/Prometheus/Langfuse/LiteLLM ссылок" />
         <fn-core_logging PURPOSE="JSON stdout: один StreamHandler на root; у app/httpx/httpcore/h11/uvicorn*/fastapi/starlette handlers сняты, propagate=True; повторный вызов в startup сбрасывает handler'ы uvicorn" />
-        <fn-frontend_app PURPOSE="React SPA: Dashboard (блок Сервер: CPU/RAM/диск/GPU), Models (прогресс pull в строке таблицы), Presets, Runtime, Monitoring, LiteLLM, Jobs (модалка), Benchmarks (поля engine/preset из /runtime/snapshot; отчёт summary.json в модалке BenchSummaryView), Settings; бренд develonica.ru/guideline" />
+        <fn-frontend_app PURPOSE="React SPA: Dashboard (Сервер + GPU live по /gpu/state, привязка пресета к индексам из runtime.slots), Presets (клонирование), Inference/Runtime (карточки слотов, матрица GPU, диалог нового слота), Models, Monitoring, LiteLLM, Jobs, Benchmarks, Settings" />
         <export-web-image PURPOSE="slgpu-web:dev, подъём: ./slgpu web up; тома: repo root по тому же абсолютному хост-пути (SLGPU_HOST_REPO=$(pwd) в scripts/cmd_web.sh), ./data/web, ./data/models, docker.sock; entrypoint chown'ит /data и ${WEB_SLGPU_ROOT}/data/{models,presets} под uid 10001; working_dir из compose НЕ задаётся (uvicorn стартует из WORKDIR /srv/app в Dockerfile.web); huggingface_hub[cli] + hf_transfer установлены для slgpu pull, HF_HOME=/data/huggingface и /home/slgpuweb writable; критично для команд из web → docker compose monitoring/llm с корректными bind-маунтами" />
         <export-contract PURPOSE="web/CONTRACT.md — границы CLI/Docker API/SQLite" />
       </annotations>

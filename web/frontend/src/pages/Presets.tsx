@@ -2,13 +2,20 @@ import { Fragment, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
-import type { Preset, PresetImportTemplatesResult, PresetSyncResult } from "@/api/types";
+import type {
+  Preset,
+  PresetCloneRequest,
+  PresetImportTemplatesResult,
+  PresetSyncResult,
+} from "@/api/types";
+import { Modal } from "@/components/Modal";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
 import { StatusBadge } from "@/components/StatusBadge";
 import {
   IconActionButton,
   IconArrowUpTray,
+  IconCopy,
   IconEdit,
   IconFileX,
   IconTrash,
@@ -130,6 +137,8 @@ export function PresetsPage() {
   const [error, setError] = useState<string | null>(null);
   const [syncResult, setSyncResult] = useState<PresetSyncResult | null>(null);
   const [templatesResult, setTemplatesResult] = useState<PresetImportTemplatesResult | null>(null);
+  const [cloneSource, setCloneSource] = useState<Preset | null>(null);
+  const [cloneName, setCloneName] = useState("");
 
   const presets = useQuery({
     queryKey: ["presets"],
@@ -202,6 +211,19 @@ export function PresetsPage() {
   const exportPreset = useMutation({
     mutationFn: (id: number) => api.post<Preset>(`/presets/${id}/export`),
     onSuccess: () => {
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: ["presets"] });
+      queryClient.invalidateQueries({ queryKey: ["activity"] });
+    },
+    onError: (err: Error) => setError(err.message),
+  });
+
+  const clonePresetMut = useMutation({
+    mutationFn: ({ id, body }: { id: number; body: PresetCloneRequest }) =>
+      api.post<Preset>(`/presets/${id}/clone`, body),
+    onSuccess: () => {
+      setCloneSource(null);
+      setCloneName("");
       setError(null);
       queryClient.invalidateQueries({ queryKey: ["presets"] });
       queryClient.invalidateQueries({ queryKey: ["activity"] });
@@ -594,6 +616,16 @@ export function PresetsPage() {
                           <IconEdit />
                         </IconActionButton>
                         <IconActionButton
+                          label="Копия пресета в БД"
+                          variant="default"
+                          onClick={() => {
+                            setCloneSource(preset);
+                            setCloneName(`${preset.name}-copy`);
+                          }}
+                        >
+                          <IconCopy />
+                        </IconActionButton>
+                        <IconActionButton
                           label="Экспортировать в .env на диске"
                           variant="default"
                           onClick={() => exportPreset.mutate(preset.id)}
@@ -639,6 +671,49 @@ export function PresetsPage() {
           </div>
         )}
       </Section>
+
+      <Modal
+        title="Копия пресета"
+        subtitle={cloneSource ? `Источник: ${cloneSource.name}` : null}
+        isOpen={cloneSource != null}
+        onClose={() => {
+          setCloneSource(null);
+          setCloneName("");
+        }}
+        actions={
+          <button
+            type="button"
+            className="btn btn--primary"
+            disabled={clonePresetMut.isPending || !cloneName.trim() || !cloneSource}
+            onClick={() => {
+              if (!cloneSource) return;
+              const name = cloneName.trim();
+              if (!name) return;
+              clonePresetMut.mutate({ id: cloneSource.id, body: { name } });
+            }}
+          >
+            {clonePresetMut.isPending ? "Создаём…" : "Создать копию"}
+          </button>
+        }
+      >
+        {cloneSource ? (
+          <div className="form-grid" style={{ marginTop: 12 }}>
+            <div>
+              <label className="label">Новое имя (slug)</label>
+              <input
+                className="input mono"
+                value={cloneName}
+                onChange={(e) => setCloneName(e.target.value)}
+                autoComplete="off"
+              />
+            </div>
+            <p className="section__subtitle" style={{ gridColumn: "1 / -1" }}>
+              Остальные поля копируются с исходного пресета; запись будет{" "}
+              <span className="mono">is_synced=false</span> до экспорта.
+            </p>
+          </div>
+        ) : null}
+      </Modal>
     </>
   );
 }

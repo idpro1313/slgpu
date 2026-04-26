@@ -124,6 +124,7 @@ async def init_db() -> None:
         run,
         service,
         setting,
+        slot,
         stack_param,
     )
     from app.services.stack_config import (

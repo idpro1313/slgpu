@@ -14,14 +14,24 @@ from pathlib import Path
 from typing import Any
 
 import docker
+from sqlalchemy import select
 
 from app.core.config import get_settings
 from app.db.session import session_scope
 from app.models.job import Job, JobStatus
+from app.models.preset import Preset
+from app.models.run import RunStatus
+from app.models.slot import EngineSlot
 from app.services import compose_exec
+from app.services.llm_env import merge_llm_stack_env, parse_gpu_mask
+from app.services.slot_runtime import (
+    internal_api_port_for,
+    run_slot_docker,
+    slot_container_name,
+    stop_all_llm_slots_sync,
+    stop_slot_sync,
+)
 from app.services.stack_config import (
-    parse_dotenv_text,
-    presets_dir_sync,
     sync_merged_flat,
     write_langfuse_litellm_env,
     write_llm_interp_env,
@@ -97,37 +107,6 @@ def _mkdir_data_dirs(root: Path, merged: dict[str, str], log: list[str]) -> None
             log.append(f"[mkdir] {k}={p} err={exc}")
 
 
-def _merge_llm(
-    root: Path,
-    merged: dict[str, str],
-    preset: str,
-    engine: str,
-    port: int | None,
-    tp: int | None,
-) -> dict[str, str]:
-    m = dict(merged)
-    presets_dir = presets_dir_sync()
-    pf = presets_dir / f"{preset}.env"
-    if pf.is_file():
-        m.update(parse_dotenv_text(pf.read_text(encoding="utf-8")))
-    if tp is not None:
-        m["TP"] = str(tp)
-    override_nv = m.get("SLGPU_NVIDIA_VISIBLE_DEVICES", "").strip()
-    if override_nv:
-        m["NVIDIA_VISIBLE_DEVICES"] = override_nv
-    else:
-        try:
-            tpi = int(m.get("TP", "8"))
-        except ValueError:
-            tpi = 8
-        m["NVIDIA_VISIBLE_DEVICES"] = ",".join(str(i) for i in range(max(1, tpi)))
-    if port is not None:
-        m["LLM_API_PORT"] = str(port)
-    elif engine == "sglang" and "LLM_API_PORT" not in m:
-        m["LLM_API_PORT"] = m.get("LLM_API_PORT_SGLANG", "8222")
-    return m
-
-
 def _write_tmp_monitoring_env(root: Path, merged: dict[str, str]) -> Path:
     fd, name = tempfile.mkstemp(prefix="slgpu-mon-", suffix=".env", dir=str(root / "data"))
     os.close(fd)
@@ -168,6 +147,12 @@ async def handle_native_job(job_id: int, command: CliCommand, args: dict[str, An
             code = await _native_llm_down(args, log)
         elif command.kind == "native.llm.restart":
             code = await _native_llm_restart(args, log)
+        elif command.kind == "native.slot.up":
+            code = await _native_slot_up(args, log)
+        elif command.kind == "native.slot.down":
+            code = await _native_slot_down(args, log)
+        elif command.kind == "native.slot.restart":
+            code = await _native_slot_restart(args, log)
         elif command.kind == "native.monitoring.up":
             code = await _native_monitoring_up(log)
         elif command.kind == "native.monitoring.down":
@@ -192,50 +177,218 @@ async def handle_native_job(job_id: int, command: CliCommand, args: dict[str, An
     await _finalize_native_job(job_id, command, code, log)
 
 
-async def _native_llm_up(args: dict[str, Any], log: list[str]) -> int:
+def _list_ints_from_args(raw: Any) -> list[int] | None:
+    if not isinstance(raw, list) or not raw:
+        return None
+    return [int(x) for x in raw]
+
+
+async def _resolve_gpu_indices(
+    preset_name: str, tp_arg: int | None, merged: dict[str, str], log: list[str]
+) -> list[int]:
+    t_default = 8
+    try:
+        t_default = int(merged.get("TP", "8"))
+    except ValueError:
+        t_default = 8
+    async with session_scope() as s:
+        r = await s.execute(select(Preset).where(Preset.name == preset_name))
+        pr = r.scalar_one_or_none()
+    tpi = int(tp_arg) if tp_arg is not None else (int(pr.tp) if pr and pr.tp is not None else t_default)
+    if pr and pr.gpu_mask and str(pr.gpu_mask).strip():
+        parsed = parse_gpu_mask(pr.gpu_mask)
+        if parsed:
+            if len(parsed) == tpi:
+                return parsed
+            log.append(f"[slot] gpu_mask len {len(parsed)} != tp {tpi}, using 0..{tpi-1}")
+    return list(range(tpi))
+
+
+def _default_host_port(merged: dict[str, str], engine: str, port_arg: Any) -> int:
+    if port_arg is not None:
+        return int(port_arg)
+    if engine == "vllm":
+        return int(merged.get("LLM_API_PORT", "8111"))
+    return int(merged.get("LLM_API_PORT", merged.get("LLM_API_PORT_SGLANG", "8222")))
+
+
+async def _db_upsert_slot_after_up(
+    slot_key: str,
+    engine: str,
+    preset: str,
+    host_api_port: int,
+    internal_port: int,
+    gpu_indices: list[int],
+    tp: int,
+    container_id: str,
+    cname: str,
+    hf_id: str | None,
+) -> None:
+    async with session_scope() as s:
+        r = await s.execute(select(EngineSlot).where(EngineSlot.slot_key == slot_key))
+        row = r.scalar_one_or_none()
+        if row is None:
+            row = EngineSlot(
+                slot_key=slot_key,
+                engine=engine,
+                gpu_indices=",".join(str(i) for i in gpu_indices),
+            )
+            s.add(row)
+        row.engine = engine
+        row.preset_name = preset
+        row.hf_id = hf_id
+        row.tp = tp
+        row.gpu_indices = ",".join(str(i) for i in gpu_indices)
+        row.host_api_port = host_api_port
+        row.internal_api_port = internal_port
+        row.container_id = container_id
+        row.container_name = cname
+        row.desired_status = RunStatus.RUNNING
+        row.observed_status = RunStatus.RUNNING
+        row.last_error = None
+        row.stopped_at = None
+        from datetime import datetime, timezone
+
+        row.started_at = datetime.now(timezone.utc)
+
+
+async def _db_mark_slot_failed(slot_key: str, err: str | None) -> None:
+    async with session_scope() as s:
+        r = await s.execute(select(EngineSlot).where(EngineSlot.slot_key == slot_key))
+        row = r.scalar_one_or_none()
+        if row is None:
+            return
+        row.desired_status = RunStatus.FAILED
+        row.observed_status = RunStatus.FAILED
+        row.last_error = (err or "unknown")[:2000]
+        if row.stopped_at is None:
+            from datetime import datetime, timezone
+
+            row.stopped_at = datetime.now(timezone.utc)
+
+
+async def _db_mark_stopped_by_key(slot_key: str) -> None:
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc)
+    async with session_scope() as s:
+        r = await s.execute(select(EngineSlot).where(EngineSlot.slot_key == slot_key))
+        row = r.scalar_one_or_none()
+        if row is None:
+            return
+        row.desired_status = RunStatus.STOPPED
+        row.observed_status = RunStatus.STOPPED
+        row.stopped_at = now
+        row.container_id = None
+        row.container_name = None
+
+
+async def _db_mark_all_llm_stopped() -> None:
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc)
+    active = (RunStatus.STARTING, RunStatus.REQUESTED, RunStatus.RUNNING, RunStatus.DEGRADED)
+    async with session_scope() as s:
+        res = await s.execute(select(EngineSlot).where(EngineSlot.observed_status.in_(active)))
+        for row in res.scalars().all():
+            row.desired_status = RunStatus.STOPPED
+            row.observed_status = RunStatus.STOPPED
+            row.stopped_at = now
+            row.container_id = None
+            row.container_name = None
+
+
+async def _native_slot_up(args: dict[str, Any], log: list[str]) -> int:
+    """Docker-py slot: ``gpu_indices`` in args, or from preset/TP; ``host_api_port`` required for slot API."""
     settings = get_settings()
     root = settings.slgpu_root
     merged = sync_merged_flat()
-    engine = str(args.get("engine", "vllm"))
-    preset = str(args.get("preset", ""))
-    port = args.get("port")
-    tp = args.get("tp")
-    port_i = int(port) if port is not None else None
-    tp_i = int(tp) if tp is not None else None
-    m = _merge_llm(root, merged, preset, engine, port_i, tp_i)
-    log.append(
-        f"[llm] up {engine} preset={preset} port={m.get('LLM_API_PORT')} TP={m.get('TP')} GPUs={m.get('NVIDIA_VISIBLE_DEVICES')}"
-    )
-
     (root / "data").mkdir(parents=True, exist_ok=True)
-    fd, interp_name = tempfile.mkstemp(prefix="slgpu-llm-", suffix=".env", dir=str(root / "data"))
-    os.close(fd)
-    interp = Path(interp_name)
-    write_llm_interp_env(interp, m)
-
-    await compose_exec.ensure_slgpu_network(log)
     _mkdir_data_dirs(root, merged, log)
 
-    for op in (
-        ("stop", "vllm", "sglang"),
-        ("rm", "-f", "vllm", "sglang"),
-    ):
-        c, o, e = await compose_exec.compose_llm_env(root, interp, "-f", _LL_YML, *op)
-        log.append(o.strip())
-        if e.strip():
-            log.append(e.strip())
-    profile = "vllm" if engine == "vllm" else "sglang"
-    c, o, e = await compose_exec.compose_llm_env(
-        root, interp, "-f", _LL_YML, "--profile", profile, "up", "-d"
+    slot_key = str(args.get("slot_key", "default"))
+    engine = str(args.get("engine", "vllm"))
+    preset = str(args.get("preset", ""))
+    port_arg = args.get("port")
+    tp = args.get("tp")
+    tp_i = int(tp) if tp is not None else None
+    if "host_api_port" in args and args.get("host_api_port") is not None:
+        host_api_port = int(args["host_api_port"])
+    else:
+        host_api_port = _default_host_port(merged, engine, port_arg)
+
+    gpu_indices: list[int] | None = _list_ints_from_args(args.get("gpu_indices"))
+    if gpu_indices is None:
+        gpu_indices = await _resolve_gpu_indices(preset, tp_i, merged, log)
+    t_eff = len(gpu_indices)
+    if tp_i is not None and t_eff != tp_i:
+        log.append(f"[slot] override TP to match gpu list: {t_eff} (arg was {tp_i})")
+    m = merge_llm_stack_env(root, dict(merged), preset, engine, None, t_eff, gpu_indices)
+    log.append(
+        f"[slot] up {slot_key} {engine} preset={preset} port={host_api_port} "
+        f"TP={m.get('TP')} GPUs={m.get('NVIDIA_VISIBLE_DEVICES')}"
     )
-    log.append(o.strip())
-    if e.strip():
-        log.append(e.strip())
-    try:
-        interp.unlink(missing_ok=True)
-    except OSError:
-        pass
-    return 0 if c == 0 else c
+
+    async with session_scope() as s:
+        prq = await s.execute(select(Preset).where(Preset.name == preset))
+        pr = prq.scalar_one_or_none()
+    hf_id = pr.hf_id if pr else None
+    int_port = internal_api_port_for(engine)
+
+    res = await run_slot_docker(
+        root=root,
+        slot_key=slot_key,
+        engine=engine,
+        preset=preset,
+        host_api_port=host_api_port,
+        gpu_indices=gpu_indices,
+        tp=t_eff,
+        log=log,
+    )
+    if not res.get("ok"):
+        err = res.get("error", "start failed")
+        log.append(f"[slot] {err}")
+        await _db_mark_slot_failed(slot_key, str(err))
+        return 1
+    cid = str(res.get("container_id") or "")
+    cname = str(res.get("container_name") or slot_container_name(engine, slot_key))
+    await _db_upsert_slot_after_up(
+        slot_key,
+        engine,
+        preset,
+        host_api_port,
+        int_port,
+        gpu_indices,
+        t_eff,
+        cid,
+        cname,
+        hf_id,
+    )
+    return 0
+
+
+async def _native_llm_up(args: dict[str, Any], log: list[str]) -> int:
+    u = {**args, "slot_key": "default", "host_api_port": _default_host_port(sync_merged_flat(), str(args.get("engine", "vllm")), args.get("port"))}
+    u.pop("port", None)
+    return await _native_slot_up(u, log)
+
+
+async def _native_slot_down(args: dict[str, Any], log: list[str]) -> int:
+    settings = get_settings()
+    root = settings.slgpu_root
+    _ = root
+    slot_key = str(args.get("slot_key", "default"))
+    engine = str(args.get("engine", "vllm"))
+    cname: str
+    async with session_scope() as s:
+        r = await s.execute(select(EngineSlot).where(EngineSlot.slot_key == slot_key))
+        row = r.scalar_one_or_none()
+    if row is not None and row.engine:
+        engine = row.engine
+    cname = slot_container_name(engine, slot_key)
+    await asyncio.to_thread(stop_slot_sync, cname, log)
+    await _db_mark_stopped_by_key(slot_key)
+    return 0
 
 
 async def _native_llm_down(args: dict[str, Any], log: list[str]) -> int:
@@ -247,62 +400,84 @@ async def _native_llm_down(args: dict[str, Any], log: list[str]) -> int:
         log.append(o + e)
         c2, o2, e2 = await compose_exec.compose_inherit_env(root, "-f", _MON_YML, "stop")
         log.append(o2 + e2)
+        await _db_mark_all_llm_stopped()
         return 0 if c == 0 and c2 == 0 else 1
-    c, o, e = await compose_exec.compose_inherit_env(root, "-f", _LL_YML, "stop", "vllm", "sglang")
-    log.append(o + e)
-    c2, o2, e2 = await compose_exec.compose_inherit_env(
-        root, "-f", _LL_YML, "rm", "-f", "vllm", "sglang"
-    )
-    log.append(o2 + e2)
-    return 0 if c == 0 else c
+    code = await asyncio.to_thread(stop_all_llm_slots_sync, log)
+    await _db_mark_all_llm_stopped()
+    return int(code)
 
 
-async def _detect_engine(root: Path, log: list[str]) -> str | None:
-    proc = await asyncio.create_subprocess_exec(
-        "docker",
-        "compose",
-        "--project-directory",
-        str(root),
-        "-f",
-        _LL_YML,
-        "ps",
-        "--status",
-        "running",
-        "--format",
-        "{{.Service}}",
-        cwd=str(root),
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        env=None,
-    )
-    out_b, _ = await proc.communicate()
-    text = out_b.decode("utf-8", errors="replace")
-    for line in text.splitlines():
-        s = line.strip().lower()
-        if s == "vllm":
-            log.append("[restart] detected vllm")
-            return "vllm"
-        if s == "sglang":
-            log.append("[restart] detected sglang")
-            return "sglang"
+async def _find_engine_for_default_restart(log: list[str]) -> str | None:
+    async with session_scope() as s:
+        r = await s.execute(
+            select(EngineSlot)
+            .where(EngineSlot.slot_key == "default")
+            .where(EngineSlot.observed_status == RunStatus.RUNNING)
+        )
+        row = r.scalar_one_or_none()
+    if row and row.engine:
+        log.append(f"[restart] engine from engine_slots: {row.engine}")
+        return row.engine
     return None
 
 
 async def _native_llm_restart(args: dict[str, Any], log: list[str]) -> int:
-    settings = get_settings()
-    root = settings.slgpu_root
-    engine = await _detect_engine(root, log)
+    engine = await _find_engine_for_default_restart(log)
     if not engine:
-        log.append("[restart] no running engine")
-        return 1
+        log.append("[restart] no engine in slot default; try vllm")
+        engine = "vllm"
     merged = sync_merged_flat()
     preset = str(args.get("preset", ""))
     tp = args.get("tp")
-    tp_i = int(tp) if tp is not None else None
-    port_s = merged.get("LLM_API_PORT", "8111" if engine == "vllm" else "8222")
-    port_i = int(port_s)
-    up_args = {"engine": engine, "preset": preset, "port": port_i, "tp": tp_i}
-    return await _native_llm_up(up_args, log)
+    port_i: int
+    async with session_scope() as s:
+        r = await s.execute(select(EngineSlot).where(EngineSlot.slot_key == "default"))
+        sl = r.scalar_one_or_none()
+    if sl and sl.host_api_port:
+        port_i = int(sl.host_api_port)
+    else:
+        port_i = int(merged.get("LLM_API_PORT", "8111" if engine == "vllm" else "8222"))
+    await _native_slot_down({"slot_key": "default", "engine": engine}, log)
+    up_args: dict[str, Any] = {
+        "slot_key": "default",
+        "engine": engine,
+        "preset": preset,
+        "host_api_port": port_i,
+        "tp": tp,
+    }
+    return await _native_slot_up(up_args, log)
+
+
+async def _native_slot_restart(args: dict[str, Any], log: list[str]) -> int:
+    slot_key = str(args.get("slot_key", "default"))
+    preset = str(args.get("preset", ""))
+    async with session_scope() as s:
+        r = await s.execute(select(EngineSlot).where(EngineSlot.slot_key == slot_key))
+        sl = r.scalar_one_or_none()
+    if not sl:
+        log.append(f"[slot] restart: unknown {slot_key}")
+        return 1
+    host_api_port = int(
+        args.get("host_api_port")
+        or sl.host_api_port
+        or _default_host_port(sync_merged_flat(), sl.engine, None)
+    )
+    tp = args.get("tp", sl.tp)
+    g = _list_ints_from_args(args.get("gpu_indices"))
+    if g is None and sl.gpu_indices:
+        g = [int(x) for x in str(sl.gpu_indices).split(",") if x.strip().isdigit()]
+    d_args = {"slot_key": slot_key, "engine": sl.engine}
+    await _native_slot_down(d_args, log)
+    up: dict[str, Any] = {
+        "slot_key": slot_key,
+        "engine": sl.engine,
+        "preset": preset or (sl.preset_name or ""),
+        "host_api_port": host_api_port,
+        "tp": tp,
+    }
+    if g:
+        up["gpu_indices"] = g
+    return await _native_slot_up(up, log)
 
 
 async def _monitoring_bootstrap(root: Path, env_file: Path, log: list[str]) -> None:
@@ -632,7 +807,7 @@ async def _native_bench_scenario(args: dict[str, Any], log: list[str]) -> int:
     preset = str(args.get("preset", ""))
     rounds = int(args.get("rounds", 1))
     warmup = int(args.get("warmup_requests", 3))
-    m = _merge_llm(root, merged, preset, engine, None, None)
+    m = merge_llm_stack_env(root, merged, preset, engine, None, None, None)
     from datetime import datetime as dt
 
     ts = dt.utcnow().strftime("%Y%m%d_%H%M%S")
@@ -672,7 +847,7 @@ async def _native_bench_load(args: dict[str, Any], log: list[str]) -> int:
     merged = sync_merged_flat()
     engine = str(args.get("engine", "vllm"))
     preset = str(args.get("preset", ""))
-    m = _merge_llm(root, merged, preset, engine, None, None)
+    m = merge_llm_stack_env(root, merged, preset, engine, None, None, None)
     from datetime import datetime as dt
 
     ts = dt.utcnow().strftime("%Y%m%d_%H%M%S")

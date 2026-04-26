@@ -47,6 +47,16 @@ class PresetUpdate(BaseModel):
     is_active: bool | None = None
 
 
+class PresetCloneRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=64)
+    description: str | None = None
+    hf_id: str | None = None
+    tp: int | None = None
+    gpu_mask: str | None = None
+    served_model_name: str | None = None
+    parameters: dict[str, Any] | None = None
+
+
 class PresetSyncResult(BaseModel):
     imported: int
     updated: int

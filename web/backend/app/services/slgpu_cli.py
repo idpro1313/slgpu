@@ -13,6 +13,7 @@ from app.core.security import (
     validate_engine,
     validate_port,
     validate_revision,
+    validate_slot_key,
     validate_slug,
     validate_slug_or_hf_id,
     validate_tp,
@@ -59,8 +60,74 @@ def cmd_up(
         kind="native.llm.up",
         argv=[],
         scope="engine",
-        resource="runtime",
+        resource="slot:default",
         summary=f"up {engine} -m {preset}",
+    )
+
+
+def cmd_slot_up(
+    slgpu_root: Path,
+    *,
+    slot_key: str,
+    engine: str,
+    preset: str,
+    host_api_port: int,
+    gpu_indices: list[int],
+    tp: int | None = None,
+) -> CliCommand:
+    engine = validate_engine(engine)
+    slot_key = validate_slot_key(slot_key)
+    validate_slug(preset)
+    validate_port(host_api_port)
+    if not gpu_indices or not all(isinstance(i, int) and i >= 0 for i in gpu_indices):
+        raise ValidationError("gpu_indices must be a non-empty list of non-negative int")
+    if tp is not None:
+        validate_tp(tp)
+    return CliCommand(
+        kind="native.slot.up",
+        argv=[],
+        scope="engine",
+        resource=f"slot:{slot_key}",
+        summary=f"slot up {slot_key} {engine} -m {preset} gpus={gpu_indices}",
+    )
+
+
+def cmd_slot_down(slgpu_root: Path, *, slot_key: str) -> CliCommand:  # noqa: ARG001
+    slot_key = validate_slot_key(slot_key)
+    return CliCommand(
+        kind="native.slot.down",
+        argv=[],
+        scope="engine",
+        resource=f"slot:{slot_key}",
+        summary=f"slot down {slot_key}",
+    )
+
+
+def cmd_slot_restart(
+    slgpu_root: Path,
+    *,
+    slot_key: str,
+    preset: str,
+    host_api_port: int | None = None,
+    tp: int | None = None,
+    gpu_indices: list[int] | None = None,
+) -> CliCommand:  # noqa: ARG001
+    slot_key = validate_slot_key(slot_key)
+    validate_slug(preset)
+    if host_api_port is not None:
+        validate_port(host_api_port)
+    if tp is not None:
+        validate_tp(tp)
+    if gpu_indices is not None and (
+        not gpu_indices or not all(isinstance(i, int) and i >= 0 for i in gpu_indices)
+    ):
+        raise ValidationError("gpu_indices must be a non-empty list of non-negative int")
+    return CliCommand(
+        kind="native.slot.restart",
+        argv=[],
+        scope="engine",
+        resource=f"slot:{slot_key}",
+        summary=f"slot restart {slot_key} -m {preset}",
     )
 
 
@@ -82,7 +149,7 @@ def cmd_restart(slgpu_root: Path, preset: str, tp: int | None = None) -> CliComm
         kind="native.llm.restart",
         argv=[],
         scope="engine",
-        resource="runtime",
+        resource="slot:default",
         summary=f"restart -m {preset}",
     )
 

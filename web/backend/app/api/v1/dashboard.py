@@ -86,6 +86,22 @@ async def dashboard(
             "served_models": runtime.served_models,
             "metrics_available": runtime.metrics_available,
             "last_checked_at": runtime.last_checked_at,
+            "slots": [
+                {
+                    "slot_key": s.slot_key,
+                    "engine": s.engine,
+                    "preset_name": s.preset_name,
+                    "hf_id": s.hf_id,
+                    "api_port": s.api_port,
+                    "tp": s.tp,
+                    "gpu_indices": s.gpu_indices,
+                    "container_status": s.container_status,
+                    "container_name": s.container_name,
+                    "served_models": s.served_models,
+                    "metrics_available": s.metrics_available,
+                }
+                for s in runtime.slots
+            ],
         },
         "services": [
             {

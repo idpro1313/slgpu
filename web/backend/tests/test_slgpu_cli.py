@@ -43,7 +43,7 @@ def test_cmd_up_native():
     assert cmd.argv == []
     assert cmd.kind == "native.llm.up"
     assert cmd.scope == "engine"
-    assert cmd.resource == "runtime"
+    assert cmd.resource == "slot:default"
 
 
 def test_cmd_up_with_port_and_tp_still_native():
@@ -68,7 +68,7 @@ def test_cmd_restart_native():
     cmd = cmd_restart(_root(), "qwen3.6-35b-a3b", tp=4)
     assert cmd.argv == []
     assert cmd.kind == "native.llm.restart"
-    assert cmd.resource == "runtime"
+    assert cmd.resource == "slot:default"
 
 
 @pytest.mark.parametrize("action", ["up", "down", "restart", "fix-perms"])

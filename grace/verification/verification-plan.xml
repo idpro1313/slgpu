@@ -1,0 +1,312 @@
+<VerificationPlan VERSION="2.3.0">
+  <GlobalPolicy>
+    <log-format>[Module][function][BLOCK_NAME] message</log-format>
+    <deterministic-first>true</deterministic-first>
+    <module-level-focus>Синтаксическая проверка shellcheck и py_compile.</module-level-focus>
+    <wave-level-focus>Проверка слияния env (пресеты вручную) и скачивания весов.</wave-level-focus>
+    <phase-level-focus>Интеграционный запуск: `./slgpu up` + API check + `./slgpu bench`.</phase-level-focus>
+    <redaction>Never log HF_TOKEN, Grafana passwords, raw request payloads.</redaction>
+  </GlobalPolicy>
+
+  <CriticalFlows>
+    <VF-001 NAME="CoreHappyPath" USE_CASES="UC-003, UC-005, UC-006" DATA_FLOW="DF-ENGINE-UP, DF-BENCH" PRIORITY="high">
+      <scenario>Оператор запускает движок и бенчмаркит.</scenario>
+      <expected-outcome>Создан `bench/results/&lt;engine&gt;/&lt;timestamp&gt;/summary.json`.</expected-outcome>
+      <required-signals>
+        <log-marker>[BENCH][bench_openai][BLOCK_RUN_SCENARIO] completed</log-marker>
+        <trace-sequence>BLOCK_LOAD_ENV -> BLOCK_COMPOSE_UP -> (API вручную) -> BLOCK_RUN_SCENARIO</trace-sequence>
+      </required-signals>
+    </VF-001>
+
+    <VF-003 NAME="ModelPull" USE_CASES="UC-002" DATA_FLOW="DF-MODEL-PULL" PRIORITY="medium">
+      <scenario>Загрузка весов по существующему пресету или по HF id (пресет вручную при необходимости).</scenario>
+      <expected-outcome>Веса в `${MODELS_DIR}`; для up — `configs/models/*.env` вручную или из репо.</expected-outcome>
+      <required-signals>
+        <log-marker>[PULL][cmd_pull][BLOCK_DOWNLOAD] completed</log-marker>
+        <trace-sequence>BLOCK_LOAD_ENV? -> BLOCK_DOWNLOAD</trace-sequence>
+      </required-signals>
+    </VF-003>
+  </CriticalFlows>
+
+  <ModuleVerification>
+    <V-M-CLI MODULE="M-CLI" PRIORITY="medium">
+      <test-files>
+        <file>tests/test_cli.sh</file>
+      </test-files>
+      <module-checks>
+        <check-1>shellcheck slgpu</check-1>
+        <check-2>test -x slgpu</check-2>
+      </module-checks>
+      <scenarios>
+        <scenario-1 kind="success">Корректная команда делегируется в cmd_*.sh.</scenario-1>
+        <scenario-2 kind="failure">Неизвестная команда возвращает exit 1 с help.</scenario-2>
+      </scenarios>
+      <required-log-markers>
+        <marker-1>[CLI][main][BLOCK_DISPATCH]</marker-1>
+      </required-log-markers>
+      <required-trace-assertions>
+        <assertion-1>Неизвестная команда не вызывает cmd_*.sh.</assertion-1>
+      </required-trace-assertions>
+    </V-M-CLI>
+
+    <V-M-LIB MODULE="M-LIB" PRIORITY="high">
+      <test-files>
+        <file>tests/test_lib.sh</file>
+      </test-files>
+      <module-checks>
+        <check-1>shellcheck scripts/_lib.sh</check-1>
+      </module-checks>
+      <scenarios>
+        <scenario-1 kind="success">Загрузка env объединяет `main.env` и пресет.</scenario-1>
+        <scenario-2 kind="success">`slgpu_hf_id_to_slug` для известного HF id даёт ожидаемый slug (например `Qwen/Qwen3` → `qwen3`).</scenario-2>
+        <scenario-3 kind="failure">Отсутствующий пресет вызывает ошибку.</scenario-3>
+      </scenarios>
+      <required-log-markers>
+        <marker-1>[LIB][slgpu_load_env][BLOCK_LOAD_ENV]</marker-1>
+      </required-log-markers>
+    </V-M-LIB>
+
+    <V-M-PULL MODULE="M-PULL" PRIORITY="medium">
+      <test-files>
+        <file>tests/test_pull.sh</file>
+      </test-files>
+      <module-checks>
+        <check-1>shellcheck scripts/cmd_pull.sh</check-1>
+      </module-checks>
+      <scenarios>
+        <scenario-1 kind="success">HF ID с «/» и существующим `configs/models/&lt;slug&gt;.env` — `hf download` с полями пресета; без пресета — только `hf download` по id (пресет не создаётся).</scenario-1>
+        <scenario-2 kind="success">Slug без `/` использует существующий пресет.</scenario-2>
+        <scenario-3 kind="failure">Отсутствующий slug без `/` сообщает об ошибке.</scenario-3>
+      </scenarios>
+    </V-M-PULL>
+
+    <V-M-UP MODULE="M-UP" PRIORITY="high">
+      <test-files>
+        <file>tests/test_up.sh</file>
+      </test-files>
+      <module-checks>
+        <check-1>shellcheck scripts/cmd_up.sh</check-1>
+      </module-checks>
+      <scenarios>
+        <scenario-1 kind="success">Запуск vLLM с корректным пресетом: compose up завершается; готовность API — отдельно (`curl` / `docker compose logs`).</scenario-1>
+        <scenario-2 kind="success">Запуск SGLang с корректным пресетом: аналогично.</scenario-2>
+        <scenario-3 kind="failure">Некорректный пресет = ошибка до запуска compose.</scenario-3>
+      </scenarios>
+    </V-M-UP>
+
+    <V-M-DOWN MODULE="M-DOWN" PRIORITY="medium">
+      <test-files>
+        <file>tests/test_down.sh</file>
+      </test-files>
+      <module-checks>
+        <check-1>shellcheck scripts/cmd_down.sh</check-1>
+        <check-1>shellcheck scripts/cmd_monitoring.sh</check-1>
+        <check-1>shellcheck scripts/monitoring_fix_permissions.sh</check-1>
+      </module-checks>
+      <scenarios>
+        <scenario-1 kind="success">`down` останавливает vllm/sglang, monitoring остаётся.</scenario-1>
+        <scenario-2 kind="success">`down --all` останавливает все сервисы.</scenario-2>
+      </scenarios>
+    </V-M-DOWN>
+
+    <V-M-BENCH MODULE="M-BENCH" PRIORITY="high">
+      <test-files>
+        <file>tests/test_bench.sh</file>
+      </test-files>
+      <module-checks>
+        <check-1>python -m py_compile scripts/bench_openai.py</check-1>
+        <check-2>shellcheck scripts/cmd_bench.sh</check-2>
+      </module-checks>
+      <scenarios>
+        <scenario-1 kind="success">Бенчмарк с валидным API возвращает summary.json.</scenario-1>
+        <scenario-2 kind="failure">Бенчмарк без доступного API завершается с ошибкой.</scenario-2>
+        <scenario-3 kind="success">Адаптация max_tokens при prompt + max_tokens > MAX_MODEL_LEN.</scenario-3>
+      </scenarios>
+      <required-log-markers>
+        <marker-1>[BENCH][bench_openai][BLOCK_RUN_SCENARIO]</marker-1>
+      </required-log-markers>
+    </V-M-BENCH>
+
+    <V-M-DOCKER MODULE="M-DOCKER" PRIORITY="high">
+      <test-files>
+        <file>tests/test_compose.sh</file>
+      </test-files>
+      <module-checks>
+        <check-1>docker compose -f docker/docker-compose.llm.yml config; docker compose -f docker/docker-compose.monitoring.yml config</check-1>
+        <check-2>shellcheck scripts/serve.sh</check-2>
+      </module-checks>
+      <scenarios>
+        <scenario-1 kind="success">`docker compose config` валиден для vllm профиля.</scenario-1>
+        <scenario-2 kind="success">`docker compose config` валиден для sglang профиля.</scenario-2>
+        <scenario-3 kind="success">`serve.sh` формирует корректную CLI-команду.</scenario-3>
+      </scenarios>
+    </V-M-DOCKER>
+
+    <V-M-MONITOR MODULE="M-MONITOR" PRIORITY="medium">
+      <test-files>
+        <file>tests/test_monitor.sh</file>
+      </test-files>
+      <module-checks>
+        <check-1>promtool check config configs/monitoring/prometheus/prometheus.yml</check-1>
+        <check-2>JSON: валидный parse для grafana/provisioning/dashboards/json/*.json (sglang-dashboard-slgpu, sglangdash2-slgpu, vllmdash2, slgpu-overview)</check-2>
+        <check-3>python -m py_compile configs/monitoring/grafana/provisioning/dashboards/json/_build_sglangdash2.py</check-3>
+      </module-checks>
+      <scenarios>
+        <scenario-1 kind="success">Prometheus targets UP при запущенном движке.</scenario-1>
+        <scenario-2 kind="success">Grafana provisioning: datasource uid prometheus + JSON-дашборды из dashboards/json/ подхватываются.</scenario-2>
+        <scenario-3 kind="success">SGLang-дашборды: запросы с `sglang:` и `job="sglang"` согласованы с README.</scenario-3>
+        <scenario-4 kind="success">Первый `./slgpu monitoring up` запускает bootstrap profile для `minio-bucket-init` и `litellm-pg-init`, создаёт marker-файлы; последующие `up/restart` не пересоздают init-контейнеры.</scenario-4>
+        <scenario-5 kind="failure">GPU температура &gt; 85°C → алерт срабатывает (эмуляция).</scenario-5>
+      </scenarios>
+    </V-M-MONITOR>
+
+    <V-M-MODELS MODULE="M-MODELS" PRIORITY="medium">
+      <test-files>
+        <file>tests/test_models.sh</file>
+      </test-files>
+      <module-checks>
+        <check-1>Каждый `.env` в configs/models/ содержит MODEL_ID и TP</check-1>
+      </module-checks>
+      <scenarios>
+        <scenario-1 kind="success">Пресет Qwen3.6 (репо) согласован с таблицей парсеров в README.</scenario-1>
+        <scenario-2 kind="success">Пресет/док gpt-oss: TOOL_CALL_PARSER=openai при использовании.</scenario-2>
+      </scenarios>
+    </V-M-MODELS>
+
+    <V-M-LOAD MODULE="M-LOAD" PRIORITY="high">
+      <test-files>
+        <file>tests/test_load.sh</file>
+      </test-files>
+      <module-checks>
+        <check-1>python -m py_compile scripts/bench_load.py</check-1>
+        <check-2>shellcheck scripts/cmd_load.sh</check-2>
+      </module-checks>
+      <scenarios>
+        <scenario-1 kind="success">CSV time_series содержит столбцы timestamp, phase, throughput_rps, ttft_p50_ms.</scenario-1>
+        <scenario-2 kind="success">summary.json содержит total_duration_sec, throughput_rps, error_rate.</scenario-2>
+        <scenario-3 kind="success">users.jsonl содержит по записи на каждого виртуального пользователя.</scenario-3>
+        <scenario-4 kind="failure">При ошибке API error_rate > 0 и summary.json содержит err_requests.</scenario-4>
+      </scenarios>
+      <required-log-markers>
+        <marker-1>[LOAD][LoadTestRunner][BLOCK_COLLECT_METRICS]</marker-1>
+      </required-log-markers>
+      <required-trace-assertions>
+        <assertion-1>ramp_up активные пользователи монотонно растут до --users.</assertion-1>
+        <assertion-2>steady active_users == --users на протяжении steady фазы.</assertion-2>
+        <assertion-3>ramp_down активные пользователи монотонно падают до 0.</assertion-3>
+      </required-trace-assertions>
+    </V-M-LOAD>
+
+    <V-M-WEB MODULE="M-WEB" PRIORITY="high">
+      <test-files>
+        <file>web/backend/tests/test_security.py</file>
+        <file>web/backend/tests/test_env_files.py</file>
+        <file>web/backend/tests/test_slgpu_cli.py</file>
+        <file>web/backend/tests/test_jobs_runner.py</file>
+        <file>web/backend/tests/test_api_smoke.py</file>
+        <file>web/backend/tests/test_gpu_state.py</file>
+        <file>web/backend/tests/test_gpu_availability.py</file>
+        <file>web/backend/tests/test_slots_runtime.py</file>
+        <file>web/backend/tests/test_preset_clone.py</file>
+      </test-files>
+      <module-checks>
+        <check-1>python -c "import compileall, sys; sys.exit(0 if compileall.compile_dir('web/backend/app', quiet=1) else 1)"</check-1>
+        <check-2>cd web/backend &amp;&amp; pytest -q</check-2>
+        <check-3>cd web/frontend &amp;&amp; npm run typecheck</check-3>
+        <check-4>docker compose -f docker/docker-compose.web.yml config</check-4>
+      </module-checks>
+      <scenarios>
+        <scenario-1 kind="success">Whitelist в app.core.security принимает legitimate slug/HF id и отвергает строки с пробелами/`;`/`&amp;`.</scenario-1>
+        <scenario-2 kind="success">Парсинг существующих configs/models/*.env возвращает MODEL_ID и набор runtime ключей.</scenario-2>
+        <scenario-3 kind="success">slgpu_cli: kind `native.*`, пустой `argv`; pull/up/down/restart/monitoring проходят валидацию.</scenario-3>
+        <scenario-4 kind="success">Job runner устанавливает advisory lock и вторая операция на тот же scope/resource падает с JobConflictError (HTTP 409).</scenario-4>
+        <scenario-5 kind="success">FastAPI app стартует, /healthz возвращает 200 и версию из app.__version__.</scenario-5>
+        <scenario-6 kind="failure">Невалидный action в /api/v1/monitoring/action возвращает 400.</scenario-6>
+        <scenario-7 kind="success">SLGPU_HOST_REPO экспортирован cmd_web.sh; в `docker compose config` для docker-compose.web.yml видны volume `${SLGPU_HOST_REPO}:${SLGPU_HOST_REPO}` и WEB_SLGPU_ROOT = тот же путь (working_dir в compose НЕ задаётся — uvicorn стартует из WORKDIR /srv/app); запуск `./slgpu monitoring up` из web не создаёт каталогов на месте файлов конфигов/скриптов monitoring.</scenario-7>
+        <scenario-8 kind="success">В образе slgpu-web:dev доступна команда `hf` (`docker compose -f docker/docker-compose.web.yml exec slgpu-web hf --help`), `HF_HOME` указывает на writable `/data/huggingface`, а `slgpu pull qwen3.6-35b-a3b` из web запускается без ошибок «Не найдена команда «hf»», `Permission denied: /home/slgpuweb`, относительного `data/models/.../.cache` и отсутствующего каталога `--local-dir` модели.</scenario-8>
+        <scenario-9 kind="success">`GET /api/v1/models` обнаруживает реальные каталоги `${MODELS_DIR}/&lt;org&gt;/&lt;repo&gt;` без зависимости от наличия пресета и возвращает статус `ready`, если есть `config.json` и файлы весов.</scenario-9>
+        <scenario-10 kind="success">`PATCH /api/v1/presets/{id}` обновляет HF ID, TP и key/value параметры пресета, помечает запись как drift; UI открывает выбранный пресет, редактирует параметры без raw JSON и отдельно экспортирует в `.env`.</scenario-10>
+        <scenario-11 kind="success">`POST /api/v1/runtime/up` создаёт активный `EngineRun`, а `GET /api/v1/runtime/snapshot` возвращает `preset_name`, `hf_id` и `tp`; Runtime/Dashboard показывают эти поля вместе с engine и served models.</scenario-11>
+        <scenario-12 kind="success">`GET /api/v1/runtime/logs?tail=N` возвращает tail stdout/stderr текущего контейнера vLLM/SGLang; Runtime UI отображает лог и обновляет его периодически.</scenario-12>
+        <scenario-13 kind="success">Runtime/Inference UI: блокировка по активной job на том же `resource` (`slot:default`, `slot:{key}`, `runtime`); параллельно разные `slot:*` не конфликтуют. Monitoring: lock `("monitoring","stack")`.</scenario-13>
+        <scenario-14 kind="success">`./slgpu monitoring fix-perms` работает и из web (без `sudo`): создаёт каталоги `data/monitoring/...` и выставляет владельца через короткоживущий root-контейнер `docker run --rm -u 0:0` (образ из `SLGPU_FIXPERMS_HELPER_IMAGE`, по умолчанию `alpine:latest`).</scenario-14>
+        <scenario-15 kind="success">Логи web в stdout — JSON one-record-one-line: `app`, `httpx` и `uvicorn*` не дублируют level/timestamp/logger/message через несколько handlers.</scenario-15>
+        <scenario-16 kind="success">`PATCH /api/v1/settings/public-access` сохраняет публичный server_host; Monitoring/Dashboard/LiteLLM возвращают browser-ссылки с этим host, а внутренние probes продолжают использовать `WEB_MONITORING_HTTP_HOST`.</scenario-16>
+        <scenario-17 kind="success">Models UI позволяет изменить revision/notes и удалить запись или локальные веса; backend DELETE не удаляет пути вне MODELS_DIR.</scenario-17>
+        <scenario-18 kind="success">Presets UI редактирует параметры через key/value строки, а не raw JSON; DELETE удаляет запись и опционально файл `.env` внутри PRESETS_DIR.</scenario-18>
+        <scenario-19 kind="success">Web entrypoint при старте создаёт/chown’ит `/data`, `${WEB_SLGPU_ROOT}/data/models` и `${WEB_SLGPU_ROOT}/data/presets`; `slgpu pull` из UI может создать `${MODELS_DIR}/&lt;org&gt;/&lt;repo&gt;` без Permission denied.</scenario-19>
+        <scenario-20 kind="success">`POST /api/v1/app-config/install` импортирует main.env в таблицу `stack_params`; `GET/PATCH /app-config/stack` отдаёт/обновляет плоский стек (удаление ключа — `null` в `stack` / `secrets`); секреты маскируются.</scenario-20>
+        <scenario-21 kind="success">`GET /api/v1/bench/runs` и `GET /bench/report.md` доступны; `POST /bench/scenario|load` ставит native.bench.* job.</scenario-21>
+        <scenario-22 kind="success">`GET /api/v1/dashboard` включает объект `host` (ОС, CPU, RAM, диск по `slgpu_root`, блок `nvidia` с `smi_available`); Dashboard UI отображает секцию «Сервер».</scenario-22>
+        <scenario-23 kind="success">`GET /api/v1/gpu/state` (при моке nvidia-smi) и `GET /api/v1/gpu/availability` (при моке списка GPU на хосте); `GET /dashboard` и `GET /runtime/snapshot` содержат `runtime.slots` (массив); `POST /api/v1/runtime/slots` при валидном пресете и `gpu_indices` — 202 `native.slot.up`; `POST /api/v1/presets/{id}/clone` — 201 и непустой `id` после flush.</scenario-23>
+      </scenarios>
+      <required-log-markers>
+        <marker-1>[WEB][jobs][BLOCK_RUN_JOB]</marker-1>
+      </required-log-markers>
+      <required-trace-assertions>
+        <assertion-1>Каждый запрос на mutating-endpoint создаёт ровно одну запись в audit_events.</assertion-1>
+        <assertion-2>Стек: native.* через compose/subprocess bench без shell; унаследованный CLI-путь — subprocess_exec без shell.</assertion-2>
+        <assertion-3>SQLite файл создаётся по пути из WEB_DATABASE_URL и тип всех таблиц совпадает с ORM.</assertion-3>
+      </required-trace-assertions>
+    </V-M-WEB>
+  </ModuleVerification>
+
+  <PhaseGates>
+    <Gate-Phase-1 PHASE="Phase-1">
+      <goal>Foundation: CLI, библиотека, compose, мониторинг валидны синтаксически.</goal>
+      <commands>
+        <command-1>shellcheck slgpu scripts/_lib.sh scripts/cmd_*.sh</command-1>
+        <command-2>docker compose config</command-2>
+        <command-3>python -m py_compile scripts/bench_openai.py</command-3>
+      </commands>
+      <required-evidence>
+        <evidence-1>Все shell-скрипты проходят shellcheck без ошибок.</evidence-1>
+        <evidence-2>`docker compose config` валиден для обоих профилей.</evidence-2>
+      </required-evidence>
+    </Gate-Phase-1>
+
+    <Gate-Phase-2 PHASE="Phase-2">
+      <goal>Model Management: пресеты корректны, pull работает.</goal>
+      <commands>
+        <command-1>test -f configs/models/qwen3.6-35b-a3b.env</command-1>
+        <command-2>grep -q MODEL_ID configs/models/*.env</command-2>
+      </commands>
+    </Gate-Phase-2>
+
+    <Gate-Phase-3 PHASE="Phase-3">
+      <goal>Engine Lifecycle: up/down; проверка API вручную (curl).</goal>
+      <commands>
+        <command-1>curl -sf http://127.0.0.1:8111/v1/models (после up vllm) или SGLang :8222</command-1>
+      </commands>
+    </Gate-Phase-3>
+
+    <Gate-Phase-4 PHASE="Phase-4">
+      <goal>Benchmark &amp; Compare: артефакты создаются, отчёт генерируется.</goal>
+      <commands>
+        <command-1>test -f bench/results/vllm/*/summary.json</command-1>
+        <command-2>test -f bench/results/sglang/*/summary.json</command-2>
+        <command-3>test -f bench/report.md</command-3>
+      </commands>
+    </Gate-Phase-4>
+
+    <Gate-Phase-5 PHASE="Phase-5">
+      <goal>Web Control Plane: backend pytest + frontend typecheck + compose config валидны.</goal>
+      <commands>
+        <command-1>cd web/backend &amp;&amp; pytest -q</command-1>
+        <command-2>cd web/frontend &amp;&amp; npm run typecheck</command-2>
+        <command-3>docker compose -f docker/docker-compose.web.yml config</command-3>
+      </commands>
+      <required-evidence>
+        <evidence-1>Все unit-тесты backend проходят без сетевого доступа и Docker daemon.</evidence-1>
+        <evidence-2>`tsc -b --noEmit` завершается с кодом 0.</evidence-2>
+        <evidence-3>`docker compose -f docker/docker-compose.web.yml config` печатает финальный YAML без ошибок.</evidence-3>
+      </required-evidence>
+    </Gate-Phase-5>
+  </PhaseGates>
+
+  <FailurePackets>
+    <packet-template>
+      <expected-fields>scenario, expected-evidence, observed-evidence, first-divergent-block, next-action</expected-fields>
+    </packet-template>
+  </FailurePackets>
+</VerificationPlan>

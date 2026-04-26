@@ -18,6 +18,7 @@ from app.core.security import (
 )
 from app.models.preset import Preset
 from app.schemas.presets import (
+    PresetCloneRequest,
     PresetCreate,
     PresetImportTemplatesResult,
     PresetOut,
@@ -141,6 +142,60 @@ async def get_preset(preset_id: int, session: AsyncSession = Depends(db_session)
     if preset is None:
         raise HTTPException(status_code=404, detail="preset not found")
     return preset
+
+
+@router.post("/{preset_id}/clone", response_model=PresetOut, status_code=status.HTTP_201_CREATED)
+async def clone_preset(
+    preset_id: int,
+    payload: PresetCloneRequest,
+    session: AsyncSession = Depends(db_session),
+    actor: str | None = Depends(actor_from_header),
+) -> Preset:
+    base = await session.get(Preset, preset_id)
+    if base is None:
+        raise HTTPException(status_code=404, detail="preset not found")
+    try:
+        validate_slug(payload.name)
+    except ValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    ex = await session.execute(select(Preset).where(Preset.name == payload.name))
+    if ex.scalar_one_or_none() is not None:
+        raise HTTPException(status_code=409, detail="preset with this name already exists")
+    if payload.hf_id is not None:
+        try:
+            validate_hf_id(payload.hf_id)
+        except ValidationError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if payload.tp is not None:
+        try:
+            validate_tp(payload.tp)
+        except ValidationError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    new = Preset(
+        name=payload.name,
+        description=payload.description if payload.description is not None else base.description,
+        model_id=base.model_id,
+        hf_id=payload.hf_id if payload.hf_id is not None else base.hf_id,
+        tp=payload.tp if payload.tp is not None else base.tp,
+        gpu_mask=payload.gpu_mask if payload.gpu_mask is not None else base.gpu_mask,
+        served_model_name=payload.served_model_name
+        if payload.served_model_name is not None
+        else base.served_model_name,
+        parameters=payload.parameters if payload.parameters is not None else (base.parameters or {}),
+        is_active=True,
+        is_synced=False,
+    )
+    session.add(new)
+    await session.flush()
+    await record_ui_action(
+        session,
+        action="preset.clone",
+        actor=actor,
+        target=payload.name,
+        note=f"from_id={preset_id} source={base.name}",
+        payload={"source_id": preset_id, "name": payload.name},
+    )
+    return new
 
 
 @router.patch("/{preset_id}", response_model=PresetOut)

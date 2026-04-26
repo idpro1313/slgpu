@@ -1,11 +1,188 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
-import type { Job, JobAccepted, Preset, RuntimeLogs, RuntimeSnapshot } from "@/api/types";
+import type {
+  GpuStateResponse,
+  GpuAvailability,
+  Job,
+  JobAccepted,
+  Preset,
+  RuntimeLogs,
+  RuntimeSlotView,
+  RuntimeSnapshot,
+} from "@/api/types";
+import { Modal } from "@/components/Modal";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
 import { StatusBadge } from "@/components/StatusBadge";
+
+function isEngineJobActive(j: Job): boolean {
+  return j.scope === "engine" && (j.status === "queued" || j.status === "running");
+}
+
+function jobBusyOnResource(jobs: Job[] | undefined, resource: string | null | undefined): boolean {
+  if (!jobs?.length) return false;
+  return jobs.some((j) => isEngineJobActive(j) && j.resource === resource);
+}
+
+function num(v: number | string): number {
+  return typeof v === "number" ? v : parseInt(String(v), 10) || 0;
+}
+
+function parseGpuCsv(csv: string | null | undefined): number[] {
+  if (!csv?.trim()) return [];
+  return csv
+    .split(",")
+    .map((s) => parseInt(s.trim(), 10))
+    .filter((n) => !Number.isNaN(n));
+}
+
+function vramForIndices(gpu: GpuStateResponse | undefined, indices: number[]): { u: number; t: number } | null {
+  if (!gpu?.gpus?.length || !indices.length) return null;
+  const byIdx = new Map(gpu.gpus.map((g) => [g.index, g]));
+  let u = 0;
+  let t = 0;
+  for (const i of indices) {
+    const g = byIdx.get(i);
+    if (g) {
+      u += num(g.memory_used_mib);
+      t += num(g.memory_total_mib);
+    }
+  }
+  return t > 0 ? { u, t } : null;
+}
+
+function GpuMatrixTable({ data }: { data: GpuStateResponse | undefined }) {
+  if (!data) {
+    return <div className="empty-state">Нет данных GPU.</div>;
+  }
+  if (!data.smi_available) {
+    return (
+      <div className="empty-state">
+        nvidia-smi недоступен{data.error ? ` (${data.error})` : ""}.
+      </div>
+    );
+  }
+  if (!data.gpus.length) {
+    return <div className="empty-state">Список GPU пуст.</div>;
+  }
+  return (
+    <div style={{ overflowX: "auto" }}>
+      <table className="table">
+        <thead>
+          <tr>
+            <th>GPU</th>
+            <th>Имя</th>
+            <th>VRAM</th>
+            <th>Util</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.gpus.map((g) => {
+            const u = num(g.memory_used_mib);
+            const to = num(g.memory_total_mib);
+            const pct = to > 0 ? Math.min(100, Math.round((u / to) * 100)) : 0;
+            return (
+              <tr key={g.index}>
+                <td className="mono">{g.index}</td>
+                <td className="mono" style={{ maxWidth: 220 }}>
+                  {g.name || "—"}
+                </td>
+                <td>
+                  <div className="mono" style={{ fontSize: 13 }}>
+                    {u} / {to} MiB
+                  </div>
+                  <div
+                    className="gpu-vram-bar"
+                    style={{
+                      marginTop: 4,
+                      height: 6,
+                      borderRadius: 3,
+                      background: "var(--color-border)",
+                    }}
+                    aria-hidden
+                  >
+                    <div
+                      style={{
+                        width: `${pct}%`,
+                        height: "100%",
+                        borderRadius: 3,
+                        background: "var(--color-accent)",
+                      }}
+                    />
+                  </div>
+                </td>
+                <td className="mono">
+                  {g.utilization_gpu}%
+                  {g.utilization_memory != null ? ` / m${g.utilization_memory}%` : ""}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function SlotCard(props: {
+  slot: RuntimeSlotView;
+  gpu: GpuStateResponse | undefined;
+  jobs: Job[] | undefined;
+  onDown: (key: string) => void;
+  onRestart: (key: string) => void;
+  onLogs: (key: string) => void;
+  downPending: boolean;
+  restartPending: boolean;
+}) {
+  const { slot } = props;
+  const busy = jobBusyOnResource(props.jobs, `slot:${slot.slot_key}`);
+  const vi = vramForIndices(props.gpu, parseGpuCsv(slot.gpu_indices));
+  return (
+    <div className="status-card">
+      <div className="status-card__head">
+        <span className="status-card__name mono">{slot.slot_key}</span>
+        <StatusBadge status={slot.container_status ?? "unknown"} label={slot.engine} />
+      </div>
+      <div className="status-card__detail mono" style={{ fontSize: 13 }}>
+        {slot.preset_name ?? "—"} • порт {slot.api_port ?? "—"}
+        {slot.tp != null ? ` • TP ${slot.tp}` : ""}
+      </div>
+      <div className="status-card__detail mono" style={{ fontSize: 12 }}>
+        GPU: {slot.gpu_indices ?? "—"}
+        {vi ? ` • VRAM ${vi.u} / ${vi.t} MiB` : ""}
+      </div>
+      <div className="status-card__detail mono" style={{ fontSize: 12 }}>
+        {slot.hf_id ?? "—"}
+      </div>
+      <div className="status-card__detail mono" style={{ fontSize: 12 }}>
+        models: {slot.served_models?.length ? slot.served_models.join(", ") : "—"}
+      </div>
+      <div className="flex flex--gap-sm flex--wrap" style={{ marginTop: 10 }}>
+        <button
+          type="button"
+          className="btn btn--danger"
+          disabled={busy || props.downPending}
+          onClick={() => props.onDown(slot.slot_key)}
+        >
+          Stop
+        </button>
+        <button
+          type="button"
+          className="btn"
+          disabled={busy || !slot.preset_name || props.restartPending}
+          onClick={() => slot.preset_name && props.onRestart(slot.slot_key)}
+        >
+          Restart
+        </button>
+        <button type="button" className="btn" onClick={() => props.onLogs(slot.slot_key)}>
+          Logs
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export function RuntimePage() {
   const queryClient = useQueryClient();
@@ -14,6 +191,15 @@ export function RuntimePage() {
   const [port, setPort] = useState<string>("");
   const [tp, setTp] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+  const [logSlotKey, setLogSlotKey] = useState<string | null>(null);
+  const [launchOpen, setLaunchOpen] = useState(false);
+  const [launchEngine, setLaunchEngine] = useState<"vllm" | "sglang">("vllm");
+  const [launchPreset, setLaunchPreset] = useState<string>("");
+  const [launchSlotKey, setLaunchSlotKey] = useState<string>("");
+  const [launchTp, setLaunchTp] = useState<string>("");
+  const [launchPort, setLaunchPort] = useState<string>("");
+  const [launchGpuText, setLaunchGpuText] = useState<string>("");
+  const [launchError, setLaunchError] = useState<string | null>(null);
 
   const presets = useQuery({
     queryKey: ["presets"],
@@ -24,15 +210,41 @@ export function RuntimePage() {
     queryFn: () => api.get<RuntimeSnapshot>("/runtime/snapshot"),
     refetchInterval: 8_000,
   });
-  const logs = useQuery({
-    queryKey: ["runtime-logs"],
-    queryFn: () => api.get<RuntimeLogs>("/runtime/logs?tail=400"),
-    refetchInterval: 5_000,
+  const slotLogs = useQuery({
+    queryKey: ["runtime-logs", logSlotKey],
+    queryFn: () =>
+      api.get<RuntimeLogs>(`/runtime/slots/${encodeURIComponent(logSlotKey!)}/logs?tail=400`),
+    enabled: logSlotKey != null,
+    refetchInterval: logSlotKey ? 5_000 : false,
   });
   const jobs = useQuery({
     queryKey: ["jobs"],
     queryFn: () => api.get<Job[]>("/jobs"),
     refetchInterval: 2_000,
+  });
+  const gpuState = useQuery({
+    queryKey: ["gpu-state"],
+    queryFn: () => api.get<GpuStateResponse>("/gpu/state"),
+    refetchInterval: 3_000,
+  });
+
+  const launchPresetRow = useMemo(
+    () => presets.data?.find((p) => p.name === launchPreset),
+    [presets.data, launchPreset],
+  );
+  const effectiveLaunchTp = useMemo(() => {
+    if (launchTp.trim()) {
+      const n = parseInt(launchTp, 10);
+      return Number.isNaN(n) ? 1 : n;
+    }
+    return launchPresetRow?.tp != null ? launchPresetRow.tp : 1;
+  }, [launchTp, launchPresetRow?.tp]);
+
+  const availability = useQuery({
+    queryKey: ["gpu-availability", effectiveLaunchTp, launchPreset],
+    queryFn: () => api.get<GpuAvailability>(`/gpu/availability?tp=${effectiveLaunchTp}`),
+    enabled: launchOpen && Boolean(launchPreset),
+    refetchInterval: launchOpen ? 4_000 : false,
   });
 
   const upMutation = useMutation({
@@ -48,7 +260,7 @@ export function RuntimePage() {
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
       queryClient.invalidateQueries({ queryKey: ["activity"] });
       queryClient.invalidateQueries({ queryKey: ["runtime-snapshot"] });
-      queryClient.invalidateQueries({ queryKey: ["runtime-logs"] });
+      queryClient.invalidateQueries({ queryKey: ["gpu-state"] });
     },
     onError: (err: Error) => setError(err.message),
   });
@@ -64,7 +276,7 @@ export function RuntimePage() {
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
       queryClient.invalidateQueries({ queryKey: ["activity"] });
       queryClient.invalidateQueries({ queryKey: ["runtime-snapshot"] });
-      queryClient.invalidateQueries({ queryKey: ["runtime-logs"] });
+      queryClient.invalidateQueries({ queryKey: ["gpu-state"] });
     },
     onError: (err: Error) => setError(err.message),
   });
@@ -77,54 +289,198 @@ export function RuntimePage() {
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
       queryClient.invalidateQueries({ queryKey: ["activity"] });
       queryClient.invalidateQueries({ queryKey: ["runtime-snapshot"] });
-      queryClient.invalidateQueries({ queryKey: ["runtime-logs"] });
+      queryClient.invalidateQueries({ queryKey: ["gpu-state"] });
     },
     onError: (err: Error) => setError(err.message),
   });
 
+  const slotDownMutation = useMutation({
+    mutationFn: (slotKey: string) => api.post<JobAccepted>(`/runtime/slots/${encodeURIComponent(slotKey)}/down`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["activity"] });
+      queryClient.invalidateQueries({ queryKey: ["runtime-snapshot"] });
+      queryClient.invalidateQueries({ queryKey: ["gpu-state"] });
+    },
+  });
+
+  const slotRestartMutation = useMutation({
+    mutationFn: (args: { slotKey: string; preset: string }) =>
+      api.post<JobAccepted>(`/runtime/slots/${encodeURIComponent(args.slotKey)}/restart`, {
+        preset: args.preset,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["activity"] });
+      queryClient.invalidateQueries({ queryKey: ["runtime-snapshot"] });
+      queryClient.invalidateQueries({ queryKey: ["gpu-state"] });
+    },
+  });
+
+  const slotUpMutation = useMutation({
+    mutationFn: (body: Record<string, unknown>) => api.post<JobAccepted>("/runtime/slots", body),
+    onSuccess: () => {
+      setLaunchError(null);
+      setLaunchOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["activity"] });
+      queryClient.invalidateQueries({ queryKey: ["runtime-snapshot"] });
+      queryClient.invalidateQueries({ queryKey: ["gpu-availability"] });
+      queryClient.invalidateQueries({ queryKey: ["gpu-state"] });
+    },
+    onError: (err: Error) => setLaunchError(err.message),
+  });
+
   const snap = snapshot.data;
-  const activeEngineJob = jobs.data?.find(
-    (job) => job.scope === "engine" && (job.status === "queued" || job.status === "running"),
-  );
-  const submittingCommand = upMutation.isPending || restartMutation.isPending || downMutation.isPending;
-  const runtimeBusy = Boolean(activeEngineJob) || submittingCommand;
+  const defaultBusy =
+    jobBusyOnResource(jobs.data, "slot:default") || jobBusyOnResource(jobs.data, "runtime");
+  const submittingDefault =
+    upMutation.isPending || restartMutation.isPending || downMutation.isPending;
+
+  const openLaunch = () => {
+    setLaunchError(null);
+    setLaunchOpen(true);
+    if (presets.data?.[0]) {
+      setLaunchPreset(presets.data[0].name);
+      if (presets.data[0].tp != null) setLaunchTp(String(presets.data[0].tp));
+      else setLaunchTp("");
+    }
+    setLaunchGpuText("");
+  };
+
+  const submitLaunch = () => {
+    setLaunchError(null);
+    if (!launchPreset) {
+      setLaunchError("Выберите пресет");
+      return;
+    }
+    const body: Record<string, unknown> = {
+      engine: launchEngine,
+      preset: launchPreset,
+      tp: effectiveLaunchTp,
+    };
+    if (launchSlotKey.trim()) body.slot_key = launchSlotKey.trim();
+    if (launchPort.trim()) {
+      const p = parseInt(launchPort, 10);
+      if (!Number.isNaN(p)) body.host_api_port = p;
+    }
+    if (launchGpuText.trim()) {
+      const gpus = launchGpuText
+        .split(",")
+        .map((s) => parseInt(s.trim(), 10))
+        .filter((n) => !Number.isNaN(n));
+      if (gpus.length) body.gpu_indices = gpus;
+    }
+    slotUpMutation.mutate(body);
+  };
+
+  const slots = snap?.slots ?? [];
+  const legacyNoSlots = slots.length === 0 && Boolean(snap?.engine);
 
   return (
     <>
       <PageHeader
-        title="Inference Runtime"
-        subtitle="Запуск, перезапуск и остановка vLLM/SGLang. Сами действия делает ./slgpu CLI, а статусы читаются из Docker."
+        title="Inference"
+        subtitle="Мультислотный vLLM/SGLang (docker), GPU в реальном времени и отдельные слоты с выбором GPU. Команда «по умолчанию» — слот default (совместимость с CLI)."
       />
 
-      {runtimeBusy ? (
+      {defaultBusy && !submittingDefault ? (
         <Section
-          title="Команда выполняется"
-          subtitle="До завершения текущей операции запуск, рестарт и остановка заблокированы."
+          title="Команда выполняется (default / runtime)"
+          subtitle="Пока активна job на engine slot:default или runtime, кнопки стека по умолчанию заблокированы."
         >
-          {activeEngineJob ? (
+          {jobs.data?.find(
+            (j) => isEngineJobActive(j) && (j.resource === "slot:default" || j.resource === "runtime"),
+          ) ? (
             <div className="status-card">
               <div className="status-card__head">
                 <span className="status-card__name">
-                  #{activeEngineJob.id} {activeEngineJob.kind}
+                  #
+                  {jobs.data.find(
+                    (j) => isEngineJobActive(j) && (j.resource === "slot:default" || j.resource === "runtime"),
+                  )?.id}{" "}
+                  {
+                    jobs.data.find(
+                      (j) => isEngineJobActive(j) && (j.resource === "slot:default" || j.resource === "runtime"),
+                    )?.kind
+                  }
                 </span>
-                <StatusBadge status={activeEngineJob.status} />
-              </div>
-              <div className="status-card__detail mono">
-                {activeEngineJob.message ?? activeEngineJob.command.join(" ")}
-              </div>
-              <div className="status-card__detail">
-                Подробный stdout/stderr tail доступен на вкладке «Задачи».
+                <StatusBadge
+                  status={
+                    jobs.data.find(
+                      (j) => isEngineJobActive(j) && (j.resource === "slot:default" || j.resource === "runtime"),
+                    )?.status ?? "unknown"
+                  }
+                />
               </div>
             </div>
-          ) : (
-            <div className="empty-state">Отправляем команду в job runner…</div>
-          )}
+          ) : null}
         </Section>
       ) : null}
 
       <Section
-        title="Текущий снимок"
-        subtitle="Контейнер выбирается автоматически: первым берётся работающий vllm, затем sglang."
+        title="GPU (live)"
+        subtitle="Снимок nvidia-smi через web (кэш ~3 с), обновление каждые 3 с."
+        actions={
+          <button
+            type="button"
+            className="btn"
+            onClick={() => gpuState.refetch()}
+            disabled={gpuState.isFetching}
+          >
+            Обновить
+          </button>
+        }
+      >
+        <GpuMatrixTable data={gpuState.data} />
+      </Section>
+
+      <Section
+        title="Слоты"
+        subtitle="Активные слоты из снимка runtime. Отдельные GPU и порты — через «Запустить в новом слоте»."
+        actions={
+          <button type="button" className="btn btn--primary" onClick={openLaunch}>
+            Запустить в новом слоте
+          </button>
+        }
+      >
+        {snapshot.isLoading ? (
+          <div className="empty-state">Загружаем…</div>
+        ) : slots.length > 0 ? (
+          <div className="cards-grid">
+            {slots.map((s) => (
+              <SlotCard
+                key={s.slot_key}
+                slot={s}
+                gpu={gpuState.data}
+                jobs={jobs.data}
+                onDown={(key) => slotDownMutation.mutate(key)}
+                onRestart={(key) => {
+                  const p = s.preset_name;
+                  if (p) slotRestartMutation.mutate({ slotKey: key, preset: p });
+                }}
+                onLogs={(key) => setLogSlotKey(key)}
+                downPending={slotDownMutation.isPending}
+                restartPending={slotRestartMutation.isPending}
+              />
+            ))}
+          </div>
+        ) : legacyNoSlots ? (
+          <p className="section__subtitle">
+            Compose/legacy-контейнер без записей в <span className="mono">engine_slots</span> — кратко:{" "}
+            <span className="mono">
+              {snap?.engine} :{snap?.api_port}
+            </span>
+            {snap?.served_models?.length ? ` • models: ${snap.served_models.join(", ")}` : ""}
+          </p>
+        ) : (
+          <div className="empty-state">Нет активных слотов. Запустите default или новый слот.</div>
+        )}
+      </Section>
+
+      <Section
+        title="Слот default (CLI-совместимый)"
+        subtitle="native.llm.* → slot_key=default. Не пересекается с другими слотами по lock, но останавливает общий LLM-стек при down."
         actions={
           <button
             type="button"
@@ -132,7 +488,7 @@ export function RuntimePage() {
             onClick={() => snapshot.refetch()}
             disabled={snapshot.isFetching}
           >
-            Обновить
+            Обновить снимок
           </button>
         }
       >
@@ -145,61 +501,28 @@ export function RuntimePage() {
                 label={snap?.engine ?? "—"}
               />
             </div>
-            <div className="status-card__detail mono">
-              port: {snap?.api_port ?? "—"}
-            </div>
+            <div className="status-card__detail mono">port: {snap?.api_port ?? "—"}</div>
           </div>
           <div className="status-card">
             <div className="status-card__head">
-              <span className="status-card__name">Запрошенный пресет</span>
+              <span className="status-card__name">Пресет</span>
             </div>
             <div className="status-card__detail mono">
               {snap?.preset_name ?? "—"}
-              {snap?.tp ? ` • TP ${snap.tp}` : ""}
-            </div>
-          </div>
-          <div className="status-card">
-            <div className="status-card__head">
-              <span className="status-card__name">Модель пресета</span>
-            </div>
-            <div className="status-card__detail mono">{snap?.hf_id ?? "—"}</div>
-          </div>
-          <div className="status-card">
-            <div className="status-card__head">
-              <span className="status-card__name">/metrics</span>
-              <StatusBadge
-                status={snap?.metrics_available ? "healthy" : "down"}
-                label={snap?.metrics_available ? "ok" : "нет"}
-              />
-            </div>
-            <div className="status-card__detail">
-              Доступность Prometheus-ручки vLLM/SGLang
-            </div>
-          </div>
-          <div className="status-card">
-            <div className="status-card__head">
-              <span className="status-card__name">Served models</span>
-            </div>
-            <div className="status-card__detail mono">
-              {snap?.served_models?.length
-                ? snap.served_models.join(", ")
-                : "—"}
+              {snap?.tp != null ? ` • TP ${snap.tp}` : ""}
             </div>
           </div>
         </div>
       </Section>
 
-      <Section
-        title="Запуск"
-        subtitle="Команды проходят валидацию до shell. Конфликтующий запуск возвращает 409."
-      >
+      <Section title="Запуск (default)" subtitle="Как раньше: up / restart / down для слота default.">
         <div className="form-grid">
           <div>
             <label className="label">Движок</label>
             <select
               className="select"
               value={engine}
-              onChange={(event) => setEngine(event.target.value as "vllm" | "sglang")}
+              onChange={(e) => setEngine(e.target.value as "vllm" | "sglang")}
             >
               <option value="vllm">vLLM</option>
               <option value="sglang">SGLang</option>
@@ -210,12 +533,12 @@ export function RuntimePage() {
             <select
               className="select"
               value={presetName}
-              onChange={(event) => setPresetName(event.target.value)}
+              onChange={(e) => setPresetName(e.target.value)}
             >
               <option value="">— выберите —</option>
-              {presets.data?.map((preset) => (
-                <option value={preset.name} key={preset.id}>
-                  {preset.name} ({preset.hf_id})
+              {presets.data?.map((p) => (
+                <option value={p.name} key={p.id}>
+                  {p.name} ({p.hf_id})
                 </option>
               ))}
             </select>
@@ -226,7 +549,7 @@ export function RuntimePage() {
               className="input"
               type="number"
               value={port}
-              onChange={(event) => setPort(event.target.value)}
+              onChange={(e) => setPort(e.target.value)}
             />
           </div>
           <div>
@@ -235,7 +558,7 @@ export function RuntimePage() {
               className="input"
               type="number"
               value={tp}
-              onChange={(event) => setTp(event.target.value)}
+              onChange={(e) => setTp(e.target.value)}
             />
           </div>
         </div>
@@ -243,68 +566,180 @@ export function RuntimePage() {
           <button
             type="button"
             className="btn btn--primary"
-            disabled={!presetName || runtimeBusy}
+            disabled={!presetName || defaultBusy || submittingDefault}
             onClick={() => upMutation.mutate()}
           >
-            {upMutation.isPending ? "Запускаем…" : "slgpu up"}
+            {upMutation.isPending ? "Запускаем…" : "up (default)"}
           </button>
           <button
             type="button"
             className="btn"
-            disabled={!presetName || runtimeBusy}
+            disabled={!presetName || defaultBusy || submittingDefault}
             onClick={() => restartMutation.mutate()}
           >
-            slgpu restart
+            restart (default)
           </button>
           <button
             type="button"
             className="btn btn--danger"
             onClick={() => downMutation.mutate(false)}
-            disabled={runtimeBusy}
+            disabled={defaultBusy || submittingDefault}
           >
-            slgpu down
+            down
           </button>
           <button
             type="button"
             className="btn btn--danger"
             onClick={() => downMutation.mutate(true)}
-            disabled={runtimeBusy}
+            disabled={defaultBusy || submittingDefault}
           >
-            slgpu down --all
+            down --all
           </button>
         </div>
         {error ? <p style={{ color: "var(--color-danger)" }}>{error}</p> : null}
       </Section>
 
       <Section
-        title="Лог контейнера модели"
-        subtitle="Хвост stdout/stderr текущего контейнера vLLM/SGLang. Обновляется каждые 5 секунд."
+        title="Лог слота"
+        subtitle="Выберите слот в карточке выше (Logs) или default ниже."
         actions={
-          <button
-            type="button"
-            className="btn"
-            onClick={() => logs.refetch()}
-            disabled={logs.isFetching}
-          >
-            Обновить лог
-          </button>
+          <div className="flex flex--gap-sm flex--wrap">
+            <button
+              type="button"
+              className="btn"
+              onClick={() => setLogSlotKey("default")}
+            >
+              default
+            </button>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => slotLogs.refetch()}
+              disabled={!logSlotKey || slotLogs.isFetching}
+            >
+              Обновить
+            </button>
+          </div>
         }
       >
         <p className="section__subtitle">
-          Контейнер:{" "}
-          <span className="mono">{logs.data?.container_name ?? "не найден"}</span>
-          {logs.data?.engine ? ` • ${logs.data.engine}` : ""}
-          {logs.data?.container_status ? ` • ${logs.data.container_status}` : ""}
-          {logs.data?.tail ? ` • tail ${logs.data.tail}` : ""}
+          Слот: <span className="mono">{logSlotKey ?? "не выбран"}</span>
         </p>
-        <pre className="code-block" style={{ maxHeight: 520, overflow: "auto" }}>
-          {logs.isLoading
-            ? "Загружаем лог…"
-            : logs.data?.logs?.trim()
-              ? logs.data.logs
-              : "Лог пуст или контейнер vLLM/SGLang не найден."}
+        <pre className="code-block" style={{ maxHeight: 420, overflow: "auto" }}>
+          {logSlotKey
+            ? slotLogs.isLoading
+              ? "Загружаем…"
+              : slotLogs.data?.logs?.trim()
+                ? slotLogs.data.logs
+                : "Лог пуст или контейнер не найден."
+            : "Нажмите Logs у слота или «default»."}
         </pre>
       </Section>
+
+      <Modal
+        title="Новый слот"
+        subtitle="GPU и порт при необходимости подставляются на сервере. Можно задать индексы вручную (через запятую, длина = TP)."
+        isOpen={launchOpen}
+        onClose={() => setLaunchOpen(false)}
+        actions={
+          <button
+            type="button"
+            className="btn btn--primary"
+            disabled={slotUpMutation.isPending || !launchPreset}
+            onClick={submitLaunch}
+          >
+            {slotUpMutation.isPending ? "Отправка…" : "Запустить"}
+          </button>
+        }
+      >
+        <div className="form-grid" style={{ marginTop: 12 }}>
+          <div>
+            <label className="label">Движок</label>
+            <select
+              className="select"
+              value={launchEngine}
+              onChange={(e) => setLaunchEngine(e.target.value as "vllm" | "sglang")}
+            >
+              <option value="vllm">vLLM (порты 8111+)</option>
+              <option value="sglang">SGLang (порты 8222+)</option>
+            </select>
+          </div>
+          <div>
+            <label className="label">Пресет</label>
+            <select
+              className="select"
+              value={launchPreset}
+              onChange={(e) => {
+                setLaunchPreset(e.target.value);
+                const p = presets.data?.find((x) => x.name === e.target.value);
+                if (p?.tp != null) setLaunchTp(String(p.tp));
+                else setLaunchTp("");
+              }}
+            >
+              <option value="">— выберите —</option>
+              {presets.data?.map((p) => (
+                <option value={p.name} key={p.id}>
+                  {p.name} (TP {p.tp ?? "?"})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="label">TP (пусто = из пресета)</label>
+            <input
+              className="input"
+              type="number"
+              value={launchTp}
+              onChange={(e) => setLaunchTp(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="label">Имя слота (опц.)</label>
+            <input
+              className="input"
+              value={launchSlotKey}
+              onChange={(e) => setLaunchSlotKey(e.target.value)}
+              placeholder="auto"
+              autoComplete="off"
+            />
+          </div>
+          <div>
+            <label className="label">host_api_port (опц.)</label>
+            <input
+              className="input"
+              type="number"
+              value={launchPort}
+              onChange={(e) => setLaunchPort(e.target.value)}
+              placeholder="авто"
+            />
+          </div>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <label className="label">GPU индексы вручную, через запятую (опц.)</label>
+            <input
+              className="input mono"
+              value={launchGpuText}
+              onChange={(e) => setLaunchGpuText(e.target.value)}
+              placeholder="например: 0,1,2,3"
+              autoComplete="off"
+            />
+          </div>
+        </div>
+        {launchPreset && availability.data ? (
+          <div style={{ marginTop: 16, fontSize: 13 }} className="mono">
+            <div>
+              Свободные GPU: {availability.data.available.join(", ") || "—"}
+            </div>
+            <div>
+              Подсказка (suggested):{" "}
+              {availability.data.suggested?.length
+                ? availability.data.suggested.join(", ")
+                : "недостаточно свободных для TP"}
+            </div>
+            {availability.data.note ? <div>note: {availability.data.note}</div> : null}
+          </div>
+        ) : null}
+        {launchError ? <p style={{ color: "var(--color-danger)", marginTop: 12 }}>{launchError}</p> : null}
+      </Modal>
     </>
   );
 }

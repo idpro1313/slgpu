@@ -41,6 +41,8 @@ async def test_dashboard_includes_host_snapshot(client: httpx.AsyncClient) -> No
         response = await client.get("/api/v1/dashboard")
     assert response.status_code == 200
     body = response.json()
+    assert "slots" in body["runtime"]
+    assert isinstance(body["runtime"]["slots"], list)
     assert "host" in body
     host = body["host"]
     assert "os_pretty" in host and host["os_pretty"]
@@ -204,6 +206,8 @@ async def test_runtime_snapshot_includes_requested_preset_and_model(
     assert body["preset_name"] == "qwen3"
     assert body["hf_id"] == "Qwen/Qwen3-30B-A3B"
     assert body["tp"] == 8
+    assert "slots" in body
+    assert isinstance(body["slots"], list)
 
 
 @pytest.mark.asyncio

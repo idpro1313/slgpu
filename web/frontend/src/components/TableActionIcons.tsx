@@ -83,6 +83,27 @@ export function IconFileX({ className }: { className?: string }) {
   );
 }
 
+/** Иконка «копия / дублировать пресет». */
+export function IconCopy({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width={20}
+      height={20}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+    </svg>
+  );
+}
+
 /** Иконка «удалить». */
 export function IconTrash({ className }: { className?: string }) {
   return (

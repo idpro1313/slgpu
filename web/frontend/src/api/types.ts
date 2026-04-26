@@ -33,6 +33,8 @@ export interface DashboardRuntime {
   served_models: string[];
   metrics_available: boolean;
   last_checked_at: string | null;
+  /** Мультислотный рантайм: карточки на Dashboard / привязка GPU live. */
+  slots?: RuntimeSlotView[];
 }
 
 export interface DashboardServiceCard {
@@ -128,6 +130,20 @@ export interface Preset {
   updated_at: string;
 }
 
+export interface RuntimeSlotView {
+  slot_key: string;
+  engine: string;
+  preset_name: string | null;
+  hf_id: string | null;
+  api_port: number | null;
+  tp: number | null;
+  gpu_indices: string | null;
+  container_status: string | null;
+  container_name: string | null;
+  served_models: string[];
+  metrics_available: boolean;
+}
+
 export interface RuntimeSnapshot {
   engine: string | null;
   api_port: number | null;
@@ -138,6 +154,63 @@ export interface RuntimeSnapshot {
   served_models: string[];
   metrics_available: boolean;
   last_checked_at: string | null;
+  slots: RuntimeSlotView[];
+}
+
+export interface EngineSlotRow {
+  id: number;
+  slot_key: string;
+  engine: string;
+  preset_name: string | null;
+  hf_id: string | null;
+  tp: number | null;
+  gpu_indices: string | null;
+  host_api_port: number | null;
+  internal_api_port: number | null;
+  container_id: string | null;
+  container_name: string | null;
+  desired_status: RunStatus;
+  observed_status: RunStatus;
+  last_error: string | null;
+  started_at: string | null;
+  stopped_at: string | null;
+  created_at: string;
+  updated_at: string;
+  extra: Record<string, unknown>;
+}
+
+export interface GpuCardState {
+  index: number;
+  uuid?: string | null;
+  name?: string;
+  memory_used_mib: number | string;
+  memory_total_mib: number | string;
+  utilization_gpu: number | string;
+  utilization_memory: number | string;
+}
+
+export interface GpuStateResponse {
+  smi_available: boolean;
+  error: string | null;
+  driver_version: string | null;
+  cuda_version: string | null;
+  gpus: GpuCardState[];
+  processes: Record<string, unknown>[];
+}
+
+export interface GpuBusy {
+  index: number;
+  slot_key: string;
+  preset_name: string | null;
+  engine: string;
+}
+
+export interface GpuAvailability {
+  all_indices: number[];
+  available: number[];
+  busy: GpuBusy[];
+  suggested: number[] | null;
+  note: string | null;
 }
 
 export interface RuntimeLogs {
@@ -217,6 +290,17 @@ export interface PresetImportTemplatesResult {
   updated: number;
   skipped: number;
   errors: string[];
+}
+
+/** POST /api/v1/presets/{id}/clone */
+export interface PresetCloneRequest {
+  name: string;
+  description?: string | null;
+  hf_id?: string | null;
+  tp?: number | null;
+  gpu_mask?: string | null;
+  served_model_name?: string | null;
+  parameters?: Record<string, unknown> | null;
 }
 
 export interface LiteLLMHealth {

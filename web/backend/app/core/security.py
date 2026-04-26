@@ -31,6 +31,11 @@ def validate_slug(value: str) -> str:
     return value
 
 
+def validate_slot_key(value: str) -> str:
+    """Slot id for inference instances (same rules as preset slug)."""
+    return validate_slug(value)
+
+
 def validate_hf_id(value: str) -> str:
     if not _HF_ID_RE.match(value):
         raise ValidationError(f"hf id {value!r} must look like 'org/repo'")

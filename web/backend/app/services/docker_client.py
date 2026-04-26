@@ -156,6 +156,20 @@ class DockerInspector:
                 return self._summary(c)
         return None
 
+    def get_by_name(self, name: str) -> ContainerSummary | None:
+        """Exact container name (with or without leading slash), e.g. ``slgpu-vllm``."""
+        if not self._client or not name:
+            return None
+        n = name.lstrip("/")
+        try:
+            c = self._client.containers.get(n)
+        except NotFound:
+            return None
+        except DockerException as exc:
+            logger.warning("[docker_client][get_by_name] %s", exc)
+            return None
+        return self._summary(c)
+
     def tail_logs(self, container_id: str, tail: int = 200) -> str:
         if not self._client:
             return ""

@@ -1,18 +1,43 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
-import type { DashboardData } from "@/api/types";
+import type { DashboardData, GpuStateResponse, RuntimeSlotView } from "@/api/types";
 import { formatBytesIEC } from "@/components/formatters";
 import { MetricCard } from "@/components/MetricCard";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
 import { StatusBadge } from "@/components/StatusBadge";
 
+function presetForGpuIndex(index: number, slots: RuntimeSlotView[] | undefined): string | null {
+  if (!slots?.length) return null;
+  for (const s of slots) {
+    if (!s.gpu_indices?.trim()) continue;
+    const ids = s.gpu_indices
+      .split(",")
+      .map((x) => parseInt(x.trim(), 10))
+      .filter((n) => !Number.isNaN(n));
+    if (ids.includes(index)) {
+      return s.preset_name ?? s.slot_key;
+    }
+  }
+  return null;
+}
+
+function numGpu(v: number | string): number {
+  return typeof v === "number" ? v : parseInt(String(v), 10) || 0;
+}
+
 export function DashboardPage() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["dashboard"],
     queryFn: () => api.get<DashboardData>("/dashboard"),
     refetchInterval: 10_000,
+  });
+
+  const gpuLive = useQuery({
+    queryKey: ["gpu-state"],
+    queryFn: () => api.get<GpuStateResponse>("/gpu/state"),
+    refetchInterval: 3_000,
   });
 
   return (
@@ -154,6 +179,84 @@ export function DashboardPage() {
                 )}
               </div>
             </div>
+          </div>
+        )}
+      </Section>
+
+      <Section
+        title="GPU (live)"
+        subtitle="VRAM и загрузка с хоста (nvidia-smi), опрос каждые 3 с. Пресет — по слотам runtime из БД (совпадение индексов GPU)."
+        actions={
+          <button
+            type="button"
+            className="btn"
+            onClick={() => gpuLive.refetch()}
+            disabled={gpuLive.isFetching}
+          >
+            Обновить
+          </button>
+        }
+      >
+        {gpuLive.isLoading ? (
+          <div className="empty-state">Загружаем…</div>
+        ) : gpuLive.isError ? (
+          <div className="empty-state">Не удалось получить /gpu/state.</div>
+        ) : !gpuLive.data?.smi_available ? (
+          <div className="empty-state">
+            nvidia-smi недоступен{gpuLive.data?.error ? ` (${gpuLive.data.error})` : ""} — подключите GPU к Docker и образ
+            WEB_NVIDIA_SMI_DOCKER_IMAGE.
+          </div>
+        ) : (
+          <div className="cards-grid">
+            {gpuLive.data.gpus.map((g) => {
+              const u = numGpu(g.memory_used_mib);
+              const t = numGpu(g.memory_total_mib);
+              const util = numGpu(g.utilization_gpu);
+              const vramPct = t > 0 ? Math.min(100, Math.round((u / t) * 100)) : 0;
+              const preset = presetForGpuIndex(g.index, data?.runtime.slots);
+              return (
+                <div className="status-card" key={g.index}>
+                  <div className="status-card__head">
+                    <span className="status-card__name">GPU {g.index}</span>
+                    <StatusBadge
+                      status={util >= 90 ? "degraded" : util >= 50 ? "unknown" : "healthy"}
+                      label={`${util}%`}
+                    />
+                  </div>
+                  <div className="status-card__detail mono" style={{ fontSize: 13 }}>
+                    {g.name || "—"}
+                  </div>
+                  {preset ? (
+                    <div className="status-card__detail" style={{ marginTop: 6, fontSize: 12 }}>
+                      Пресет: <span className="mono">{preset}</span>
+                    </div>
+                  ) : null}
+                  <div className="status-card__detail" style={{ marginTop: 8 }}>
+                    <div className="mono" style={{ fontSize: 12 }}>
+                      VRAM {u} / {t} MiB
+                    </div>
+                    <div
+                      style={{
+                        marginTop: 6,
+                        height: 8,
+                        borderRadius: 4,
+                        background: "var(--color-border)",
+                      }}
+                      aria-hidden
+                    >
+                      <div
+                        style={{
+                          width: `${vramPct}%`,
+                          height: "100%",
+                          borderRadius: 4,
+                          background: "var(--color-accent)",
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </Section>
