@@ -163,7 +163,8 @@ Mutations контейнеров идут только через CLI allowlist.
   отдельный `docker/docker-compose.monitoring.yml` и **не** монтируются в web-контейнер:
   UI опрашивает их по HTTP/ Docker API, не по путям на диске.
 - Entrypoint образа (`web/docker-entrypoint.sh`): PID 1 кратко под root,
-  `chown` на смонтированный `/data` под UID приложения (10001);
+  `chown` на смонтированные `/data`, `${WEB_SLGPU_ROOT}/data/models` и
+  `${WEB_SLGPU_ROOT}/data/presets` под UID приложения (10001);
   сокет Docker при монтировании часто `root:docker` (660) — создаётся/используется
   группа с GID, совпадающим с `stat` сокета, в неё добавляется `slgpuweb`, затем
   `tini` (PID 1) → entrypoint → `runuser` (uvicorn), группа = GID `docker.sock`

@@ -104,6 +104,10 @@ cd /path/to/slgpu
 `cwd=settings.slgpu_root` в `app/services/jobs.py`.
 Тома: `./data/web` → `/data`; **`MODELS_DIR` с хоста** → **`${SLGPU_HOST_REPO}/data/models`** (тот же абсолютный
 путь, что и в CLI на хосте; см. [`docker/docker-compose.web.yml`](../docker/docker-compose.web.yml)).
+Entrypoint web-контейнера стартует от root, создаёт и chown’ит `/data`,
+`${WEB_SLGPU_ROOT}/data/models` и `${WEB_SLGPU_ROOT}/data/presets`, затем
+переходит на пользователя `slgpuweb` (uid 10001). Это нужно, чтобы `./slgpu pull`
+из UI мог создавать `${MODELS_DIR}/<org>/<repo>`.
 
 **Зачем совпадение путей:** когда web запускает `./slgpu monitoring up`, `docker compose` внутри
 контейнера разрешает относительные bind-маунты от `cwd` и отдаёт docker daemon **строки путей**, которые

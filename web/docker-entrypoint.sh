@@ -12,6 +12,10 @@ set -e
 if [ "$(id -u)" = "0" ]; then
   mkdir -p /data
   chown -R 10001:10001 /data
+  if [ -n "${WEB_SLGPU_ROOT:-}" ]; then
+    mkdir -p "${WEB_SLGPU_ROOT}/data/models" "${WEB_SLGPU_ROOT}/data/presets"
+    chown -R 10001:10001 "${WEB_SLGPU_ROOT}/data/models" "${WEB_SLGPU_ROOT}/data/presets" 2>/dev/null || true
+  fi
   if [ -S /var/run/docker.sock ]; then
     GID=$(stat -c %g /var/run/docker.sock)
     if [ -n "$GID" ] && [ "$GID" != "0" ]; then

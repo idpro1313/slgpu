@@ -28,7 +28,7 @@ services:
       dockerfile: ../docker/Dockerfile.web
     container_name: slgpu-web
     restart: unless-stopped
-    # user: not set — entrypoint starts as root, chown /data, then runs app as 10001
+    # user: not set — entrypoint starts as root, chown /data and data/models|presets mounts, then runs app as 10001
     # working_dir НЕ переопределяем: uvicorn запускается из WORKDIR `/srv/app` (Dockerfile.web),
     # где лежит пакет `app/`. Иначе — `ModuleNotFoundError: No module named 'app'`.
     # Для CLI-вызовов backend сам устанавливает cwd=settings.slgpu_root в jobs.py.
