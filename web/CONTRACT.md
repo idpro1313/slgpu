@@ -36,6 +36,10 @@ radius `10px`. Favicon остаётся в LLM-тематике, но испол
 ссылок, открываемых браузером пользователя: Grafana, Prometheus, Langfuse и
 LiteLLM Admin UI. Внутренние health-probe из web-контейнера продолжают
 использовать `WEB_MONITORING_HTTP_HOST` (`host.docker.internal` в compose).
+Снимок runtime и dashboard-проба **не** обращаются к `http://127.0.0.1:${порт}/v1/models` из
+web-контейнера: к API движка ходим через `WEB_LLM_HTTP_HOST` (в compose
+`host.docker.internal`) плюс запасной адрес `http://vllm:8111` / `http://sglang:8222`
+(сеть `slgpu`).
 
 ## 2. Границы ответственности
 
@@ -113,8 +117,10 @@ Mutations контейнеров идут только через CLI allowlist.
 
 ### HTTP-проверки
 
-- `GET http://127.0.0.1:${LLM_API_PORT}/v1/models` — реальный список
-  моделей у движка.
+- `GET ${WEB_LLM_HTTP_HOST:-host.docker.internal}:${LLM_API_PORT}/v1/models` и, при
+  необходимости, `http://vllm:8111` / `http://sglang:8222` — реальный список
+  обслуживаемых id и проверка `/metrics` (из контейнера `slgpu-web` не
+  `127.0.0.1:порт` на публикованный порт движка).
 - `GET http://127.0.0.1:${PROMETHEUS_PORT}/-/healthy` и `/api/v1/query`.
 - `GET http://127.0.0.1:${GRAFANA_PORT}/api/health`.
 - `GET http://127.0.0.1:${LITELLM_PORT}/health`.

@@ -134,6 +134,8 @@ daemon не нашёл бы файлы по `/slgpu/...` и создал бы п
 
 Страница **Мониторинг** опрашивает Prometheus/Grafana/Langfuse/LiteLLM по HTTP: с хоста это `127.0.0.1`, **из контейнера slgpu-web** — **`host.docker.internal`** (задано в `docker/docker-compose.web.yml` как `WEB_MONITORING_HTTP_HOST`), иначе пробы попадали бы в сам контейнер web, а не в стек на хосте. Это внутренний адрес только для health-probe. Ссылки, которые открывает браузер, строятся по публичному host из страницы **Настройки** (`/settings`); если он не задан, используется hostname текущего запроса к Develonica.LLM.
 
+**Инференс-пробы** (`/v1/models`, `/metrics` к vLLM/SGLang) из backend используют `WEB_LLM_HTTP_HOST` (в compose тоже `host.docker.internal`) и при необходимости прямой DNS сервиса `http://vllm:8111` / `http://sglang:8222` в сети `slgpu`, потому что `127.0.0.1` внутри web — не хост с опубликованным портом движка.
+
 ## API
 
 Все ручки версионированы под `/api/v1`. Подробное описание выдаёт

@@ -10,11 +10,72 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 from app.models.run import EngineRun, RunStatus
 from app.services.docker_client import get_docker_inspector
 
 logger = logging.getLogger(__name__)
+
+_VLLM_INTERNAL_PORT = 8111
+_SGLANG_INTERNAL_PORT = 8222
+
+
+def _llm_probe_bases(settings: Settings, engine: str, api_port: int) -> list[str]:
+    """Candidates for OpenAI /v1/models and /metrics; order matters (fast path first)."""
+
+    port = int(api_port)
+    candidates: list[str] = [f"http://{settings.llm_http_host}:{port}"]
+    if engine == "vllm":
+        candidates.append(f"http://vllm:{_VLLM_INTERNAL_PORT}")
+    elif engine == "sglang":
+        candidates.append(f"http://sglang:{_SGLANG_INTERNAL_PORT}")
+    # Fallback, если LLM на хосте, а llm_http_host ещё 127.0.0.1 (доп. дубли отфильтруем)
+    hdi = f"http://host.docker.internal:{port}"
+    if settings.llm_http_host not in ("host.docker.internal",):
+        candidates.append(hdi)
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for c in candidates:
+        if c not in seen:
+            seen.add(c)
+            ordered.append(c)
+    return ordered
+
+
+async def _fetch_served_and_metrics(
+    client: httpx.AsyncClient, bases: list[str]
+) -> tuple[list[str], bool, str | None]:
+    """Return (served model ids, metrics 200, base URL that answered /v1/models)."""
+
+    served: list[str] = []
+    models_base: str | None = None
+    for base in bases:
+        try:
+            response = await client.get(f"{base}/v1/models")
+            if response.status_code == 200:
+                payload = response.json()
+                served = [item.get("id") for item in payload.get("data", []) if item.get("id")]
+                models_base = base
+                break
+        except httpx.HTTPError:
+            continue
+
+    metrics_bases: list[str] = []
+    if models_base is not None:
+        metrics_bases.append(models_base)
+    metrics_bases.extend(b for b in bases if b != models_base)
+    metrics_ok = False
+    for base in metrics_bases:
+        if base is None:
+            continue
+        try:
+            metrics = await client.get(f"{base}/metrics")
+            if metrics.status_code == 200:
+                metrics_ok = True
+                break
+        except httpx.HTTPError:
+            continue
+    return served, metrics_ok, models_base
 
 
 @dataclass
@@ -69,19 +130,14 @@ async def snapshot() -> RuntimeSnapshot:
     served: list[str] = []
     metrics_available = False
     if engine and api_port:
+        bases = _llm_probe_bases(settings, engine, api_port)
         async with httpx.AsyncClient(timeout=2.0) as client:
-            try:
-                response = await client.get(f"http://127.0.0.1:{api_port}/v1/models")
-                if response.status_code == 200:
-                    payload = response.json()
-                    served = [item.get("id") for item in payload.get("data", []) if item.get("id")]
-            except httpx.HTTPError:
-                pass
-            try:
-                metrics = await client.get(f"http://127.0.0.1:{api_port}/metrics")
-                metrics_available = metrics.status_code == 200
-            except httpx.HTTPError:
-                metrics_available = False
+            served, metrics_available, _ = await _fetch_served_and_metrics(client, bases)
+        if not served and not metrics_available:
+            logger.info(
+                "[runtime][snapshot][BLOCK_LLM_HTTP] all_probe_bases_failed bases=%r",
+                bases,
+            )
 
     if not inspector.is_available:
         logger.info(

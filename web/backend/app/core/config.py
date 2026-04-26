@@ -77,6 +77,14 @@ class Settings(BaseSettings):
         description="Host for HTTP health checks to monitoring services (Prometheus, Grafana, Langfuse, LiteLLM).",
     )
 
+    # Тот же принцип, что у WEB_MONITORING_HTTP_HOST: из slgpu-web к API vLLM/SGLang нельзя ходить на 127.0.0.1:порт
+    # (это loopback самого web). Дополнительно `runtime.py` пробует http://vllm:8111 и http://sglang:8222
+    # по сети compose `slgpu`.
+    llm_http_host: str = Field(
+        default="127.0.0.1",
+        description="Host for /v1/models and /metrics probes to the LLM container (published port on host or Docker DNS).",
+    )
+
     cors_origins: list[str] = Field(default_factory=lambda: ["*"])
     static_dir: Path | None = None
 

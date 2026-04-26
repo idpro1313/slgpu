@@ -52,6 +52,8 @@ services:
       WEB_LOKI_PORT: "${LOKI_PORT:-3100}"
       # HTTP-пробы из slgpu-web к стеку monitoring (порты на хосте, не 127.0.0.1 внутри контейнера)
       WEB_MONITORING_HTTP_HOST: host.docker.internal
+      # /v1/models и /metrics к vLLM/SGLang: с 127.0.0.1 внутри web не видно опубликованный порт на хосте
+      WEB_LLM_HTTP_HOST: host.docker.internal
     volumes:
       - ${SLGPU_HOST_REPO:-.}:${SLGPU_HOST_REPO:-/slgpu}
       - ${WEB_DATA_DIR:-./data/web}:/data

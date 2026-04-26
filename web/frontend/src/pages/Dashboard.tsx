@@ -79,7 +79,9 @@ export function DashboardPage() {
                 />
               </div>
               <div className="status-card__detail">
-                /metrics доступен и собирается Prometheus
+                {data.runtime.metrics_available
+                  ? "Проверка /metrics из slgpu-web: ответ 200. Prometheus на хосте может собирать тот же endpoint."
+                  : "Проверка /metrics из slgpu-web не прошла (см. WEB_LLM_HTTP_HOST и сеть slgpu). На хосте /metrics у движка всё ещё может быть доступен."}
               </div>
             </div>
             <div className="status-card">
