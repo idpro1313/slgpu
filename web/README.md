@@ -29,11 +29,11 @@ Web control plane поверх существующего CLI [`./slgpu`](../slg
 - **Backend**: FastAPI + SQLAlchemy 2.0 (async) + aiosqlite + Alembic +
   `docker` SDK + httpx.
 - **Frontend**: React 18 + Vite + TypeScript + React Router + TanStack Query.
-  Приложение называется **Develonica.LLM**. Стиль — лёгкий enterprise по мотивам
-  [`develonica.ru`](https://develonica.ru/) и бренд-гайда
-  [`Материалы бренда`](https://develonica.ru/company/guideline/): Gilroy-first
-  типографика, рубиновый акцент, молочно-белые поверхности, округлые карточки,
-  pill-навигация и стрелочный brand mark.
+  Приложение называется **Develonica.LLM**. Стиль синхронизирован с live CSS
+  [`develonica.ru`](https://develonica.ru/): `IBM Plex Sans` как основной
+  шрифт, `Finlandica` для акцентов, голубая палитра `#59AFFF`/`#0A5AA4`,
+  светло-голубые градиенты `#F7FBFF`/`#E2EDF8`, белая sticky-шапка,
+  подчёркнутая навигация и контролы с radius `10px`.
 - **Контейнер**: один образ. Backend отдаёт `/api/v1/*` и собранную React
   статику.
 - **БД**: SQLite, путь приходит из переменной `WEB_DATABASE_URL`,
