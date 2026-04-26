@@ -1539,3 +1539,10 @@
 - **Почему:** в Docker/Loki строки вида `INFO INFO … ts=… logger=httpx` от многократной обработки одной записи; контекст — шум в логах при просмотре httpx (в т.ч. 401 к LiteLLM).
 - **Файлы:** `web/backend/app/core/logging.py`, `web/backend/app/main.py` (повторный вызов в startup), `web/CONTRACT.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/plan/development-plan.xml`, `VERSION`, `docs/HISTORY.md`.
 - **Решение:** PATCH 3.3.5.
+
+### 3.3.6: Бенчмарки — убраны статический report.md и секция в UI
+
+- **Что:** Удалён `data/bench/report.md`, эндпоинт `GET /api/v1/bench/report.md`, блок на странице Benchmarks; каталог `data/bench/` сохранён через `.gitignore` + `.gitkeep`. Документация README, `data/README.md`, `web/CONTRACT.md`, GRACE (`fn-api_bench`, `export-bench-ui`).
+- **Почему:** запрос пользователя — длинный статический разбор в репозитории и превью в UI не нужны; достаточно модалки по `summary.json`.
+- **Файлы:** `web/frontend/src/pages/Benchmarks.tsx`, `web/backend/app/api/v1/bench.py`, `.gitignore`, `data/bench/.gitkeep`, удалён `data/bench/report.md`, `README.md`, `data/README.md`, `web/CONTRACT.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/plan/development-plan.xml`, `VERSION`, `docs/HISTORY.md`.
+- **Решение:** PATCH 3.3.6.

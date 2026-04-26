@@ -85,14 +85,6 @@ async def get_summary(engine: str, ts: str) -> dict[str, Any]:
     return json.loads(p.read_text(encoding="utf-8"))
 
 
-@router.get("/report.md")
-async def get_report_md() -> dict[str, str]:
-    path = get_settings().slgpu_root / "data" / "bench" / "report.md"
-    if not path.is_file():
-        raise HTTPException(status_code=404, detail="report.md not found")
-    return {"content": path.read_text(encoding="utf-8")}
-
-
 @router.post("/scenario", response_model=JobAccepted, status_code=status.HTTP_202_ACCEPTED)
 async def bench_scenario(
     payload: BenchScenarioBody,

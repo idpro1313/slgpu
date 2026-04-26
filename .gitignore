@@ -15,7 +15,7 @@ data/**
 !data/presets/**
 data/presets/*.env
 !data/bench/
-!data/bench/report.md
+!data/bench/.gitkeep
 
 # Доки агентов, GRACE, Kilo, правила Cursor — только локально, не в репозитории
 docs/

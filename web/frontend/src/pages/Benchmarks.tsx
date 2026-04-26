@@ -67,11 +67,6 @@ export function BenchmarksPage() {
     refetchInterval: 8_000,
   });
 
-  const report = useQuery({
-    queryKey: ["bench", "report"],
-    queryFn: () => api.get<{ content: string }>("/bench/report.md"),
-  });
-
   const summary = useQuery({
     queryKey: ["bench", "summary", detailRun?.engine, detailRun?.timestamp],
     queryFn: () =>
@@ -348,21 +343,6 @@ export function BenchmarksPage() {
           <div className="empty-state">Нет данных.</div>
         )}
       </Modal>
-
-      <Section title="report.md (пример в репозитории)" subtitle="Статический разбор; не генерируется автоматически.">
-        {report.isLoading ? (
-          <div className="empty-state">Загружаем…</div>
-        ) : report.isError ? (
-          <div className="empty-state">Файл не найден на сервере.</div>
-        ) : (
-          <pre
-            className="mono"
-            style={{ overflow: "auto", maxHeight: "28rem", whiteSpace: "pre-wrap", fontSize: "0.85rem" }}
-          >
-            {report.data?.content ?? ""}
-          </pre>
-        )}
-      </Section>
     </>
   );
 }

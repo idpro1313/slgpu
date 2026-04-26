@@ -392,7 +392,7 @@
         <export-settings-public-access PURPOSE="/api/v1/settings/public-access хранит публичный host сервера для UI-ссылок; внутренние probes остаются на WEB_MONITORING_HTTP_HOST" />
         <export-frontend-settings PURPOSE="/settings — public host, install из main.env, правка стека таблицей (stack_params)" />
         <export-app-config PURPOSE="/api/v1/app-config/*" />
-        <export-bench-ui PURPOSE="/benchmarks — список прогонов, report.md, запуск scenario/load" />
+        <export-bench-ui PURPOSE="/benchmarks — список прогонов, модалка summary.json, запуск scenario/load" />
         <export-models-crud PURPOSE="/api/v1/models/{id}: PATCH revision/notes, DELETE registry row and optional local weights under MODELS_DIR" />
         <export-presets-crud PURPOSE="/api/v1/presets/{id}: PATCH structured key/value runtime params, DELETE DB row and optional .env under PRESETS_DIR" />
       </interface>
