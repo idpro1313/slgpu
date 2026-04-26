@@ -210,6 +210,15 @@ export interface PresetSyncResult {
   errors: string[];
 }
 
+export interface PresetImportTemplatesResult {
+  files_copied: number;
+  files_skipped_existing: number;
+  imported: number;
+  updated: number;
+  skipped: number;
+  errors: string[];
+}
+
 export interface LiteLLMHealth {
   liveliness: boolean;
   readiness: boolean;

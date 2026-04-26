@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -16,7 +17,13 @@ from app.core.security import (
     validate_tp,
 )
 from app.models.preset import Preset
-from app.schemas.presets import PresetCreate, PresetOut, PresetSyncResult, PresetUpdate
+from app.schemas.presets import (
+    PresetCreate,
+    PresetImportTemplatesResult,
+    PresetOut,
+    PresetSyncResult,
+    PresetUpdate,
+)
 from app.services import presets as preset_service
 from app.services.ui_audit import record_ui_action
 
@@ -44,6 +51,46 @@ async def sync_presets(
         payload={"imported": imported, "updated": updated, "skipped": skipped, "error_lines": errors[:20]},
     )
     return PresetSyncResult(imported=imported, updated=updated, skipped=skipped, errors=errors)
+
+
+@router.post("/import-templates", response_model=PresetImportTemplatesResult)
+async def import_preset_templates(
+    session: AsyncSession = Depends(db_session),
+    actor: str | None = Depends(actor_from_header),
+) -> PresetImportTemplatesResult:
+    """Скопировать шаблоны из ``<repo>/examples/presets`` в PRESETS_DIR (без перезаписи), затем импорт в БД."""
+
+    copied, skipped_files, errs_copy = await asyncio.to_thread(
+        preset_service.copy_example_presets_to_disk
+    )
+    imported, updated, skipped_imp, errs_db = await preset_service.import_files_into_db(session)
+    errors = [*errs_copy, *errs_db]
+    await record_ui_action(
+        session,
+        action="presets.import_templates",
+        actor=actor,
+        target=None,
+        note=(
+            f"files_copied={copied} files_skipped={skipped_files} "
+            f"imported={imported} updated={updated} skipped={skipped_imp} errors={len(errors)}"
+        ),
+        payload={
+            "files_copied": copied,
+            "files_skipped_existing": skipped_files,
+            "imported": imported,
+            "updated": updated,
+            "skipped": skipped_imp,
+            "error_lines": errors[:40],
+        },
+    )
+    return PresetImportTemplatesResult(
+        files_copied=copied,
+        files_skipped_existing=skipped_files,
+        imported=imported,
+        updated=updated,
+        skipped=skipped_imp,
+        errors=errors,
+    )
 
 
 @router.post("", response_model=PresetOut, status_code=status.HTTP_201_CREATED)

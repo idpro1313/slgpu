@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
-import type { Preset, PresetSyncResult } from "@/api/types";
+import type { Preset, PresetImportTemplatesResult, PresetSyncResult } from "@/api/types";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -129,6 +129,7 @@ export function PresetsPage() {
   const [editor, setEditor] = useState<PresetEditorForm | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [syncResult, setSyncResult] = useState<PresetSyncResult | null>(null);
+  const [templatesResult, setTemplatesResult] = useState<PresetImportTemplatesResult | null>(null);
 
   const presets = useQuery({
     queryKey: ["presets"],
@@ -140,6 +141,20 @@ export function PresetsPage() {
     mutationFn: () => api.post<PresetSyncResult>("/presets/sync"),
     onSuccess: (data) => {
       setSyncResult(data);
+      setTemplatesResult(null);
+      queryClient.invalidateQueries({ queryKey: ["presets"] });
+      queryClient.invalidateQueries({ queryKey: ["models"] });
+      queryClient.invalidateQueries({ queryKey: ["activity"] });
+    },
+    onError: (err: Error) => setError(err.message),
+  });
+
+  const importTemplates = useMutation({
+    mutationFn: () => api.post<PresetImportTemplatesResult>("/presets/import-templates"),
+    onSuccess: (data) => {
+      setTemplatesResult(data);
+      setSyncResult(null);
+      setError(null);
       queryClient.invalidateQueries({ queryKey: ["presets"] });
       queryClient.invalidateQueries({ queryKey: ["models"] });
       queryClient.invalidateQueries({ queryKey: ["activity"] });
@@ -234,18 +249,43 @@ export function PresetsPage() {
     <>
       <PageHeader
         title="Пресеты запуска"
-        subtitle="CRUD пресетов и двусторонняя синхронизация с data/presets/<slug>.env (PRESETS_DIR)."
+        subtitle="CRUD пресетов и двусторонняя синхронизация с data/presets/<slug>.env (PRESETS_DIR). Шаблоны — из examples/presets в репозитории."
         actions={
-          <button
-            type="button"
-            className="btn btn--ghost"
-            onClick={() => sync.mutate()}
-            disabled={sync.isPending}
-          >
-            {sync.isPending ? "Синхронизация…" : "Синхронизировать с диском"}
-          </button>
+          <Fragment>
+            <button
+              type="button"
+              className="btn btn--ghost"
+              onClick={() => importTemplates.mutate()}
+              disabled={importTemplates.isPending || sync.isPending}
+            >
+              {importTemplates.isPending ? "Копируем шаблоны…" : "Загрузить шаблоны"}
+            </button>
+            <button
+              type="button"
+              className="btn btn--ghost"
+              onClick={() => sync.mutate()}
+              disabled={sync.isPending || importTemplates.isPending}
+            >
+              {sync.isPending ? "Синхронизация…" : "Синхронизировать с диском"}
+            </button>
+          </Fragment>
         }
       />
+
+      {templatesResult ? (
+        <div className="section" style={{ marginTop: 0 }}>
+          <p className="section__subtitle">
+            Шаблоны из <span className="mono">examples/presets</span>: скопировано файлов{" "}
+            <strong>{templatesResult.files_copied}</strong>, уже были на диске{" "}
+            <strong>{templatesResult.files_skipped_existing}</strong>. В БД: импортировано{" "}
+            <strong>{templatesResult.imported}</strong>, обновлено <strong>{templatesResult.updated}</strong>
+            , пропущено <strong>{templatesResult.skipped}</strong>.
+          </p>
+          {templatesResult.errors.length > 0 ? (
+            <pre className="code-block">{templatesResult.errors.join("\n")}</pre>
+          ) : null}
+        </div>
+      ) : null}
 
       {syncResult ? (
         <div className="section" style={{ marginTop: 0 }}>

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -10,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.security import validate_slug
+from app.core.security import ValidationError, validate_slug
 from app.models.model import HFModel, ModelDownloadStatus
 from app.models.preset import Preset
 from app.services.env_files import (
@@ -59,6 +60,52 @@ _RUNTIME_KEYS = {
 
 def presets_dir() -> Path:
     return get_settings().models_presets_dir
+
+
+def copy_example_presets_to_disk() -> tuple[int, int, list[str]]:
+    """Скопировать ``*.env`` из ``examples/presets`` в PRESETS_DIR.
+
+    Существующие файлы с тем же именем не перезаписываются (пропуск).
+
+    Returns:
+        (copied, skipped_existing, errors)
+    """
+
+    settings = get_settings()
+    root = settings.slgpu_root.resolve()
+    src_root = (root / "examples" / "presets").resolve()
+    try:
+        src_root.relative_to(root)
+    except ValueError:
+        return 0, 0, ["examples/presets is outside SLGPU_ROOT"]
+
+    if not src_root.is_dir():
+        return 0, 0, [f"missing examples presets directory: {src_root}"]
+
+    dest_root = presets_dir().resolve()
+    copied = 0
+    skipped = 0
+    errors: list[str] = []
+
+    for path in list_preset_files(src_root):
+        slug = path.stem
+        try:
+            validate_slug(slug)
+        except ValidationError as exc:
+            errors.append(f"{path.name}: {exc}")
+            continue
+        dest = dest_root / f"{slug}.env"
+        if dest.exists():
+            skipped += 1
+            continue
+        try:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, dest)
+            copied += 1
+        except OSError as exc:
+            errors.append(f"{path.name}: {exc}")
+
+    return copied, skipped, errors
 
 
 async def import_files_into_db(
