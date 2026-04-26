@@ -7,7 +7,7 @@ Web control plane поверх существующего CLI [`./slgpu`](../slg
   регистрация, изменение revision/notes, удаление записи или локальной папки весов,
   инициируемые загрузки.
 - CRUD пресетов с двусторонней синхронизацией с
-  [`data/presets/*.env`](../data/presets/) (`PRESETS_DIR` в `main.env`).
+  рабочий каталог [`data/presets/`](../data/presets/) (`PRESETS_DIR` в `main.env`), эталоны — [`examples/presets/`](../examples/presets/).
   Параметры пресета редактируются через строки `ключ/значение` с подсказками
   типовых runtime-переменных, без ручного JSON.
 - Управление инференсом vLLM/SGLang через `./slgpu up|down|restart`.

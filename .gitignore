@@ -8,12 +8,14 @@ __pycache__/
 .DS_Store
 template/*
 
-# Локальные данные на сервере (веса, БД, TSDB); в git — README, .gitkeep, пресеты data/presets/*.env
+# Локальные данные на сервере (веса, БД, TSDB). Пресеты data/presets/*.env — только локально (не в git);
+# эталонные примеры — examples/presets/*.env
 data/**
 !data/README.md
 !data/**/.gitkeep
 !data/presets/
 !data/presets/**
+data/presets/*.env
 
 # Доки агентов, GRACE, Kilo, правила Cursor — только локально, не в репозитории
 docs/

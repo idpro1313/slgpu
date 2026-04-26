@@ -5,7 +5,7 @@
 | Подкаталог | Назначение |
 |------------|------------|
 | **`models/`** | Веса Hugging Face (`MODELS_DIR=./data/models` в `main.env`) — то же дерево, что монтируется в vLLM/SGLang и в `slgpu-web`. |
-| **`presets/`** | Файлы пресетов `*.env` (`PRESETS_DIR=./data/presets` в `main.env`); web UI и `./slgpu` читают и пишут сюда. Формат полей: `configs/models/README.md`. |
+| **`presets/`** | Файлы пресетов `*.env` (`PRESETS_DIR=./data/presets` в `main.env`); web UI и `./slgpu` читают и пишут сюда. Каталог `*.env` **не в git** (чтобы `git pull` на сервере не конфликтовал с локальными правками). Эталонные примеры — **`examples/presets/`** (`cp examples/presets/*.env data/presets/` на чистом клоне). Формат полей: `configs/models/README.md`. |
 | **`web/`** | SQLite и рабочие файлы web UI (`WEB_DATA_DIR=./data/web`). |
 | **`monitoring/`** | TSDB, Loki, Grafana, Langfuse, MinIO и т.д. — пути задаются в `main.env` (`PROMETHEUS_DATA_DIR`, `LOKI_DATA_DIR`, `LANGFUSE_*_DATA_DIR`, …), по умолчанию подкаталоги **`./data/monitoring/...`**. |
 

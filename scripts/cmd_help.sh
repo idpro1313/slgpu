@@ -7,7 +7,7 @@ slgpu — стенд vLLM vs SGLang в Docker (Linux VM).
 
 Команды:
   prepare [1–6]        Подготовка хоста (Docker, NVIDIA toolkit, каталог моделей, …)
-  pull <HF_ID|preset>   Скачать веса (hf download); пресет не создаётся — см. configs/models/README.md (файлы в data/presets)
+  pull <HF_ID|preset>   Скачать веса (hf download); пресет не создаётся — см. configs/models/README.md (эталоны: examples/presets/, рабочие: data/presets/)
   up [vllm|sglang] [-m <preset>] [-p <порт>] [--tp <N>]   (без арг. — выбор в TTY)
   monitoring up|down|restart|fix-perms   Мониторинг; fix-perms — chown каталогов данных (bind mount)
   web up|down|restart|logs|build      Web UI (slgpu-web); из корня репо; см. data/README, main.env
