@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
-import type { HFModel, JobAccepted } from "@/api/types";
+import type { HFModel, JobAccepted, ModelSyncResult } from "@/api/types";
 import { formatBytes, formatDate } from "@/components/formatters";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
@@ -11,6 +11,7 @@ import {
   IconActionButton,
   IconCloudArrowDown,
   IconEdit,
+  IconTrash,
 } from "@/components/TableActionIcons";
 
 interface AddModelForm {
@@ -46,11 +47,26 @@ export function ModelsPage() {
   const [editor, setEditor] = useState<ModelEditorForm | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pulling, setPulling] = useState<number | null>(null);
+  const [syncResult, setSyncResult] = useState<ModelSyncResult | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["models"],
     queryFn: () => api.get<HFModel[]>("/models"),
     refetchInterval: 8_000,
+  });
+
+  const syncFromDisk = useMutation({
+    mutationFn: () => api.post<ModelSyncResult>("/models/sync"),
+    onSuccess: (res) => {
+      setError(null);
+      setSyncResult(res);
+      queryClient.invalidateQueries({ queryKey: ["models"] });
+      queryClient.invalidateQueries({ queryKey: ["activity"] });
+    },
+    onError: (err: Error) => {
+      setError(err.message);
+      setSyncResult(null);
+    },
   });
 
   const addModel = useMutation({
@@ -102,10 +118,12 @@ export function ModelsPage() {
   const deleteModel = useMutation({
     mutationFn: ({ id, deleteFiles }: { id: number; deleteFiles: boolean }) =>
       api.delete<{ deleted: boolean }>(`/models/${id}?delete_files=${deleteFiles ? "true" : "false"}`),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       setError(null);
-      setSelectedId(null);
-      setEditor(null);
+      if (selectedId === variables.id) {
+        setSelectedId(null);
+        setEditor(null);
+      }
       queryClient.invalidateQueries({ queryKey: ["models"] });
       queryClient.invalidateQueries({ queryKey: ["activity"] });
     },
@@ -278,8 +296,24 @@ export function ModelsPage() {
 
       <Section
         title="Реестр моделей"
-        subtitle="Состояние локального диска синхронизируется при каждом запросе."
+        subtitle="Состояние с диска (MODELS_DIR) обновляется при загрузке списка. Кнопка ниже — явное сканирование папок и обновление всех карточек."
+        actions={
+          <button
+            type="button"
+            className="btn btn--ghost"
+            onClick={() => syncFromDisk.mutate()}
+            disabled={syncFromDisk.isPending}
+          >
+            {syncFromDisk.isPending ? "Синхронизация…" : "Синхронизировать с диском"}
+          </button>
+        }
       >
+        {syncResult ? (
+          <p className="section__subtitle" style={{ marginTop: 0 }}>
+            Сканирование: затронуто <strong>{syncResult.touched}</strong> папок на диске, в реестре сейчас{" "}
+            <strong>{syncResult.total}</strong> моделей.
+          </p>
+        ) : null}
         {isLoading ? (
           <div className="empty-state">Загружаем…</div>
         ) : !data || data.length === 0 ? (
@@ -338,6 +372,22 @@ export function ModelsPage() {
                           disabled={pullModel.isPending || pulling === model.id}
                         >
                           <IconCloudArrowDown />
+                        </IconActionButton>
+                        <IconActionButton
+                          label="Удалить модель из web-реестра (веса на диске остаются)"
+                          variant="danger"
+                          disabled={deleteModel.isPending}
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                `Удалить «${model.hf_id}» из реестра? Локальные веса в MODELS_DIR не удаляются.`,
+                              )
+                            ) {
+                              deleteModel.mutate({ id: model.id, deleteFiles: false });
+                            }
+                          }}
+                        >
+                          <IconTrash />
                         </IconActionButton>
                       </div>
                     </td>

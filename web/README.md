@@ -149,6 +149,7 @@ daemon не нашёл бы файлы по `/slgpu/...` и создал бы п
 | GET | `/healthz` | liveness + версия |
 | GET | `/api/v1/dashboard` | сводка для главной страницы |
 | GET/POST | `/api/v1/models` | список HF моделей по `MODELS_DIR/<org>/<repo>` и регистрация HF моделей |
+| POST | `/api/v1/models/sync` | явное сканирование `MODELS_DIR` и обновление реестра (сколько папок затронуто, всего записей) |
 | PATCH/DELETE | `/api/v1/models/{id}` | изменение revision/notes, удаление записи или локальных весов |
 | POST | `/api/v1/models/{id}/pull` | `slgpu pull` через job runner |
 | GET/POST | `/api/v1/presets` | список и создание пресетов |

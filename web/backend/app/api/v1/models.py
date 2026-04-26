@@ -11,7 +11,13 @@ from app.core.security import ValidationError
 from app.models.model import HFModel
 from app.models.preset import Preset
 from app.schemas.common import JobAccepted
-from app.schemas.models import HFModelCreate, HFModelOut, HFModelPullRequest, HFModelUpdate
+from app.schemas.models import (
+    HFModelCreate,
+    HFModelOut,
+    HFModelPullRequest,
+    HFModelUpdate,
+    ModelSyncResult,
+)
 from app.core.config import get_settings
 from app.services import hf_models as hf_service
 from app.services import jobs as jobs_service
@@ -57,6 +63,29 @@ async def create_model(
         payload={"hf_id": model.hf_id, "id": model.id},
     )
     return model
+
+
+@router.post("/sync", response_model=ModelSyncResult)
+async def sync_models_from_disk(
+    session: AsyncSession = Depends(db_session),
+    actor: str | None = Depends(actor_from_header),
+) -> ModelSyncResult:
+    """Подмешать папки в MODELS_DIR в реестр и обновить размер/статус у всех записей."""
+
+    discovered = await hf_service.sync_local_models(session)
+    result = await session.execute(select(HFModel).order_by(HFModel.hf_id))
+    items = list(result.scalars().all())
+    for item in items:
+        await hf_service.refresh_status(session, item)
+    await record_ui_action(
+        session,
+        action="models.sync",
+        actor=actor,
+        target=None,
+        note=f"touched={len(discovered)} total={len(items)}",
+        payload={"touched": len(discovered), "total": len(items)},
+    )
+    return ModelSyncResult(touched=len(discovered), total=len(items))
 
 
 @router.get("/{model_id}", response_model=HFModelOut)

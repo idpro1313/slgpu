@@ -67,6 +67,11 @@ export interface HFModel {
   updated_at: string;
 }
 
+export interface ModelSyncResult {
+  touched: number;
+  total: number;
+}
+
 export interface Preset {
   id: number;
   name: string;

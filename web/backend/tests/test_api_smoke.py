@@ -224,6 +224,17 @@ async def test_public_access_settings_drive_external_ui_links(client: httpx.Asyn
 
 
 @pytest.mark.asyncio
+async def test_models_sync_returns_counts(client: httpx.AsyncClient) -> None:
+    async with client:
+        res = await client.post("/api/v1/models/sync")
+    assert res.status_code == 200
+    body = res.json()
+    assert "touched" in body and "total" in body
+    assert isinstance(body["touched"], int)
+    assert isinstance(body["total"], int)
+
+
+@pytest.mark.asyncio
 async def test_activity_includes_ui_after_preset_and_settings(client: httpx.AsyncClient) -> None:
     """Лента /activity: UI-события (audit без correlation) + CLI-записи (jobs)."""
     async with client:

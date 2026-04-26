@@ -40,3 +40,10 @@ class HFModelUpdate(BaseModel):
 
 class HFModelPullRequest(BaseModel):
     revision: str | None = None
+
+
+class ModelSyncResult(BaseModel):
+    """Сканирование MODELS_DIR: папок затронуто (создано/обновлено) и всего в реестре."""
+
+    touched: int
+    total: int
