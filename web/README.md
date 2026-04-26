@@ -30,9 +30,10 @@ Web control plane поверх существующего CLI [`./slgpu`](../slg
   `docker` SDK + httpx.
 - **Frontend**: React 18 + Vite + TypeScript + React Router + TanStack Query.
   Приложение называется **Develonica.LLM**. Стиль — лёгкий enterprise по мотивам
-  [`develonica.ru`](https://develonica.ru/): тёмная технологичная навигация,
-  яркие синие AI-акценты, крупные карточки, аккуратная типографика и светлая
-  рабочая область.
+  [`develonica.ru`](https://develonica.ru/) и бренд-гайда
+  [`Материалы бренда`](https://develonica.ru/company/guideline/): Gilroy-first
+  типографика, рубиновый акцент, молочно-белые поверхности, округлые карточки,
+  pill-навигация и стрелочный brand mark.
 - **Контейнер**: один образ. Backend отдаёт `/api/v1/*` и собранную React
   статику.
 - **БД**: SQLite, путь приходит из переменной `WEB_DATABASE_URL`,

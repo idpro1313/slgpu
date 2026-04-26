@@ -23,8 +23,10 @@ Web-приложение **Develonica.LLM** (`slgpu-web`) — control plane по
    точки доступа к моделям.
 
 Визуальный стиль фронтенда следует брендовой рамке сайта
-[`develonica.ru`](https://develonica.ru/): тёмная технологичная навигация,
-синие AI-акценты, крупные светлые enterprise-блоки и favicon в LLM-тематике.
+[`develonica.ru`](https://develonica.ru/) и публичным
+[`Материалам бренда`](https://develonica.ru/company/guideline/): Gilroy-first
+типографика, фирменный рубиновый акцент, молочно-белые поверхности, округлые
+контролы, pill-навигация, стрелочный brand mark и favicon в LLM-тематике.
 
 Отдельная страница **Настройки** хранит публичный IP/DNS сервера в SQLite
 (`settings.public_access.server_host`). Этот host используется только для
