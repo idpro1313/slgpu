@@ -92,7 +92,6 @@ async def test_update_preset_allows_hf_id_and_parameters(client: httpx.AsyncClie
             json={
                 "name": "qwen3",
                 "hf_id": "Qwen/Qwen3-7B",
-                "engine": "vllm",
                 "tp": 4,
                 "parameters": {"MAX_MODEL_LEN": "32768"},
             },
@@ -125,7 +124,6 @@ async def test_delete_preset_can_remove_exported_file(client: httpx.AsyncClient)
             json={
                 "name": "delete-me",
                 "hf_id": "Qwen/Qwen3-7B",
-                "engine": "vllm",
                 "parameters": {"MAX_MODEL_LEN": "32768"},
             },
         )
@@ -172,7 +170,6 @@ async def test_runtime_snapshot_includes_requested_preset_and_model(
             json={
                 "name": "qwen3",
                 "hf_id": "Qwen/Qwen3-30B-A3B",
-                "engine": "vllm",
                 "tp": 8,
                 "parameters": {},
             },

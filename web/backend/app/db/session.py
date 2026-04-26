@@ -20,6 +20,9 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from sqlalchemy import text
+from sqlalchemy.engine import Connection
+
 from app.core.config import get_settings
 from app.db.base import Base
 
@@ -92,6 +95,20 @@ async def reset_engine() -> None:
     _session_factory = None
 
 
+def _sqlite_drop_legacy_preset_engine_column(connection: Connection) -> None:
+    """Remove `presets.engine` if present (schema before 2.13.26)."""
+
+    if connection.engine.dialect.name != "sqlite":
+        return
+    rows = connection.execute(text("PRAGMA table_info('presets')")).fetchall()
+    if not any(r[1] == "engine" for r in rows):
+        return
+    try:
+        connection.execute(text("ALTER TABLE presets DROP COLUMN engine"))
+    except Exception as exc:  # noqa: BLE001 - best-effort; older SQLite
+        logger.warning("Could not drop legacy presets.engine column: %s", exc)
+
+
 async def init_db() -> None:
     """Create tables on first run.
 
@@ -112,6 +129,7 @@ async def init_db() -> None:
     engine = get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(_sqlite_drop_legacy_preset_engine_column)
 
 
 @asynccontextmanager

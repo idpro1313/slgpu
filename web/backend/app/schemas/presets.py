@@ -16,7 +16,6 @@ class PresetOut(BaseModel):
     description: str | None
     model_id: int | None
     hf_id: str
-    engine: str
     tp: int | None
     gpu_mask: str | None
     served_model_name: str | None
@@ -32,7 +31,6 @@ class PresetCreate(BaseModel):
     name: str = Field(min_length=1, max_length=64)
     description: str | None = None
     hf_id: str
-    engine: str = "vllm"
     tp: int | None = None
     gpu_mask: str | None = None
     served_model_name: str | None = None
@@ -42,7 +40,6 @@ class PresetCreate(BaseModel):
 class PresetUpdate(BaseModel):
     description: str | None = None
     hf_id: str | None = None
-    engine: str | None = None
     tp: int | None = None
     gpu_mask: str | None = None
     served_model_name: str | None = None

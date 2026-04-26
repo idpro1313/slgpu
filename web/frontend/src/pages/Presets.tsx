@@ -17,7 +17,6 @@ import {
 interface NewPresetForm {
   name: string;
   hf_id: string;
-  engine: "vllm" | "sglang";
   tp: string;
   served_model_name: string;
   gpu_mask: string;
@@ -33,7 +32,6 @@ interface ParameterRow {
 
 interface PresetEditorForm {
   hf_id: string;
-  engine: "vllm" | "sglang";
   tp: string;
   served_model_name: string;
   gpu_mask: string;
@@ -45,7 +43,6 @@ interface PresetEditorForm {
 const EMPTY: NewPresetForm = {
   name: "",
   hf_id: "",
-  engine: "vllm",
   tp: "",
   served_model_name: "",
   gpu_mask: "",
@@ -56,7 +53,6 @@ const EMPTY: NewPresetForm = {
 function editorFromPreset(preset: Preset): PresetEditorForm {
   return {
     hf_id: preset.hf_id,
-    engine: preset.engine === "sglang" ? "sglang" : "vllm",
     tp: preset.tp == null ? "" : String(preset.tp),
     served_model_name: preset.served_model_name ?? "",
     gpu_mask: preset.gpu_mask ?? "",
@@ -87,7 +83,6 @@ function parametersFromRows(rows: ParameterRow[]): Record<string, string> {
 function isPresetEditorDirty(editor: PresetEditorForm, preset: Preset): boolean {
   const base = editorFromPreset(preset);
   if (editor.hf_id !== base.hf_id) return true;
-  if (editor.engine !== base.engine) return true;
   if (editor.tp !== base.tp) return true;
   if (editor.served_model_name !== base.served_model_name) return true;
   if (editor.gpu_mask !== base.gpu_mask) return true;
@@ -173,7 +168,6 @@ export function PresetsPage() {
       api.post<Preset>("/presets", {
         name: payload.name,
         hf_id: payload.hf_id,
-        engine: payload.engine,
         tp: payload.tp ? Number(payload.tp) : null,
         served_model_name: payload.served_model_name || null,
         gpu_mask: payload.gpu_mask || null,
@@ -202,7 +196,6 @@ export function PresetsPage() {
       const parameters = parametersFromRows(payload.parameters);
       return api.patch<Preset>(`/presets/${id}`, {
         hf_id: payload.hf_id,
-        engine: payload.engine,
         tp: payload.tp ? Number(payload.tp) : null,
         served_model_name: payload.served_model_name || null,
         gpu_mask: payload.gpu_mask || null,
@@ -264,7 +257,7 @@ export function PresetsPage() {
 
       <Section
         title="Создать пресет"
-        subtitle="Минимальный пресет: имя, HF id, движок и опционально TP. Параметры можно расширить позже."
+        subtitle="Минимальный пресет: имя, HF id и опционально TP. Движок (vLLM/SGLang) выбирается при запуске на странице Inference. Параметры можно расширить позже."
       >
         <form
           className="form-grid"
@@ -291,19 +284,6 @@ export function PresetsPage() {
               value={form.hf_id}
               onChange={(event) => setForm({ ...form, hf_id: event.target.value })}
             />
-          </div>
-          <div>
-            <label className="label">Движок</label>
-            <select
-              className="select"
-              value={form.engine}
-              onChange={(event) =>
-                setForm({ ...form, engine: event.target.value as NewPresetForm["engine"] })
-              }
-            >
-              <option value="vllm">vLLM</option>
-              <option value="sglang">SGLang</option>
-            </select>
           </div>
           <div>
             <label className="label">TP (tensor parallel)</label>
@@ -386,28 +366,6 @@ export function PresetsPage() {
                   value={editor.hf_id}
                   onChange={(event) => setEditor({ ...editor, hf_id: event.target.value })}
                 />
-              </div>
-              <div>
-                <label className="label">Движок</label>
-                <select
-                  className="select"
-                  value={editor.engine}
-                  onChange={(event) =>
-                    setEditor({
-                      ...editor,
-                      engine: event.target.value as PresetEditorForm["engine"],
-                    })
-                  }
-                >
-                  <option value="vllm">vLLM</option>
-                  <option value="sglang">SGLang</option>
-                </select>
-                <p className="section__subtitle" style={{ marginTop: 6, marginBottom: 0, fontSize: 13 }}>
-                  Сохраняется в БД; при экспорте в <span className="mono">.env</span> пишется{" "}
-                  <span className="mono">SLGPU_ENGINE</span>. Какой контейнер реально поднимется, задаётся
-                  командой <span className="mono">./slgpu up vllm|sglang -m …</span> или выбором движка на
-                  странице Inference, а не только этой строкой.
-                </p>
               </div>
               <div>
                 <label className="label">TP</label>
@@ -548,7 +506,6 @@ export function PresetsPage() {
                 <tr>
                   <th>Имя</th>
                   <th>HF ID</th>
-                  <th>Движок</th>
                   <th>TP</th>
                   <th>Served name</th>
                   <th>Sync</th>
@@ -561,7 +518,6 @@ export function PresetsPage() {
                   <tr key={preset.id}>
                     <td className="mono">{preset.name}</td>
                     <td className="mono">{preset.hf_id}</td>
-                    <td>{preset.engine}</td>
                     <td>{preset.tp ?? "—"}</td>
                     <td className="mono">{preset.served_model_name ?? "—"}</td>
                     <td>

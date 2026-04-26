@@ -73,7 +73,6 @@ export interface Preset {
   description: string | null;
   model_id: number | null;
   hf_id: string;
-  engine: string;
   tp: number | null;
   gpu_mask: string | null;
   served_model_name: string | null;

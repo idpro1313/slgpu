@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import db_session
 from app.core.security import (
     ValidationError,
-    validate_engine,
     validate_hf_id,
     validate_slug,
     validate_tp,
@@ -54,7 +53,6 @@ async def create_preset(payload: PresetCreate, session: AsyncSession = Depends(d
         name=payload.name,
         description=payload.description,
         hf_id=payload.hf_id,
-        engine=payload.engine,
         tp=payload.tp,
         gpu_mask=payload.gpu_mask,
         served_model_name=payload.served_model_name,
@@ -91,12 +89,6 @@ async def update_preset(
         except ValidationError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         preset.hf_id = payload.hf_id
-    if "engine" in fields and payload.engine is not None:
-        try:
-            validate_engine(payload.engine)
-        except ValidationError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        preset.engine = payload.engine
     if "tp" in fields:
         if payload.tp is None:
             preset.tp = None

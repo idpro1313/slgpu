@@ -21,7 +21,6 @@ class Preset(Base):
     )
     hf_id: Mapped[str] = mapped_column(String(256), nullable=False)
 
-    engine: Mapped[str] = mapped_column(String(16), nullable=False, default="vllm")
     tp: Mapped[int | None] = mapped_column(Integer, nullable=True)
     gpu_mask: Mapped[str | None] = mapped_column(String(64), nullable=True)
     served_model_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
