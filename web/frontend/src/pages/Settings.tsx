@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
-import type { PublicAccessSettings } from "@/api/types";
+import type { Job, JobAccepted, PublicAccessSettings } from "@/api/types";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
 
@@ -11,11 +11,35 @@ export function SettingsPage() {
   const [serverHost, setServerHost] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [jobError, setJobError] = useState<string | null>(null);
 
   const publicAccess = useQuery({
     queryKey: ["settings", "public-access"],
     queryFn: () => api.get<PublicAccessSettings>("/settings/public-access"),
   });
+
+  const jobs = useQuery({
+    queryKey: ["jobs"],
+    queryFn: () => api.get<Job[]>("/jobs"),
+    refetchInterval: 2_000,
+  });
+
+  const monitoringAction = useMutation({
+    mutationFn: (act: string) =>
+      api.post<JobAccepted>("/monitoring/action", { action: act }),
+    onSuccess: () => {
+      setJobError(null);
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["monitoring", "services"] });
+    },
+    onError: (err: Error) => setJobError(err.message),
+  });
+
+  const activeMonitoringJob = jobs.data?.find(
+    (job) => job.scope === "monitoring" && (job.status === "queued" || job.status === "running"),
+  );
+  const monitoringBusy =
+    Boolean(activeMonitoringJob) || monitoringAction.isPending;
 
   useEffect(() => {
     if (publicAccess.data) {
@@ -91,6 +115,29 @@ export function SettingsPage() {
           {message ? <p style={{ color: "var(--color-success)" }}>{message}</p> : null}
           {error ? <p style={{ color: "var(--color-danger)" }}>{error}</p> : null}
         </form>
+      </Section>
+
+      <Section
+        title="Права на каталоги мониторинга"
+        subtitle="Команда `./slgpu monitoring fix-perms`: создаёт/чинит владельца bind-mount каталогов стека (Loki, Langfuse, LiteLLM и др.). Обычно нужна один раз на новом сервере; выполняется как фоновая задача. Пока идёт любая job мониторинга, кнопка заблокирована."
+      >
+        <div className="flex flex--col flex--gap-sm">
+          <button
+            type="button"
+            className="btn btn--ghost"
+            disabled={monitoringBusy}
+            onClick={() => monitoringAction.mutate("fix-perms")}
+          >
+            {monitoringAction.isPending ? "Запуск fix-perms…" : "fix-perms (chmod/chown mount’ов)"}
+          </button>
+          {activeMonitoringJob ? (
+            <p className="section__subtitle" style={{ margin: 0 }}>
+              Выполняется job мониторинга #{activeMonitoringJob.id} — дождитесь окончания или смотрите
+              «Задачи».
+            </p>
+          ) : null}
+          {jobError ? <p style={{ color: "var(--color-danger)" }}>{jobError}</p> : null}
+        </div>
       </Section>
 
       <Section title="Итоговые ссылки" subtitle="Именно эти URL будут показаны на Dashboard, Monitoring и LiteLLM.">

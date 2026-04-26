@@ -62,14 +62,6 @@ export function MonitoringPage() {
             </button>
             <button
               type="button"
-              className="btn btn--ghost"
-              onClick={() => action.mutate("fix-perms")}
-              disabled={monitoringBusy}
-            >
-              fix-perms
-            </button>
-            <button
-              type="button"
               className="btn btn--danger"
               onClick={() => action.mutate("down")}
               disabled={monitoringBusy}
@@ -83,7 +75,7 @@ export function MonitoringPage() {
       {monitoringBusy ? (
         <Section
           title="Команда мониторинга выполняется"
-          subtitle="Пока job не завершилась, повторные up/restart/fix-perms/down заблокированы."
+          subtitle="Пока job не завершилась, повторные up/restart/down заблокированы."
         >
           {activeMonitoringJob ? (
             <div className="status-card">

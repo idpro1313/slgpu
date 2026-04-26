@@ -17,7 +17,8 @@ Web control plane поверх существующего CLI [`./slgpu`](../slg
 - Управление и наблюдение мониторинг-стека (`./slgpu monitoring …`).
 - Состояние и базовые маршруты LiteLLM Proxy.
 - Настройки публичного адреса сервера для корректных ссылок на Grafana,
-  Prometheus, Langfuse и LiteLLM Admin UI из браузера пользователя.
+  Prometheus, Langfuse и LiteLLM Admin UI из браузера пользователя; на той же
+  странице — запуск `monitoring fix-perms` (права на bind-mount каталогов стека).
 - Журнал всех CLI-операций с stdout/stderr tail.
 
 Контракт и границы ответственности зафиксированы в
