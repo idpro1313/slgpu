@@ -28,6 +28,12 @@ function editorFromModel(model: HFModel): ModelEditorForm {
   };
 }
 
+function isModelEditorDirty(editor: ModelEditorForm, model: HFModel): boolean {
+  return (
+    editor.revision !== (model.revision ?? "") || editor.notes !== (model.notes ?? "")
+  );
+}
+
 export function ModelsPage() {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<AddModelForm>(EMPTY_FORM);
@@ -98,6 +104,21 @@ export function ModelsPage() {
   });
 
   const selectedModel = data?.find((model) => model.id === selectedId) ?? null;
+
+  const cancelModelEdit = () => {
+    if (!selectedModel || !editor) return;
+    if (isModelEditorDirty(editor, selectedModel)) {
+      if (
+        !window.confirm(
+          "Закрыть редактирование без сохранения? Несохранённые изменения будут потеряны.",
+        )
+      ) {
+        return;
+      }
+    }
+    setSelectedId(null);
+    setEditor(null);
+  };
 
   return (
     <>
@@ -209,6 +230,9 @@ export function ModelsPage() {
                 onClick={() => updateModel.mutate({ id: selectedModel.id, payload: editor })}
               >
                 {updateModel.isPending ? "Сохраняем…" : "Сохранить"}
+              </button>
+              <button type="button" className="btn btn--ghost" onClick={cancelModelEdit}>
+                Отмена
               </button>
               <button
                 type="button"

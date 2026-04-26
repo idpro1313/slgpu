@@ -77,6 +77,26 @@ function parametersFromRows(rows: ParameterRow[]): Record<string, string> {
   return out;
 }
 
+function isPresetEditorDirty(editor: PresetEditorForm, preset: Preset): boolean {
+  const base = editorFromPreset(preset);
+  if (editor.hf_id !== base.hf_id) return true;
+  if (editor.engine !== base.engine) return true;
+  if (editor.tp !== base.tp) return true;
+  if (editor.served_model_name !== base.served_model_name) return true;
+  if (editor.gpu_mask !== base.gpu_mask) return true;
+  if (editor.description !== base.description) return true;
+  if (editor.is_active !== base.is_active) return true;
+  const cur = parametersFromRows(editor.parameters);
+  const orig = preset.parameters ?? {};
+  const keys = new Set([...Object.keys(cur), ...Object.keys(orig)]);
+  for (const key of keys) {
+    const a = cur[key] ?? "";
+    const b = orig[key] == null ? "" : String(orig[key]);
+    if (a !== b) return true;
+  }
+  return false;
+}
+
 function newParameterRow(): ParameterRow {
   return { id: `${Date.now()}-${Math.random()}`, key: "", value: "" };
 }
@@ -125,6 +145,21 @@ export function PresetsPage() {
   });
 
   const selectedPreset = presets.data?.find((preset) => preset.id === selectedId) ?? null;
+
+  const cancelPresetEdit = () => {
+    if (!selectedPreset || !editor) return;
+    if (isPresetEditorDirty(editor, selectedPreset)) {
+      if (
+        !window.confirm(
+          "Закрыть редактирование без сохранения? Несохранённые изменения будут потеряны.",
+        )
+      ) {
+        return;
+      }
+    }
+    setSelectedId(null);
+    setEditor(null);
+  };
 
   const create = useMutation({
     mutationFn: (payload: NewPresetForm) =>
@@ -432,6 +467,9 @@ export function PresetsPage() {
                 onClick={() => updatePreset.mutate({ id: selectedPreset.id, payload: editor })}
               >
                 {updatePreset.isPending ? "Сохраняем…" : "Сохранить"}
+              </button>
+              <button type="button" className="btn btn--ghost" onClick={cancelPresetEdit}>
+                Отмена
               </button>
               <button
                 type="button"
