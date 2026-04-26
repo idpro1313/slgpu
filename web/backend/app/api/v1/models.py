@@ -11,11 +11,13 @@ from app.core.security import ValidationError
 from app.models.model import HFModel
 from app.models.preset import Preset
 from app.schemas.common import JobAccepted
+from app.models.job import Job
 from app.schemas.models import (
     HFModelCreate,
     HFModelOut,
     HFModelPullRequest,
     HFModelUpdate,
+    ModelPullProgress,
     ModelSyncResult,
 )
 from app.core.config import get_settings
@@ -27,15 +29,32 @@ from app.services.ui_audit import record_ui_action
 router = APIRouter()
 
 
+def _pull_progress_from_job(job: Job | None) -> ModelPullProgress | None:
+    if job is None:
+        return None
+    return ModelPullProgress(
+        job_id=job.id,
+        status=job.status.value,
+        progress=job.progress,
+        message=job.message,
+    )
+
+
+def _hf_model_out(item: HFModel, active_pull: Job | None) -> HFModelOut:
+    base = HFModelOut.model_validate(item)
+    return base.model_copy(update={"pull_progress": _pull_progress_from_job(active_pull)})
+
+
 @router.get("", response_model=list[HFModelOut])
-async def list_models(session: AsyncSession = Depends(db_session)) -> list[HFModel]:
+async def list_models(session: AsyncSession = Depends(db_session)) -> list[HFModelOut]:
     await hf_service.sync_local_models(session)
     await session.flush()
     result = await session.execute(select(HFModel).order_by(HFModel.hf_id))
     items = list(result.scalars().all())
     for item in items:
         await hf_service.refresh_status(session, item)
-    return items
+    active = await hf_service.active_pull_jobs_by_resource(session)
+    return [_hf_model_out(m, active.get(m.hf_id)) for m in items]
 
 
 @router.post("", response_model=HFModelOut, status_code=status.HTTP_201_CREATED)
@@ -89,12 +108,13 @@ async def sync_models_from_disk(
 
 
 @router.get("/{model_id}", response_model=HFModelOut)
-async def get_model(model_id: int, session: AsyncSession = Depends(db_session)) -> HFModel:
+async def get_model(model_id: int, session: AsyncSession = Depends(db_session)) -> HFModelOut:
     model = await session.get(HFModel, model_id)
     if model is None:
         raise HTTPException(status_code=404, detail="model not found")
     await hf_service.refresh_status(session, model)
-    return model
+    active = await hf_service.active_pull_jobs_by_resource(session)
+    return _hf_model_out(model, active.get(model.hf_id))
 
 
 @router.patch("/{model_id}", response_model=HFModelOut)

@@ -7,6 +7,8 @@ import logging
 import os
 import shutil
 import tempfile
+import threading
+from contextlib import suppress
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -175,7 +177,7 @@ async def handle_native_job(job_id: int, command: CliCommand, args: dict[str, An
         elif command.kind == "native.monitoring.fix-perms":
             code = await _native_fix_perms(log)
         elif command.kind == "native.model.pull":
-            code = await _native_model_pull(args, log)
+            code = await _native_model_pull(job_id, args, log)
         elif command.kind == "native.bench.scenario":
             code = await _native_bench_scenario(args, log)
         elif command.kind == "native.bench.load":
@@ -509,7 +511,52 @@ async def _native_fix_perms(log: list[str]) -> int:
     return 0
 
 
-async def _native_model_pull(args: dict[str, Any], log: list[str]) -> int:
+def _try_make_job_tqdm(
+    lock: threading.Lock,
+    state: dict[str, Any],
+) -> type | None:
+    try:
+        from tqdm.auto import tqdm as tqdm_base
+    except ImportError:
+        return None
+
+    class JobTqdm(tqdm_base):  # type: ignore[misc,valid-type]
+        def update(self, n: int = 1) -> bool | None:
+            r = super().update(n)
+            with lock:
+                state["n"] = int(self.n)
+                state["total"] = self.total
+                state["desc"] = str(getattr(self, "desc", "") or "")
+            return r
+
+    return JobTqdm
+
+
+async def _flush_pull_progress(job_id: int, lock: threading.Lock, state: dict[str, Any]) -> None:
+    with lock:
+        n = int(state.get("n") or 0)
+        total = state.get("total")
+        desc = str(state.get("desc") or "").strip()
+    pct: float | None = None
+    if isinstance(total, (int, float)) and float(total) > 0:
+        pct = min(1.0, float(n) / float(total))
+    msg: str | None = desc[:2000] if desc else None
+    if not msg and isinstance(total, (int, float)) and float(total) > 0:
+        msg = f"{n} / {int(total)}"
+    try:
+        async with session_scope() as session:
+            job = await session.get(Job, job_id)
+            if job is None or job.status not in (JobStatus.QUEUED, JobStatus.RUNNING):
+                return
+            if pct is not None:
+                job.progress = pct
+            if msg:
+                job.message = msg
+    except Exception:  # noqa: BLE001
+        logger.debug("[native_model_pull] progress flush failed", exc_info=True)
+
+
+async def _native_model_pull(job_id: int, args: dict[str, Any], log: list[str]) -> int:
     from huggingface_hub import snapshot_download
 
     settings = get_settings()
@@ -525,22 +572,56 @@ async def _native_model_pull(args: dict[str, Any], log: list[str]) -> int:
     target = models_dir / hf_id
     target.mkdir(parents=True, exist_ok=True)
 
+    lock = threading.Lock()
+    state: dict[str, Any] = {"n": 0, "total": None, "desc": ""}
+    stop = asyncio.Event()
+
+    async def poller() -> None:
+        while not stop.is_set():
+            try:
+                await asyncio.wait_for(stop.wait(), timeout=1.5)
+                return
+            except TimeoutError:
+                await _flush_pull_progress(job_id, lock, state)
+
+    poll_task = asyncio.create_task(poller())
+
     def run_dl() -> None:
-        snapshot_download(
+        kwargs: dict[str, Any] = dict(
             repo_id=hf_id,
             local_dir=str(target),
             local_dir_use_symlinks=False,
             revision=revision,
             token=token or None,
         )
+        tqdm_cls = _try_make_job_tqdm(lock, state)
+        if tqdm_cls is not None:
+            kwargs["tqdm_class"] = tqdm_cls
+        try:
+            snapshot_download(**kwargs)
+        except TypeError:
+            if "tqdm_class" not in kwargs:
+                raise
+            kwargs.pop("tqdm_class", None)
+            snapshot_download(**kwargs)
 
     log.append(f"[pull] {hf_id} -> {target}")
+    code = 0
     try:
         await asyncio.to_thread(run_dl)
     except Exception as exc:  # noqa: BLE001
         log.append(f"[pull] failed: {exc}")
-        return 1
-    return 0
+        code = 1
+    finally:
+        stop.set()
+        with suppress(TimeoutError):
+            await asyncio.wait_for(poll_task, timeout=5.0)
+        with suppress(asyncio.CancelledError):
+            if not poll_task.done():
+                poll_task.cancel()
+                await poll_task
+        await _flush_pull_progress(job_id, lock, state)
+    return code
 
 
 async def _native_bench_scenario(args: dict[str, Any], log: list[str]) -> int:

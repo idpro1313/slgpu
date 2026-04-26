@@ -82,6 +82,13 @@ export interface DashboardData {
   host: DashboardHostInfo;
 }
 
+export interface ModelPullProgress {
+  job_id: number;
+  status: JobStatus;
+  progress: number | null;
+  message: string | null;
+}
+
 export interface HFModel {
   id: number;
   hf_id: string;
@@ -96,6 +103,7 @@ export interface HFModel {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  pull_progress?: ModelPullProgress | null;
 }
 
 export interface ModelSyncResult {

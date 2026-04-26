@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
-import type { HFModel, JobAccepted, ModelSyncResult } from "@/api/types";
+import type { HFModel, JobAccepted, ModelPullProgress, ModelSyncResult } from "@/api/types";
 import { formatBytes, formatDate } from "@/components/formatters";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
@@ -40,19 +40,49 @@ function isModelEditorDirty(editor: ModelEditorForm, model: HFModel): boolean {
   );
 }
 
+function ModelPullProgressBlock({ progress }: { progress: ModelPullProgress }) {
+  const pct =
+    progress.progress != null && Number.isFinite(progress.progress)
+      ? Math.min(100, Math.max(0, Math.round(progress.progress * 100)))
+      : null;
+  const caption =
+    progress.status === "queued"
+      ? (progress.message?.trim() || "В очереди…")
+      : (progress.message?.trim() || "Скачивание…");
+
+  return (
+    <div className="model-pull-progress">
+      {pct != null ? (
+        <div
+          className="model-pull-progress__bar"
+          role="progressbar"
+          aria-valuenow={pct}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        >
+          <div className="model-pull-progress__fill" style={{ width: `${pct}%` }} />
+        </div>
+      ) : null}
+      <div className="model-pull-progress__caption mono" title={caption}>
+        {caption}
+      </div>
+    </div>
+  );
+}
+
 export function ModelsPage() {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<AddModelForm>(EMPTY_FORM);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [editor, setEditor] = useState<ModelEditorForm | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [pulling, setPulling] = useState<number | null>(null);
   const [syncResult, setSyncResult] = useState<ModelSyncResult | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["models"],
     queryFn: () => api.get<HFModel[]>("/models"),
-    refetchInterval: 8_000,
+    refetchInterval: (query) =>
+      query.state.data?.some((m) => m.pull_progress) ? 2_000 : 8_000,
   });
 
   const syncFromDisk = useMutation({
@@ -88,13 +118,11 @@ export function ModelsPage() {
   const pullModel = useMutation({
     mutationFn: ({ id, revision }: { id: number; revision: string | null }) =>
       api.post<JobAccepted>(`/models/${id}/pull`, { revision }),
-    onSuccess: (_, variables) => {
-      setPulling(variables.id);
+    onSuccess: () => {
       setError(null);
       queryClient.invalidateQueries({ queryKey: ["models"] });
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
       queryClient.invalidateQueries({ queryKey: ["activity"] });
-      window.setTimeout(() => setPulling(null), 1500);
     },
     onError: (err: Error) => setError(err.message),
   });
@@ -151,7 +179,7 @@ export function ModelsPage() {
     <>
       <PageHeader
         title="Модели Hugging Face"
-        subtitle="Реестр моделей. Загрузка идёт через ./slgpu pull, прогресс — на вкладке Задачи."
+        subtitle="Реестр моделей. Загрузка: ./slgpu pull или кнопка в таблице; ход скачивания показывается в строке модели (и на вкладке «Задачи»)."
       />
 
       <Section
@@ -338,7 +366,12 @@ export function ModelsPage() {
                     <td className="mono">{model.hf_id}</td>
                     <td className="mono">{model.slug}</td>
                     <td>
-                      <StatusBadge status={model.download_status} />
+                      <div className="model-status-cell">
+                        <StatusBadge status={model.download_status} />
+                        {model.pull_progress ? (
+                          <ModelPullProgressBlock progress={model.pull_progress} />
+                        ) : null}
+                      </div>
                     </td>
                     <td>{formatBytes(model.size_bytes)}</td>
                     <td>{model.attempts}</td>
@@ -361,15 +394,15 @@ export function ModelsPage() {
                         </IconActionButton>
                         <IconActionButton
                           label={
-                            pulling === model.id
-                              ? "Скачивание запущено, ждите"
+                            model.pull_progress
+                              ? "Скачивание уже выполняется"
                               : "Скачать или докачать веса (slgpu pull)"
                           }
                           variant="primary"
                           onClick={() =>
                             pullModel.mutate({ id: model.id, revision: model.revision })
                           }
-                          disabled={pullModel.isPending || pulling === model.id}
+                          disabled={pullModel.isPending || Boolean(model.pull_progress)}
                         >
                           <IconCloudArrowDown />
                         </IconActionButton>

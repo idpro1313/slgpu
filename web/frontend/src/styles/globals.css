@@ -839,6 +839,44 @@ button.btn--icon,
   margin: 16px 0;
 }
 
+.model-status-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 11rem;
+}
+
+.model-pull-progress {
+  width: 100%;
+  max-width: 22rem;
+}
+
+.model-pull-progress__bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--color-surface-alt);
+  overflow: hidden;
+  width: 100%;
+}
+
+.model-pull-progress__fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--color-accent), var(--color-primary));
+  transition: width 0.35s ease-out;
+}
+
+.model-pull-progress__caption {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--color-text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 22rem;
+}
+
 @media (max-width: 720px) {
   .app-header {
     flex-direction: column;

@@ -12,10 +12,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.stack_config import models_dir_sync
 from app.core.security import ValidationError, validate_hf_id, validate_revision
+from app.models.job import Job, JobStatus
 from app.models.model import HFModel, ModelDownloadStatus
 from app.services.env_files import hf_id_to_slug
 
 logger = logging.getLogger(__name__)
+
+_NATIVE_PULL_KIND = "native.model.pull"
 
 _SAFETENSORS = ".safetensors"
 _GGUF = ".gguf"
@@ -172,6 +175,24 @@ async def upsert_from_hf_id(
         if notes is not None:
             model.notes = notes
     return model
+
+
+async def active_pull_jobs_by_resource(session: AsyncSession) -> dict[str, Job]:
+    """Последняя активная задача pull по каждому `Job.resource` (HF id или slug, как в реестре)."""
+
+    result = await session.execute(
+        select(Job)
+        .where(
+            Job.kind == _NATIVE_PULL_KIND,
+            Job.status.in_((JobStatus.QUEUED, JobStatus.RUNNING)),
+        )
+        .order_by(Job.id.asc())
+    )
+    by_resource: dict[str, Job] = {}
+    for job in result.scalars().all():
+        if job.resource:
+            by_resource[job.resource] = job
+    return by_resource
 
 
 async def refresh_status(session: AsyncSession, model: HFModel) -> HFModel:

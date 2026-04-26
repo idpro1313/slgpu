@@ -9,6 +9,15 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.models.model import ModelDownloadStatus
 
 
+class ModelPullProgress(BaseModel):
+    """Активная фоновая загрузка весов (`native.model.pull`) для данной HF-модели."""
+
+    job_id: int
+    status: str
+    progress: float | None = Field(default=None, description="Доля 0..1, если известна (tqdm по файлам).")
+    message: str | None = None
+
+
 class HFModelOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -25,6 +34,7 @@ class HFModelOut(BaseModel):
     notes: str | None
     created_at: datetime
     updated_at: datetime
+    pull_progress: ModelPullProgress | None = None
 
 
 class HFModelCreate(BaseModel):
