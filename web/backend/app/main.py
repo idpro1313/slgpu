@@ -58,6 +58,8 @@ def create_app() -> FastAPI:
 
     @app.on_event("startup")
     async def _startup() -> None:
+        # Uvicorn добавляет свои handler'ы после create_app — снова один JSON на root.
+        configure_logging(settings.log_level)
         try:
             await init_db()
             logger.info("[main][startup] db initialised")

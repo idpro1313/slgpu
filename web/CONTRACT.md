@@ -163,9 +163,11 @@ API: `GET /api/v1/dashboard` — метрики БД, runtime, пробы сер
   другом `COMPOSE_PROJECT_NAME` задайте `WEB_COMPOSE_PROJECT_INFER` и
   `WEB_COMPOSE_PROJECT_MONITORING` (см. `main.env` в корне репо).
 - **Наблюдаемость:** логи в **stdout** в JSON (`app.core.logging`); один
-  `LogRecord` должен давать ровно одну строку. `configure_logging()` заменяет
-  handlers у `root`, `app`, `httpx`, `uvicorn*` и отключает `propagate`, чтобы
-  не получать дубли вроде `INFO INFO ... ts=... logger=... msg=...`. В сообщениях
+  `LogRecord` — одна строка. `configure_logging()` оставляет **единственный** handler
+  на **root**, снимает handlers с `app`, `httpx`, `httpcore`, `h11`, `uvicorn*`,
+  `fastapi`, `starlette` и включает у них `propagate`, чтобы не было дублей
+  (`INFO INFO …` в Loki). Повторный вызов в `startup` сбрасывает handler'ы, которые
+  добавил uvicorn после импорта приложения. В сообщениях
   якоря вроде `[runtime][snapshot][BLOCK_RESOLVE]`, `[monitoring][probe_all]`, `[api][dashboard]`.
   `WEB_LOG_LEVEL=DEBUG` включает, в частности, отсутствие контейнера по
   лейблам `com.docker.compose.project` / `…service` (`get_by_service`).

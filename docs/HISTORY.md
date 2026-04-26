@@ -1532,3 +1532,10 @@
 - **Почему:** запрос пользователя — наглядное отображение результатов.
 - **Файлы:** `web/frontend/src/components/BenchSummaryView.tsx`, `web/frontend/src/components/Modal.tsx`, `web/frontend/src/pages/Benchmarks.tsx`, `web/frontend/src/styles/globals.css`, `grace/knowledge-graph/knowledge-graph.xml`, `VERSION`, `docs/HISTORY.md`.
 - **Решение:** PATCH 3.3.4.
+
+### 3.3.5: Web — логи без дублей `INFO` (httpx/uvicorn)
+
+- **Что:** `configure_logging`: единственный `StreamHandler` на **root**; у `app`, `httpx`, `httpcore`, `h11`, `uvicorn*`, `fastapi`, `starlette` — `handlers.clear()` и `propagate=True` (раньше тот же handler дублировался на именованных логгерах). Повторный вызов в `startup` после добавления handler'ов uvicorn. Обновлены `web/CONTRACT.md`, аннотация `fn-core_logging` в GRACE.
+- **Почему:** в Docker/Loki строки вида `INFO INFO … ts=… logger=httpx` от многократной обработки одной записи; контекст — шум в логах при просмотре httpx (в т.ч. 401 к LiteLLM).
+- **Файлы:** `web/backend/app/core/logging.py`, `web/backend/app/main.py` (повторный вызов в startup), `web/CONTRACT.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/plan/development-plan.xml`, `VERSION`, `docs/HISTORY.md`.
+- **Решение:** PATCH 3.3.5.

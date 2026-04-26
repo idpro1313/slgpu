@@ -57,6 +57,14 @@ class _JsonFormatter(logging.Formatter):
 
 
 def configure_logging(level: str = "INFO") -> None:
+    """Один StreamHandler на **root**: одна строка JSON на LogRecord.
+
+    Раньше тот же handler вешали на ``httpx``/``app`` и на root — при ``propagate``
+    у промежуточных логгеров запись могла обрабатываться несколько раз, что давало
+    ``INFO INFO …`` в Docker/Loki. Uvicorn после импорта приложения снова добавляет
+    свои handler'ы — вызывайте эту функцию повторно из ``startup`` (см. ``main``).
+    """
+
     handler = logging.StreamHandler(stream=sys.stdout)
     handler.setFormatter(_JsonFormatter())
     resolved_level = logging.getLevelName(level.upper())
@@ -64,15 +72,22 @@ def configure_logging(level: str = "INFO") -> None:
         resolved_level = logging.INFO
 
     root = logging.getLogger()
-    root.handlers = [handler]
+    root.handlers.clear()
+    root.addHandler(handler)
     root.setLevel(resolved_level)
 
-    # Uvicorn configures its own handlers before importing `app.main`.
-    # Replacing handlers on the app/httpx/uvicorn logger roots makes this
-    # function idempotent and prevents one record from being rendered by
-    # multiple formatters in Docker/Portainer/Loki logs.
-    for logger_name in ("app", "httpx", "uvicorn", "uvicorn.error", "uvicorn.access"):
-        named_logger = logging.getLogger(logger_name)
-        named_logger.handlers = [handler]
-        named_logger.setLevel(resolved_level)
-        named_logger.propagate = False
+    for logger_name in (
+        "app",
+        "httpx",
+        "httpcore",
+        "h11",
+        "uvicorn",
+        "uvicorn.error",
+        "uvicorn.access",
+        "fastapi",
+        "starlette",
+    ):
+        named = logging.getLogger(logger_name)
+        named.handlers.clear()
+        named.setLevel(resolved_level)
+        named.propagate = True

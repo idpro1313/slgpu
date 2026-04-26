@@ -1,0 +1,492 @@
+<DevelopmentPlan VERSION="2.3.0">
+  <!--
+    GRACE development plan — methodology: https://github.com/osovv/grace-marketplace
+    Upstream ships Agent Skills + optional CLI (@osovv/grace-cli): grace lint | module find | module show | file show.
+    This workspace stores shared XML under grace/** (lifecycle folders), not docs/*.xml; semantic map in docs/AGENTS.md.
+
+    ExecutionPolicy: used by $grace-multiagent-execute / $grace-execute — controller merges edits to the listed
+    shared artifacts; workers touch only module sources and module-local tests inside approved write scope.
+  -->
+  <ArchitectureNotes>
+    <objective>Унифицированный CLI для жизненного цикла стенда LLM-инференса.</objective>
+    <non-goal>Нет оркестрации Kubernetes, нет хранилища истории бенчей.</non-goal>
+    <risk-1>Образы latest — невоспроизводимость между запусками.</risk-1>
+    <risk-2>Парсеры и `MAX_MODEL_LEN` только в пресетах: ошибка в пресете или смена образа vLLM/SGLang без правки пресета даёт сбои при старте или в tool/reasoning.</risk-2>
+  </ArchitectureNotes>
+
+  <Modules>
+    <M-CLI NAME="CLI" TYPE="ENTRY_POINT" LAYER="0" ORDER="1" STATUS="implemented">
+      <contract>
+        <purpose>Корневой диспетчер `./slgpu`: парсинг аргумента и делегация в `scripts/cmd_*.sh` (в т.ч. `cmd_web.sh` → `slgpu web up`).</purpose>
+        <inputs>
+          <param name="command" type="string" />
+          <param name="args" type="string..." />
+        </inputs>
+        <outputs>
+          <param name="exit_code" type="int" />
+        </outputs>
+        <errors>
+          <error code="1">Неизвестная команда</error>
+        </errors>
+      </contract>
+      <interface>
+        <export-slgpu PURPOSE="Корневой диспетчер" />
+        <export-cmd-web PURPOSE="scripts/cmd_web.sh — web up|down|restart|install; compose.web.yml; install → curl POST /api/v1/app-config/install" />
+      </interface>
+      <depends>M-LIB</depends>
+      <target>
+        <source>slgpu</source>
+        <tests>tests/test_cli.sh</tests>
+      </target>
+      <observability>
+        <log-prefix>[CLI]</log-prefix>
+        <critical-block>BLOCK_DISPATCH</critical-block>
+      </observability>
+      <verification-ref>V-M-CLI</verification-ref>
+      <notes>
+        <note-1>Исполняемый бит 100755 в git.</note-1>
+      </notes>
+    </M-CLI>
+
+    <M-LIB NAME="Library" TYPE="UTILITY" LAYER="0" ORDER="2" STATUS="implemented">
+      <contract>
+        <purpose>Общие функции для всех cmd_*: `main.env` в корне (дефолты), затем движок, пресет; парсеры и обычно `MAX_MODEL_LEN` — в пресете.</purpose>
+        <inputs>
+          <param name="engine" type="string" />
+          <param name="preset" type="string" />
+        </inputs>
+        <outputs>
+          <param name="env_vars" type="map" />
+        </outputs>
+        <errors>
+          <error code="1">Пресет не найден</error>
+        </errors>
+      </contract>
+      <interface>
+        <export-slgpu_root PURPOSE="Определение корня проекта" />
+        <export-slgpu_list_presets PURPOSE="Список пресетов" />
+        <export-slgpu_source_main_env PURPOSE="Дефолты из main.env (корень)" />
+        <export-slgpu_load_env PURPOSE="Загрузка окружения" />
+        <export-slgpu_hf_id_to_slug PURPOSE="Slug из HF ID" />
+        <export-slgpu_detect_running_engine PURPOSE="Определение running движка" />
+      </interface>
+      <depends>none</depends>
+      <target>
+        <source>scripts/_lib.sh</source>
+        <tests>tests/test_lib.sh</tests>
+      </target>
+      <observability>
+        <log-prefix>[LIB]</log-prefix>
+        <critical-block>BLOCK_LOAD_ENV</critical-block>
+      </observability>
+      <verification-ref>V-M-LIB</verification-ref>
+    </M-LIB>
+
+    <M-PULL NAME="ModelPull" TYPE="INTEGRATION" LAYER="1" ORDER="3" STATUS="implemented">
+      <contract>
+        <purpose>Скачивание весов с HF; пресеты вручную (data/presets, PRESETS_DIR). `cmd_pull.sh` нормализует `MODELS_DIR` в абсолютный путь и заранее создаёт каталог модели для `hf download --local-dir`.</purpose>
+        <inputs>
+          <param name="hf_id_or_preset" type="string" />
+          <param name="options" type="map" />
+        </inputs>
+        <outputs>
+          <param name="model_path" type="string" />
+        </outputs>
+        <errors>
+          <error code="1">Ошибка загрузки</error>
+          <error code="2">Невалидный HF ID</error>
+        </errors>
+      </contract>
+      <interface>
+        <export-cmd_pull PURPOSE="Команда pull" />
+      </interface>
+      <depends>M-LIB</depends>
+      <target>
+        <source>scripts/cmd_pull.sh</source>
+        <tests>tests/test_pull.sh</tests>
+      </target>
+      <observability>
+        <log-prefix>[PULL]</log-prefix>
+        <critical-block>BLOCK_DOWNLOAD</critical-block>
+      </observability>
+      <verification-ref>V-M-PULL</verification-ref>
+    </M-PULL>
+
+    <M-UP NAME="EngineUp" TYPE="INTEGRATION" LAYER="1" ORDER="4" STATUS="implemented">
+      <contract>
+        <purpose>Запуск выбранного движка (vLLM/SGLang) через Docker Compose.</purpose>
+        <inputs>
+          <param name="engine" type="string" />
+          <param name="preset" type="string" />
+        </inputs>
+        <outputs>
+          <param name="compose_up" type="bool" />
+        </outputs>
+        <errors>
+          <error code="1">Ошибка запуска контейнера</error>
+        </errors>
+      </contract>
+      <interface>
+        <export-cmd_up PURPOSE="Команда up" />
+        <export-cmd_restart PURPOSE="Команда restart" />
+      </interface>
+      <depends>M-LIB, M-DOCKER</depends>
+      <target>
+        <source>scripts/cmd_up.sh, scripts/cmd_restart.sh</source>
+        <tests>tests/test_up.sh</tests>
+      </target>
+      <observability>
+        <log-prefix>[UP]</log-prefix>
+        <critical-block>BLOCK_COMPOSE_UP</critical-block>
+      </observability>
+      <verification-ref>V-M-UP</verification-ref>
+    </M-UP>
+
+    <M-DOWN NAME="EngineDown" TYPE="INTEGRATION" LAYER="1" ORDER="5" STATUS="implemented">
+      <contract>
+        <purpose>Остановка движков (vLLM/SGLang), опционально — всего compose.</purpose>
+        <inputs>
+          <param name="all" type="bool" />
+        </inputs>
+        <outputs>
+          <param name="stopped" type="bool" />
+        </outputs>
+        <errors>
+          <error code="1">Ошибка остановки</error>
+        </errors>
+      </contract>
+      <interface>
+        <export-cmd_down PURPOSE="Команда down" />
+      </interface>
+      <depends>M-DOCKER</depends>
+      <target>
+        <source>scripts/cmd_down.sh</source>
+        <tests>tests/test_down.sh</tests>
+      </target>
+      <observability>
+        <log-prefix>[DOWN]</log-prefix>
+        <critical-block>BLOCK_STOP</critical-block>
+      </observability>
+      <verification-ref>V-M-DOWN</verification-ref>
+    </M-DOWN>
+
+    <M-BENCH NAME="Benchmark" TYPE="CORE_LOGIC" LAYER="2" ORDER="6" STATUS="implemented">
+      <contract>
+        <purpose>Нагрузочный бенчмарк OpenAI-совместимого API: матрица concurrency × prompt × max_tokens.</purpose>
+        <inputs>
+          <param name="engine" type="string" />
+          <param name="preset" type="string" />
+        </inputs>
+        <outputs>
+          <param name="results_dir" type="string" />
+          <param name="summary_json" type="string" />
+        </outputs>
+        <errors>
+          <error code="1">Ошибка бенчмарка</error>
+        </errors>
+      </contract>
+      <interface>
+        <export-cmd_bench PURPOSE="Команда bench" />
+        <export-bench_openai PURPOSE="Python бенчмарк-скрипт" />
+      </interface>
+      <depends>M-LIB, M-UP</depends>
+      <target>
+        <source>scripts/cmd_bench.sh, scripts/bench_openai.py</source>
+        <tests>tests/test_bench.sh</tests>
+      </target>
+      <observability>
+        <log-prefix>[BENCH]</log-prefix>
+        <critical-block>BLOCK_RUN_SCENARIO</critical-block>
+      </observability>
+      <verification-ref>V-M-BENCH</verification-ref>
+    </M-BENCH>
+
+    <M-LOAD NAME="LoadTest" TYPE="CORE_LOGIC" LAYER="2" ORDER="7" STATUS="implemented">
+      <contract>
+        <purpose>Длительный нагрузочный тест с эмуляцией 200-300 виртуальных пользователей, фазами ramp-up/steady/ramp-down, сбором time-series.</purpose>
+        <inputs>
+          <param name="base_url" type="string" />
+          <param name="engine" type="string" />
+          <param name="users" type="int" />
+          <param name="ramp_up_sec" type="int" />
+          <param name="steady_sec" type="int" />
+          <param name="ramp_down_sec" type="int" />
+          <param name="think_time_ms" type="tuple" />
+          <param name="max_prompt_tokens" type="int" />
+          <param name="max_output_tokens" type="int" />
+          <param name="report_interval" type="float" />
+        </inputs>
+        <outputs>
+          <param name="summary_json" type="string" />
+          <param name="time_series_csv" type="string" />
+          <param name="users_jsonl" type="string" />
+        </outputs>
+        <errors>
+          <error code="1">Ошибка API или бенча</error>
+        </errors>
+      </contract>
+      <interface>
+        <export-cmd_load PURPOSE="Команда load" />
+        <export-bench_load PURPOSE="Python: длительный бенч с time-series" />
+        <export-LoadTestRunner PURPOSE="Оркестратор фаз" />
+        <export-MetricCollector PURPOSE="Поток-сборщик метрик CSV" />
+      </interface>
+      <depends>M-LIB, M-UP</depends>
+      <target>
+        <source>scripts/cmd_load.sh, scripts/bench_load.py</source>
+        <tests>tests/test_load.sh</tests>
+      </target>
+      <observability>
+        <log-prefix>[LOAD]</log-prefix>
+        <critical-block>BLOCK_COLLECT_METRICS</critical-block>
+      </observability>
+      <verification-ref>V-M-LOAD</verification-ref>
+    </M-LOAD>
+
+    <M-WEB NAME="WebControlPlane" TYPE="ENTRY_POINT" LAYER="3" ORDER="9" STATUS="implemented">
+      <contract>
+        <purpose>Single-container web control plane: FastAPI + React/Vite + SQLite. Стек LLM/monitoring: `docker compose` / docker-py из web (`native.*` jobs), не `./slgpu` subprocess. Плоский стек и секреты в БД (**таблица `stack_params`**, `cfg.meta`; legacy JSON в `settings` мигрируется при старте), импорт из `main.env` + опциональные secrets-файлы (`POST /app-config/install`); пробы мониторинга и публичные ссылки используют слитый стек. Реестр моделей, пресеты, Runtime/Dashboard, бенчмарк API (`/bench/*`, артефакты `data/bench/results/`). Репо bind-mount по `SLGPU_HOST_REPO`; `huggingface_hub` для pull в образе; `working_dir` в compose web не задаётся.</purpose>
+        <inputs>
+          <param name="http_request" type="HTTP" />
+          <param name="slgpu_root" type="path" />
+          <param name="docker_socket" type="unix-socket" />
+          <param name="database_url" type="sqlalchemy-url" />
+        </inputs>
+        <outputs>
+          <param name="http_response" type="JSON|HTML" />
+          <param name="job_record" type="DB row" />
+          <param name="audit_event" type="DB row" />
+          <param name="preset_env_file" type="data/presets/<slug>.env" />
+        </outputs>
+        <errors>
+          <error code="400">Аргумент не прошёл whitelist в app.core.security</error>
+          <error code="404">Модель/пресет/задача не найдены</error>
+          <error code="409">Конфликт advisory lock на (scope, resource)</error>
+          <error code="500">Сбой CLI (exit_code != 0) или экспорта файла</error>
+        </errors>
+      </contract>
+      <interface>
+        <export-web-image PURPOSE="Docker image slgpu-web:dev" />
+        <export-api-v1 PURPOSE="REST /api/v1: dashboard, models, presets, runtime, monitoring, litellm, jobs, app-config, bench" />
+        <export-spa PURPOSE="React SPA, статика встроена в образ" />
+        <export-contract-md PURPOSE="web/CONTRACT.md — границы CLI/Docker API/SQLite" />
+      </interface>
+      <depends>M-CLI, M-PULL, M-UP, M-DOWN, M-MONITOR, M-MODELS</depends>
+      <target>
+        <source>web/backend/app/**, web/frontend/src/**, docker/Dockerfile.web, docker/docker-compose.web.yml</source>
+        <tests>web/backend/tests/**</tests>
+      </target>
+      <observability>
+        <log-prefix>[WEB]</log-prefix>
+        <critical-block>BLOCK_RUN_JOB</critical-block>
+      </observability>
+      <verification-ref>V-M-WEB</verification-ref>
+    </M-WEB>
+
+    <M-DOCKER NAME="DockerCompose" TYPE="INTEGRATION" LAYER="1" ORDER="10" STATUS="implemented">
+      <contract>
+        <purpose>Конфигурация Docker Compose и serve.sh для vLLM/SGLang.</purpose>
+        <inputs>
+          <param name="engine" type="string" />
+          <param name="env_vars" type="map" />
+        </inputs>
+        <outputs>
+          <param name="container_running" type="bool" />
+        </outputs>
+        <errors>
+          <error code="1">Ошибка compose</error>
+        </errors>
+      </contract>
+      <interface>
+        <export-docker-compose PURPOSE="Основной compose-файл" />
+        <export-stable-container-names PURPOSE="container_name: slgpu-vllm, slgpu-sglang (scale &gt;1 с именем — не поддерживается)" />
+        <export-serve_sh PURPOSE="CLI скрипт в контейнере" />
+      </interface>
+      <depends>none</depends>
+      <target>
+        <source>docker/docker-compose.llm.yml, scripts/serve.sh</source>
+        <tests>tests/test_compose.sh</tests>
+      </target>
+      <observability>
+        <log-prefix>[DOCKER]</log-prefix>
+        <critical-block>BLOCK_COMPOSE_UP</critical-block>
+      </observability>
+      <verification-ref>V-M-DOCKER</verification-ref>
+    </M-DOCKER>
+
+    <M-MONITOR NAME="Monitoring" TYPE="INTEGRATION" LAYER="1" ORDER="10" STATUS="implemented">
+      <contract>
+        <purpose>Prometheus, Grafana, DCGM Exporter, Node Exporter — сбор и визуализация метрик.</purpose>
+        <inputs>
+          <param name="engine" type="string" />
+        </inputs>
+        <outputs>
+          <param name="metrics_available" type="bool" />
+        </outputs>
+        <errors>
+          <error code="1">Target DOWN в Prometheus</error>
+        </errors>
+      </contract>
+      <interface>
+        <export-monitoring_compose PURPOSE="docker/docker-compose.monitoring.yml + configs/monitoring/*: стабильные container_name slgpu-monitoring-*" />
+        <export-prometheus_yml PURPOSE="Конфиг скрейпинга" />
+        <export-grafana-slgpu-overview PURPOSE="slgpu-overview (provisioning)" />
+        <export-grafana-sglang-dashboard-slgpu PURPOSE="sglang-dashboard-slgpu.json" />
+        <export-grafana-sglangdash2-slgpu PURPOSE="sglangdash2-slgpu.json + _build_sglangdash2.py от vllmdash2" />
+        <export-grafana-vllmdash2 PURPOSE="vllmdash2.json — исходник vLLM V2" />
+        <export-alerts PURPOSE="Правила алертинга" />
+      </interface>
+      <depends>M-DOCKER</depends>
+      <target>
+        <source>docker/docker-compose.monitoring.yml, configs/monitoring/prometheus/**, configs/monitoring/grafana/provisioning/**, configs/monitoring/README.md</source>
+        <tests>tests/test_monitor.sh</tests>
+      </target>
+      <observability>
+        <log-prefix>[MONITOR]</log-prefix>
+        <critical-block>BLOCK_SCRAPE</critical-block>
+      </observability>
+      <verification-ref>V-M-MONITOR</verification-ref>
+    </M-MONITOR>
+
+    <M-MODELS NAME="ModelPresets" TYPE="DATA_LAYER" LAYER="0" ORDER="11" STATUS="implemented">
+      <contract>
+        <purpose>Управление пресетами: файлы .env, парсеры, параметры инференса.</purpose>
+        <inputs>
+          <param name="hf_id" type="string" />
+        </inputs>
+        <outputs>
+          <param name="preset_file" type="string" />
+        </outputs>
+        <errors>
+          <error code="1">Неподдерживаемая модель</error>
+        </errors>
+      </contract>
+      <interface>
+        <export-presets_dir PURPOSE="Директория пресетов" />
+      </interface>
+      <depends>M-LIB</depends>
+      <target>
+        <source>data/presets/*.env, configs/models/README.md</source>
+        <tests>tests/test_models.sh</tests>
+      </target>
+      <observability>
+        <log-prefix>[MODELS]</log-prefix>
+        <critical-block>BLOCK_PRESET_FILE</critical-block>
+      </observability>
+      <verification-ref>V-M-MODELS</verification-ref>
+    </M-MODELS>
+
+    <M-WEB NAME="WebControlPlane" TYPE="ENTRY_POINT" LAYER="2" ORDER="12" STATUS="implemented">
+      <contract>
+        <purpose>Develonica.LLM: FastAPI + React; стек в SQLite (`stack_params` + install); native compose jobs; страницы Benchmarks и расширенные Настройки; models/presets/runtime/monitoring/LiteLLM как раньше.</purpose>
+        <inputs>
+          <param name="server_host" type="hostname|ip|null" />
+          <param name="api_requests" type="HTTP /api/v1/*" />
+        </inputs>
+        <outputs>
+          <param name="browser_links" type="Grafana/Prometheus/Langfuse/LiteLLM URLs" />
+          <param name="jobs" type="queued CLI operations" />
+        </outputs>
+      </contract>
+      <interface>
+        <export-settings-public-access PURPOSE="/api/v1/settings/public-access хранит публичный host сервера для UI-ссылок; внутренние probes остаются на WEB_MONITORING_HTTP_HOST" />
+        <export-frontend-settings PURPOSE="/settings — public host, install из main.env, правка стека таблицей (stack_params)" />
+        <export-app-config PURPOSE="/api/v1/app-config/*" />
+        <export-bench-ui PURPOSE="/benchmarks — список прогонов, report.md, запуск scenario/load" />
+        <export-models-crud PURPOSE="/api/v1/models/{id}: PATCH revision/notes, DELETE registry row and optional local weights under MODELS_DIR" />
+        <export-presets-crud PURPOSE="/api/v1/presets/{id}: PATCH structured key/value runtime params, DELETE DB row and optional .env under PRESETS_DIR" />
+      </interface>
+      <depends>M-CLI, M-MONITOR, M-MODELS</depends>
+      <target>
+        <source>web/</source>
+        <tests>web/backend/tests/test_api_smoke.py</tests>
+      </target>
+      <observability>
+        <log-format>stdout JSON (`app.core.logging`): один handler на root; библиотечные логгеры без собственных handlers, propagate к root; `configure_logging` в create_app и повторно в startup (сброс handler'ов uvicorn).</log-format>
+      </observability>
+      <verification-ref>V-M-WEB</verification-ref>
+    </M-WEB>
+  </Modules>
+
+  <DataFlow>
+    <DF-HOST-PREPARE NAME="Подготовка хоста" TRIGGER="./slgpu prepare">
+      <step-1>Проверка драйвера NVIDIA</step-1>
+      <step-2>Установка Docker и Compose v2</step-2>
+      <step-3>Установка NVIDIA Container Toolkit</step-3>
+      <step-4>Настройка sysctl и лимитов</step-4>
+      <evidence><![CDATA[`nvidia-smi` работает, `docker compose version` доступен]]></evidence>
+    </DF-HOST-PREPARE>
+
+    <DF-MODEL-PULL NAME="Загрузка модели" TRIGGER="./slgpu pull &lt;HF_ID|preset&gt;">
+      <step-1>При наличии пресета — загрузка env (M-LIB)</step-1>
+      <step-2>Скачивание весов через <![CDATA[`hf download`]]> (M-PULL)</step-2>
+      <evidence><![CDATA[Веса в `${MODELS_DIR}`]]></evidence>
+    </DF-MODEL-PULL>
+
+    <DF-ENGINE-UP NAME="Запуск движка" TRIGGER="./slgpu up [vllm|sglang] -m [preset]">
+      <step-1>Загрузка env: `main.env` + пресет (M-LIB)</step-1>
+      <step-2>Остановка другого движка (M-DOWN)</step-2>
+      <step-3>Подъём мониторинга (M-MONITOR)</step-3>
+      <step-4>`docker compose up` профиля vllm/sglang (M-DOCKER)</step-4>
+      <evidence>Контейнер запущен; готовность API — вручную (curl)</evidence>
+    </DF-ENGINE-UP>
+
+    <DF-ENGINE-DOWN NAME="Остановка движка" TRIGGER="./slgpu down [--all]">
+      <step-1>По умолчанию: `docker compose stop/rm vllm sglang`</step-1>
+      <step-2>С `--all`: остановка всех сервисов</step-2>
+      <evidence>`docker compose ps` — нет vllm/sglang</evidence>
+    </DF-ENGINE-DOWN>
+
+    <DF-BENCH NAME="Бенчмарк" TRIGGER="./slgpu bench [vllm|sglang] -m [preset]">
+      <step-1>Загрузка env и пресета (M-LIB)</step-1>
+      <step-2>Запуск <![CDATA[`bench_openai.py`]]> с матрицей сценариев (M-BENCH)</step-2>
+      <step-3>Запись JSON-артефактов в <![CDATA[`bench/results/{engine}/{timestamp}/`]]></step-3>
+      <evidence>`summary.json` существует и содержит key_metrics</evidence>
+    </DF-BENCH>
+
+    <DF-MONITOR NAME="Мониторинг" TRIGGER="включён при ./slgpu up">
+      <step-1>Prometheus собирает metrics с vllm/sglang, dcgm, node-exporter</step-1>
+      <step-2>Grafana: datasource + JSON в <![CDATA[configs/monitoring/grafana/provisioning/dashboards/json/]]> (SGLang: sglang-dashboard-slgpu, sglangdash2-slgpu; vLLM: vllmdash2)</step-2>
+      <evidence><![CDATA[Grafana :3000: slgpu-overview; для SGLang — дашборды с instance/model_name; см. configs/monitoring/README.md]]></evidence>
+    </DF-MONITOR>
+  </DataFlow>
+
+  <ImplementationOrder>
+    <Phase-1 name="Foundation" status="done">
+      <goal>CLI, библиотека, Docker Compose, мониторинг.</goal>
+      <step-1 module="M-CLI" status="done" verification="V-M-CLI">slgpu dispatcher</step-1>
+      <step-2 module="M-LIB" status="done" verification="V-M-LIB">_lib.sh utilities</step-2>
+      <step-3 module="M-DOCKER" status="done" verification="V-M-DOCKER">docker-compose + serve.sh</step-3>
+      <step-4 module="M-MONITOR" status="done" verification="V-M-MONITOR">Prometheus + Grafana + DCGM</step-4>
+    </Phase-1>
+
+    <Phase-2 name="Model Management" status="done">
+      <goal>Загрузка моделей, пресеты, парсеры.</goal>
+      <step-1 module="M-MODELS" status="done" verification="V-M-MODELS">data/presets/*.env</step-1>
+      <step-2 module="M-PULL" status="done" verification="V-M-PULL">cmd_pull.sh + hf download</step-2>
+    </Phase-2>
+
+    <Phase-3 name="Engine Lifecycle" status="done">
+      <goal>Запуск, остановка, перезапуск движков.</goal>
+      <step-1 module="M-UP" status="done" verification="V-M-UP">cmd_up.sh + cmd_restart.sh</step-1>
+      <step-2 module="M-DOWN" status="done" verification="V-M-DOWN">cmd_down.sh</step-2>
+    </Phase-3>
+
+    <Phase-4 name="Benchmark &amp; load" status="done">
+      <goal>Нагрузочные тесты; артефакты в `bench/results/{engine}/{timestamp}/`.</goal>
+      <step-1 module="M-BENCH" status="done" verification="V-M-BENCH">bench_openai.py + cmd_bench.sh</step-1>
+      <step-2 module="M-LOAD" status="done" verification="V-M-LOAD">bench_load.py + cmd_load.sh</step-2>
+    </Phase-4>
+
+    <Phase-5 name="Web Control Plane" status="done">
+      <goal>Web-приложение в `web/`: FastAPI + React/Vite + SQLite, single-container.</goal>
+      <step-1 module="M-WEB" status="done" verification="V-M-WEB">FastAPI app, React SPA, docker/Dockerfile.web, docker/docker-compose.web.yml</step-1>
+    </Phase-5>
+  </ImplementationOrder>
+
+  <ExecutionPolicy>
+    <default-profile>balanced</default-profile>
+    <controller-owns>grace/plan/development-plan.xml, grace/knowledge-graph/knowledge-graph.xml, grace/verification/verification-plan.xml</controller-owns>
+    <worker-owns>Only module source files (scripts/cmd_*.sh, _lib.sh, bench_openai.py, bench_load.py, scripts/serve.sh, configs/) and module-local tests inside the approved write scope.</worker-owns>
+  </ExecutionPolicy>
+</DevelopmentPlan>
