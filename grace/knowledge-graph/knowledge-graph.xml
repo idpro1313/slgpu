@@ -1,5 +1,5 @@
 <KnowledgeGraph>
-  <Project NAME="slgpu" VERSION="3.3.2">
+  <Project NAME="slgpu" VERSION="3.3.3">
     <keywords>slgpu, vllm, sglang, llm-inference, benchmark, docker-compose, gpu, prometheus, grafana, sglang-dashboard-slgpu, sglangdash2-slgpu</keywords>
     <annotation>Стенд для сравнения движков LLM-инференса vLLM и SGLang на Linux-сервере с NVIDIA GPU.</annotation>
 
@@ -172,7 +172,7 @@
         <fn-api_app_config PURPOSE="GET/POST /app-config/status|install, GET/PATCH /app-config/stack" />
         <fn-api_bench PURPOSE="GET /bench/runs, report.md, summary; POST scenario|load → native.bench.* jobs" />
         <fn-api_dashboard PURPOSE="GET /dashboard: metrics, runtime, services, host (collect_host_info: /proc, diskUsage(slgpu_root), nvidia-smi при наличии)" />
-        <fn-services_host_info PURPOSE="Снимок ОС/CPU/RAM/диска/NVIDIA для дашборда; subprocess nvidia-smi в thread pool" />
+        <fn-services_host_info PURPOSE="Снимок ОС/CPU/RAM/диска/NVIDIA для дашборда: docker run с bind /proc,/etc хоста (busybox) и nvidia-smi в GPU-контейнере; fallback — локальный /proc и nvidia-smi в namespace web" />
         <fn-services_compose_exec PURPOSE="async docker compose для LLM и monitoring стеков, subprocess logged" />
         <fn-services_native_jobs PURPOSE="handle_native_job: llm/monitoring/bench/pull без ./slgpu; native.model.pull — tqdm_class + периодический flush Job.progress/message в SQLite" />
         <fn-services_slgpu_cli PURPOSE="CliCommand kind=native.* с пустым argv; валидация slug/engine/port/tp" />

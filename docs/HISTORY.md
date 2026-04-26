@@ -1518,3 +1518,10 @@
 - **Почему:** запрос пользователя — бенч после уже загруженной модели, без ручного ввода slug.
 - **Файлы:** `web/frontend/src/pages/Benchmarks.tsx`, `web/CONTRACT.md`, `grace/knowledge-graph/knowledge-graph.xml`, `VERSION`, `docs/HISTORY.md`.
 - **Решение:** PATCH 3.3.2.
+
+### 3.3.3: Дашборд «Сервер» — железо с хоста через Docker
+
+- **Что:** `host_info.collect_host_info`: при `docker.ping()` — чтение **хостовых** `cpuinfo`/`meminfo`/`version` через эфемерный контейнер с bind `/proc`; `os-release`, `hostname` из `/etc`; NVIDIA — `containers.run` с `DeviceRequest(gpu)` и образом `WEB_NVIDIA_SMI_DOCKER_IMAGE` (дефолт CUDA base). Настройки `WEB_DOCKER_HOST_PROBE_IMAGE`, `WEB_NVIDIA_SMI_DOCKER_IMAGE`. Иначе прежний fallback. Комментарий в `docker-compose.web.yml`.
+- **Почему:** запрос пользователя — на сервере есть GPU, а в slgpu-web нет `nvidia-smi`; нужны параметры **сервера**, не изолированного контейнера web.
+- **Файлы:** `web/backend/app/services/host_info.py`, `web/backend/app/core/config.py`, `docker/docker-compose.web.yml`, `web/CONTRACT.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `VERSION`, `docs/HISTORY.md`.
+- **Решение:** PATCH 3.3.3.

@@ -15,7 +15,7 @@ Web control plane поверх существующего CLI [`./slgpu`](../slg
   Runtime также показывает автообновляемый хвост логов контейнера модели и активную job
   запуска/рестарта/остановки, пока кнопки заблокированы.
 - Управление и наблюдение мониторинг-стека (`./slgpu monitoring …`).
-- **Dashboard:** сводка по стенду и блок **«Сервер»** (CPU, RAM, диск репозитория, ОС; GPU/NVIDIA/CUDA при доступности `nvidia-smi` в контейнере — опционально см. комментарий GPU в `docker-compose.web.yml`).
+- **Dashboard:** сводка по стенду и блок **«Сервер»** (CPU, RAM, диск репозитория, ОС и GPU с **хоста** через `docker run` и bind-mount `/proc`/`/etc`, плюс `nvidia-smi` в эфемерном GPU-контейнере; переменные `WEB_DOCKER_HOST_PROBE_IMAGE`, `WEB_NVIDIA_SMI_DOCKER_IMAGE`; нужен NVIDIA Container Toolkit для списка GPU).
 - Состояние и базовые маршруты LiteLLM Proxy.
 - Настройки публичного адреса сервера для корректных ссылок на Grafana,
   Prometheus, Langfuse и LiteLLM Admin UI из браузера пользователя; на той же

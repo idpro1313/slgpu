@@ -70,6 +70,20 @@ class Settings(BaseSettings):
     job_log_tail_kb: int = 64
     health_poll_seconds: float = 8.0
 
+    docker_host_probe_image: str = Field(
+        default="busybox:1.36",
+        description=(
+            "Образ для docker run с bind-mount хостовых /proc и /etc "
+            "(дашборд «Сервер»: CPU/RAM/ОС с хоста, а не из namespace web)."
+        ),
+    )
+    nvidia_smi_docker_image: str = Field(
+        default="nvidia/cuda:12.4.1-base-ubuntu22.04",
+        description=(
+            "Образ с nvidia-smi для опроса GPU на хосте через Docker (NVIDIA Container Toolkit)."
+        ),
+    )
+
     @property
     def slgpu_cli(self) -> Path:
         return self.slgpu_root / "slgpu"
