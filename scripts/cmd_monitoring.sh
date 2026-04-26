@@ -12,12 +12,17 @@ usage() {
 
 Один раз на хост (или после reboot, если не включён restart: unless-stopped):
   ./slgpu monitoring up
+  (первый up на новом сервере сам выполнит bootstrap: MinIO buckets + БД LiteLLM)
 
 Остановить только стек мониторинга (модель не трогает):
   ./slgpu monitoring down
 
 Перезапуск контейнеров мониторинга:
   ./slgpu monitoring restart
+
+Принудительно повторить одноразовый bootstrap:
+  ./slgpu monitoring bootstrap
+  SLGPU_MONITORING_BOOTSTRAP_FORCE=1 ./slgpu monitoring bootstrap
 
 Права на каталоги данных (bind mount: Grafana, Prometheus, **Loki**, **Promtail**/positions): по uid:gid **из образов** (рекомендуется до up или при ошибках):
   ./slgpu monitoring fix-perms
@@ -76,6 +81,38 @@ slgpu_ensure_langfuse_litellm_secrets() {
   fi
 }
 
+slgpu_monitoring_bootstrap_dir() {
+  echo "${ROOT}/data/monitoring/.bootstrap"
+}
+
+slgpu_monitoring_run_bootstrap_service() {
+  local svc="$1"
+  local marker="$2"
+  local dir
+  dir="$(slgpu_monitoring_bootstrap_dir)"
+  mkdir -p "${dir}"
+
+  if [[ -f "${marker}" && "${SLGPU_MONITORING_BOOTSTRAP_FORCE:-0}" != "1" ]]; then
+    echo "Bootstrap ${svc}: уже выполнен (${marker#${ROOT}/})."
+    return 0
+  fi
+
+  echo "Bootstrap ${svc}: одноразовый запуск…"
+  slgpu_docker_compose -f docker/docker-compose.monitoring.yml --env-file main.env --profile bootstrap rm -f -s -v "${svc}" >/dev/null 2>&1 || true
+  slgpu_docker_compose -f docker/docker-compose.monitoring.yml --env-file main.env --profile bootstrap up --abort-on-container-exit --exit-code-from "${svc}" "${svc}"
+  slgpu_docker_compose -f docker/docker-compose.monitoring.yml --env-file main.env --profile bootstrap rm -f -s -v "${svc}" >/dev/null 2>&1 || true
+  touch "${marker}"
+  echo "Bootstrap ${svc}: готово."
+}
+
+slgpu_monitoring_bootstrap_once() {
+  local dir
+  dir="$(slgpu_monitoring_bootstrap_dir)"
+  mkdir -p "${dir}"
+  slgpu_monitoring_run_bootstrap_service "minio-bucket-init" "${dir}/minio-bucket-init.done"
+  slgpu_monitoring_run_bootstrap_service "litellm-pg-init" "${dir}/litellm-pg-init.done"
+}
+
 case "${SUB}" in
   up)
     slgpu_ensure_slgpu_network
@@ -83,6 +120,7 @@ case "${SUB}" in
     slgpu_load_server_env
     slgpu_ensure_data_dirs
     slgpu_ensure_monitoring_bind_config_files
+    slgpu_monitoring_bootstrap_once
     echo "Поднимаю мониторинг (slgpu-monitoring)…"
     slgpu_docker_compose -f docker/docker-compose.monitoring.yml --env-file main.env up -d
     echo "Проверка: Prometheus /targets (http://<хост>:9090/targets) · Grafana: GRAFANA_PORT · Loki: Explore → Loki · Langfuse: :${LANGFUSE_PORT:-3001} · LiteLLM: :${LITELLM_PORT:-4000} (vLLM: LLM_API_PORT → configs/monitoring/litellm/config.yaml, devllm = SLGPU_SERVED_MODEL_NAME)"
@@ -100,6 +138,15 @@ case "${SUB}" in
     echo "Перезапуск мониторинга…"
     slgpu_docker_compose -f docker/docker-compose.monitoring.yml --env-file main.env up -d --force-recreate
     echo "Готово."
+    ;;
+  bootstrap)
+    slgpu_ensure_slgpu_network
+    slgpu_ensure_langfuse_litellm_secrets
+    slgpu_load_server_env
+    slgpu_ensure_data_dirs
+    slgpu_ensure_monitoring_bind_config_files
+    SLGPU_MONITORING_BOOTSTRAP_FORCE="${SLGPU_MONITORING_BOOTSTRAP_FORCE:-1}" slgpu_monitoring_bootstrap_once
+    echo "Bootstrap готов."
     ;;
   fix-perms|fix_permissions)
     exec bash "${ROOT}/scripts/monitoring_fix_permissions.sh"

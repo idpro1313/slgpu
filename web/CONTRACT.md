@@ -1,4 +1,4 @@
-# Контракт `web/` — slgpu Control Plane
+# Контракт `web/` — Develonica.LLM
 
 > Этот документ — единый источник правды для границ ответственности
 > web-приложения внутри проекта `slgpu`. Любое расхождение между кодом
@@ -6,7 +6,7 @@
 
 ## 1. Назначение
 
-Web-приложение `slgpu-web` — control plane поверх существующего bash CLI
+Web-приложение **Develonica.LLM** (`slgpu-web`) — control plane поверх существующего bash CLI
 [`./slgpu`](../slgpu) и Docker-стека ([`docker/docker-compose.llm.yml`](../docker/docker-compose.llm.yml),
 [`docker/docker-compose.monitoring.yml`](../docker/docker-compose.monitoring.yml)). Оно
 выполняет пять задач из ТЗ пользователя:
@@ -21,6 +21,10 @@ Web-приложение `slgpu-web` — control plane поверх сущест
    Promtail, DCGM, Node Exporter, Langfuse).
 5. Управление и контроль LiteLLM Proxy — единой OpenAI-совместимой
    точки доступа к моделям.
+
+Визуальный стиль фронтенда следует брендовой рамке сайта
+[`develonica.ru`](https://develonica.ru/): тёмная технологичная навигация,
+синие AI-акценты, крупные светлые enterprise-блоки и favicon в LLM-тематике.
 
 ## 2. Границы ответственности
 
@@ -106,7 +110,9 @@ Mutations контейнеров идут только через CLI allowlist.
   БД и не показываются в UI**. UI показывает только наличие/отсутствие
   и путь к секретному файлу.
 - Один mutating job на стек одновременно (advisory lock в БД на
-  `(scope, resource)`, например `("engine", "vllm")`).
+  `(scope, resource)`: runtime-команды используют `("engine", "runtime")`,
+  monitoring-команды — `("monitoring", "stack")`). UI показывает активную
+  job и блокирует повторные конфликтующие кнопки до завершения.
 - Все mutating-эндпоинты пишут запись в `audit_events`.
 - Корневой запуск не нужен. Контейнер web-приложения работает от
   не-root пользователя; для CLI он `exec`-ает в slgpu-репозиторий через

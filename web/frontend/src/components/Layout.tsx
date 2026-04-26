@@ -16,9 +16,11 @@ export function Layout({ children }: PropsWithChildren) {
     <div className="app-shell">
       <header className="app-header">
         <div className="app-header__brand">
-          <div className="app-header__brand-mark">SL</div>
+          <div className="app-header__brand-mark" aria-hidden="true">
+            D<span>LLM</span>
+          </div>
           <div>
-            <div>slgpu Control Plane</div>
+            <div>Develonica.LLM</div>
             <div style={{ fontSize: 12, fontWeight: 400, color: "rgba(245,247,251,0.6)" }}>
               управление инференсом, мониторингом и LiteLLM
             </div>

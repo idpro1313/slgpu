@@ -69,7 +69,7 @@ def cmd_up(
         kind="cli.up",
         argv=argv,
         scope="engine",
-        resource=engine,
+        resource="runtime",
         summary=f"slgpu up {engine} -m {preset}",
     )
 
@@ -82,7 +82,7 @@ def cmd_down(slgpu_root: Path, include_monitoring: bool = False) -> CliCommand:
         kind="cli.down",
         argv=argv,
         scope="engine",
-        resource="all" if include_monitoring else "vllm+sglang",
+        resource="runtime",
         summary="slgpu down" + (" --all" if include_monitoring else ""),
     )
 
@@ -96,7 +96,7 @@ def cmd_restart(slgpu_root: Path, preset: str, tp: int | None = None) -> CliComm
         kind="cli.restart",
         argv=argv,
         scope="engine",
-        resource=preset,
+        resource="runtime",
         summary=f"slgpu restart -m {preset}",
     )
 
@@ -114,6 +114,6 @@ def cmd_monitoring(slgpu_root: Path, action: str) -> CliCommand:
         kind=f"cli.monitoring.{action}",
         argv=argv,
         scope="monitoring",
-        resource=action,
+        resource="stack",
         summary=f"slgpu monitoring {action}",
     )

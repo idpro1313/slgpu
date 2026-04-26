@@ -1,4 +1,4 @@
-# slgpu-web
+# Develonica.LLM
 
 Web control plane поверх существующего CLI [`./slgpu`](../slgpu) и Docker-стека
 проекта [`slgpu`](../README.md). Содержит:
@@ -8,7 +8,8 @@ Web control plane поверх существующего CLI [`./slgpu`](../slg
   [`data/presets/*.env`](../data/presets/) (`PRESETS_DIR` в `main.env`).
 - Управление инференсом vLLM/SGLang через `./slgpu up|down|restart`.
   Runtime/Dashboard показывают текущий engine, запрошенный пресет, HF ID модели и TP;
-  Runtime также показывает автообновляемый хвост логов контейнера модели.
+  Runtime также показывает автообновляемый хвост логов контейнера модели и активную job
+  запуска/рестарта/остановки, пока кнопки заблокированы.
 - Управление и наблюдение мониторинг-стека (`./slgpu monitoring …`).
 - Состояние и базовые маршруты LiteLLM Proxy.
 - Журнал всех CLI-операций с stdout/stderr tail.
@@ -22,9 +23,10 @@ Web control plane поверх существующего CLI [`./slgpu`](../slg
 - **Backend**: FastAPI + SQLAlchemy 2.0 (async) + aiosqlite + Alembic +
   `docker` SDK + httpx.
 - **Frontend**: React 18 + Vite + TypeScript + React Router + TanStack Query.
-  Стиль — лёгкий enterprise по мотивам [`develonica.ru`](https://develonica.ru/):
-  тёмная панель навигации, крупные градиентные карточки, аккуратная
-  типографика.
+  Приложение называется **Develonica.LLM**. Стиль — лёгкий enterprise по мотивам
+  [`develonica.ru`](https://develonica.ru/): тёмная технологичная навигация,
+  яркие синие AI-акценты, крупные карточки, аккуратная типографика и светлая
+  рабочая область.
 - **Контейнер**: один образ. Backend отдаёт `/api/v1/*` и собранную React
   статику.
 - **БД**: SQLite, путь приходит из переменной `WEB_DATABASE_URL`,
@@ -149,7 +151,9 @@ daemon не нашёл бы файлы по `/slgpu/...` и создал бы п
 - Команды формируются ТОЛЬКО в [`app.services.slgpu_cli`](backend/app/services/slgpu_cli.py)
   и исполняются через `asyncio.create_subprocess_exec(*argv)`, без shell.
 - На каждый mutating job ставится in-memory advisory lock на
-  `(scope, resource)` — повторный `up` или `pull` той же модели вернёт `409`.
+  `(scope, resource)` — runtime-команды лочатся на `("engine", "runtime")`,
+  monitoring-команды на `("monitoring", "stack")`; повторный конфликтующий клик
+  в UI блокируется, а прямой повторный запрос вернёт `409`.
 - Секреты HF/Grafana/LiteLLM/Langfuse в БД не пишутся; UI показывает
   лишь наличие/отсутствие.
 

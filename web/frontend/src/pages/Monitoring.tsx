@@ -1,13 +1,20 @@
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
-import type { JobAccepted, ServiceCard } from "@/api/types";
+import type { Job, JobAccepted, ServiceCard } from "@/api/types";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
 import { StatusBadge } from "@/components/StatusBadge";
 
 export function MonitoringPage() {
   const queryClient = useQueryClient();
+  const [error, setError] = useState<string | null>(null);
+  const jobs = useQuery({
+    queryKey: ["jobs"],
+    queryFn: () => api.get<Job[]>("/jobs"),
+    refetchInterval: 2_000,
+  });
   const services = useQuery({
     queryKey: ["monitoring", "services"],
     queryFn: () => api.get<ServiceCard[]>("/monitoring/services"),
@@ -18,10 +25,17 @@ export function MonitoringPage() {
     mutationFn: (act: string) =>
       api.post<JobAccepted>("/monitoring/action", { action: act }),
     onSuccess: () => {
+      setError(null);
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
       queryClient.invalidateQueries({ queryKey: ["monitoring", "services"] });
     },
+    onError: (err: Error) => setError(err.message),
   });
+
+  const activeMonitoringJob = jobs.data?.find(
+    (job) => job.scope === "monitoring" && (job.status === "queued" || job.status === "running"),
+  );
+  const monitoringBusy = Boolean(activeMonitoringJob) || action.isPending;
 
   return (
     <>
@@ -34,7 +48,7 @@ export function MonitoringPage() {
               type="button"
               className="btn btn--primary"
               onClick={() => action.mutate("up")}
-              disabled={action.isPending}
+              disabled={monitoringBusy}
             >
               monitoring up
             </button>
@@ -42,7 +56,7 @@ export function MonitoringPage() {
               type="button"
               className="btn"
               onClick={() => action.mutate("restart")}
-              disabled={action.isPending}
+              disabled={monitoringBusy}
             >
               restart
             </button>
@@ -50,7 +64,7 @@ export function MonitoringPage() {
               type="button"
               className="btn btn--ghost"
               onClick={() => action.mutate("fix-perms")}
-              disabled={action.isPending}
+              disabled={monitoringBusy}
             >
               fix-perms
             </button>
@@ -58,13 +72,40 @@ export function MonitoringPage() {
               type="button"
               className="btn btn--danger"
               onClick={() => action.mutate("down")}
-              disabled={action.isPending}
+              disabled={monitoringBusy}
             >
               down
             </button>
           </>
         }
       />
+
+      {monitoringBusy ? (
+        <Section
+          title="Команда мониторинга выполняется"
+          subtitle="Пока job не завершилась, повторные up/restart/fix-perms/down заблокированы."
+        >
+          {activeMonitoringJob ? (
+            <div className="status-card">
+              <div className="status-card__head">
+                <span className="status-card__name">
+                  #{activeMonitoringJob.id} {activeMonitoringJob.kind}
+                </span>
+                <StatusBadge status={activeMonitoringJob.status} />
+              </div>
+              <div className="status-card__detail mono">
+                {activeMonitoringJob.message ?? activeMonitoringJob.command.join(" ")}
+              </div>
+              <div className="status-card__detail">
+                Подробный stdout/stderr tail доступен на вкладке «Задачи».
+              </div>
+            </div>
+          ) : (
+            <div className="empty-state">Отправляем команду в job runner…</div>
+          )}
+        </Section>
+      ) : null}
+      {error ? <p style={{ color: "var(--color-danger)" }}>{error}</p> : null}
 
       <Section title="Сервисы" subtitle="Опрос Docker + HTTP-проба, обновление каждые 8 секунд.">
         {services.isLoading ? (

@@ -52,6 +52,8 @@ def test_cmd_up_minimal():
         "-m",
         "qwen3.6-35b-a3b",
     ]
+    assert cmd.scope == "engine"
+    assert cmd.resource == "runtime"
 
 
 def test_cmd_up_with_port_and_tp():
@@ -66,6 +68,7 @@ def test_cmd_up_rejects_bad_engine():
 
 def test_cmd_down_optionally_includes_monitoring():
     assert cmd_down(_root()).argv == ["/srv/slgpu/slgpu", "down"]
+    assert cmd_down(_root()).resource == "runtime"
     assert cmd_down(_root(), include_monitoring=True).argv == [
         "/srv/slgpu/slgpu",
         "down",
@@ -83,6 +86,7 @@ def test_cmd_restart_argv():
         "--tp",
         "4",
     ]
+    assert cmd.resource == "runtime"
 
 
 @pytest.mark.parametrize("action", ["up", "down", "restart", "fix-perms"])
@@ -90,6 +94,8 @@ def test_cmd_monitoring_allowlist(action: str):
     cmd = cmd_monitoring(_root(), action)
     assert cmd.argv == ["/srv/slgpu/slgpu", "monitoring", action]
     assert cmd.kind == f"cli.monitoring.{action}"
+    assert cmd.scope == "monitoring"
+    assert cmd.resource == "stack"
 
 
 def test_cmd_monitoring_rejects_unknown():

@@ -1,29 +1,29 @@
 /*
- * slgpu-web design system. Inspired by https://develonica.ru/:
- * dark navigation header, generous whitespace, large gradient
- * statistic cards, light enterprise palette in the body.
+ * Develonica.LLM design system. Inspired by https://develonica.ru/:
+ * dark navigation header, generous whitespace, bright blue AI accents,
+ * large cards and a light enterprise working area.
  */
 
 :root {
-  --color-bg: #f5f7fb;
+  --color-bg: #f4f7fb;
   --color-surface: #ffffff;
-  --color-surface-alt: #eef1f7;
-  --color-border: #d8dde8;
-  --color-text: #0c1224;
-  --color-text-muted: #5a6378;
+  --color-surface-alt: #edf3fb;
+  --color-border: #d7e0ee;
+  --color-text: #07111f;
+  --color-text-muted: #536276;
   --color-text-dim: #8b94a7;
-  --color-primary: #2f5cff;
-  --color-primary-deep: #1c3fc2;
-  --color-accent: #8b5cf6;
+  --color-primary: #005bff;
+  --color-primary-deep: #003ec7;
+  --color-accent: #00a3ff;
   --color-success: #16a34a;
   --color-warning: #d97706;
   --color-danger: #dc2626;
-  --color-header-bg: #0c1224;
+  --color-header-bg: #07111f;
   --color-header-text: #f5f7fb;
-  --color-card-grad-from: #1f3aff;
-  --color-card-grad-to: #8b5cf6;
-  --shadow-soft: 0 8px 24px rgba(12, 18, 36, 0.06);
-  --shadow-strong: 0 14px 38px rgba(12, 18, 36, 0.12);
+  --color-card-grad-from: #005bff;
+  --color-card-grad-to: #00b8ff;
+  --shadow-soft: 0 10px 28px rgba(7, 17, 31, 0.07);
+  --shadow-strong: 0 18px 44px rgba(0, 91, 255, 0.2);
   --radius-md: 12px;
   --radius-lg: 20px;
   --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
@@ -74,7 +74,9 @@ pre {
 }
 
 .app-header {
-  background: var(--color-header-bg);
+  background:
+    radial-gradient(circle at 18% 0%, rgba(0, 184, 255, 0.28), transparent 34%),
+    linear-gradient(135deg, #07111f 0%, #0b1830 58%, #061020 100%);
   color: var(--color-header-text);
   padding: 18px 36px;
   display: flex;
@@ -93,15 +95,25 @@ pre {
 }
 
 .app-header__brand-mark {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, var(--color-card-grad-from), var(--color-card-grad-to));
-  display: grid;
-  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.16), transparent),
+    linear-gradient(135deg, var(--color-card-grad-from), var(--color-card-grad-to));
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: white;
-  font-weight: 700;
-  font-size: 15px;
+  font-weight: 800;
+  font-size: 16px;
+  box-shadow: 0 10px 28px rgba(0, 91, 255, 0.34);
+}
+
+.app-header__brand-mark span {
+  font-size: 8px;
+  margin-left: 1px;
+  transform: translateY(4px);
 }
 
 .app-header__nav {
@@ -127,7 +139,7 @@ pre {
 .app-header__nav a.active {
   color: white;
   background: linear-gradient(135deg, var(--color-card-grad-from), var(--color-card-grad-to));
-  box-shadow: 0 6px 18px rgba(47, 92, 255, 0.35);
+  box-shadow: 0 6px 18px rgba(0, 91, 255, 0.35);
 }
 
 .app-main {
@@ -187,7 +199,9 @@ pre {
 .metric-card--accent {
   color: white;
   border-color: transparent;
-  background: linear-gradient(135deg, var(--color-card-grad-from), var(--color-card-grad-to));
+  background:
+    radial-gradient(circle at 85% 18%, rgba(255, 255, 255, 0.22), transparent 26%),
+    linear-gradient(135deg, var(--color-card-grad-from), var(--color-card-grad-to));
   box-shadow: var(--shadow-strong);
 }
 
@@ -366,12 +380,12 @@ pre {
   background: linear-gradient(135deg, var(--color-card-grad-from), var(--color-card-grad-to));
   color: white;
   border-color: transparent;
-  box-shadow: 0 6px 18px rgba(47, 92, 255, 0.28);
+  box-shadow: 0 6px 18px rgba(0, 91, 255, 0.28);
 }
 
 .btn--primary:hover:not(:disabled) {
   transform: translateY(-1px);
-  background: linear-gradient(135deg, #2748de, #7849ee);
+  background: linear-gradient(135deg, #0049d6, #009ee6);
 }
 
 .btn--ghost {
@@ -406,7 +420,7 @@ pre {
 .input:focus,
 .select:focus,
 .textarea:focus {
-  outline: 2px solid rgba(47, 92, 255, 0.35);
+  outline: 2px solid rgba(0, 91, 255, 0.28);
   border-color: var(--color-primary);
 }
 
@@ -454,7 +468,7 @@ pre {
 }
 
 .table tr:hover td {
-  background: rgba(47, 92, 255, 0.04);
+  background: rgba(0, 91, 255, 0.04);
 }
 
 .table--compact th,
@@ -464,7 +478,7 @@ pre {
 }
 
 .code-block {
-  background: #0c1224;
+  background: #07111f;
   color: #d6deff;
   border-radius: var(--radius-md);
   padding: 14px 16px;

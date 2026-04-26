@@ -221,6 +221,7 @@ services:
   minio-bucket-init:
     container_name: slgpu-monitoring-minio-bucket-init
     image: ${SLGPU_MINIO_MC_IMAGE:-minio/mc:latest}
+    profiles: ["bootstrap"]
     restart: "no"
     networks:
       - slgpu
@@ -304,8 +305,6 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-      minio-bucket-init:
-        condition: service_completed_successfully
       redis:
         condition: service_healthy
       clickhouse:
@@ -364,8 +363,6 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-      minio-bucket-init:
-        condition: service_completed_successfully
       redis:
         condition: service_healthy
       clickhouse:
@@ -420,6 +417,7 @@ services:
   litellm-pg-init:
     container_name: slgpu-monitoring-litellm-pg-init
     image: ${SLGPU_LANGFUSE_POSTGRES_IMAGE:-postgres:17}
+    profiles: ["bootstrap"]
     restart: "no"
     networks:
       - slgpu
@@ -448,8 +446,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      litellm-pg-init:
-        condition: service_completed_successfully
     networks:
       - slgpu
     entrypoint: ["/bin/sh", "/etc/slgpu/litellm-entrypoint.sh"]

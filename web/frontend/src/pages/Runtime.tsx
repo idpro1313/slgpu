@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
-import type { JobAccepted, Preset, RuntimeLogs, RuntimeSnapshot } from "@/api/types";
+import type { Job, JobAccepted, Preset, RuntimeLogs, RuntimeSnapshot } from "@/api/types";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -29,6 +29,11 @@ export function RuntimePage() {
     queryFn: () => api.get<RuntimeLogs>("/runtime/logs?tail=400"),
     refetchInterval: 5_000,
   });
+  const jobs = useQuery({
+    queryKey: ["jobs"],
+    queryFn: () => api.get<Job[]>("/jobs"),
+    refetchInterval: 2_000,
+  });
 
   const upMutation = useMutation({
     mutationFn: () =>
@@ -42,6 +47,7 @@ export function RuntimePage() {
       setError(null);
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
       queryClient.invalidateQueries({ queryKey: ["runtime-snapshot"] });
+      queryClient.invalidateQueries({ queryKey: ["runtime-logs"] });
     },
     onError: (err: Error) => setError(err.message),
   });
@@ -52,18 +58,33 @@ export function RuntimePage() {
         preset: presetName,
         tp: tp ? Number(tp) : null,
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["jobs"] }),
+    onSuccess: () => {
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["runtime-snapshot"] });
+      queryClient.invalidateQueries({ queryKey: ["runtime-logs"] });
+    },
     onError: (err: Error) => setError(err.message),
   });
 
   const downMutation = useMutation({
     mutationFn: (includeMonitoring: boolean) =>
       api.post<JobAccepted>("/runtime/down", { include_monitoring: includeMonitoring }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["jobs"] }),
+    onSuccess: () => {
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["runtime-snapshot"] });
+      queryClient.invalidateQueries({ queryKey: ["runtime-logs"] });
+    },
     onError: (err: Error) => setError(err.message),
   });
 
   const snap = snapshot.data;
+  const activeEngineJob = jobs.data?.find(
+    (job) => job.scope === "engine" && (job.status === "queued" || job.status === "running"),
+  );
+  const submittingCommand = upMutation.isPending || restartMutation.isPending || downMutation.isPending;
+  const runtimeBusy = Boolean(activeEngineJob) || submittingCommand;
 
   return (
     <>
@@ -71,6 +92,32 @@ export function RuntimePage() {
         title="Inference Runtime"
         subtitle="Запуск, перезапуск и остановка vLLM/SGLang. Сами действия делает ./slgpu CLI, а статусы читаются из Docker."
       />
+
+      {runtimeBusy ? (
+        <Section
+          title="Команда выполняется"
+          subtitle="До завершения текущей операции запуск, рестарт и остановка заблокированы."
+        >
+          {activeEngineJob ? (
+            <div className="status-card">
+              <div className="status-card__head">
+                <span className="status-card__name">
+                  #{activeEngineJob.id} {activeEngineJob.kind}
+                </span>
+                <StatusBadge status={activeEngineJob.status} />
+              </div>
+              <div className="status-card__detail mono">
+                {activeEngineJob.message ?? activeEngineJob.command.join(" ")}
+              </div>
+              <div className="status-card__detail">
+                Подробный stdout/stderr tail доступен на вкладке «Задачи».
+              </div>
+            </div>
+          ) : (
+            <div className="empty-state">Отправляем команду в job runner…</div>
+          )}
+        </Section>
+      ) : null}
 
       <Section
         title="Текущий снимок"
@@ -193,7 +240,7 @@ export function RuntimePage() {
           <button
             type="button"
             className="btn btn--primary"
-            disabled={!presetName || upMutation.isPending}
+            disabled={!presetName || runtimeBusy}
             onClick={() => upMutation.mutate()}
           >
             {upMutation.isPending ? "Запускаем…" : "slgpu up"}
@@ -201,7 +248,7 @@ export function RuntimePage() {
           <button
             type="button"
             className="btn"
-            disabled={!presetName || restartMutation.isPending}
+            disabled={!presetName || runtimeBusy}
             onClick={() => restartMutation.mutate()}
           >
             slgpu restart
@@ -210,7 +257,7 @@ export function RuntimePage() {
             type="button"
             className="btn btn--danger"
             onClick={() => downMutation.mutate(false)}
-            disabled={downMutation.isPending}
+            disabled={runtimeBusy}
           >
             slgpu down
           </button>
@@ -218,7 +265,7 @@ export function RuntimePage() {
             type="button"
             className="btn btn--danger"
             onClick={() => downMutation.mutate(true)}
-            disabled={downMutation.isPending}
+            disabled={runtimeBusy}
           >
             slgpu down --all
           </button>
