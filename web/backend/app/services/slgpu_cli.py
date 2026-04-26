@@ -1,12 +1,7 @@
-"""Allowlist for `./slgpu` invocations.
+"""Allowlist for stack operations (native docker compose / jobs).
 
-This module is the only place in the backend that builds argv for the
-slgpu CLI. The strict separation guarantees:
-
-- nothing from request bodies ever reaches the shell as an interpreted
-  string;
-- every command that mutates the stack is logged with its exact argv;
-- unit tests can assert the argv shape without a real Docker daemon.
+Legacy argv-shaped ``CliCommand`` is kept for tests and optional CLI fallback;
+web uses ``native.*`` kinds with empty ``argv``.
 """
 
 from __future__ import annotations
@@ -33,21 +28,17 @@ class CliCommand:
     summary: str | None = None
 
 
-def _root_cli(slgpu_root: Path) -> str:
-    return str(slgpu_root / "slgpu")
-
-
 def cmd_pull(slgpu_root: Path, target: str, revision: str | None = None) -> CliCommand:
     target = validate_slug_or_hf_id(target)
-    argv = [_root_cli(slgpu_root), "pull", target]
     if revision:
-        argv += ["--revision", validate_revision(revision)]
+        validate_revision(revision)
     return CliCommand(
-        kind="cli.pull",
-        argv=argv,
+        kind="native.model.pull",
+        argv=[],
         scope="model",
         resource=target,
-        summary=f"slgpu pull {target}",
+        summary=f"pull {target}" + (f"@{revision}" if revision else ""),
+        # hf_id passed via job extra_args
     )
 
 
@@ -60,44 +51,39 @@ def cmd_up(
 ) -> CliCommand:
     engine = validate_engine(engine)
     preset = validate_slug(preset)
-    argv = [_root_cli(slgpu_root), "up", engine, "-m", preset]
     if port is not None:
-        argv += ["-p", str(validate_port(port))]
+        validate_port(port)
     if tp is not None:
-        argv += ["--tp", str(validate_tp(tp))]
+        validate_tp(tp)
     return CliCommand(
-        kind="cli.up",
-        argv=argv,
+        kind="native.llm.up",
+        argv=[],
         scope="engine",
         resource="runtime",
-        summary=f"slgpu up {engine} -m {preset}",
+        summary=f"up {engine} -m {preset}",
     )
 
 
 def cmd_down(slgpu_root: Path, include_monitoring: bool = False) -> CliCommand:
-    argv = [_root_cli(slgpu_root), "down"]
-    if include_monitoring:
-        argv.append("--all")
     return CliCommand(
-        kind="cli.down",
-        argv=argv,
+        kind="native.llm.down",
+        argv=[],
         scope="engine",
         resource="runtime",
-        summary="slgpu down" + (" --all" if include_monitoring else ""),
+        summary="down" + (" --all" if include_monitoring else ""),
     )
 
 
 def cmd_restart(slgpu_root: Path, preset: str, tp: int | None = None) -> CliCommand:
     preset = validate_slug(preset)
-    argv = [_root_cli(slgpu_root), "restart", "-m", preset]
     if tp is not None:
-        argv += ["--tp", str(validate_tp(tp))]
+        validate_tp(tp)
     return CliCommand(
-        kind="cli.restart",
-        argv=argv,
+        kind="native.llm.restart",
+        argv=[],
         scope="engine",
         resource="runtime",
-        summary=f"slgpu restart -m {preset}",
+        summary=f"restart -m {preset}",
     )
 
 
@@ -109,11 +95,39 @@ def cmd_monitoring(slgpu_root: Path, action: str) -> CliCommand:
         raise ValueError(
             f"monitoring action must be one of {sorted(_MONITORING_ACTIONS)}, got {action!r}"
         )
-    argv = [_root_cli(slgpu_root), "monitoring", action]
     return CliCommand(
-        kind=f"cli.monitoring.{action}",
-        argv=argv,
+        kind=f"native.monitoring.{action}",
+        argv=[],
         scope="monitoring",
         resource="stack",
-        summary=f"slgpu monitoring {action}",
+        summary=f"monitoring {action}",
+    )
+
+
+def cmd_bench_scenario(
+    slgpu_root: Path,
+    *,
+    engine: str,
+    preset: str,
+    rounds: int = 1,
+    warmup_requests: int = 3,
+) -> CliCommand:
+    engine = validate_engine(engine)
+    preset = validate_slug(preset)
+    return CliCommand(
+        kind="native.bench.scenario",
+        argv=[],
+        scope="bench",
+        resource="scenario",
+        summary=f"bench scenario {engine}/{preset}",
+    )
+
+
+def cmd_bench_load(_slgpu_root: Path) -> CliCommand:
+    return CliCommand(
+        kind="native.bench.load",
+        argv=[],
+        scope="bench",
+        resource="load",
+        summary="bench load",
     )

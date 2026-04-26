@@ -13,22 +13,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings, get_settings
 from app.models.run import EngineRun, RunStatus
 from app.services.docker_client import get_docker_inspector
+from app.services.stack_config import ports_for_probes_sync
 
 logger = logging.getLogger(__name__)
-
-_VLLM_INTERNAL_PORT = 8111
-_SGLANG_INTERNAL_PORT = 8222
 
 
 def _llm_probe_bases(settings: Settings, engine: str, api_port: int) -> list[str]:
     """Candidates for OpenAI /v1/models and /metrics; order matters (fast path first)."""
 
+    p = ports_for_probes_sync()
+    internal_vllm = int(p["llm_default_vllm_port"])
+    internal_sglang = int(p["llm_default_sglang_port"])
     port = int(api_port)
     candidates: list[str] = [f"http://{settings.llm_http_host}:{port}"]
     if engine == "vllm":
-        candidates.append(f"http://vllm:{_VLLM_INTERNAL_PORT}")
+        candidates.append(f"http://vllm:{internal_vllm}")
     elif engine == "sglang":
-        candidates.append(f"http://sglang:{_SGLANG_INTERNAL_PORT}")
+        candidates.append(f"http://sglang:{internal_sglang}")
     # Fallback, если LLM на хосте, а llm_http_host ещё 127.0.0.1 (доп. дубли отфильтруем)
     hdi = f"http://host.docker.internal:{port}"
     if settings.llm_http_host not in ("host.docker.internal",):
@@ -104,12 +105,13 @@ class RuntimeLogs:
 async def snapshot() -> RuntimeSnapshot:
     settings = get_settings()
     inspector = get_docker_inspector()
+    ports = ports_for_probes_sync()
 
     engine: str | None = None
     container_status: str | None = None
     api_port: int | None = None
 
-    project = settings.compose_project_infer
+    project = str(ports["compose_project_infer"])
     for candidate in ("vllm", "sglang"):
         container = inspector.get_by_service(project, candidate)
         if container is None:
@@ -123,8 +125,8 @@ async def snapshot() -> RuntimeSnapshot:
         container_status = container_status or container.status
 
     if api_port is None:
-        api_port = settings.llm_default_vllm_port if engine == "vllm" else (
-            settings.llm_default_sglang_port if engine == "sglang" else None
+        api_port = int(ports["llm_default_vllm_port"]) if engine == "vllm" else (
+            int(ports["llm_default_sglang_port"]) if engine == "sglang" else None
         )
 
     served: list[str] = []
@@ -176,7 +178,7 @@ async def snapshot() -> RuntimeSnapshot:
 def tail_container_logs(tail: int = 300) -> RuntimeLogs:
     settings = get_settings()
     inspector = get_docker_inspector()
-    project = settings.compose_project_infer
+    project = str(ports_for_probes_sync()["compose_project_infer"])
     bounded_tail = max(1, min(tail, 2000))
 
     selected_engine: str | None = None

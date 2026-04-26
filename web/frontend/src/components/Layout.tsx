@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { to: "/monitoring", label: "Мониторинг" },
   { to: "/litellm", label: "LiteLLM" },
   { to: "/jobs", label: "Задачи" },
+  { to: "/benchmarks", label: "Бенчмарки" },
   { to: "/settings", label: "Настройки" },
 ];
 

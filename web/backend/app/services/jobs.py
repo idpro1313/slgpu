@@ -24,6 +24,7 @@ from app.core.config import get_settings
 from app.db.session import session_scope
 from app.models.audit import AuditEvent
 from app.models.job import Job, JobStatus
+from app.services.native_jobs import handle_native_job
 from app.services.slgpu_cli import CliCommand
 
 logger = logging.getLogger(__name__)
@@ -131,6 +132,12 @@ async def _run_job(job_id: int, command: CliCommand) -> None:
             return
         job.status = JobStatus.RUNNING
         job.started_at = datetime.now(timezone.utc)
+        job_args: dict = dict(job.args or {})
+
+    if command.kind.startswith("native."):
+        await handle_native_job(job_id, command, job_args)
+        await _release_lock(command.scope, command.resource)
+        return
 
     exit_code = -1
     argv = _exec_argv_for_cli(command, cwd)

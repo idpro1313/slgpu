@@ -1,5 +1,5 @@
 <KnowledgeGraph>
-  <Project NAME="slgpu" VERSION="2.13.32">
+  <Project NAME="slgpu" VERSION="3.0.0">
     <keywords>slgpu, vllm, sglang, llm-inference, benchmark, docker-compose, gpu, prometheus, grafana, sglang-dashboard-slgpu, sglangdash2-slgpu</keywords>
     <annotation>Стенд для сравнения движков LLM-инференса vLLM и SGLang на Linux-сервере с NVIDIA GPU.</annotation>
 
@@ -11,7 +11,7 @@
       <annotations>
         <fn-main PURPOSE="Точка входа, dispatch в cmd_*.sh (в т.ч. web, monitoring)" />
         <export-slgpu PURPOSE="Исполняемый диспетчер" />
-        <fn-cmd_web PURPOSE="scripts/cmd_web.sh: slgpu web up|down|restart (docker/docker-compose.web.yml, --project-directory корня)" />
+        <fn-cmd_web PURPOSE="scripts/cmd_web.sh: slgpu web up|down|restart|install (compose.web.yml; install → POST /api/v1/app-config/install)" />
       </annotations>
     </M-CLI>
 
@@ -74,7 +74,7 @@
       <annotations>
         <fn-cmd_bench PURPOSE="Обёртка bench_openai.py" />
         <fn-bench_openai PURPOSE="Python бенчмарк: матрица concurrency × prompt × max_tokens; SSE-парсинг content+reasoning_*+пустой content; summary: error_code, errors_breakdown" />
-        <export-results_dir PURPOSE="bench/results/{engine}/{timestamp}/" />
+        <export-results_dir PURPOSE="data/bench/results/{engine}/{timestamp}/" />
       </annotations>
     </M-BENCH>
 
@@ -156,30 +156,35 @@
         <fn-bench_load PURPOSE="Python: длительный бенч с time-series; SSE как bench_openai (content+reasoning_*)" />
         <fn-LoadTestRunner PURPOSE="Оркестратор фаз: ramp_up/steady/ramp_down" />
         <fn-MetricCollector PURPOSE="Поток-сборщик метрик CSV каждые N сек" />
-        <export-time_series_csv PURPOSE="bench/results/{engine}/{timestamp}/time_series.csv" />
-        <export-users_jsonl PURPOSE="bench/results/{engine}/{timestamp}/users.jsonl" />
+        <export-time_series_csv PURPOSE="data/bench/results/{engine}/{timestamp}/time_series.csv" />
+        <export-users_jsonl PURPOSE="data/bench/results/{engine}/{timestamp}/users.jsonl" />
       </annotations>
     </M-LOAD>
 
     <M-WEB NAME="WebControlPlane" TYPE="ENTRY_POINT" STATUS="implemented">
-      <purpose>Single-container web control plane: FastAPI + React/Vite, SQLite на локальном диске; обёртка над `./slgpu` CLI и Docker API.</purpose>
+      <purpose>Single-container web control plane: FastAPI + React/Vite, SQLite; стек LLM/monitoring через native docker compose / docker-py; бенч — subprocess scripts; cfg.stack/cfg.secrets в БД (install из main.env).</purpose>
       <path>web/</path>
       <depends>M-CLI, M-PULL, M-UP, M-DOWN, M-MONITOR</depends>
       <verification-ref>V-M-WEB</verification-ref>
       <annotations>
         <fn-app_main PURPOSE="FastAPI app, маршруты /api/v1/*, /healthz с версией из корневого VERSION и SPA fallback" />
-        <fn-services_slgpu_cli PURPOSE="Allowlist для ./slgpu pull|up|down|restart|monitoring; argv only, никакого shell" />
-        <fn-services_jobs PURPOSE="Job runner: persist Job, advisory lock на (scope, resource), стрим stdout/stderr; runtime lock = (engine,runtime), monitoring lock = (monitoring,stack)" />
+        <fn-services_stack_config PURPOSE="cfg.stack/cfg.secrets/cfg.meta, sync_merged_flat, ports_for_probes_sync, presets_dir_sync; ensure_default_settings после create_all" />
+        <fn-api_app_config PURPOSE="GET/POST /app-config/status|install, GET/PATCH /app-config/stack" />
+        <fn-api_bench PURPOSE="GET /bench/runs, report.md, summary; POST scenario|load → native.bench.* jobs" />
+        <fn-services_compose_exec PURPOSE="async docker compose для LLM и monitoring стеков, subprocess logged" />
+        <fn-services_native_jobs PURPOSE="handle_native_job: llm/monitoring/bench/pull без ./slgpu" />
+        <fn-services_slgpu_cli PURPOSE="CliCommand kind=native.* с пустым argv; валидация slug/engine/port/tp" />
+        <fn-services_jobs PURPOSE="Job runner: native.* → native_jobs; иначе legacy argv; advisory lock (scope, resource)" />
         <fn-services_docker_client PURPOSE="get_docker_inspector(): get_by_service — label filter, fallback: нормализованные лейблы, имена Compose v1/v2, жёсткие имена slgpu-* и slgpu-monitoring-*" />
         <fn-services_env_files PURPOSE="Парсер и рендер data/presets/<slug>.env, совместимые с serve.sh" />
         <fn-services_presets PURPOSE="Двусторонняя синхронизация Preset DB ↔ data/presets/*.env; просмотр/key-value редактирование через GET/PATCH /api/v1/presets/{id}, DELETE удаляет запись и опционально .env, экспорт в .env отдельной операцией" />
         <fn-services_hf_models PURPOSE="Реестр HF моделей и статусы скачивания: GET /models синхронизирует DB с фактическими папками MODELS_DIR/&lt;org&gt;/&lt;repo&gt;; PATCH меняет revision/notes, DELETE удаляет запись и опционально локальные веса внутри MODELS_DIR" />
-        <fn-services_runtime PURPOSE="Runtime snapshot/logs: Docker + /v1/models и /metrics через WEB_LLM_HTTP_HOST (compose: host.docker.internal) и запас http://vllm:8111|sglang:8222 в сети slgpu — не 127.0.0.1:порт из web; последний активный EngineRun (preset_name, hf_id, TP); GET /runtime/logs — tail логов контейнера" />
-        <fn-services_monitoring PURPOSE="Probe мониторинг-стека: Docker (лейблы compose project из WEB_COMPOSE_PROJECT_*) + HTTP healthchecks; browser URLs строятся отдельно через public_access settings" />
-        <fn-services_litellm PURPOSE="Read-only /v1/models и /health/* у LiteLLM через WEB_MONITORING_HTTP_HOST (не 127.0.0.1 из контейнера); /info — публичные UI/API ссылки из settings" />
+        <fn-services_runtime PURPOSE="Runtime snapshot/logs: Docker + HTTP пробы; compose project и fallback портов из ports_for_probes_sync(); внутренние URL vllm/sglang с портами из стека" />
+        <fn-services_monitoring PURPOSE="Probe: Docker + HTTP; порта и compose project monitoring из слитого стека (БД)" />
+        <fn-services_litellm PURPOSE="LiteLLM HTTP: порт из слитого стека; public URLs из app_settings + ports_for_probes_sync" />
         <fn-services_app_settings PURPOSE="Persistent UI settings в SQLite: /api/v1/settings/public-access хранит публичный server_host для Grafana/Prometheus/Langfuse/LiteLLM ссылок" />
         <fn-core_logging PURPOSE="JSON stdout logging: one LogRecord → one line; root/app/httpx/uvicorn handlers заменяются идемпотентно без propagation-дублей" />
-        <fn-frontend_app PURPOSE="React SPA Develonica.LLM: Dashboard, Models, Presets, Runtime, Monitoring, LiteLLM, Jobs, Settings; брендовая тема по develonica.ru/guideline; footer показывает VERSION и copyright Igor Yatsishen, Develonica" />
+        <fn-frontend_app PURPOSE="React SPA: Dashboard, Models, Presets, Runtime, Monitoring, LiteLLM, Jobs, Benchmarks, Settings (install/stack + public host); бренд develonica.ru/guideline" />
         <export-web-image PURPOSE="slgpu-web:dev, подъём: ./slgpu web up; тома: repo root по тому же абсолютному хост-пути (SLGPU_HOST_REPO=$(pwd) в scripts/cmd_web.sh), ./data/web, ./data/models, docker.sock; entrypoint chown'ит /data и ${WEB_SLGPU_ROOT}/data/{models,presets} под uid 10001; working_dir из compose НЕ задаётся (uvicorn стартует из WORKDIR /srv/app в Dockerfile.web); huggingface_hub[cli] + hf_transfer установлены для slgpu pull, HF_HOME=/data/huggingface и /home/slgpuweb writable; критично для команд из web → docker compose monitoring/llm с корректными bind-маунтами" />
         <export-contract PURPOSE="web/CONTRACT.md — границы CLI/Docker API/SQLite" />
       </annotations>
@@ -201,11 +206,12 @@
     <CrossLink from="M-LOAD" to="M-LIB" relation="loads preset for MAX_MODEL_LEN" />
     <CrossLink from="M-LOAD" to="M-UP" relation="requires running engine" />
     <CrossLink from="M-CLI" to="M-LOAD" relation="delegates load command" />
-    <CrossLink from="M-WEB" to="M-CLI" relation="invokes ./slgpu via allowlisted argv" />
+    <CrossLink from="M-WEB" to="M-CLI" relation="хостовый ./slgpu для ручных сценариев; web jobs — native compose/API" />
     <CrossLink from="M-WEB" to="M-MODELS" relation="syncs data/presets/*.env presets to/from SQLite" />
-    <CrossLink from="M-WEB" to="M-MONITOR" relation="reads Docker container statuses (read-only)" />
-    <CrossLink from="M-WEB" to="M-PULL" relation="enqueues slgpu pull as a job" />
-    <CrossLink from="M-WEB" to="M-UP" relation="enqueues slgpu up/restart as a job" />
-    <CrossLink from="M-WEB" to="M-DOWN" relation="enqueues slgpu down as a job" />
+    <CrossLink from="M-WEB" to="M-MONITOR" relation="Docker read + compose up monitoring из web" />
+    <CrossLink from="M-WEB" to="M-PULL" relation="native.model.pull (HF snapshot) как job" />
+    <CrossLink from="M-WEB" to="M-UP" relation="native.llm.up/restart как job" />
+    <CrossLink from="M-WEB" to="M-DOWN" relation="native.llm.down как job" />
+    <CrossLink from="M-WEB" to="M-BENCH" relation="native.bench.* + data/bench/results" />
   </Project>
 </KnowledgeGraph>

@@ -11,6 +11,7 @@ import httpx
 from app.core.config import get_settings
 from app.models.service import ServiceStatus
 from app.services.docker_client import ContainerSummary, get_docker_inspector
+from app.services.stack_config import ports_for_probes_sync
 
 logger = logging.getLogger(__name__)
 
@@ -28,8 +29,13 @@ class ServiceProbe:
 
 def _settings_probes() -> list[ServiceProbe]:
     s = get_settings()
-    mon = s.compose_project_monitoring
+    p = ports_for_probes_sync()
+    mon = str(p["compose_project_monitoring"])
     h = s.monitoring_http_host
+    prom = int(p["prometheus_port"])
+    graf = int(p["grafana_port"])
+    lf = int(p["langfuse_port"])
+    llm = int(p["litellm_port"])
     return [
         ServiceProbe(
             key="prometheus",
@@ -37,8 +43,8 @@ def _settings_probes() -> list[ServiceProbe]:
             category="monitoring",
             project=mon,
             service="prometheus",
-            health_url=f"http://{h}:{s.prometheus_port}/-/healthy",
-            web_url=f"http://{h}:{s.prometheus_port}",
+            health_url=f"http://{h}:{prom}/-/healthy",
+            web_url=f"http://{h}:{prom}",
         ),
         ServiceProbe(
             key="grafana",
@@ -46,8 +52,8 @@ def _settings_probes() -> list[ServiceProbe]:
             category="monitoring",
             project=mon,
             service="grafana",
-            health_url=f"http://{h}:{s.grafana_port}/api/health",
-            web_url=f"http://{h}:{s.grafana_port}",
+            health_url=f"http://{h}:{graf}/api/health",
+            web_url=f"http://{h}:{graf}",
         ),
         ServiceProbe(
             key="loki",
@@ -91,8 +97,8 @@ def _settings_probes() -> list[ServiceProbe]:
             category="monitoring",
             project=mon,
             service="langfuse-web",
-            health_url=f"http://{h}:{s.langfuse_port}/api/public/health",
-            web_url=f"http://{h}:{s.langfuse_port}",
+            health_url=f"http://{h}:{lf}/api/public/health",
+            web_url=f"http://{h}:{lf}",
         ),
         ServiceProbe(
             key="litellm",
@@ -100,8 +106,8 @@ def _settings_probes() -> list[ServiceProbe]:
             category="gateway",
             project=mon,
             service="litellm",
-            health_url=f"http://{h}:{s.litellm_port}/health/liveliness",
-            web_url=f"http://{h}:{s.litellm_port}/ui",
+            health_url=f"http://{h}:{llm}/health/liveliness",
+            web_url=f"http://{h}:{llm}/ui",
         ),
     ]
 
@@ -116,6 +122,7 @@ class ProbeResult:
 
 async def probe_all() -> list[ProbeResult]:
     s = get_settings()
+    ports = ports_for_probes_sync()
     inspector = get_docker_inspector()
     results: list[ProbeResult] = []
     async with httpx.AsyncClient(timeout=2.0) as client:
@@ -150,8 +157,8 @@ async def probe_all() -> list[ProbeResult]:
             "socket=%s cannot_list_containers=True hint=see_docker_client_warning "
             "infer_project=%s monitoring_project=%s",
             s.docker_socket,
-            s.compose_project_infer,
-            s.compose_project_monitoring,
+            ports["compose_project_infer"],
+            ports["compose_project_monitoring"],
         )
     else:
         not_found = sum(1 for r in results if r.detail == "container not found")
@@ -160,7 +167,7 @@ async def probe_all() -> list[ProbeResult]:
             "[monitoring][probe_all][BLOCK_RESOLVE] docker=ok project=%s "
             "probes=%s container_not_found=%s healthy=%s "
             "if_not_found_check_WEB_COMPOSE_PROJECT_MONITORING",
-            s.compose_project_monitoring,
+            ports["compose_project_monitoring"],
             len(results),
             not_found,
             healthy,

@@ -121,7 +121,7 @@ fi
 echo "[LOAD] API доступен."
 
 TS="$(date +%Y%m%d_%H%M%S)"
-OUT="${ROOT}/bench/results/${ENGINE}/${TS}"
+OUT="${ROOT}/data/bench/results/${ENGINE}/${TS}"
 mkdir -p "${OUT}"
 
 model_label="${BENCH_MODEL_NAME:-${MODEL_ID:-<auto>}}"

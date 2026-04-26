@@ -4,7 +4,7 @@
 **Движок:** vLLM (`http://127.0.0.1:8111/v1`)
 **Период:** 21–22.04.2026 (Kimi-K2.6 + эталонный scenario после фикса SSE в **v1.2.1**)
 **Железо:** стенд проекта (см. `configs/*`)
-**Источник данных:** `bench/results/vllm/<timestamp>/` — `summary.json` + `time_series.csv` (для load-тестов). Каталоги прогонов часто только локально (см. `.gitignore`).
+**Источник данных:** `data/bench/results/vllm/<timestamp>/` — `summary.json` + `time_series.csv` (для load-тестов). Каталоги прогонов часто только локально (см. `.gitignore`).
 
 ## Легенда метрик
 
@@ -27,7 +27,7 @@
 | [20260421_233822](results/vllm/20260421_233822/summary.json) | load | 1 500 users, steady 10 800 s | 10 980 с (~3 ч) | 297 498 | 297 498 / 0 | 16 492 / 18 156 | 53 654 / 56 545 | 27.09 | 27.65 |
 | [20260422_104802](results/vllm/20260422_104802/summary.json) | scenario | матрица 16 ячеек ×1 round | — | **676** | **676 / 0** | см. §2.4 | см. §2.4 | 0.05…9.42 | — |
 
-> Прогон `20260421_103502` из `bench/results/vllm/` исключён из анализа: там модель `openai/gpt-oss-120b`, не Kimi-K2.6.
+> Прогон `20260421_103502` из `data/bench/results/vllm/` исключён из анализа: там модель `openai/gpt-oss-120b`, не Kimi-K2.6.
 
 ## 2. Scenario-прогоны (`bench_openai.py`)
 

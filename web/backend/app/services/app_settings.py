@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.services.stack_config import ports_for_probes_sync
 from app.core.security import ValidationError
 from app.models.setting import Setting
 
@@ -73,13 +74,17 @@ def effective_server_host(request: Request, configured_host: str | None) -> str:
 
 
 def public_urls(server_host: str) -> dict[str, str]:
-    settings = get_settings()
+    p = ports_for_probes_sync()
+    prom = int(p["prometheus_port"])
+    graf = int(p["grafana_port"])
+    lf = int(p["langfuse_port"])
+    llm = int(p["litellm_port"])
     return {
-        "prometheus": f"http://{server_host}:{settings.prometheus_port}",
-        "grafana": f"http://{server_host}:{settings.grafana_port}",
-        "langfuse": f"http://{server_host}:{settings.langfuse_port}",
-        "litellm": f"http://{server_host}:{settings.litellm_port}/ui",
-        "litellm_api": f"http://{server_host}:{settings.litellm_port}/v1",
+        "prometheus": f"http://{server_host}:{prom}",
+        "grafana": f"http://{server_host}:{graf}",
+        "langfuse": f"http://{server_host}:{lf}",
+        "litellm": f"http://{server_host}:{llm}/ui",
+        "litellm_api": f"http://{server_host}:{llm}/v1",
     }
 
 

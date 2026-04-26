@@ -125,11 +125,15 @@ async def init_db() -> None:
         service,
         setting,
     )
+    from app.services.stack_config import ensure_default_settings
 
     engine = get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await conn.run_sync(_sqlite_drop_legacy_preset_engine_column)
+
+    async with session_scope() as session:
+        await ensure_default_settings(session)
 
 
 @asynccontextmanager

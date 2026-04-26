@@ -61,7 +61,7 @@ slgpu_validate_running_config "${ENGINE}" || exit 1
 BASE="$(slgpu_openai_base_url "${ENGINE}")"
 
 TS="$(date +%Y%m%d_%H%M%S)"
-OUT="${ROOT}/bench/results/${ENGINE}/${TS}"
+OUT="${ROOT}/data/bench/results/${ENGINE}/${TS}"
 mkdir -p "${OUT}"
 
 echo "Бенч: engine=${ENGINE} base=${BASE} model=${BENCH_MODEL_NAME:-${MODEL_ID:-<auto>}}"
@@ -73,5 +73,5 @@ python3 "${ROOT}/scripts/bench_openai.py" \
   --engine "${ENGINE}" \
   --output-dir "${OUT}"
 
-echo "${OUT}" > "${ROOT}/bench/results/.last_${ENGINE}"
+echo "${OUT}" > "${ROOT}/data/bench/results/.last_${ENGINE}"
 echo "Готово. summary: ${OUT}/summary.json"

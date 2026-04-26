@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import db_session
-from app.core.config import get_settings
+from app.services.stack_config import ports_for_probes_sync
 from app.services import app_settings
 from app.services import litellm as litellm_service
 
@@ -30,11 +30,10 @@ async def info(
     request: Request,
     session: AsyncSession = Depends(db_session),
 ) -> dict[str, Any]:
-    settings = get_settings()
     urls = await app_settings.get_public_urls(session, request)
     return {
         "ui_url": urls["litellm"],
         "api_url": urls["litellm_api"],
-        "port": settings.litellm_port,
+        "port": int(ports_for_probes_sync()["litellm_port"]),
         "note": "Routes and pricing are configured in LiteLLM Admin UI / DB.",
     }

@@ -1,4 +1,4 @@
-"""Argv generators for the ./slgpu CLI."""
+"""Argv / kind for stack operations (native docker compose; empty argv)."""
 
 from __future__ import annotations
 
@@ -20,22 +20,17 @@ def _root() -> Path:
     return Path("/srv/slgpu")
 
 
-def test_cmd_pull_with_slug():
+def test_cmd_pull_native():
     cmd = cmd_pull(_root(), "qwen3.6-35b-a3b")
-    assert cmd.argv == ["/srv/slgpu/slgpu", "pull", "qwen3.6-35b-a3b"]
-    assert cmd.kind == "cli.pull"
+    assert cmd.argv == []
+    assert cmd.kind == "native.model.pull"
     assert cmd.scope == "model"
 
 
 def test_cmd_pull_with_hf_id_and_revision():
     cmd = cmd_pull(_root(), "Qwen/Qwen3.6-35B-A3B", revision="main")
-    assert cmd.argv == [
-        "/srv/slgpu/slgpu",
-        "pull",
-        "Qwen/Qwen3.6-35B-A3B",
-        "--revision",
-        "main",
-    ]
+    assert cmd.argv == []
+    assert cmd.kind == "native.model.pull"
 
 
 def test_cmd_pull_rejects_injection():
@@ -43,22 +38,18 @@ def test_cmd_pull_rejects_injection():
         cmd_pull(_root(), "Qwen/Qwen; rm -rf /")
 
 
-def test_cmd_up_minimal():
+def test_cmd_up_native():
     cmd = cmd_up(_root(), "vllm", "qwen3.6-35b-a3b")
-    assert cmd.argv == [
-        "/srv/slgpu/slgpu",
-        "up",
-        "vllm",
-        "-m",
-        "qwen3.6-35b-a3b",
-    ]
+    assert cmd.argv == []
+    assert cmd.kind == "native.llm.up"
     assert cmd.scope == "engine"
     assert cmd.resource == "runtime"
 
 
-def test_cmd_up_with_port_and_tp():
+def test_cmd_up_with_port_and_tp_still_native():
     cmd = cmd_up(_root(), "sglang", "deepseek-v4-pro", port=8222, tp=8)
-    assert cmd.argv[-4:] == ["-p", "8222", "--tp", "8"]
+    assert cmd.argv == []
+    assert cmd.kind == "native.llm.up"
 
 
 def test_cmd_up_rejects_bad_engine():
@@ -66,34 +57,25 @@ def test_cmd_up_rejects_bad_engine():
         cmd_up(_root(), "trtllm", "demo")
 
 
-def test_cmd_down_optionally_includes_monitoring():
-    assert cmd_down(_root()).argv == ["/srv/slgpu/slgpu", "down"]
+def test_cmd_down_native():
+    assert cmd_down(_root()).argv == []
+    assert cmd_down(_root()).kind == "native.llm.down"
     assert cmd_down(_root()).resource == "runtime"
-    assert cmd_down(_root(), include_monitoring=True).argv == [
-        "/srv/slgpu/slgpu",
-        "down",
-        "--all",
-    ]
+    assert cmd_down(_root(), include_monitoring=True).kind == "native.llm.down"
 
 
-def test_cmd_restart_argv():
+def test_cmd_restart_native():
     cmd = cmd_restart(_root(), "qwen3.6-35b-a3b", tp=4)
-    assert cmd.argv == [
-        "/srv/slgpu/slgpu",
-        "restart",
-        "-m",
-        "qwen3.6-35b-a3b",
-        "--tp",
-        "4",
-    ]
+    assert cmd.argv == []
+    assert cmd.kind == "native.llm.restart"
     assert cmd.resource == "runtime"
 
 
 @pytest.mark.parametrize("action", ["up", "down", "restart", "fix-perms"])
-def test_cmd_monitoring_allowlist(action: str):
+def test_cmd_monitoring_native(action: str):
     cmd = cmd_monitoring(_root(), action)
-    assert cmd.argv == ["/srv/slgpu/slgpu", "monitoring", action]
-    assert cmd.kind == f"cli.monitoring.{action}"
+    assert cmd.argv == []
+    assert cmd.kind == f"native.monitoring.{action}"
     assert cmd.scope == "monitoring"
     assert cmd.resource == "stack"
 

@@ -8,6 +8,7 @@
 | **`presets/`** | Файлы пресетов `*.env` (`PRESETS_DIR=./data/presets` в `main.env`); web UI и `./slgpu` читают и пишут сюда. Каталог `*.env` **не в git** (чтобы `git pull` на сервере не конфликтовал с локальными правками). Эталонные примеры — **`examples/presets/`** (`cp examples/presets/*.env data/presets/` на чистом клоне). Формат полей: `configs/models/README.md`. |
 | **`web/`** | SQLite и рабочие файлы web UI (`WEB_DATA_DIR=./data/web`). |
 | **`monitoring/`** | TSDB, Loki, Grafana, Langfuse, MinIO и т.д. — пути задаются в `main.env` (`PROMETHEUS_DATA_DIR`, `LOKI_DATA_DIR`, `LANGFUSE_*_DATA_DIR`, …), по умолчанию подкаталоги **`./data/monitoring/...`**. |
+| **`bench/`** | Результаты `./slgpu bench` / `./slgpu load` и прогонов из web UI: **`data/bench/results/<engine>/<timestamp>/`** (`summary.json`, для load — ещё `time_series.csv`, `users.jsonl`). В git — только пример [`report.md`](bench/report.md). |
 
 Каталоги с относительными путями `./data/...` создаются скриптами при `up` там, где это уместно (`slgpu_ensure_data_dirs` в `scripts/_lib.sh`). Перед первым **`./slgpu monitoring up`** по-прежнему рекомендуется **`sudo ./slgpu monitoring fix-perms`** для владельцев uid:gid из образов.
 

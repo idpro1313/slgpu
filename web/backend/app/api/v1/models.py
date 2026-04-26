@@ -180,7 +180,11 @@ async def pull_model(
         job = await jobs_service.submit(
             command,
             actor=actor,
-            extra_args={"model_id": model_id, "revision": revision},
+            extra_args={
+                "model_id": model_id,
+                "revision": revision,
+                "hf_id": model.hf_id,
+            },
         )
     except jobs_service.JobConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

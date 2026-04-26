@@ -68,20 +68,26 @@ def test_session_scope_helper_exists():
     assert callable(jobs_service.session_scope)
 
 
+def test_exec_argv_empty_for_native_commands(tmp_path: Path) -> None:
+    root = tmp_path / "repo"
+    root.mkdir()
+    cmd = cmd_up(root, "vllm", "deepseek-v4-flash")
+    assert _exec_argv_for_cli(cmd, root) == []
+
+
 def test_exec_argv_wraps_repo_slgpu_with_bash(tmp_path: Path) -> None:
     root = tmp_path / "repo"
     root.mkdir()
     (root / "slgpu").write_text("#!/usr/bin/env bash\necho ok\n", encoding="utf-8")
-    cmd = cmd_up(root, "vllm", "deepseek-v4-flash")
+    entry = str(root / "slgpu")
+    cmd = CliCommand(
+        kind="legacy.cli.up",
+        argv=[entry, "up", "vllm", "-m", "deepseek-v4-flash"],
+        scope="engine",
+        resource="runtime",
+    )
     out = _exec_argv_for_cli(cmd, root)
-    assert out == [
-        "/bin/bash",
-        str(root / "slgpu"),
-        "up",
-        "vllm",
-        "-m",
-        "deepseek-v4-flash",
-    ]
+    assert out == ["/bin/bash", entry, "up", "vllm", "-m", "deepseek-v4-flash"]
 
 
 def test_exec_argv_passes_through_other_commands(tmp_path: Path) -> None:

@@ -113,12 +113,12 @@
 | **`pull`** | **Скачивание весов** в `${MODELS_DIR}/<MODEL_ID>` через `hf download`. **Файл пресета не создаётся.** Аргумент **с `/`** — HF id: если есть `data/presets/<slug>.env` (slug из имени репо), подхватывается `MODEL_ID` и т.д.; если пресета **нет** — скачивание только по HF id, для `./slgpu up` заведите `data/presets/<slug>.env`. Аргумент **без `/`** — имя существующего пресета. Опция **`--revision`**: пин ревизии (переопределяет `MODEL_REVISION` при загрузке с пресетом). Токен: [`configs/secrets/hf.env`](configs/secrets/hf.env) (`HF_TOKEN`). |
 | **`up`** | **Запуск движка**: останавливает и удаляет контейнеры другого движка (vllm/sglang), поднимает **один** выбранный профиль — `vllm` или `sglang` (см. `./slgpu up -h`) с **`-m <preset>`** (в неинтерактивном вызове). **`./slgpu up` без аргументов** при **TTY** сначала предлагает выбрать движок, затем пресет из `data/presets/*.env`; **без TTY** укажите `vllm`/`sglang` и **`-m`** явно. Мониторинг (Prometheus, Grafana) **отдельно**: **`./slgpu monitoring up`** (один раз на хост). **Не ждёт** `GET /v1/models` — `curl` вручную. |
 | **`monitoring`** | **`up` / `down` / `restart` / `bootstrap` / `fix-perms`**: стек в [`docker/docker-compose.monitoring.yml`](docker/docker-compose.monitoring.yml); первый **`up`** на новом сервере один раз запускает bootstrap-контейнеры `minio-bucket-init` и `litellm-pg-init` (markers в `data/monitoring/.bootstrap`), последующие `up/restart` их не пересоздают. **`bootstrap`** — ручной повтор (`SLGPU_MONITORING_BOOTSTRAP_FORCE=1`). **`fix-perms`** — chown каталогов `PROMETHEUS_DATA_DIR`, `GRAFANA_DATA_DIR`, `LOKI_DATA_DIR`, `PROMTAIL_DATA_DIR`, `LANGFUSE_*_DATA_DIR` по uid:gid из образов; работает через короткоживущий root-контейнер (`SLGPU_FIXPERMS_HELPER_IMAGE`, по умолчанию `alpine:latest`), `sudo` не нужен (см. [configs/monitoring/README](configs/monitoring/README.md)). |
-| **`web`** | **`up` / `down` / `restart` / `logs` / `build`**: приложение **Develonica.LLM**, образ **slgpu-web** ([`docker/docker-compose.web.yml`](docker/docker-compose.web.yml)), сеть `slgpu`; тома `data/web`, `data/models` по [`main.env`](main.env). Репо bind-монтируется в контейнер по **тому же абсолютному пути, что и на хосте** (`SLGPU_HOST_REPO`, экспортируется из `scripts/cmd_web.sh` как `$(pwd)`) — это важно, чтобы команды веба `./slgpu monitoring …` корректно резолвили bind-маунты конфигов и скриптов мониторинга. |
+| **`web`** | **`up` / `down` / `restart` / `logs` / `build` / `install`**: приложение **Develonica.LLM**, образ **slgpu-web** ([`docker/docker-compose.web.yml`](docker/docker-compose.web.yml)), сеть `slgpu`; тома `data/web`, `data/models` по [`main.env`](main.env). Репо bind-монтируется в контейнер по **тому же абсолютному пути, что и на хосте** (`SLGPU_HOST_REPO`, экспортируется из `scripts/cmd_web.sh` как `$(pwd)`). **`install`** — `POST /api/v1/app-config/install`: импорт `main.env` (+ опционально `configs/secrets/*.env`) в SQLite стека web (после первого запуска `web up`). |
 | **`down`** | **Остановка инференса**: по умолчанию — **только** `vllm` и `sglang`. С флагом **`--all`** — ещё и стек мониторинга. Тома метрик/дашбордов не удаляются. |
 | **`restart`** | **Перезапуск с новым пресетом без смены движка**: определяет, какой сервис сейчас в статусе *running* (`vllm` или `sglang`), и выполняет для него ту же последовательность, что и `up`, с новым **`-m <preset>`**; опционально **`--tp`**, как у `up`. Если ни один LLM-контейнер не запущен — сообщение об ошибке; тогда используйте `up`. |
-| **`bench`** | **Нагрузочный тест** против уже поднятого API (порт vLLM 8111 / SGLang 8222 по умолчанию, см. `docker compose -f docker/docker-compose.llm.yml port`): запускает [`scripts/bench_openai.py`](scripts/bench_openai.py). Модель и engine **автоматически определяются** из запущенного API (`/v1/models`) и docker compose. Пресет **`-m`** опционален — используется только для `MAX_MODEL_LEN` и `BENCH_MODEL_NAME`, если указан. Пишет артефакты в `bench/results/<engine>/<timestamp>/`. |
+| **`bench`** | **Нагрузочный тест** против уже поднятого API (порт vLLM 8111 / SGLang 8222 по умолчанию, см. `docker compose -f docker/docker-compose.llm.yml port`): запускает [`scripts/bench_openai.py`](scripts/bench_openai.py). Модель и engine **автоматически определяются** из запущенного API (`/v1/models`) и docker compose. Пресет **`-m`** опционален — используется только для `MAX_MODEL_LEN` и `BENCH_MODEL_NAME`, если указан. Пишет артефакты в **`data/bench/results/<engine>/<timestamp>/`**. |
 | **`load`** | **Длительный нагрузочный тест** (15–20 мин, 200–300 виртуальных пользователей): запускает [`scripts/bench_load.py`](scripts/bench_load.py). Модель и engine **автоматически определяются** из запущенного API. Эмулирует фазы ramp-up → steady → ramp-down, собирает time-series метрики (throughput, TTFT, latency, error rate) в CSV каждые 5 сек. Артефакты: `summary.json`, `time_series.csv`, `users.jsonl`. Опции: `--users`, `--duration`, `--ramp-up`, `--ramp-down`, `--think-time`, `--max-prompt`, `--max-output`, `--report-interval`, `--burst` (макс throughput без пауз). |
-Подробности по флагам **`pull`**: см. `./slgpu pull -h` и [`configs/models/README.md`](configs/models/README.md). Результаты бенчей: **`bench/results/<engine>/<timestamp>/summary.json`**. Пример разборов — [`bench/report.md`](bench/report.md) (вручную, не генерируется репо). Логи: **`docker compose -f docker/docker-compose.llm.yml logs -f vllm`**; мониторинг: **`./slgpu monitoring up`**, логи — `-f docker/docker-compose.monitoring.yml`. Диагностика: **`docker compose ps`**, **`curl`**, **`nvidia-smi`**.
+Подробности по флагам **`pull`**: см. `./slgpu pull -h` и [`configs/models/README.md`](configs/models/README.md). Результаты бенчей: **`data/bench/results/<engine>/<timestamp>/summary.json`**. Пример разборов — [`data/bench/report.md`](data/bench/report.md) (вручную, в git). Старые прогоны при необходимости перенесите из `bench/results/` в `data/bench/results/`. Логи: **`docker compose -f docker/docker-compose.llm.yml logs -f vllm`**; мониторинг: **`./slgpu monitoring up`**, логи — `-f docker/docker-compose.monitoring.yml`. Диагностика: **`docker compose ps`**, **`curl`**, **`nvidia-smi`**.
 
 ---
 
@@ -192,10 +192,10 @@ M=qwen3.6-35b-a3b
 ./slgpu up vllm   -m $M && ./slgpu bench vllm   -m $M
 ./slgpu down
 ./slgpu up sglang -m $M && ./slgpu bench sglang -m $M
-# Артефакты: bench/results/vllm|sglang/<timestamp>/summary.json
+# Артефакты: data/bench/results/vllm|sglang/<timestamp>/summary.json
 ```
 
-Артефакты: `bench/results/<engine>/<timestamp>/summary.json`.
+Артефакты: `data/bench/results/<engine>/<timestamp>/summary.json`.
 
 ---
 
@@ -218,7 +218,7 @@ M=qwen3.6-35b-a3b
 
 ### Артефакты результатов
 
-В `bench/results/<engine>/<timestamp>/` создаётся 3 файла:
+В `data/bench/results/<engine>/<timestamp>/` создаётся 3 файла:
 
 1. **`summary.json`** — сводка по всему прогону: total_duration_sec, throughput_rps, ttft_p50_ms, error_rate, …
 2. **`time_series.csv`** — time-series каждые 5 сек: timestamp, phase, active_users, throughput_rps, ttft_p50_ms, ttft_p95_ms, latency_p50_ms, latency_p95_ms, tokens_per_sec, error_rate.
@@ -379,8 +379,9 @@ slgpu/
 │   ├── cmd_*.sh
 │   ├── bench_openai.py
 │   └── bench_load.py           # Длительный нагрузочный тест
-├── bench/
-│   └── results/{vllm,sglang}/
+├── data/bench/
+│   ├── report.md               # пример разборов (в git); результаты — data/bench/results/ (локально)
+│   └── results/{vllm,sglang}/  # артефакты прогонов (не в git)
 ├── grace/                      # GRACE-артефакты
 │   ├── requirements/requirements.xml
 │   ├── technology/technology.xml

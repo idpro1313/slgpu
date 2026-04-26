@@ -10,7 +10,7 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
+from app.services.stack_config import models_dir_sync
 from app.core.security import ValidationError, validate_hf_id, validate_revision
 from app.models.model import HFModel, ModelDownloadStatus
 from app.services.env_files import hf_id_to_slug
@@ -24,33 +24,12 @@ _CONFIG = "config.json"
 
 
 def _models_root() -> Path:
-    """Resolve where slgpu CLI puts the weights.
+    """Weights directory from stack config in SQLite (defaults in ``cfg.stack``)."""
 
-    Reads `MODELS_DIR` from `main.env` if present, otherwise defaults
-    to `/opt/models` to match the slgpu README.
-
-    Relative paths (e.g. ``./data/models``) are resolved from ``slgpu_root``
-    (``/slgpu`` in the web container), so they match the bind mount in
-    ``docker/docker-compose.web.yml``.
-    """
-
-    settings = get_settings()
-    main_env = settings.main_env_path
-    root = settings.slgpu_root
-    if main_env.exists():
-        for line in main_env.read_text(encoding="utf-8").splitlines():
-            stripped = line.strip()
-            if stripped.startswith("MODELS_DIR=") and not stripped.startswith("#"):
-                value = stripped.split("=", 1)[1].strip()
-                if not value:
-                    break
-                if value.startswith("./"):
-                    return (root / value[2:]).resolve()
-                p = Path(value)
-                if p.is_absolute():
-                    return p
-                return (root / value).resolve()
-    return Path("/opt/models")
+    try:
+        return models_dir_sync()
+    except Exception:  # noqa: BLE001
+        return Path("/opt/models")
 
 
 def _scan_local_state(hf_id: str) -> tuple[ModelDownloadStatus, int | None]:

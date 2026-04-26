@@ -405,6 +405,7 @@ slgpu_ensure_data_dirs() {
       mkdir -p "${root}/${_p#./}"
     fi
   done
+  mkdir -p "${root}/data/bench/results"
 }
 
 # Если bind-монт в Docker указывал на отсутствующий файл, Docker мог создать каталог с тем же именем → Loki/Promtail: «is a directory».

@@ -6,10 +6,11 @@
 
 ## 1. Назначение
 
-Web-приложение **Develonica.LLM** (`slgpu-web`) — control plane поверх существующего bash CLI
-[`./slgpu`](../slgpu) и Docker-стека ([`docker/docker-compose.llm.yml`](../docker/docker-compose.llm.yml),
-[`docker/docker-compose.monitoring.yml`](../docker/docker-compose.monitoring.yml)). Оно
-выполняет пять задач из ТЗ пользователя:
+Web-приложение **Develonica.LLM** (`slgpu-web`) — control plane поверх Docker Compose / Docker API
+([`docker/docker-compose.llm.yml`](../docker/docker-compose.llm.yml),
+[`docker/docker-compose.monitoring.yml`](../docker/docker-compose.monitoring.yml)); опционально bash CLI
+[`./slgpu`](../slgpu) на хосте для ручных сценариев. Оно
+выполняет задачи из ТЗ пользователя:
 
 1. Скачивание моделей с Hugging Face по ID, контроль процесса,
    повторная докачка, журнал.
@@ -31,15 +32,8 @@ Web-приложение **Develonica.LLM** (`slgpu-web`) — control plane по
 radius `10px`. Favicon остаётся в LLM-тематике, но использует ту же синюю
 палитру.
 
-Отдельная страница **Настройки** хранит публичный IP/DNS сервера в SQLite
-(`settings.public_access.server_host`). Этот host используется только для
-ссылок, открываемых браузером пользователя: Grafana, Prometheus, Langfuse и
-LiteLLM Admin UI. Внутренние health-probe из web-контейнера продолжают
-использовать `WEB_MONITORING_HTTP_HOST` (`host.docker.internal` в compose).
-Снимок runtime и dashboard-проба **не** обращаются к `http://127.0.0.1:${порт}/v1/models` из
-web-контейнера: к API движка ходим через `WEB_LLM_HTTP_HOST` (в compose
-`host.docker.internal`) плюс запасной адрес `http://vllm:8111` / `http://sglang:8222`
-(сеть `slgpu`).
+Страница **Настройки**: публичный IP/DNS (`settings.public_access.server_host`), импорт стека из
+`main.env` в SQLite (`cfg.stack`, `cfg.secrets`, `cfg.meta`), правка плоских ключей и секретов (секреты в API маскируются). Этот host используется только для ссылок в браузере. Внутренние health-probe используют `WEB_MONITORING_HTTP_HOST`; порты Prometheus/Grafana/Langfuse/LiteLLM и имена compose-проектов читаются из **слитого** стека (БД + дефолты), не только из `WEB_*` env. Снимок runtime ходит к API движка через `WEB_LLM_HTTP_HOST` и `http://vllm:<LLM_API_PORT>` / `http://sglang:<порт>` (порты из стека).
 
 ## 2. Границы ответственности
 
@@ -48,7 +42,7 @@ web-контейнера: к API движка ходим через `WEB_LLM_HTT
 | Сущность | Источник правды |
 |---|---|
 | Веса моделей на диске | `${MODELS_DIR}` (по умолчанию **`./data/models`**, см. `data/README.md`); удаление весов из UI разрешено только внутри этого каталога |
-| Параметры движка для запуска | `main.env` + `data/presets/<slug>.env` (путь: `PRESETS_DIR`) |
+| Параметры движка для запуска | Плоский стек в SQLite (`cfg.stack` + `cfg.secrets`), синхронизируемый с `main.env` при install; пресеты — `data/presets/<slug>.env` (`PRESETS_DIR` из стека) |
 | Состояние контейнеров | Docker daemon (через socket) |
 | Метрики и серии | Prometheus TSDB |
 | Логи контейнеров | Loki / `docker logs` |
@@ -65,7 +59,7 @@ web-контейнера: к API движка ходим через `WEB_LLM_HTT
 | `services` | Состояние сервисов мониторинга и LiteLLM по последнему опросу. |
 | `jobs` | Долгие операции CLI: команда, статус, exit code, stdout/stderr tail, correlation id, инициатор. |
 | `audit_events` | Действия: при `jobs.submit` — запись **с** `correlation_id` (дублирует job для трассировки). Отдельно — **только UI** (`correlation_id IS NULL`): пресеты, модель в реестре, настройки public-access. Лента «Задачи» строится из `GET /activity`: `jobs` + UI-`audit` без дубля CLI-строк. |
-| `settings` | Пользовательские настройки UI, включая публичный host сервера для ссылок на monitoring/LiteLLM. |
+| `settings` | Публичный host (`public_access`), плюс ключи **`cfg.stack`**, **`cfg.secrets`**, **`cfg.meta`** (установка из файлов, маскирование секретов в API). |
 
 Footer приложения показывает версию из `/healthz`; backend читает её из
 корневого `VERSION`, чтобы UI не расходился с SemVer проекта. Копирайт:
@@ -73,47 +67,27 @@ Footer приложения показывает версию из `/healthz`; b
 
 ## 3. Операции
 
-### CLI Allowlist (только эти команды разрешены приложению)
+### Фоновые задачи стека (`jobs.kind` = `native.*`)
 
-| ID | Команда | Назначение |
-|---|---|---|
-| `cli.pull` | `./slgpu pull <slug-or-hf-id> [--revision REV]` | Скачать модель. |
-| `cli.up` | `./slgpu up <vllm\|sglang> -m <slug> [-p PORT] [--tp N]` | Поднять движок. |
-| `cli.down` | `./slgpu down [--all]` | Остановить движок (опц. с мониторингом). |
-| `cli.restart` | `./slgpu restart -m <slug> [--tp N]` | Перезапуск с новым пресетом без смены движка. |
-| `cli.monitoring.up` | `./slgpu monitoring up` | Поднять мониторинг. |
-| `cli.monitoring.down` | `./slgpu monitoring down` | Остановить мониторинг. |
-| `cli.monitoring.restart` | `./slgpu monitoring restart` | Пересоздать мониторинг. |
-| `cli.monitoring.fix-perms` | `./slgpu monitoring fix-perms` | Починить права на bind-mount каталоги. |
+| kind | Назначение |
+|---|---|
+| `native.model.pull` | Скачать веса через `huggingface_hub.snapshot_download` (`HF_TOKEN` из слитого стека). |
+| `native.llm.up` | `docker compose` LLM-стек, env из БД + пресет. |
+| `native.llm.down` / `native.llm.restart` | Остановка / пересоздание LLM-стека. |
+| `native.monitoring.up` / `down` / `restart` | Стек мониторинга. |
+| `native.monitoring.fix-perms` | Права на data-dir через docker-py + helper-образ. |
+| `native.bench.scenario` / `native.bench.load` | Subprocess `scripts/bench_openai.py` / `bench_load.py`, вывод в `data/bench/results/`. |
 
-Любая команда вне списка отвергается раньше, чем дойдёт до shell.
-Аргументы валидируются регулярными выражениями: slug, hf-id, port,
-TP, revision. `shell=False` всегда.
+`CliCommand.argv` для этих операций **пустой**; параметры в `Job.args`. Унаследованный путь с subprocess `./slgpu` не используется для стека.
 
-Зависимости job runner’а в образе web (`docker/Dockerfile.web`):
-- `huggingface_hub[cli]` (команда `hf`) и `hf_transfer` — для `cli.pull`
-  (см. [`scripts/cmd_pull.sh`](../scripts/cmd_pull.sh): требует `hf` в `PATH`).
-  `cmd_pull.sh` нормализует относительный `MODELS_DIR=./data/models` в абсолютный
-  путь от корня репозитория и создаёт writable cache/home для Hugging Face:
-  `HF_HOME` по умолчанию указывает на `/data/huggingface` в web-образе; если
-  `$HOME` отсутствует или не writable, CLI использует `WEB_DATA_DIR` (абсолютный
-  путь) вместо `/home/slgpuweb`, чтобы не падать на `Permission denied`.
-  Перед `hf download --local-dir` создаётся каталог модели `${MODELS_DIR}/<org>/<repo>`.
-- Сам `docker` CLI и доступ к `/var/run/docker.sock` — для `cli.up/down/restart` и
-  `cli.monitoring.*`. `cli.monitoring.fix-perms` использует короткоживущий root-контейнер
-  (`docker run --rm -u 0:0` с образом `SLGPU_FIXPERMS_HELPER_IMAGE`, по умолчанию
-  `alpine:latest`) и **не требует `sudo`** ни на хосте, ни в web-контейнере.
+API: `GET/PATCH /app-config/stack`, `POST /app-config/install`, `GET /app-config/status`; бенчмарк: `GET /bench/runs`, `GET /bench/report.md`, `POST /bench/scenario`, `POST /bench/load`.
 
-### Docker API (read-only)
+Зависимости образа web: `docker` (socket), `huggingface_hub` (pull), `docker compose` на хосте репо — для LLM/monitoring up (см. `app/services/compose_exec.py`).
 
-Приложение использует Docker socket только для чтения:
+### Docker API
 
-- `containers.list({"label": "com.docker.compose.project=slgpu"})`,
-  `+slgpu-monitoring`;
-- `container.attrs` (статус, ports, restart count);
-- `container.logs(tail=N, since=...)` — хвост логов текущего vLLM/SGLang на Runtime-странице и `jobs.stderr_tail`.
-
-Mutations контейнеров идут только через CLI allowlist.
+- **Чтение:** список контейнеров по `com.docker.compose.project`, атрибуты, хвост логов.
+- **Запись:** `native.monitoring.fix-perms` (chown через ephemeral контейнер); LLM/monitoring up/down — через `docker compose`, не через произвольный `docker run` из UI.
 
 ### HTTP-проверки
 
@@ -128,9 +102,7 @@ Mutations контейнеров идут только через CLI allowlist.
 
 ## 4. Безопасность
 
-- Hugging Face / Grafana / Langfuse / LiteLLM секреты **не пишутся в
-  БД и не показываются в UI**. UI показывает только наличие/отсутствие
-  и путь к секретному файлу.
+- Секреты стека хранятся в **`cfg.secrets`** (SQLite); в API отдаются **маскированными** (`***`). Пользователь может обновить значение через `PATCH /app-config/stack` (не отправляйте `***` как новое значение).
 - Один mutating job на стек одновременно (advisory lock в БД на
   `(scope, resource)`: runtime-команды используют `("engine", "runtime")`,
   monitoring-команды — `("monitoring", "stack")`). UI показывает активную
@@ -145,7 +117,7 @@ Mutations контейнеров идут только через CLI allowlist.
 - Подъём **с хоста (Linux VM) из корня репозитория:** **`./slgpu web up`** (обёртка над
   `docker compose -f docker/docker-compose.web.yml --env-file main.env` с
   `--project-directory` = корень репо; см. `scripts/cmd_web.sh`). Остановка:
-  **`./slgpu web down`**. Переменные `WEB_DATA_DIR`, `MODELS_DIR`, `WEB_BIND`, `WEB_PORT` —
+  **`./slgpu web down`**. После первого старта: **`./slgpu web install`** или UI / `POST /app-config/install` — импорт `main.env` в БД. Переменные `WEB_DATA_DIR`, `MODELS_DIR`, `WEB_BIND`, `WEB_PORT` —
   в [`main.env`](../main.env). Публикация на хосте: по умолчанию **`WEB_BIND=0.0.0.0`** (доступ извне на `WEB_PORT`); только с localhost — **`WEB_BIND=127.0.0.1`**.
 - Сборка образа: [`docker/Dockerfile.web`](../docker/Dockerfile.web) (context = каталог `web/`).
 - Один контейнер `slgpu-web`. Внутри: FastAPI (uvicorn) + статика

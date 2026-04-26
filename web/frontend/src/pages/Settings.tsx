@@ -6,12 +6,24 @@ import type { Job, JobAccepted, PublicAccessSettings } from "@/api/types";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
 
+type AppConfigStatus = { installed: boolean; meta: Record<string, unknown> };
+type AppConfigStack = {
+  stack: Record<string, string>;
+  secrets: Record<string, string>;
+  meta: Record<string, unknown>;
+};
+
 export function SettingsPage() {
   const queryClient = useQueryClient();
   const [serverHost, setServerHost] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [jobError, setJobError] = useState<string | null>(null);
+  const [stackJson, setStackJson] = useState("{}");
+  const [secretsJson, setSecretsJson] = useState("{}");
+  const [installForce, setInstallForce] = useState(false);
+  const [cfgMessage, setCfgMessage] = useState<string | null>(null);
+  const [cfgError, setCfgError] = useState<string | null>(null);
 
   const publicAccess = useQuery({
     queryKey: ["settings", "public-access"],
@@ -22,6 +34,50 @@ export function SettingsPage() {
     queryKey: ["jobs"],
     queryFn: () => api.get<Job[]>("/jobs"),
     refetchInterval: 2_000,
+  });
+
+  const appStatus = useQuery({
+    queryKey: ["app-config", "status"],
+    queryFn: () => api.get<AppConfigStatus>("/app-config/status"),
+  });
+
+  const appStack = useQuery({
+    queryKey: ["app-config", "stack"],
+    queryFn: () => api.get<AppConfigStack>("/app-config/stack"),
+  });
+
+  const installCfg = useMutation({
+    mutationFn: (force: boolean) =>
+      api.post<{ installed: boolean; stack_keys: number; secret_keys: number }>(
+        "/app-config/install",
+        { force },
+      ),
+    onSuccess: (res) => {
+      setCfgError(null);
+      setCfgMessage(
+        `Импорт выполнен: ключей стека ${res.stack_keys}, секретов ${res.secret_keys}.`,
+      );
+      queryClient.invalidateQueries({ queryKey: ["app-config"] });
+    },
+    onError: (err: Error) => {
+      setCfgMessage(null);
+      setCfgError(err.message);
+    },
+  });
+
+  const patchStack = useMutation({
+    mutationFn: (body: { stack?: Record<string, string>; secrets?: Record<string, string> }) =>
+      api.patch("/app-config/stack", body),
+    onSuccess: () => {
+      setCfgError(null);
+      setCfgMessage("Стек и секреты обновлены в БД.");
+      setSecretsJson("{}");
+      queryClient.invalidateQueries({ queryKey: ["app-config"] });
+    },
+    onError: (err: Error) => {
+      setCfgMessage(null);
+      setCfgError(err.message);
+    },
   });
 
   const monitoringAction = useMutation({
@@ -47,6 +103,12 @@ export function SettingsPage() {
       setServerHost(publicAccess.data.server_host ?? "");
     }
   }, [publicAccess.data]);
+
+  useEffect(() => {
+    if (appStack.data?.stack) {
+      setStackJson(JSON.stringify(appStack.data.stack, null, 2));
+    }
+  }, [appStack.data]);
 
   const save = useMutation({
     mutationFn: () =>
@@ -74,12 +136,125 @@ export function SettingsPage() {
 
   const data = publicAccess.data;
 
+  function onSaveStack(event: FormEvent) {
+    event.preventDefault();
+    setCfgMessage(null);
+    setCfgError(null);
+    let stack: Record<string, string>;
+    let secrets: Record<string, string> | undefined;
+    try {
+      stack = JSON.parse(stackJson) as Record<string, string>;
+      if (typeof stack !== "object" || stack === null || Array.isArray(stack)) {
+        throw new Error("stack должен быть объектом");
+      }
+    } catch (e) {
+      setCfgError(e instanceof Error ? e.message : "Неверный JSON стека");
+      return;
+    }
+    const secRaw = secretsJson.trim();
+    if (secRaw && secRaw !== "{}") {
+      try {
+        secrets = JSON.parse(secretsJson) as Record<string, string>;
+        if (typeof secrets !== "object" || secrets === null || Array.isArray(secrets)) {
+          throw new Error("secrets должен быть объектом");
+        }
+      } catch (e) {
+        setCfgError(e instanceof Error ? e.message : "Неверный JSON секретов");
+        return;
+      }
+    }
+    patchStack.mutate(secrets ? { stack, secrets } : { stack });
+  }
+
   return (
     <>
       <PageHeader
         title="Настройки"
-        subtitle="Публичный адрес сервера используется только для ссылок, которые открывает браузер: Grafana, Prometheus, Langfuse и LiteLLM Admin UI."
+        subtitle="Публичный адрес сервера, импорт стека из main.env и правка плоских ключей в SQLite (порты, пути, проекты compose). Секреты в API маскируются; для смены укажите только новые значения в JSON."
       />
+
+      {(cfgMessage || cfgError) && (
+        <p style={{ color: cfgError ? "var(--color-danger)" : "var(--color-success)" }}>
+          {cfgError ?? cfgMessage}
+        </p>
+      )}
+
+      <Section
+        title="Установка стека из файлов"
+        subtitle="Читает `main.env` в корне репозитория и опционально `configs/secrets/hf.env`, `configs/secrets/langfuse-litellm.env`. Повтор без force вернёт 409."
+      >
+        <div className="flex flex--col flex--gap-sm">
+          <p className="section__subtitle" style={{ margin: 0 }}>
+            Статус:{" "}
+            {appStatus.isLoading
+              ? "…"
+              : appStatus.data?.installed
+                ? "установлено"
+                : "не импортировано"}
+            {appStatus.data?.meta && typeof appStatus.data.meta.installed_at === "string"
+              ? ` · ${appStatus.data.meta.installed_at}`
+              : null}
+          </p>
+          <label className="flex flex--gap-sm" style={{ alignItems: "center" }}>
+            <input
+              type="checkbox"
+              checked={installForce}
+              onChange={(e) => setInstallForce(e.target.checked)}
+            />
+            <span>Принудительно перезаписать (force)</span>
+          </label>
+          <button
+            type="button"
+            className="btn btn--primary"
+            disabled={installCfg.isPending}
+            onClick={() => installCfg.mutate(installForce)}
+          >
+            {installCfg.isPending ? "Импорт…" : "Импортировать из main.env"}
+          </button>
+        </div>
+      </Section>
+
+      <Section
+        title="Стек и секреты (БД)"
+        subtitle="Редактирование `cfg.stack`; секреты — только новые ключи/значения (пустой объект = не трогать). Не вставляйте маску ***."
+      >
+        {appStack.isLoading ? (
+          <div className="empty-state">Загружаем…</div>
+        ) : (
+          <form className="flex flex--col flex--gap-md" onSubmit={onSaveStack}>
+            <label>
+              <span className="label">stack (JSON)</span>
+              <textarea
+                className="input"
+                rows={14}
+                value={stackJson}
+                onChange={(e) => setStackJson(e.target.value)}
+                spellCheck={false}
+              />
+            </label>
+            <label>
+              <span className="label">secrets — только изменяемые поля (JSON)</span>
+              <textarea
+                className="input"
+                rows={6}
+                value={secretsJson}
+                onChange={(e) => setSecretsJson(e.target.value)}
+                placeholder='{"HF_TOKEN":"..."}'
+                spellCheck={false}
+              />
+            </label>
+            <p className="section__subtitle">
+              Текущие секреты (маскировано):{" "}
+              <span className="mono">
+                {appStack.data ? JSON.stringify(appStack.data.secrets) : "—"}
+              </span>
+            </p>
+            <button type="submit" className="btn btn--ghost" disabled={patchStack.isPending}>
+              {patchStack.isPending ? "Сохранение…" : "Сохранить в БД"}
+            </button>
+          </form>
+        )}
+      </Section>
 
       <Section
         title="Адрес сервера"
