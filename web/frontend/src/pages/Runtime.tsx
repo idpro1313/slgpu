@@ -186,11 +186,6 @@ function SlotCard(props: {
 
 export function RuntimePage() {
   const queryClient = useQueryClient();
-  const [engine, setEngine] = useState<"vllm" | "sglang">("vllm");
-  const [presetName, setPresetName] = useState<string>("");
-  const [port, setPort] = useState<string>("");
-  const [tp, setTp] = useState<string>("");
-  const [error, setError] = useState<string | null>(null);
   const [logSlotKey, setLogSlotKey] = useState<string | null>(null);
   const [launchOpen, setLaunchOpen] = useState(false);
   const [launchEngine, setLaunchEngine] = useState<"vllm" | "sglang">("vllm");
@@ -247,53 +242,6 @@ export function RuntimePage() {
     refetchInterval: launchOpen ? 4_000 : false,
   });
 
-  const upMutation = useMutation({
-    mutationFn: () =>
-      api.post<JobAccepted>("/runtime/up", {
-        engine,
-        preset: presetName,
-        port: port ? Number(port) : null,
-        tp: tp ? Number(tp) : null,
-      }),
-    onSuccess: () => {
-      setError(null);
-      queryClient.invalidateQueries({ queryKey: ["jobs"] });
-      queryClient.invalidateQueries({ queryKey: ["activity"] });
-      queryClient.invalidateQueries({ queryKey: ["runtime-snapshot"] });
-      queryClient.invalidateQueries({ queryKey: ["gpu-state"] });
-    },
-    onError: (err: Error) => setError(err.message),
-  });
-
-  const restartMutation = useMutation({
-    mutationFn: () =>
-      api.post<JobAccepted>("/runtime/restart", {
-        preset: presetName,
-        tp: tp ? Number(tp) : null,
-      }),
-    onSuccess: () => {
-      setError(null);
-      queryClient.invalidateQueries({ queryKey: ["jobs"] });
-      queryClient.invalidateQueries({ queryKey: ["activity"] });
-      queryClient.invalidateQueries({ queryKey: ["runtime-snapshot"] });
-      queryClient.invalidateQueries({ queryKey: ["gpu-state"] });
-    },
-    onError: (err: Error) => setError(err.message),
-  });
-
-  const downMutation = useMutation({
-    mutationFn: (includeMonitoring: boolean) =>
-      api.post<JobAccepted>("/runtime/down", { include_monitoring: includeMonitoring }),
-    onSuccess: () => {
-      setError(null);
-      queryClient.invalidateQueries({ queryKey: ["jobs"] });
-      queryClient.invalidateQueries({ queryKey: ["activity"] });
-      queryClient.invalidateQueries({ queryKey: ["runtime-snapshot"] });
-      queryClient.invalidateQueries({ queryKey: ["gpu-state"] });
-    },
-    onError: (err: Error) => setError(err.message),
-  });
-
   const slotDownMutation = useMutation({
     mutationFn: (slotKey: string) => api.post<JobAccepted>(`/runtime/slots/${encodeURIComponent(slotKey)}/down`, {}),
     onSuccess: () => {
@@ -332,10 +280,6 @@ export function RuntimePage() {
   });
 
   const snap = snapshot.data;
-  const defaultBusy =
-    jobBusyOnResource(jobs.data, "slot:default") || jobBusyOnResource(jobs.data, "runtime");
-  const submittingDefault =
-    upMutation.isPending || restartMutation.isPending || downMutation.isPending;
 
   const openLaunch = () => {
     setLaunchError(null);
@@ -381,42 +325,8 @@ export function RuntimePage() {
     <>
       <PageHeader
         title="Inference"
-        subtitle="Мультислотный vLLM/SGLang (docker), GPU в реальном времени и отдельные слоты с выбором GPU. Команда «по умолчанию» — слот default (совместимость с CLI)."
+        subtitle="Мультислотный vLLM/SGLang (docker), GPU в реальном времени, запуск и остановка по слотам. CLI: ./slgpu up / down."
       />
-
-      {defaultBusy && !submittingDefault ? (
-        <Section
-          title="Команда выполняется (default / runtime)"
-          subtitle="Пока активна job на engine slot:default или runtime, кнопки стека по умолчанию заблокированы."
-        >
-          {jobs.data?.find(
-            (j) => isEngineJobActive(j) && (j.resource === "slot:default" || j.resource === "runtime"),
-          ) ? (
-            <div className="status-card">
-              <div className="status-card__head">
-                <span className="status-card__name">
-                  #
-                  {jobs.data.find(
-                    (j) => isEngineJobActive(j) && (j.resource === "slot:default" || j.resource === "runtime"),
-                  )?.id}{" "}
-                  {
-                    jobs.data.find(
-                      (j) => isEngineJobActive(j) && (j.resource === "slot:default" || j.resource === "runtime"),
-                    )?.kind
-                  }
-                </span>
-                <StatusBadge
-                  status={
-                    jobs.data.find(
-                      (j) => isEngineJobActive(j) && (j.resource === "slot:default" || j.resource === "runtime"),
-                    )?.status ?? "unknown"
-                  }
-                />
-              </div>
-            </div>
-          ) : null}
-        </Section>
-      ) : null}
 
       <Section
         title="GPU (live)"
@@ -437,11 +347,21 @@ export function RuntimePage() {
 
       <Section
         title="Слоты"
-        subtitle="Активные слоты из снимка runtime. Отдельные GPU и порты — через «Запустить в новом слоте»."
+        subtitle="Активные слоты из снимка runtime. Для `slot_key=default` (как в CLI) укажите имя слота `default` в диалоге запуска."
         actions={
-          <button type="button" className="btn btn--primary" onClick={openLaunch}>
-            Запустить в новом слоте
-          </button>
+          <div className="flex flex--gap-sm flex--wrap" style={{ alignItems: "center" }}>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => snapshot.refetch()}
+              disabled={snapshot.isFetching}
+            >
+              Обновить снимок
+            </button>
+            <button type="button" className="btn btn--primary" onClick={openLaunch}>
+              Запустить слот
+            </button>
+          </div>
         }
       >
         {snapshot.isLoading ? (
@@ -474,134 +394,13 @@ export function RuntimePage() {
             {snap?.served_models?.length ? ` • models: ${snap.served_models.join(", ")}` : ""}
           </p>
         ) : (
-          <div className="empty-state">Нет активных слотов. Запустите default или новый слот.</div>
+          <div className="empty-state">Нет активных слотов. Нажмите «Запустить слот».</div>
         )}
       </Section>
 
       <Section
-        title="Слот default (CLI-совместимый)"
-        subtitle="native.llm.* → slot_key=default. Не пересекается с другими слотами по lock, но останавливает общий LLM-стек при down."
-        actions={
-          <button
-            type="button"
-            className="btn"
-            onClick={() => snapshot.refetch()}
-            disabled={snapshot.isFetching}
-          >
-            Обновить снимок
-          </button>
-        }
-      >
-        <div className="cards-grid">
-          <div className="status-card">
-            <div className="status-card__head">
-              <span className="status-card__name">Engine</span>
-              <StatusBadge
-                status={snap?.container_status ?? "unknown"}
-                label={snap?.engine ?? "—"}
-              />
-            </div>
-            <div className="status-card__detail mono">port: {snap?.api_port ?? "—"}</div>
-          </div>
-          <div className="status-card">
-            <div className="status-card__head">
-              <span className="status-card__name">Пресет</span>
-            </div>
-            <div className="status-card__detail mono">
-              {snap?.preset_name ?? "—"}
-              {snap?.tp != null ? ` • TP ${snap.tp}` : ""}
-            </div>
-          </div>
-        </div>
-      </Section>
-
-      <Section title="Запуск (default)" subtitle="Как раньше: up / restart / down для слота default.">
-        <div className="form-grid">
-          <div>
-            <label className="label">Движок</label>
-            <select
-              className="select"
-              value={engine}
-              onChange={(e) => setEngine(e.target.value as "vllm" | "sglang")}
-            >
-              <option value="vllm">vLLM</option>
-              <option value="sglang">SGLang</option>
-            </select>
-          </div>
-          <div>
-            <label className="label">Пресет</label>
-            <select
-              className="select"
-              value={presetName}
-              onChange={(e) => setPresetName(e.target.value)}
-            >
-              <option value="">— выберите —</option>
-              {presets.data?.map((p) => (
-                <option value={p.name} key={p.id}>
-                  {p.name} ({p.hf_id})
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="label">Порт API (опц.)</label>
-            <input
-              className="input"
-              type="number"
-              value={port}
-              onChange={(e) => setPort(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="label">TP override (опц.)</label>
-            <input
-              className="input"
-              type="number"
-              value={tp}
-              onChange={(e) => setTp(e.target.value)}
-            />
-          </div>
-        </div>
-        <div className="flex flex--gap-sm flex--wrap" style={{ marginTop: 16 }}>
-          <button
-            type="button"
-            className="btn btn--primary"
-            disabled={!presetName || defaultBusy || submittingDefault}
-            onClick={() => upMutation.mutate()}
-          >
-            {upMutation.isPending ? "Запускаем…" : "up (default)"}
-          </button>
-          <button
-            type="button"
-            className="btn"
-            disabled={!presetName || defaultBusy || submittingDefault}
-            onClick={() => restartMutation.mutate()}
-          >
-            restart (default)
-          </button>
-          <button
-            type="button"
-            className="btn btn--danger"
-            onClick={() => downMutation.mutate(false)}
-            disabled={defaultBusy || submittingDefault}
-          >
-            down
-          </button>
-          <button
-            type="button"
-            className="btn btn--danger"
-            onClick={() => downMutation.mutate(true)}
-            disabled={defaultBusy || submittingDefault}
-          >
-            down --all
-          </button>
-        </div>
-        {error ? <p style={{ color: "var(--color-danger)" }}>{error}</p> : null}
-      </Section>
-
-      <Section
         title="Лог слота"
-        subtitle="Выберите слот в карточке выше (Logs) или default ниже."
+        subtitle="Кнопка Logs у слота или выбор `default` для логов слота по умолчанию."
         actions={
           <div className="flex flex--gap-sm flex--wrap">
             <button
@@ -637,8 +436,8 @@ export function RuntimePage() {
       </Section>
 
       <Modal
-        title="Новый слот"
-        subtitle="GPU и порт при необходимости подставляются на сервере. Можно задать индексы вручную (через запятую, длина = TP)."
+        title="Запуск слота"
+        subtitle="Имя слота `default` соответствует CLI. GPU и порт при необходимости подставляются на сервере; индексы вручную — через запятую (длина = TP)."
         isOpen={launchOpen}
         onClose={() => setLaunchOpen(false)}
         actions={

@@ -87,6 +87,8 @@ API: `GET /api/v1/dashboard` — метрики БД, runtime, пробы сер
 
 Зависимости образа web: `docker` (socket), `huggingface_hub` (pull), `docker compose` на хосте репо — для LLM/monitoring up (см. `app/services/compose_exec.py`).
 
+**Inference (UI):** мультислотный запуск — `POST /api/v1/runtime/slots` (для слота `default` задайте `slot_key: "default"`). Отдельная форма «up/restart/down только для default» в UI **не** дублируется; при необходимости вызывайте `POST /api/v1/runtime/up` и соседние маршруты из CLI/скриптов или вручную.
+
 ### Docker API
 
 - **Чтение:** список контейнеров по `com.docker.compose.project`, атрибуты, хвост логов; слоты — по `com.develonica.slgpu.slot` / имени `slgpu-{engine}-{slot_key}`.
