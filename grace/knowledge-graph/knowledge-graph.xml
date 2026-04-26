@@ -1,0 +1,211 @@
+<KnowledgeGraph>
+  <Project NAME="slgpu" VERSION="2.12.5">
+    <keywords>slgpu, vllm, sglang, llm-inference, benchmark, docker-compose, gpu, prometheus, grafana, sglang-dashboard-slgpu, sglangdash2-slgpu</keywords>
+    <annotation>Стенд для сравнения движков LLM-инференса vLLM и SGLang на Linux-сервере с NVIDIA GPU.</annotation>
+
+    <M-CLI NAME="CLI" TYPE="ENTRY_POINT" STATUS="implemented">
+      <purpose>Корневой диспетчер ./slgpu: парсинг аргумента и делегация.</purpose>
+      <path>slgpu</path>
+      <depends>M-LIB</depends>
+      <verification-ref>V-M-CLI</verification-ref>
+      <annotations>
+        <fn-main PURPOSE="Точка входа, dispatch в cmd_*.sh (в т.ч. web, monitoring)" />
+        <export-slgpu PURPOSE="Исполняемый диспетчер" />
+        <fn-cmd_web PURPOSE="scripts/cmd_web.sh: slgpu web up|down|restart (docker/docker-compose.web.yml, --project-directory корня)" />
+      </annotations>
+    </M-CLI>
+
+    <M-LIB NAME="Library" TYPE="UTILITY" STATUS="implemented">
+      <purpose>Загрузка env: `main.env` в корне (дефолты) → пресет; пресеты — `data/presets/*.env` (PRESETS_DIR), вручную или из web.</purpose>
+      <path>scripts/_lib.sh</path>
+      <depends>none</depends>
+      <verification-ref>V-M-LIB</verification-ref>
+      <annotations>
+        <fn-slgpu_root PURPOSE="Определение корня проекта" />
+        <fn-slgpu_presets_dir PURPOSE="Каталог PRESETS_DIR (data/presets)" />
+        <fn-slgpu_list_presets PURPOSE="Список пресетов" />
+        <fn-slgpu_source_main_env PURPOSE="Подмешать main.env в корне (дефолты)" />
+        <fn-slgpu_fail_if_missing_preset_arg PURPOSE="Если -m без имени — подсказка и список пресетов" />
+        <fn-slgpu_load_env PURPOSE="Загрузка окружения (SLGPU_ROOT + main.env + preset)" />
+        <fn-slgpu_load_compose_env PURPOSE="Загрузка env для compose" />
+        <fn-slgpu_hf_id_to_slug PURPOSE="Конвертация HF ID в slug" />
+        <fn-slgpu_detect_running_engine PURPOSE="Определение running движка (docker compose ps)" />
+        <fn-slgpu_validate_running_config PURPOSE="Валидация соответствия запущенного engine с аргументом bench/load" />
+        <fn-slgpu_ensure_config_yaml_is_file PURPOSE="Loki/Promtail: если yaml — каталог, rm + git checkout" />
+      </annotations>
+    </M-LIB>
+
+    <M-PULL NAME="ModelPull" TYPE="INTEGRATION" STATUS="implemented">
+      <purpose>Скачивание весов с Hugging Face (hf download), без автосоздания пресетов.</purpose>
+      <path>scripts/cmd_pull.sh</path>
+      <depends>M-LIB, M-MODELS</depends>
+      <verification-ref>V-M-PULL</verification-ref>
+      <annotations>
+        <fn-cmd_pull PURPOSE="Команда pull: HF ID или preset; нормализует MODELS_DIR в абсолютный путь и создаёт --local-dir модели до hf download" />
+      </annotations>
+    </M-PULL>
+
+    <M-UP NAME="EngineUp" TYPE="INTEGRATION" STATUS="implemented">
+      <purpose>Запуск vLLM или SGLang через Docker Compose (без опроса /v1/models в up).</purpose>
+      <path>scripts/cmd_up.sh</path>
+      <depends>M-LIB, M-DOCKER, M-MONITOR</depends>
+      <verification-ref>V-M-UP</verification-ref>
+      <annotations>
+        <fn-cmd_up PURPOSE="Команда up: запуск выбранного движка" />
+        <fn-cmd_restart PURPOSE="Команда restart: перезапуск с новым пресетом" />
+      </annotations>
+    </M-UP>
+
+    <M-DOWN NAME="EngineDown" TYPE="INTEGRATION" STATUS="implemented">
+      <purpose>Остановка движков (vLLM/SGLang), опционально — всего compose.</purpose>
+      <path>scripts/cmd_down.sh</path>
+      <depends>M-DOCKER</depends>
+      <verification-ref>V-M-DOWN</verification-ref>
+      <annotations>
+        <fn-cmd_down PURPOSE="Команда down: остановка LLM-контейнеров" />
+      </annotations>
+    </M-DOWN>
+
+    <M-BENCH NAME="Benchmark" TYPE="CORE_LOGIC" STATUS="implemented">
+      <purpose>Нагрузочный бенчмарк OpenAI-совместимого API.</purpose>
+      <path>scripts/cmd_bench.sh, scripts/bench_openai.py</path>
+      <depends>M-LIB, M-UP</depends>
+      <verification-ref>V-M-BENCH</verification-ref>
+      <annotations>
+        <fn-cmd_bench PURPOSE="Обёртка bench_openai.py" />
+        <fn-bench_openai PURPOSE="Python бенчмарк: матрица concurrency × prompt × max_tokens; SSE-парсинг content+reasoning_*+пустой content; summary: error_code, errors_breakdown" />
+        <export-results_dir PURPOSE="bench/results/{engine}/{timestamp}/" />
+      </annotations>
+    </M-BENCH>
+
+    <M-DOCKER NAME="DockerCompose" TYPE="INTEGRATION" STATUS="implemented">
+      <purpose>Конфигурация Docker Compose и serve.sh для vLLM/SGLang.</purpose>
+      <path>docker/docker-compose.llm.yml, scripts/serve.sh</path>
+      <depends>none</depends>
+      <verification-ref>V-M-DOCKER</verification-ref>
+      <annotations>
+        <export-docker-compose PURPOSE="vllm/sglang + опц. мониторинг: жёсткие имена `container_name` slgpu-vllm, slgpu-sglang" />
+        <export-serve_slgpu PURPOSE="scripts/serve.sh: vllm|sglang по SLGPU_ENGINE; vLLM: опц. SLGPU_VLLM_TOKENIZER_MODE, SLGPU_VLLM_MAX_NUM_SEQS, SLGPU_VLLM_BLOCK_SIZE" />
+      </annotations>
+    </M-DOCKER>
+
+    <M-MONITOR NAME="Monitoring" TYPE="INTEGRATION" STATUS="implemented">
+      <purpose>Prometheus, Grafana, DCGM Exporter, Node Exporter, Langfuse, LiteLLM; JSON-дашборды. Init-сервисы MinIO buckets / LiteLLM DB вынесены в одноразовый bootstrap.</purpose>
+      <path>docker/docker-compose.monitoring.yml, configs/monitoring/prometheus/**, configs/monitoring/grafana/provisioning/**, configs/monitoring/README.md</path>
+      <depends>M-DOCKER</depends>
+      <verification-ref>V-M-MONITOR</verification-ref>
+      <annotations>
+        <export-monitoring_compose PURPOSE="docker/docker-compose.monitoring.yml: container_name slgpu-monitoring-*; init services minio-bucket-init/litellm-pg-init под profile bootstrap" />
+        <export-prometheus_yml PURPOSE="Scrape config для всех targets" />
+        <export-grafana-slgpu-overview PURPOSE="slgpu-overview.json" />
+        <export-grafana-sglang-dashboard-slgpu PURPOSE="sglang-dashboard-slgpu.json (оф. SGLang, slgpu-адаптация)" />
+        <export-grafana-sglangdash2-slgpu PURPOSE="sglangdash2-slgpu.json — расширенный; генератор _build_sglangdash2.py от vllmdash2" />
+        <export-grafana-vllmdash2 PURPOSE="vllmdash2.json — vLLM V2, эталон для ручного импорта" />
+        <export-alerts PURPOSE="Алерты GPU temp > 85°C, GPU mem > 95%" />
+      </annotations>
+    </M-MONITOR>
+
+    <M-MODELS NAME="ModelPresets" TYPE="DATA_LAYER" STATUS="implemented">
+      <purpose>Управление пресетами моделей и их параметрами инференса.</purpose>
+      <path>data/presets/*.env, configs/models/README.md (формат)</path>
+      <depends>M-LIB</depends>
+      <verification-ref>V-M-MODELS</verification-ref>
+      <annotations>
+        <export-presets_dir PURPOSE="Каталог PRESETS_DIR (data/presets)" />
+        <fn-manual_presets PURPOSE="Пресеты вручную; парсеры в пресете" />
+      </annotations>
+    </M-MODELS>
+
+    <M-ENV NAME="Environment" TYPE="DATA_LAYER" STATUS="implemented">
+      <purpose>Конфигурация окружения: `main.env` (в т.ч. PRESETS_DIR), секреты HF.</purpose>
+      <path>main.env, configs/secrets/hf.env.example</path>
+      <depends>none</depends>
+      <verification-ref>V-M-ENV</verification-ref>
+      <annotations>
+        <export-main-env PURPOSE="Дефолты в корне: сервер, мониторинг, vLLM/SGLang (listen, кэши Triton, NCCL), PRESETS_DIR" />
+      </annotations>
+    </M-ENV>
+
+    <M-PREPARE NAME="HostPrepare" TYPE="UTILITY" STATUS="implemented">
+      <purpose>Подготовка хоста: драйвер, Docker, NVIDIA Toolkit, sysctl, limits.</purpose>
+      <path>scripts/cmd_prepare.sh</path>
+      <depends>none</depends>
+      <verification-ref>V-M-PREPARE</verification-ref>
+      <annotations>
+        <fn-cmd_prepare PURPOSE="Команда prepare (шаги 1-6)" />
+      </annotations>
+    </M-PREPARE>
+
+    <M-HELP NAME="Help" TYPE="UTILITY" STATUS="implemented">
+      <purpose>Справка по командам ./slgpu.</purpose>
+      <path>scripts/cmd_help.sh</path>
+      <depends>none</depends>
+      <verification-ref>V-M-HELP</verification-ref>
+      <annotations>
+        <fn-cmd_help PURPOSE="Команда help" />
+      </annotations>
+    </M-HELP>
+
+    <M-LOAD NAME="LoadTest" TYPE="CORE_LOGIC" STATUS="implemented">
+      <purpose>Длительный нагрузочный тест с эмуляцией 200-300 виртуальных пользователей, фазами ramp-up/steady/ramp-down, сбором time-series.</purpose>
+      <path>scripts/bench_load.py, scripts/cmd_load.sh</path>
+      <depends>M-LIB, M-UP</depends>
+      <verification-ref>V-M-LOAD</verification-ref>
+      <annotations>
+        <fn-cmd_load PURPOSE="Обёртка bench_load.py" />
+        <fn-bench_load PURPOSE="Python: длительный бенч с time-series; SSE как bench_openai (content+reasoning_*)" />
+        <fn-LoadTestRunner PURPOSE="Оркестратор фаз: ramp_up/steady/ramp_down" />
+        <fn-MetricCollector PURPOSE="Поток-сборщик метрик CSV каждые N сек" />
+        <export-time_series_csv PURPOSE="bench/results/{engine}/{timestamp}/time_series.csv" />
+        <export-users_jsonl PURPOSE="bench/results/{engine}/{timestamp}/users.jsonl" />
+      </annotations>
+    </M-LOAD>
+
+    <M-WEB NAME="WebControlPlane" TYPE="ENTRY_POINT" STATUS="implemented">
+      <purpose>Single-container web control plane: FastAPI + React/Vite, SQLite на локальном диске; обёртка над `./slgpu` CLI и Docker API.</purpose>
+      <path>web/</path>
+      <depends>M-CLI, M-PULL, M-UP, M-DOWN, M-MONITOR</depends>
+      <verification-ref>V-M-WEB</verification-ref>
+      <annotations>
+        <fn-app_main PURPOSE="FastAPI app, маршруты /api/v1/*, /healthz с версией из корневого VERSION и SPA fallback" />
+        <fn-services_slgpu_cli PURPOSE="Allowlist для ./slgpu pull|up|down|restart|monitoring; argv only, никакого shell" />
+        <fn-services_jobs PURPOSE="Job runner: persist Job, advisory lock на (scope, resource), стрим stdout/stderr; runtime lock = (engine,runtime), monitoring lock = (monitoring,stack)" />
+        <fn-services_docker_client PURPOSE="get_docker_inspector(): get_by_service — label filter, fallback: нормализованные лейблы, имена Compose v1/v2, жёсткие имена slgpu-* и slgpu-monitoring-*" />
+        <fn-services_env_files PURPOSE="Парсер и рендер data/presets/<slug>.env, совместимые с serve.sh" />
+        <fn-services_presets PURPOSE="Двусторонняя синхронизация Preset DB ↔ data/presets/*.env; просмотр/key-value редактирование через GET/PATCH /api/v1/presets/{id}, DELETE удаляет запись и опционально .env, экспорт в .env отдельной операцией" />
+        <fn-services_hf_models PURPOSE="Реестр HF моделей и статусы скачивания: GET /models синхронизирует DB с фактическими папками MODELS_DIR/&lt;org&gt;/&lt;repo&gt;; PATCH меняет revision/notes, DELETE удаляет запись и опционально локальные веса внутри MODELS_DIR" />
+        <fn-services_runtime PURPOSE="Runtime snapshot/logs: Docker + /v1/models и /metrics через WEB_LLM_HTTP_HOST (compose: host.docker.internal) и запас http://vllm:8111|sglang:8222 в сети slgpu — не 127.0.0.1:порт из web; последний активный EngineRun (preset_name, hf_id, TP); GET /runtime/logs — tail логов контейнера" />
+        <fn-services_monitoring PURPOSE="Probe мониторинг-стека: Docker (лейблы compose project из WEB_COMPOSE_PROJECT_*) + HTTP healthchecks; browser URLs строятся отдельно через public_access settings" />
+        <fn-services_litellm PURPOSE="Read-only обёртка над /v1/models и /health/* у LiteLLM; /info возвращает публичные UI/API ссылки из settings" />
+        <fn-services_app_settings PURPOSE="Persistent UI settings в SQLite: /api/v1/settings/public-access хранит публичный server_host для Grafana/Prometheus/Langfuse/LiteLLM ссылок" />
+        <fn-core_logging PURPOSE="JSON stdout logging: one LogRecord → one line; root/app/httpx/uvicorn handlers заменяются идемпотентно без propagation-дублей" />
+        <fn-frontend_app PURPOSE="React SPA Develonica.LLM: Dashboard, Models, Presets, Runtime, Monitoring, LiteLLM, Jobs, Settings; брендовая тема по develonica.ru/guideline; footer показывает VERSION и copyright Igor Yatsishen, Develonica" />
+        <export-web-image PURPOSE="slgpu-web:dev, подъём: ./slgpu web up; тома: repo root по тому же абсолютному хост-пути (SLGPU_HOST_REPO=$(pwd) в scripts/cmd_web.sh), ./data/web, ./data/models, docker.sock; entrypoint chown'ит /data и ${WEB_SLGPU_ROOT}/data/{models,presets} под uid 10001; working_dir из compose НЕ задаётся (uvicorn стартует из WORKDIR /srv/app в Dockerfile.web); huggingface_hub[cli] + hf_transfer установлены для slgpu pull, HF_HOME=/data/huggingface и /home/slgpuweb writable; критично для команд из web → docker compose monitoring/llm с корректными bind-маунтами" />
+        <export-contract PURPOSE="web/CONTRACT.md — границы CLI/Docker API/SQLite" />
+      </annotations>
+    </M-WEB>
+
+    <!-- CrossLinks -->
+    <CrossLink from="M-CLI" to="M-LIB" relation="delegates all commands" />
+    <CrossLink from="M-CLI" to="M-HELP" relation="default/help fallback" />
+    <CrossLink from="M-PULL" to="M-LIB" relation="uses env loading and slug" />
+    <CrossLink from="M-PULL" to="M-MODELS" relation="uses existing preset or HF id" />
+    <CrossLink from="M-UP" to="M-LIB" relation="loads env for compose" />
+    <CrossLink from="M-UP" to="M-DOCKER" relation="triggers docker compose up" />
+    <CrossLink from="M-UP" to="M-MONITOR" relation="ensures monitoring is up" />
+    <CrossLink from="M-DOWN" to="M-DOCKER" relation="stops containers" />
+    <CrossLink from="M-BENCH" to="M-LIB" relation="loads preset for MAX_MODEL_LEN" />
+    <CrossLink from="M-BENCH" to="M-UP" relation="requires running engine" />
+    <CrossLink from="M-MONITOR" to="M-DOCKER" relation="defined in compose" />
+    <CrossLink from="M-MODELS" to="M-LIB" relation="optional MAX_LEN guess; parsers in preset" />
+    <CrossLink from="M-LOAD" to="M-LIB" relation="loads preset for MAX_MODEL_LEN" />
+    <CrossLink from="M-LOAD" to="M-UP" relation="requires running engine" />
+    <CrossLink from="M-CLI" to="M-LOAD" relation="delegates load command" />
+    <CrossLink from="M-WEB" to="M-CLI" relation="invokes ./slgpu via allowlisted argv" />
+    <CrossLink from="M-WEB" to="M-MODELS" relation="syncs data/presets/*.env presets to/from SQLite" />
+    <CrossLink from="M-WEB" to="M-MONITOR" relation="reads Docker container statuses (read-only)" />
+    <CrossLink from="M-WEB" to="M-PULL" relation="enqueues slgpu pull as a job" />
+    <CrossLink from="M-WEB" to="M-UP" relation="enqueues slgpu up/restart as a job" />
+    <CrossLink from="M-WEB" to="M-DOWN" relation="enqueues slgpu down as a job" />
+  </Project>
+</KnowledgeGraph>
