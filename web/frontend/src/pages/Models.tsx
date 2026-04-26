@@ -7,6 +7,11 @@ import { formatBytes, formatDate } from "@/components/formatters";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
 import { StatusBadge } from "@/components/StatusBadge";
+import {
+  IconActionButton,
+  IconCloudArrowDown,
+  IconEdit,
+} from "@/components/TableActionIcons";
 
 interface AddModelForm {
   hf_id: string;
@@ -276,8 +281,8 @@ export function ModelsPage() {
         ) : !data || data.length === 0 ? (
           <div className="empty-state">Моделей пока нет — добавьте первую.</div>
         ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table className="table">
+          <div style={{ overflowX: "auto", width: "100%" }}>
+            <table className="table table--registry">
               <thead>
                 <tr>
                   <th>HF ID</th>
@@ -301,26 +306,36 @@ export function ModelsPage() {
                     <td>{model.attempts}</td>
                     <td>{formatDate(model.last_pulled_at)}</td>
                     <td>
-                      <button
-                        type="button"
-                        className="btn btn--ghost"
-                        onClick={() => {
-                          setSelectedId(model.id);
-                          setEditor(editorFromModel(model));
-                        }}
+                      <div
+                        className="table-actions"
+                        role="group"
+                        aria-label={`Действия: ${model.hf_id}`}
                       >
-                        Открыть
-                      </button>{" "}
-                      <button
-                        type="button"
-                        className="btn btn--primary"
-                        onClick={() =>
-                          pullModel.mutate({ id: model.id, revision: model.revision })
-                        }
-                        disabled={pullModel.isPending || pulling === model.id}
-                      >
-                        {pulling === model.id ? "Запущено" : "Скачать / докачать"}
-                      </button>
+                        <IconActionButton
+                          label="Редактировать карточку в реестре"
+                          variant="ghost"
+                          onClick={() => {
+                            setSelectedId(model.id);
+                            setEditor(editorFromModel(model));
+                          }}
+                        >
+                          <IconEdit />
+                        </IconActionButton>
+                        <IconActionButton
+                          label={
+                            pulling === model.id
+                              ? "Скачивание запущено, ждите"
+                              : "Скачать или докачать веса (slgpu pull)"
+                          }
+                          variant="primary"
+                          onClick={() =>
+                            pullModel.mutate({ id: model.id, revision: model.revision })
+                          }
+                          disabled={pullModel.isPending || pulling === model.id}
+                        >
+                          <IconCloudArrowDown />
+                        </IconActionButton>
+                      </div>
                     </td>
                   </tr>
                 ))}

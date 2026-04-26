@@ -6,6 +6,12 @@ import type { Preset, PresetSyncResult } from "@/api/types";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
 import { StatusBadge } from "@/components/StatusBadge";
+import {
+  IconActionButton,
+  IconArrowUpTray,
+  IconEdit,
+  IconTrash,
+} from "@/components/TableActionIcons";
 
 interface NewPresetForm {
   name: string;
@@ -529,8 +535,8 @@ export function PresetsPage() {
         ) : !presets.data || presets.data.length === 0 ? (
           <div className="empty-state">Пресетов нет. Создайте новый или синхронизируйте с диска.</div>
         ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table className="table">
+          <div style={{ overflowX: "auto", width: "100%" }}>
+            <table className="table table--registry">
               <thead>
                 <tr>
                   <th>Имя</th>
@@ -564,37 +570,42 @@ export function PresetsPage() {
                       />
                     </td>
                     <td>
-                      <button
-                        type="button"
-                        className="btn btn--ghost"
-                        onClick={() => {
-                          setSelectedId(preset.id);
-                          setEditor(editorFromPreset(preset));
-                        }}
+                      <div
+                        className="table-actions"
+                        role="group"
+                        aria-label={`Действия: ${preset.name}`}
                       >
-                        Открыть
-                      </button>{" "}
-                      <button
-                        type="button"
-                        className="btn"
-                        onClick={() => exportPreset.mutate(preset.id)}
-                        disabled={exportPreset.isPending}
-                      >
-                        Экспорт в .env
-                      </button>
-                      {" "}
-                      <button
-                        type="button"
-                        className="btn btn--danger"
-                        disabled={deletePreset.isPending}
-                        onClick={() => {
-                          if (window.confirm(`Удалить пресет ${preset.name} из БД?`)) {
-                            deletePreset.mutate({ id: preset.id, deleteFile: false });
-                          }
-                        }}
-                      >
-                        Удалить
-                      </button>
+                        <IconActionButton
+                          label="Редактировать пресет"
+                          variant="ghost"
+                          onClick={() => {
+                            setSelectedId(preset.id);
+                            setEditor(editorFromPreset(preset));
+                          }}
+                        >
+                          <IconEdit />
+                        </IconActionButton>
+                        <IconActionButton
+                          label="Экспортировать в .env на диске"
+                          variant="default"
+                          onClick={() => exportPreset.mutate(preset.id)}
+                          disabled={exportPreset.isPending}
+                        >
+                          <IconArrowUpTray />
+                        </IconActionButton>
+                        <IconActionButton
+                          label="Удалить пресет из БД"
+                          variant="danger"
+                          disabled={deletePreset.isPending}
+                          onClick={() => {
+                            if (window.confirm(`Удалить пресет ${preset.name} из БД?`)) {
+                              deletePreset.mutate({ id: preset.id, deleteFile: false });
+                            }
+                          }}
+                        >
+                          <IconTrash />
+                        </IconActionButton>
+                      </div>
                     </td>
                   </tr>
                 ))}
