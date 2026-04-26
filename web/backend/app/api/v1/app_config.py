@@ -14,8 +14,6 @@ from app.core.config import get_settings
 from app.models.audit import AuditEvent
 from app.services.stack_config import (
     META_KEY,
-    SECRETS_KEY,
-    STACK_KEY,
     mask_secrets,
     merge_partial_secrets,
     parse_dotenv_text,
@@ -70,8 +68,7 @@ async def install_from_files(
         flat.update(parse_dotenv_text(lf.read_text(encoding="utf-8")))
 
     stack, secrets = split_stack_and_secrets(flat)
-    await sc.save_section(session, STACK_KEY, stack)
-    await sc.save_section(session, SECRETS_KEY, secrets)
+    await sc.replace_all_params_from_flat(session, flat)
     await sc.save_section(
         session,
         META_KEY,
@@ -116,14 +113,20 @@ async def patch_stack(
 ) -> dict[str, Any]:
     stack, secrets, _meta = await sc.load_sections(session)
     if "stack" in payload and isinstance(payload["stack"], dict):
-        stack.update({k: str(v) for k, v in payload["stack"].items() if v is not None})
-        await sc.save_section(session, STACK_KEY, stack)
+        for k, v in payload["stack"].items():
+            key = str(k)
+            if v is None:
+                await sc.delete_stack_param(session, key)
+            else:
+                await sc.upsert_stack_param(session, key, str(v))
     if "secrets" in payload and isinstance(payload["secrets"], dict):
+        _, secrets, _ = await sc.load_sections(session)
         secrets = merge_partial_secrets(
             {str(k): str(v) for k, v in secrets.items()},
             {str(k): v for k, v in payload["secrets"].items()},
         )
-        await sc.save_section(session, SECRETS_KEY, secrets)
+        await sc.replace_secret_params(session, secrets)
+    stack, secrets, _ = await sc.load_sections(session)
     session.add(
         AuditEvent(
             actor=actor,

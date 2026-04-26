@@ -13,14 +13,86 @@ type AppConfigStack = {
   meta: Record<string, unknown>;
 };
 
+type StackRow = { id: string; key: string; value: string; isSecret: boolean };
+
+function newRowId(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `r-${Math.random().toString(36).slice(2)}`;
+}
+
+function rowsFromServer(data: AppConfigStack): StackRow[] {
+  const stack = data.stack ?? {};
+  const sec = data.secrets ?? {};
+  return [
+    ...Object.keys(stack)
+      .sort()
+      .map((k) => ({
+        id: newRowId(),
+        key: k,
+        value: stack[k] ?? "",
+        isSecret: false as const,
+      })),
+    ...Object.keys(sec)
+      .sort()
+      .map((k) => ({
+        id: newRowId(),
+        key: k,
+        value: "",
+        isSecret: true as const,
+      })),
+  ];
+}
+
+function buildStackPatch(
+  data: AppConfigStack | undefined,
+  rows: StackRow[],
+): { stack?: Record<string, string | null>; secrets?: Record<string, string | null> } | null {
+  if (!data) return null;
+  const norm = rows
+    .map((r) => ({ ...r, k: r.key.trim() }))
+    .filter((r) => r.k.length > 0);
+  const byKey = new Map<string, (typeof norm)[0]>();
+  for (const r of norm) {
+    byKey.set(r.k, r);
+  }
+  const uniq = [...byKey.values()];
+  const stackRows = uniq.filter((r) => !r.isSecret);
+  const secretRows = uniq.filter((r) => r.isSecret);
+
+  const stack: Record<string, string | null> = {};
+  const secrets: Record<string, string | null> = {};
+
+  const editedStackKeys = new Set(stackRows.map((r) => r.k));
+  for (const k of Object.keys(data.stack ?? {})) {
+    if (!editedStackKeys.has(k)) stack[k] = null;
+  }
+  for (const r of stackRows) {
+    stack[r.k] = r.value;
+  }
+
+  const editedSecretKeys = new Set(secretRows.map((r) => r.k));
+  for (const k of Object.keys(data.secrets ?? {})) {
+    if (!editedSecretKeys.has(k)) secrets[k] = null;
+  }
+  for (const r of secretRows) {
+    const v = r.value.trim();
+    if (v) secrets[r.k] = v;
+  }
+
+  const out: { stack?: Record<string, string | null>; secrets?: Record<string, string | null> } =
+    {};
+  if (Object.keys(stack).length > 0) out.stack = stack;
+  if (Object.keys(secrets).length > 0) out.secrets = secrets;
+  if (!out.stack && !out.secrets) return null;
+  return out;
+}
+
 export function SettingsPage() {
   const queryClient = useQueryClient();
   const [serverHost, setServerHost] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [jobError, setJobError] = useState<string | null>(null);
-  const [stackJson, setStackJson] = useState("{}");
-  const [secretsJson, setSecretsJson] = useState("{}");
+  const [stackRows, setStackRows] = useState<StackRow[]>([]);
   const [installForce, setInstallForce] = useState(false);
   const [cfgMessage, setCfgMessage] = useState<string | null>(null);
   const [cfgError, setCfgError] = useState<string | null>(null);
@@ -66,12 +138,13 @@ export function SettingsPage() {
   });
 
   const patchStack = useMutation({
-    mutationFn: (body: { stack?: Record<string, string>; secrets?: Record<string, string> }) =>
-      api.patch("/app-config/stack", body),
+    mutationFn: (body: {
+      stack?: Record<string, string | null>;
+      secrets?: Record<string, string | null>;
+    }) => api.patch("/app-config/stack", body),
     onSuccess: () => {
       setCfgError(null);
       setCfgMessage("Стек и секреты обновлены в БД.");
-      setSecretsJson("{}");
       queryClient.invalidateQueries({ queryKey: ["app-config"] });
     },
     onError: (err: Error) => {
@@ -105,8 +178,8 @@ export function SettingsPage() {
   }, [publicAccess.data]);
 
   useEffect(() => {
-    if (appStack.data?.stack) {
-      setStackJson(JSON.stringify(appStack.data.stack, null, 2));
+    if (appStack.data) {
+      setStackRows(rowsFromServer(appStack.data));
     }
   }, [appStack.data]);
 
@@ -140,37 +213,19 @@ export function SettingsPage() {
     event.preventDefault();
     setCfgMessage(null);
     setCfgError(null);
-    let stack: Record<string, string>;
-    let secrets: Record<string, string> | undefined;
-    try {
-      stack = JSON.parse(stackJson) as Record<string, string>;
-      if (typeof stack !== "object" || stack === null || Array.isArray(stack)) {
-        throw new Error("stack должен быть объектом");
-      }
-    } catch (e) {
-      setCfgError(e instanceof Error ? e.message : "Неверный JSON стека");
+    const patch = buildStackPatch(appStack.data, stackRows);
+    if (!patch) {
+      setCfgError("Нет изменений для сохранения (или данные ещё не загружены).");
       return;
     }
-    const secRaw = secretsJson.trim();
-    if (secRaw && secRaw !== "{}") {
-      try {
-        secrets = JSON.parse(secretsJson) as Record<string, string>;
-        if (typeof secrets !== "object" || secrets === null || Array.isArray(secrets)) {
-          throw new Error("secrets должен быть объектом");
-        }
-      } catch (e) {
-        setCfgError(e instanceof Error ? e.message : "Неверный JSON секретов");
-        return;
-      }
-    }
-    patchStack.mutate(secrets ? { stack, secrets } : { stack });
+    patchStack.mutate(patch);
   }
 
   return (
     <>
       <PageHeader
         title="Настройки"
-        subtitle="Публичный адрес сервера, импорт стека из main.env и правка плоских ключей в SQLite (порты, пути, проекты compose). Секреты в API маскируются; для смены укажите только новые значения в JSON."
+        subtitle="Публичный адрес сервера, импорт стека из main.env и правка плоских ключей в SQLite (таблица stack_params: одна строка на параметр). Секреты в API маскируются; для смены введите новое значение в строке (не вставляйте ***)."
       />
 
       {(cfgMessage || cfgError) && (
@@ -216,37 +271,111 @@ export function SettingsPage() {
 
       <Section
         title="Стек и секреты (БД)"
-        subtitle="Редактирование `cfg.stack`; секреты — только новые ключи/значения (пустой объект = не трогать). Не вставляйте маску ***."
+        subtitle="Каждый параметр — отдельная строка в таблице `stack_params`. Галочка «секрет» — значение не отдаётся в API; оставьте поле пустым, если не меняете. Удаление строки удаляет ключ из БД."
       >
         {appStack.isLoading ? (
           <div className="empty-state">Загружаем…</div>
         ) : (
           <form className="flex flex--col flex--gap-md" onSubmit={onSaveStack}>
-            <label>
-              <span className="label">stack (JSON)</span>
-              <textarea
-                className="input"
-                rows={14}
-                value={stackJson}
-                onChange={(e) => setStackJson(e.target.value)}
-                spellCheck={false}
-              />
-            </label>
-            <label>
-              <span className="label">secrets — только изменяемые поля (JSON)</span>
-              <textarea
-                className="input"
-                rows={6}
-                value={secretsJson}
-                onChange={(e) => setSecretsJson(e.target.value)}
-                placeholder='{"HF_TOKEN":"..."}'
-                spellCheck={false}
-              />
-            </label>
+            <div className="flex flex--gap-sm flex--wrap">
+              <button
+                type="button"
+                className="btn btn--ghost"
+                onClick={() =>
+                  setStackRows((prev) => [
+                    ...prev,
+                    { id: newRowId(), key: "", value: "", isSecret: false },
+                  ])
+                }
+              >
+                + параметр
+              </button>
+            </div>
+            <div style={{ overflowX: "auto" }}>
+              <table className="table table--compact" style={{ width: "100%", minWidth: "520px" }}>
+                <thead>
+                  <tr>
+                    <th>Ключ</th>
+                    <th>Значение</th>
+                    <th>Секрет</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {stackRows.map((row) => (
+                    <tr key={row.id}>
+                      <td>
+                        <input
+                          className="input"
+                          value={row.key}
+                          onChange={(e) =>
+                            setStackRows((prev) =>
+                              prev.map((r) =>
+                                r.id === row.id ? { ...r, key: e.target.value } : r,
+                              ),
+                            )
+                          }
+                          spellCheck={false}
+                          placeholder="VAR_NAME"
+                          disabled={patchStack.isPending}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          className="input"
+                          value={row.value}
+                          onChange={(e) =>
+                            setStackRows((prev) =>
+                              prev.map((r) =>
+                                r.id === row.id ? { ...r, value: e.target.value } : r,
+                              ),
+                            )
+                          }
+                          spellCheck={false}
+                          placeholder={
+                            row.isSecret ? "новое значение (пусто = не менять)" : ""
+                          }
+                          disabled={patchStack.isPending}
+                          type={row.isSecret ? "password" : "text"}
+                          autoComplete="off"
+                        />
+                      </td>
+                      <td style={{ width: "1%" }}>
+                        <input
+                          type="checkbox"
+                          checked={row.isSecret}
+                          onChange={(e) =>
+                            setStackRows((prev) =>
+                              prev.map((r) =>
+                                r.id === row.id ? { ...r, isSecret: e.target.checked } : r,
+                              ),
+                            )
+                          }
+                          disabled={patchStack.isPending}
+                          title="Секрет: не показывается в API после сохранения"
+                        />
+                      </td>
+                      <td style={{ width: "1%" }}>
+                        <button
+                          type="button"
+                          className="btn btn--ghost"
+                          disabled={patchStack.isPending}
+                          onClick={() =>
+                            setStackRows((prev) => prev.filter((r) => r.id !== row.id))
+                          }
+                        >
+                          Удалить
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             <p className="section__subtitle">
-              Текущие секреты (маскировано):{" "}
+              Ключи с маской в ответе API:{" "}
               <span className="mono">
-                {appStack.data ? JSON.stringify(appStack.data.secrets) : "—"}
+                {appStack.data ? JSON.stringify(Object.keys(appStack.data.secrets).sort()) : "—"}
               </span>
             </p>
             <button type="submit" className="btn btn--ghost" disabled={patchStack.isPending}>

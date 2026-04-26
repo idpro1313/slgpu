@@ -124,8 +124,13 @@ async def init_db() -> None:
         run,
         service,
         setting,
+        stack_param,
     )
-    from app.services.stack_config import ensure_default_settings
+    from app.services.stack_config import (
+        ensure_default_settings,
+        ensure_default_stack_params,
+        migrate_legacy_json_to_rows,
+    )
 
     engine = get_engine()
     async with engine.begin() as conn:
@@ -133,7 +138,9 @@ async def init_db() -> None:
         await conn.run_sync(_sqlite_drop_legacy_preset_engine_column)
 
     async with session_scope() as session:
+        await migrate_legacy_json_to_rows(session)
         await ensure_default_settings(session)
+        await ensure_default_stack_params(session)
 
 
 @asynccontextmanager

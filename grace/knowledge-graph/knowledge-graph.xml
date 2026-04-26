@@ -1,5 +1,5 @@
 <KnowledgeGraph>
-  <Project NAME="slgpu" VERSION="3.0.1">
+  <Project NAME="slgpu" VERSION="3.1.0">
     <keywords>slgpu, vllm, sglang, llm-inference, benchmark, docker-compose, gpu, prometheus, grafana, sglang-dashboard-slgpu, sglangdash2-slgpu</keywords>
     <annotation>Стенд для сравнения движков LLM-инференса vLLM и SGLang на Linux-сервере с NVIDIA GPU.</annotation>
 
@@ -162,13 +162,13 @@
     </M-LOAD>
 
     <M-WEB NAME="WebControlPlane" TYPE="ENTRY_POINT" STATUS="implemented">
-      <purpose>Single-container web control plane: FastAPI + React/Vite, SQLite; стек LLM/monitoring через native docker compose / docker-py; бенч — subprocess scripts; cfg.stack/cfg.secrets в БД (install из main.env).</purpose>
+      <purpose>Single-container web control plane: FastAPI + React/Vite, SQLite; стек LLM/monitoring через native docker compose / docker-py; бенч — subprocess scripts; плоский стек в SQLite: таблица stack_params (строка на ключ) + cfg.meta; legacy cfg.stack/cfg.secrets очищаются после миграции; install из main.env.</purpose>
       <path>web/</path>
       <depends>M-CLI, M-PULL, M-UP, M-DOWN, M-MONITOR</depends>
       <verification-ref>V-M-WEB</verification-ref>
       <annotations>
         <fn-app_main PURPOSE="FastAPI app, маршруты /api/v1/*, /healthz с версией из корневого VERSION и SPA fallback" />
-        <fn-services_stack_config PURPOSE="cfg.stack/cfg.secrets/cfg.meta, sync_merged_flat, ports_for_probes_sync, presets_dir_sync; ensure_default_settings после create_all" />
+        <fn-services_stack_config PURPOSE="stack_params (param_key, param_value, is_secret) + cfg.meta; миграция JSON cfg.stack/cfg.secrets → строки; sync_merged_flat (приоритет stack_params), ports_for_probes_sync, presets_dir_sync; init_db: migrate_legacy_json_to_rows, ensure_default_settings, ensure_default_stack_params; ORM app.models.stack_param.StackParam" />
         <fn-api_app_config PURPOSE="GET/POST /app-config/status|install, GET/PATCH /app-config/stack" />
         <fn-api_bench PURPOSE="GET /bench/runs, report.md, summary; POST scenario|load → native.bench.* jobs" />
         <fn-services_compose_exec PURPOSE="async docker compose для LLM и monitoring стеков, subprocess logged" />

@@ -1,9 +1,10 @@
 """Stack configuration in SQLite (web no longer reads main.env at runtime).
 
-``settings`` rows:
-- ``cfg.stack`` — non-secret flat env
-- ``cfg.secrets`` — secrets (masked in API)
-- ``cfg.meta`` — ``{installed, installed_at, source}``
+``stack_params`` table: one row per key (``param_key``, ``param_value``, ``is_secret``).
+
+Legacy ``settings`` rows ``cfg.stack`` / ``cfg.secrets`` (JSON blobs) are migrated once
+to ``stack_params``; afterwards those settings keys are kept as ``{}`` for compatibility.
+``cfg.meta`` — ``{installed, installed_at, source}`` (unchanged).
 """
 
 from __future__ import annotations
@@ -14,6 +15,8 @@ import re
 import sqlite3
 from pathlib import Path
 from typing import Any
+
+from sqlalchemy import delete, func, select
 
 logger = logging.getLogger(__name__)
 
@@ -157,17 +160,39 @@ def _load_json_key(conn: sqlite3.Connection, key: str) -> dict[str, Any]:
     return {}
 
 
+def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1",
+        (name,),
+    ).fetchone()
+    return row is not None
+
+
+def _load_flat_from_stack_params(conn: sqlite3.Connection) -> dict[str, str] | None:
+    if not _table_exists(conn, "stack_params"):
+        return None
+    cur = conn.execute("SELECT param_key, param_value FROM stack_params")
+    rows = cur.fetchall()
+    if not rows:
+        return None
+    return {str(k): str(v) if v is not None else "" for k, v in rows}
+
+
 def sync_merged_flat() -> dict[str, str]:
     merged = dict(DEFAULT_STACK)
     conn = _connect_ro()
     if conn is not None:
         try:
-            stack = _load_json_key(conn, STACK_KEY)
-            secrets = _load_json_key(conn, SECRETS_KEY)
-            if isinstance(stack, dict):
-                merged.update({k: str(v) for k, v in stack.items() if v is not None})
-            if isinstance(secrets, dict):
-                merged.update({k: str(v) for k, v in secrets.items() if v is not None})
+            from_params = _load_flat_from_stack_params(conn)
+            if from_params is not None:
+                merged.update(from_params)
+            else:
+                stack = _load_json_key(conn, STACK_KEY)
+                secrets = _load_json_key(conn, SECRETS_KEY)
+                if isinstance(stack, dict):
+                    merged.update({k: str(v) for k, v in stack.items() if v is not None})
+                if isinstance(secrets, dict):
+                    merged.update({k: str(v) for k, v in secrets.items() if v is not None})
         finally:
             conn.close()
     return merged
@@ -237,9 +262,14 @@ def mask_secrets(secrets: dict[str, Any]) -> dict[str, str]:
     return {k: ("***" if v else "") for k, v in secrets.items()}
 
 
-async def load_sections(session) -> tuple[dict, dict, dict]:
-    from sqlalchemy import select
+async def _stack_param_count(session) -> int:
+    from app.models.stack_param import StackParam
 
+    n = await session.scalar(select(func.count()).select_from(StackParam))
+    return int(n or 0)
+
+
+async def _load_sections_from_settings_json(session) -> tuple[dict, dict]:
     from app.models.setting import Setting
 
     async def _one(key: str) -> dict:
@@ -252,13 +282,42 @@ async def load_sections(session) -> tuple[dict, dict, dict]:
 
     stack = await _one(STACK_KEY)
     secrets = await _one(SECRETS_KEY)
-    meta = await _one(META_KEY)
+    return stack, secrets
+
+
+async def load_sections(session) -> tuple[dict, dict, dict]:
+    from app.models.setting import Setting
+
+    async def _meta() -> dict:
+        r = await session.execute(select(Setting).where(Setting.key == META_KEY))
+        row = r.scalar_one_or_none()
+        if row is None:
+            return {}
+        v = row.value
+        return dict(v) if isinstance(v, dict) else {}
+
+    from app.models.stack_param import StackParam
+
+    cnt = await _stack_param_count(session)
+    if cnt > 0:
+        r = await session.execute(select(StackParam))
+        rows = r.scalars().all()
+        stack: dict[str, str] = {}
+        secrets: dict[str, str] = {}
+        for row in rows:
+            if row.is_secret:
+                secrets[row.param_key] = row.param_value
+            else:
+                stack[row.param_key] = row.param_value
+        meta = await _meta()
+        return stack, secrets, meta
+
+    stack, secrets = await _load_sections_from_settings_json(session)
+    meta = await _meta()
     return stack, secrets, meta
 
 
 async def save_section(session, key: str, value: dict) -> None:
-    from sqlalchemy import select
-
     from app.models.setting import Setting
 
     r = await session.execute(select(Setting).where(Setting.key == key))
@@ -269,13 +328,47 @@ async def save_section(session, key: str, value: dict) -> None:
         row.value = value
 
 
-async def ensure_default_settings(session) -> None:
-    from sqlalchemy import select
+async def migrate_legacy_json_to_rows(session) -> None:
+    from app.models.setting import Setting
+    from app.models.stack_param import StackParam
 
+    cnt = await _stack_param_count(session)
+    if cnt > 0:
+        return
+
+    stack_d, secrets_d = await _load_sections_from_settings_json(session)
+    if not stack_d and not secrets_d:
+        return
+
+    for k, v in stack_d.items():
+        if v is None:
+            continue
+        session.add(StackParam(param_key=str(k), param_value=str(v), is_secret=False))
+    for k, v in secrets_d.items():
+        if v is None:
+            continue
+        key_s = str(k)
+        r = await session.execute(select(StackParam).where(StackParam.param_key == key_s))
+        existing = r.scalar_one_or_none()
+        if existing is not None:
+            existing.param_value = str(v)
+            existing.is_secret = True
+        else:
+            session.add(StackParam(param_key=key_s, param_value=str(v), is_secret=True))
+
+    for key in (STACK_KEY, SECRETS_KEY):
+        r = await session.execute(select(Setting).where(Setting.key == key))
+        row = r.scalar_one_or_none()
+        if row is not None:
+            row.value = {}
+    logger.info("[stack_config] migrated legacy cfg.stack/cfg.secrets JSON to stack_params")
+
+
+async def ensure_default_settings(session) -> None:
     from app.models.setting import Setting
 
     for k, default in (
-        (STACK_KEY, dict(DEFAULT_STACK)),
+        (STACK_KEY, {}),
         (SECRETS_KEY, {}),
         (META_KEY, {}),
     ):
@@ -283,6 +376,56 @@ async def ensure_default_settings(session) -> None:
         if r.scalar_one_or_none() is None:
             session.add(Setting(key=k, value=default))
             logger.info("[stack_config] seeded %s", k)
+
+
+async def ensure_default_stack_params(session) -> None:
+    from app.models.stack_param import StackParam
+
+    for k, v in DEFAULT_STACK.items():
+        r = await session.execute(select(StackParam).where(StackParam.param_key == k))
+        if r.scalar_one_or_none() is None:
+            session.add(StackParam(param_key=k, param_value=str(v), is_secret=False))
+
+
+async def replace_all_params_from_flat(session, flat: dict[str, str]) -> None:
+    from app.models.stack_param import StackParam
+
+    await session.execute(delete(StackParam))
+    for k, v in flat.items():
+        session.add(
+            StackParam(
+                param_key=str(k),
+                param_value=str(v),
+                is_secret=_is_secret_key(str(k)),
+            )
+        )
+
+
+async def upsert_stack_param(session, key: str, value: str) -> None:
+    from app.models.stack_param import StackParam
+
+    is_sec = _is_secret_key(key)
+    r = await session.execute(select(StackParam).where(StackParam.param_key == key))
+    row = r.scalar_one_or_none()
+    if row is None:
+        session.add(StackParam(param_key=key, param_value=value, is_secret=is_sec))
+    else:
+        row.param_value = value
+        row.is_secret = is_sec
+
+
+async def delete_stack_param(session, key: str) -> None:
+    from app.models.stack_param import StackParam
+
+    await session.execute(delete(StackParam).where(StackParam.param_key == key))
+
+
+async def replace_secret_params(session, secrets: dict[str, str]) -> None:
+    from app.models.stack_param import StackParam
+
+    await session.execute(delete(StackParam).where(StackParam.is_secret.is_(True)))
+    for k, v in secrets.items():
+        session.add(StackParam(param_key=str(k), param_value=str(v), is_secret=True))
 
 
 def merge_partial_secrets(

@@ -33,7 +33,7 @@ radius `10px`. Favicon остаётся в LLM-тематике, но испол
 палитру.
 
 Страница **Настройки**: публичный IP/DNS (`settings.public_access.server_host`), импорт стека из
-`main.env` в SQLite (`cfg.stack`, `cfg.secrets`, `cfg.meta`), правка плоских ключей и секретов (секреты в API маскируются). Этот host используется только для ссылок в браузере. Внутренние health-probe используют `WEB_MONITORING_HTTP_HOST`; порты Prometheus/Grafana/Langfuse/LiteLLM и имена compose-проектов читаются из **слитого** стека (БД + дефолты), не только из `WEB_*` env. Снимок runtime ходит к API движка через `WEB_LLM_HTTP_HOST` и `http://vllm:<LLM_API_PORT>` / `http://sglang:<порт>` (порты из стека).
+`main.env` в SQLite (**таблица `stack_params`** — одна строка на переменную; **`cfg.meta`** — установка; унаследованные ключи **`cfg.stack`** / **`cfg.secrets`** в `settings` после миграции остаются пустыми `{}`), правка ключей в UI таблицей (секреты в API маскируются). Этот host используется только для ссылок в браузере. Внутренние health-probe используют `WEB_MONITORING_HTTP_HOST`; порты Prometheus/Grafana/Langfuse/LiteLLM и имена compose-проектов читаются из **слитого** стека (БД + дефолты), не только из `WEB_*` env. Снимок runtime ходит к API движка через `WEB_LLM_HTTP_HOST` и `http://vllm:<LLM_API_PORT>` / `http://sglang:<порт>` (порты из стека).
 
 ## 2. Границы ответственности
 
@@ -42,7 +42,7 @@ radius `10px`. Favicon остаётся в LLM-тематике, но испол
 | Сущность | Источник правды |
 |---|---|
 | Веса моделей на диске | `${MODELS_DIR}` (по умолчанию **`./data/models`**, см. `data/README.md`); удаление весов из UI разрешено только внутри этого каталога |
-| Параметры движка для запуска | Плоский стек в SQLite (`cfg.stack` + `cfg.secrets`), синхронизируемый с `main.env` при install; пресеты — `data/presets/<slug>.env` (`PRESETS_DIR` из стека) |
+| Параметры движка для запуска | Плоский стек в SQLite (**`stack_params`** + слияние с кодовыми дефолтами в `sync_merged_flat`), синхронизируемый с `main.env` при install; пресеты — `data/presets/<slug>.env` (`PRESETS_DIR` из стека) |
 | Состояние контейнеров | Docker daemon (через socket) |
 | Метрики и серии | Prometheus TSDB |
 | Логи контейнеров | Loki / `docker logs` |
@@ -59,7 +59,8 @@ radius `10px`. Favicon остаётся в LLM-тематике, но испол
 | `services` | Состояние сервисов мониторинга и LiteLLM по последнему опросу. |
 | `jobs` | Долгие операции CLI: команда, статус, exit code, stdout/stderr tail, correlation id, инициатор. |
 | `audit_events` | Действия: при `jobs.submit` — запись **с** `correlation_id` (дублирует job для трассировки). Отдельно — **только UI** (`correlation_id IS NULL`): пресеты, модель в реестре, настройки public-access. Лента «Задачи» строится из `GET /activity`: `jobs` + UI-`audit` без дубля CLI-строк. |
-| `settings` | Публичный host (`public_access`), плюс ключи **`cfg.stack`**, **`cfg.secrets`**, **`cfg.meta`** (установка из файлов, маскирование секретов в API). |
+| `settings` | Публичный host (`public_access`), **`cfg.meta`**, плюс унаследованные пустые **`cfg.stack`** / **`cfg.secrets`** после миграции. |
+| `stack_params` | Плоский стек: `param_key`, `param_value`, `is_secret` (секреты маскируются в `GET /app-config/stack`). |
 
 Footer приложения показывает версию из `/healthz`; backend читает её из
 корневого `VERSION`, чтобы UI не расходился с SemVer проекта. Копирайт:
@@ -102,7 +103,7 @@ API: `GET/PATCH /app-config/stack`, `POST /app-config/install`, `GET /app-config
 
 ## 4. Безопасность
 
-- Секреты стека хранятся в **`cfg.secrets`** (SQLite); в API отдаются **маскированными** (`***`). Пользователь может обновить значение через `PATCH /app-config/stack` (не отправляйте `***` как новое значение).
+- Секреты стека хранятся в **`stack_params`** с `is_secret=true`; в API отдаются **маскированными** (`***`). Пользователь может обновить значение через `PATCH /app-config/stack` (не отправляйте `***` как новое значение). В теле `stack` значение **`null`** удаляет ключ; в `secrets` — **`null`** удаляет секрет (после `merge_partial_secrets`).
 - Один mutating job на стек одновременно (advisory lock в БД на
   `(scope, resource)`: runtime-команды используют `("engine", "runtime")`,
   monitoring-команды — `("monitoring", "stack")`). UI показывает активную

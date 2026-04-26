@@ -7,6 +7,7 @@ from app.models.preset import Preset
 from app.models.run import EngineRun, RunStatus
 from app.models.service import ServiceState, ServiceStatus
 from app.models.setting import Setting
+from app.models.stack_param import StackParam
 
 __all__ = [
     "AuditEvent",
@@ -20,4 +21,5 @@ __all__ = [
     "ServiceState",
     "ServiceStatus",
     "Setting",
+    "StackParam",
 ]

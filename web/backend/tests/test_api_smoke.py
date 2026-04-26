@@ -235,6 +235,18 @@ async def test_models_sync_returns_counts(client: httpx.AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_app_config_stack_returns_seeded_params(client: httpx.AsyncClient) -> None:
+    """Stack lives in ``stack_params`` after init_db; API shape unchanged (stack + masked secrets)."""
+    async with client:
+        r = await client.get("/api/v1/app-config/stack")
+    assert r.status_code == 200
+    body = r.json()
+    assert "stack" in body and "secrets" in body
+    assert body["stack"].get("MODELS_DIR") == "./data/models"
+    assert isinstance(body["secrets"], dict)
+
+
+@pytest.mark.asyncio
 async def test_activity_includes_ui_after_preset_and_settings(client: httpx.AsyncClient) -> None:
     """Лента /activity: UI-события (audit без correlation) + CLI-записи (jobs)."""
     async with client:
