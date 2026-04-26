@@ -118,6 +118,51 @@ async def test_update_preset_allows_hf_id_and_parameters(client: httpx.AsyncClie
 
 
 @pytest.mark.asyncio
+async def test_delete_preset_can_remove_exported_file(client: httpx.AsyncClient) -> None:
+    async with client:
+        created = await client.post(
+            "/api/v1/presets",
+            json={
+                "name": "delete-me",
+                "hf_id": "Qwen/Qwen3-7B",
+                "engine": "vllm",
+                "parameters": {"MAX_MODEL_LEN": "32768"},
+            },
+        )
+        assert created.status_code == 201
+        preset_id = created.json()["id"]
+        exported = await client.post(f"/api/v1/presets/{preset_id}/export")
+        file_path = exported.json()["file_path"]
+        deleted = await client.delete(f"/api/v1/presets/{preset_id}?delete_file=true")
+        fetched = await client.get(f"/api/v1/presets/{preset_id}")
+
+    assert exported.status_code == 200
+    assert deleted.status_code == 200
+    assert deleted.json()["deleted_file"] == file_path
+    assert fetched.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_delete_model_can_remove_local_files(client: httpx.AsyncClient) -> None:
+    settings = get_settings()
+    model_dir = settings.slgpu_root.parent / "models" / "Qwen" / "Qwen3-Delete"
+    model_dir.mkdir(parents=True)
+    (model_dir / "config.json").write_text("{}", encoding="utf-8")
+    (model_dir / "model.safetensors").write_bytes(b"weights")
+
+    async with client:
+        models = await client.get("/api/v1/models")
+        model_id = next(item["id"] for item in models.json() if item["hf_id"] == "Qwen/Qwen3-Delete")
+        deleted = await client.delete(f"/api/v1/models/{model_id}?delete_files=true")
+        after = await client.get("/api/v1/models")
+
+    assert deleted.status_code == 200
+    assert deleted.json()["deleted_files"] is True
+    assert not model_dir.exists()
+    assert all(item["hf_id"] != "Qwen/Qwen3-Delete" for item in after.json())
+
+
+@pytest.mark.asyncio
 async def test_runtime_snapshot_includes_requested_preset_and_model(
     client: httpx.AsyncClient,
 ) -> None:

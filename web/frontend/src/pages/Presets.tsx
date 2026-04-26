@@ -13,7 +13,15 @@ interface NewPresetForm {
   engine: "vllm" | "sglang";
   tp: string;
   served_model_name: string;
+  gpu_mask: string;
   description: string;
+  parameters: ParameterRow[];
+}
+
+interface ParameterRow {
+  id: string;
+  key: string;
+  value: string;
 }
 
 interface PresetEditorForm {
@@ -23,7 +31,7 @@ interface PresetEditorForm {
   served_model_name: string;
   gpu_mask: string;
   description: string;
-  parameters_json: string;
+  parameters: ParameterRow[];
   is_active: boolean;
 }
 
@@ -33,7 +41,9 @@ const EMPTY: NewPresetForm = {
   engine: "vllm",
   tp: "",
   served_model_name: "",
+  gpu_mask: "",
   description: "",
+  parameters: [],
 };
 
 function editorFromPreset(preset: Preset): PresetEditorForm {
@@ -44,10 +54,51 @@ function editorFromPreset(preset: Preset): PresetEditorForm {
     served_model_name: preset.served_model_name ?? "",
     gpu_mask: preset.gpu_mask ?? "",
     description: preset.description ?? "",
-    parameters_json: JSON.stringify(preset.parameters ?? {}, null, 2),
+    parameters: parameterRowsFromRecord(preset.parameters ?? {}),
     is_active: preset.is_active,
   };
 }
+
+function parameterRowsFromRecord(parameters: Record<string, unknown>): ParameterRow[] {
+  return Object.entries(parameters).map(([key, value], index) => ({
+    id: `${key}-${index}`,
+    key,
+    value: value == null ? "" : String(value),
+  }));
+}
+
+function parametersFromRows(rows: ParameterRow[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const row of rows) {
+    const key = row.key.trim();
+    if (!key) continue;
+    out[key] = row.value;
+  }
+  return out;
+}
+
+function newParameterRow(): ParameterRow {
+  return { id: `${Date.now()}-${Math.random()}`, key: "", value: "" };
+}
+
+const COMMON_PARAMETERS = [
+  "MAX_MODEL_LEN",
+  "MODEL_REVISION",
+  "KV_CACHE_DTYPE",
+  "GPU_MEM_UTIL",
+  "VLLM_DOCKER_IMAGE",
+  "SLGPU_MAX_NUM_BATCHED_TOKENS",
+  "SLGPU_VLLM_MAX_NUM_SEQS",
+  "SLGPU_VLLM_BLOCK_SIZE",
+  "SLGPU_ENABLE_PREFIX_CACHING",
+  "SLGPU_ENABLE_EXPERT_PARALLEL",
+  "SGLANG_MEM_FRACTION_STATIC",
+  "SGLANG_CUDA_GRAPH_MAX_BS",
+  "TOOL_CALL_PARSER",
+  "REASONING_PARSER",
+  "CHAT_TEMPLATE_CONTENT_FORMAT",
+  "BENCH_MODEL_NAME",
+];
 
 export function PresetsPage() {
   const queryClient = useQueryClient();
@@ -83,8 +134,9 @@ export function PresetsPage() {
         engine: payload.engine,
         tp: payload.tp ? Number(payload.tp) : null,
         served_model_name: payload.served_model_name || null,
+        gpu_mask: payload.gpu_mask || null,
         description: payload.description || null,
-        parameters: {},
+        parameters: parametersFromRows(payload.parameters),
       }),
     onSuccess: () => {
       setForm(EMPTY);
@@ -105,15 +157,7 @@ export function PresetsPage() {
 
   const updatePreset = useMutation({
     mutationFn: ({ id, payload }: { id: number; payload: PresetEditorForm }) => {
-      let parameters: unknown;
-      try {
-        parameters = JSON.parse(payload.parameters_json || "{}");
-      } catch (exc) {
-        throw new Error(`Некорректный JSON параметров: ${String(exc)}`);
-      }
-      if (!parameters || Array.isArray(parameters) || typeof parameters !== "object") {
-        throw new Error("Параметры должны быть JSON-объектом");
-      }
+      const parameters = parametersFromRows(payload.parameters);
       return api.patch<Preset>(`/presets/${id}`, {
         hf_id: payload.hf_id,
         engine: payload.engine,
@@ -129,6 +173,18 @@ export function PresetsPage() {
       setError(null);
       setSelectedId(preset.id);
       setEditor(editorFromPreset(preset));
+      queryClient.invalidateQueries({ queryKey: ["presets"] });
+    },
+    onError: (err: Error) => setError(err.message),
+  });
+
+  const deletePreset = useMutation({
+    mutationFn: ({ id, deleteFile }: { id: number; deleteFile: boolean }) =>
+      api.delete<{ deleted: boolean }>(`/presets/${id}?delete_file=${deleteFile ? "true" : "false"}`),
+    onSuccess: () => {
+      setError(null);
+      setSelectedId(null);
+      setEditor(null);
       queryClient.invalidateQueries({ queryKey: ["presets"] });
     },
     onError: (err: Error) => setError(err.message),
@@ -213,7 +269,7 @@ export function PresetsPage() {
               className="input"
               type="number"
               min={1}
-              max={16}
+              max={128}
               value={form.tp}
               onChange={(event) => setForm({ ...form, tp: event.target.value })}
             />
@@ -230,6 +286,15 @@ export function PresetsPage() {
             />
           </div>
           <div>
+            <label className="label">GPU mask</label>
+            <input
+              className="input"
+              placeholder="0,1,2,3"
+              value={form.gpu_mask}
+              onChange={(event) => setForm({ ...form, gpu_mask: event.target.value })}
+            />
+          </div>
+          <div>
             <label className="label">Описание</label>
             <input
               className="input"
@@ -237,6 +302,13 @@ export function PresetsPage() {
               onChange={(event) =>
                 setForm({ ...form, description: event.target.value })
               }
+            />
+          </div>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <label className="label">Параметры запуска</label>
+            <ParameterRows
+              rows={form.parameters}
+              onChange={(parameters) => setForm({ ...form, parameters })}
             />
           </div>
           <div style={{ display: "flex", alignItems: "flex-end" }}>
@@ -345,18 +417,10 @@ export function PresetsPage() {
             </div>
 
             <div style={{ marginTop: 16 }}>
-              <label className="label" htmlFor="preset-parameters">
-                Parameters JSON
-              </label>
-              <textarea
-                id="preset-parameters"
-                className="input mono"
-                rows={14}
-                spellCheck={false}
-                value={editor.parameters_json}
-                onChange={(event) =>
-                  setEditor({ ...editor, parameters_json: event.target.value })
-                }
+              <label className="label">Параметры запуска</label>
+              <ParameterRows
+                rows={editor.parameters}
+                onChange={(parameters) => setEditor({ ...editor, parameters })}
               />
             </div>
 
@@ -383,6 +447,30 @@ export function PresetsPage() {
                 onClick={() => setEditor(editorFromPreset(selectedPreset))}
               >
                 Сбросить форму
+              </button>
+              <button
+                type="button"
+                className="btn btn--danger"
+                disabled={deletePreset.isPending}
+                onClick={() => {
+                  if (window.confirm(`Удалить пресет ${selectedPreset.name} из БД?`)) {
+                    deletePreset.mutate({ id: selectedPreset.id, deleteFile: false });
+                  }
+                }}
+              >
+                Удалить из БД
+              </button>
+              <button
+                type="button"
+                className="btn btn--danger"
+                disabled={deletePreset.isPending}
+                onClick={() => {
+                  if (window.confirm(`Удалить пресет ${selectedPreset.name} и его .env файл?`)) {
+                    deletePreset.mutate({ id: selectedPreset.id, deleteFile: true });
+                  }
+                }}
+              >
+                Удалить с .env
               </button>
             </div>
 
@@ -456,6 +544,19 @@ export function PresetsPage() {
                       >
                         Экспорт в .env
                       </button>
+                      {" "}
+                      <button
+                        type="button"
+                        className="btn btn--danger"
+                        disabled={deletePreset.isPending}
+                        onClick={() => {
+                          if (window.confirm(`Удалить пресет ${preset.name} из БД?`)) {
+                            deletePreset.mutate({ id: preset.id, deleteFile: false });
+                          }
+                        }}
+                      >
+                        Удалить
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -465,5 +566,70 @@ export function PresetsPage() {
         )}
       </Section>
     </>
+  );
+}
+
+function ParameterRows({
+  rows,
+  onChange,
+}: {
+  rows: ParameterRow[];
+  onChange: (rows: ParameterRow[]) => void;
+}) {
+  function updateRow(id: string, patch: Partial<ParameterRow>) {
+    onChange(rows.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+  }
+
+  function removeRow(id: string) {
+    onChange(rows.filter((row) => row.id !== id));
+  }
+
+  return (
+    <div className="flex flex--col flex--gap-sm">
+      {rows.length === 0 ? (
+        <div className="empty-state" style={{ padding: 16 }}>
+          Дополнительных параметров нет.
+        </div>
+      ) : (
+        rows.map((row) => (
+          <div className="form-grid" key={row.id} style={{ alignItems: "end" }}>
+            <div>
+              <label className="label">Ключ</label>
+              <input
+                className="input mono"
+                list="preset-parameter-keys"
+                placeholder="MAX_MODEL_LEN"
+                value={row.key}
+                onChange={(event) => updateRow(row.id, { key: event.target.value })}
+              />
+            </div>
+            <div>
+              <label className="label">Значение</label>
+              <input
+                className="input mono"
+                placeholder="262144"
+                value={row.value}
+                onChange={(event) => updateRow(row.id, { value: event.target.value })}
+              />
+            </div>
+            <div>
+              <button type="button" className="btn btn--danger" onClick={() => removeRow(row.id)}>
+                Удалить параметр
+              </button>
+            </div>
+          </div>
+        ))
+      )}
+      <datalist id="preset-parameter-keys">
+        {COMMON_PARAMETERS.map((key) => (
+          <option value={key} key={key} />
+        ))}
+      </datalist>
+      <div>
+        <button type="button" className="btn" onClick={() => onChange([...rows, newParameterRow()])}>
+          Добавить параметр
+        </button>
+      </div>
+    </div>
   );
 }

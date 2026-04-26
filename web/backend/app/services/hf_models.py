@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -102,6 +103,25 @@ def _iter_local_hf_ids() -> list[str]:
                 continue
             hf_ids.append(hf_id)
     return hf_ids
+
+
+def delete_local_model_files(hf_id: str) -> Path | None:
+    """Delete the model directory under MODELS_DIR, refusing paths outside it."""
+
+    validate_hf_id(hf_id)
+    root = _models_root().resolve()
+    target = (root / hf_id).resolve()
+    try:
+        target.relative_to(root)
+    except ValueError as exc:
+        raise ValidationError("model path is outside MODELS_DIR") from exc
+    if not target.exists():
+        return None
+    if not target.is_dir():
+        raise ValidationError("model path is not a directory")
+    shutil.rmtree(target)
+    logger.info("[hf_models][delete_local_model_files] deleted=%s", target)
+    return target
 
 
 async def sync_local_models(session: AsyncSession) -> list[HFModel]:

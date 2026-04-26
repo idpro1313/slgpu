@@ -14,11 +14,25 @@ interface AddModelForm {
   notes: string;
 }
 
+interface ModelEditorForm {
+  revision: string;
+  notes: string;
+}
+
 const EMPTY_FORM: AddModelForm = { hf_id: "", revision: "", notes: "" };
+
+function editorFromModel(model: HFModel): ModelEditorForm {
+  return {
+    revision: model.revision ?? "",
+    notes: model.notes ?? "",
+  };
+}
 
 export function ModelsPage() {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<AddModelForm>(EMPTY_FORM);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [editor, setEditor] = useState<ModelEditorForm | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pulling, setPulling] = useState<number | null>(null);
 
@@ -55,6 +69,35 @@ export function ModelsPage() {
     },
     onError: (err: Error) => setError(err.message),
   });
+
+  const updateModel = useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: ModelEditorForm }) =>
+      api.patch<HFModel>(`/models/${id}`, {
+        revision: payload.revision || null,
+        notes: payload.notes || null,
+      }),
+    onSuccess: (model) => {
+      setError(null);
+      setSelectedId(model.id);
+      setEditor(editorFromModel(model));
+      queryClient.invalidateQueries({ queryKey: ["models"] });
+    },
+    onError: (err: Error) => setError(err.message),
+  });
+
+  const deleteModel = useMutation({
+    mutationFn: ({ id, deleteFiles }: { id: number; deleteFiles: boolean }) =>
+      api.delete<{ deleted: boolean }>(`/models/${id}?delete_files=${deleteFiles ? "true" : "false"}`),
+    onSuccess: () => {
+      setError(null);
+      setSelectedId(null);
+      setEditor(null);
+      queryClient.invalidateQueries({ queryKey: ["models"] });
+    },
+    onError: (err: Error) => setError(err.message),
+  });
+
+  const selectedModel = data?.find((model) => model.id === selectedId) ?? null;
 
   return (
     <>
@@ -125,6 +168,82 @@ export function ModelsPage() {
       </Section>
 
       <Section
+        title="Изменить модель"
+        subtitle="Редактируется карточка модели в web-реестре: revision и заметка. HF ID и slug не меняются."
+      >
+        {!selectedModel || !editor ? (
+          <div className="empty-state">Выберите модель в таблице ниже.</div>
+        ) : (
+          <>
+            <div className="form-grid">
+              <div>
+                <label className="label">HF ID</label>
+                <input className="input mono" value={selectedModel.hf_id} disabled />
+              </div>
+              <div>
+                <label className="label">Revision</label>
+                <input
+                  className="input"
+                  value={editor.revision}
+                  onChange={(event) => setEditor({ ...editor, revision: event.target.value })}
+                />
+              </div>
+              <div>
+                <label className="label">Заметка</label>
+                <input
+                  className="input"
+                  value={editor.notes}
+                  onChange={(event) => setEditor({ ...editor, notes: event.target.value })}
+                />
+              </div>
+              <div>
+                <label className="label">Локальный путь</label>
+                <input className="input mono" value={selectedModel.local_path ?? "—"} disabled />
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 16 }}>
+              <button
+                type="button"
+                className="btn btn--primary"
+                disabled={updateModel.isPending}
+                onClick={() => updateModel.mutate({ id: selectedModel.id, payload: editor })}
+              >
+                {updateModel.isPending ? "Сохраняем…" : "Сохранить"}
+              </button>
+              <button
+                type="button"
+                className="btn btn--danger"
+                disabled={deleteModel.isPending}
+                onClick={() => {
+                  if (window.confirm(`Удалить ${selectedModel.hf_id} только из web-реестра?`)) {
+                    deleteModel.mutate({ id: selectedModel.id, deleteFiles: false });
+                  }
+                }}
+              >
+                Удалить из реестра
+              </button>
+              <button
+                type="button"
+                className="btn btn--danger"
+                disabled={deleteModel.isPending}
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      `Удалить ${selectedModel.hf_id} из реестра и стереть локальную папку весов?`,
+                    )
+                  ) {
+                    deleteModel.mutate({ id: selectedModel.id, deleteFiles: true });
+                  }
+                }}
+              >
+                Удалить с диска
+              </button>
+            </div>
+          </>
+        )}
+      </Section>
+
+      <Section
         title="Реестр моделей"
         subtitle="Состояние локального диска синхронизируется при каждом запросе."
       >
@@ -158,6 +277,16 @@ export function ModelsPage() {
                     <td>{model.attempts}</td>
                     <td>{formatDate(model.last_pulled_at)}</td>
                     <td>
+                      <button
+                        type="button"
+                        className="btn btn--ghost"
+                        onClick={() => {
+                          setSelectedId(model.id);
+                          setEditor(editorFromModel(model));
+                        }}
+                      >
+                        Открыть
+                      </button>{" "}
                       <button
                         type="button"
                         className="btn btn--primary"

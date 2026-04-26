@@ -3,9 +3,13 @@
 Web control plane поверх существующего CLI [`./slgpu`](../slgpu) и Docker-стека
 проекта [`slgpu`](../README.md). Содержит:
 
-- Реестр моделей Hugging Face по фактическим папкам `MODELS_DIR/<org>/<repo>` и инициируемые загрузки.
+- Реестр моделей Hugging Face по фактическим папкам `MODELS_DIR/<org>/<repo>`:
+  регистрация, изменение revision/notes, удаление записи или локальной папки весов,
+  инициируемые загрузки.
 - CRUD пресетов с двусторонней синхронизацией с
   [`data/presets/*.env`](../data/presets/) (`PRESETS_DIR` в `main.env`).
+  Параметры пресета редактируются через строки `ключ/значение` с подсказками
+  типовых runtime-переменных, без ручного JSON.
 - Управление инференсом vLLM/SGLang через `./slgpu up|down|restart`.
   Runtime/Dashboard показывают текущий engine, запрошенный пресет, HF ID модели и TP;
   Runtime также показывает автообновляемый хвост логов контейнера модели и активную job
@@ -133,9 +137,10 @@ daemon не нашёл бы файлы по `/slgpu/...` и создал бы п
 | GET | `/healthz` | liveness + версия |
 | GET | `/api/v1/dashboard` | сводка для главной страницы |
 | GET/POST | `/api/v1/models` | список HF моделей по `MODELS_DIR/<org>/<repo>` и регистрация HF моделей |
+| PATCH/DELETE | `/api/v1/models/{id}` | изменение revision/notes, удаление записи или локальных весов |
 | POST | `/api/v1/models/{id}/pull` | `slgpu pull` через job runner |
 | GET/POST | `/api/v1/presets` | список и создание пресетов |
-| GET/PATCH | `/api/v1/presets/{id}` | просмотр и редактирование пресета в БД |
+| GET/PATCH/DELETE | `/api/v1/presets/{id}` | просмотр, параметрическое редактирование и удаление пресета |
 | POST | `/api/v1/presets/sync` | импорт `data/presets/*.env` (или `PRESETS_DIR`) в БД |
 | POST | `/api/v1/presets/{id}/export` | экспорт пресета в файл |
 | POST | `/api/v1/runtime/up\|down\|restart` | управление движком |

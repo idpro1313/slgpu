@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import actor_from_header, db_session
 from app.core.security import ValidationError
 from app.models.model import HFModel
+from app.models.preset import Preset
 from app.schemas.common import JobAccepted
 from app.schemas.models import HFModelCreate, HFModelOut, HFModelPullRequest, HFModelUpdate
 from app.services import hf_models as hf_service
@@ -71,6 +72,29 @@ async def update_model(
     if payload.notes is not None:
         model.notes = payload.notes
     return model
+
+
+@router.delete("/{model_id}")
+async def delete_model(
+    model_id: int,
+    delete_files: bool = Query(default=False),
+    session: AsyncSession = Depends(db_session),
+) -> dict[str, object]:
+    model = await session.get(HFModel, model_id)
+    if model is None:
+        raise HTTPException(status_code=404, detail="model not found")
+    deleted_path = None
+    if delete_files:
+        try:
+            deleted = hf_service.delete_local_model_files(model.hf_id)
+        except (OSError, ValidationError) as exc:
+            raise HTTPException(status_code=400, detail=f"delete files failed: {exc}") from exc
+        deleted_path = str(deleted) if deleted is not None else None
+    presets = await session.execute(select(Preset).where(Preset.model_id == model.id))
+    for preset in presets.scalars().all():
+        preset.model_id = None
+    await session.delete(model)
+    return {"deleted": True, "deleted_files": delete_files, "deleted_path": deleted_path}
 
 
 @router.post("/{model_id}/pull", response_model=JobAccepted, status_code=status.HTTP_202_ACCEPTED)

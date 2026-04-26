@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -128,3 +130,30 @@ async def export_preset(preset_id: int, session: AsyncSession = Depends(db_sessi
     except (OSError, ValidationError) as exc:
         raise HTTPException(status_code=500, detail=f"export failed: {exc}") from exc
     return preset
+
+
+@router.delete("/{preset_id}")
+async def delete_preset(
+    preset_id: int,
+    delete_file: bool = False,
+    session: AsyncSession = Depends(db_session),
+) -> dict[str, object]:
+    preset = await session.get(Preset, preset_id)
+    if preset is None:
+        raise HTTPException(status_code=404, detail="preset not found")
+    deleted_file = None
+    if delete_file and preset.file_path:
+        path = Path(preset.file_path).resolve()
+        allowed_dir = preset_service.presets_dir().resolve()
+        try:
+            path.relative_to(allowed_dir)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="preset file is outside PRESETS_DIR") from exc
+        if path.exists():
+            try:
+                path.unlink()
+            except OSError as exc:
+                raise HTTPException(status_code=500, detail=f"delete file failed: {exc}") from exc
+            deleted_file = str(path)
+    await session.delete(preset)
+    return {"deleted": True, "deleted_file": deleted_file}

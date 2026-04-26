@@ -57,6 +57,10 @@ _RUNTIME_KEYS = {
 }
 
 
+def presets_dir() -> Path:
+    return get_settings().models_presets_dir
+
+
 def _engine_from_values(values: dict[str, str]) -> str:
     if "SGLANG_MEM_FRACTION_STATIC" in values:
         return "sglang"
