@@ -91,6 +91,11 @@ async def compute_availability(
 ) -> dict[str, Any]:
     """Return available / busy (with slot ref) / suggested first ``tp`` indices."""
     host = await _cached_host_indices()
+    logger.info(
+        "[gpu_availability][compute_availability][BLOCK_HOST_INFO] n=%s tp=%s",
+        len(host),
+        tp,
+    )
     if not host:
         return {
             "all_indices": [],
@@ -177,8 +182,18 @@ async def compute_availability(
         seen.add(k)
         unique_busy.append(b)
 
+    logger.info(
+        "[gpu_availability][compute_availability][BLOCK_BUSY] busy_indices=%s rows=%s",
+        len(busy),
+        len(unique_busy),
+    )
     available = sorted(host - busy)
     sugg = _suggest_indices(set(available), tp) if tp >= 1 else None
+    logger.info(
+        "[gpu_availability][compute_availability][BLOCK_SUGGEST] suggested=%s available_n=%s",
+        sugg,
+        len(available),
+    )
     return {
         "all_indices": sorted(host),
         "available": available,

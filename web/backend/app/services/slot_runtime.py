@@ -177,7 +177,11 @@ def _run_slot_sync(
             restart_policy={"Name": "unless-stopped"},
         )
     except docker.errors.DockerException as exc:
-        logger.exception("[slot_runtime] run failed")
+        logger.exception(
+            "[slot_runtime][_run_slot_sync][BLOCK_FAIL] cname=%s err=%s",
+            cname,
+            str(exc)[:300],
+        )
         return {"ok": False, "error": str(exc)[:800], "container_id": None, "container_name": cname}
 
     cid = container.id or ""

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
@@ -72,3 +72,33 @@ async def test_gpu_state_reports_unavailable(client: httpx.AsyncClient) -> None:
     body = r.json()
     assert body["smi_available"] is False
     assert body["gpus"] == []
+
+
+def test_enrich_processes_maps_host_pid_to_slot_key() -> None:
+    """docker top() PIDs from slot container must match nvidia-smi process pid → slot_key."""
+    from app.services import gpu_state as gs
+
+    class _FakeContainer:
+        def top(self) -> dict:
+            return {"Processes": [["root", "12345", "VLLM::Worker"]]}
+
+    dclient = MagicMock()
+    dclient.ping = lambda: True
+    dclient.containers.get = lambda _name: _FakeContainer()
+
+    data = {
+        "processes": [
+            {
+                "pid": 12345,
+                "process_name": "VLLM::Worker",
+                "used_memory_mib": 100,
+                "gpu_uuid": "GPU-abc",
+            }
+        ],
+    }
+    with patch("docker.from_env", return_value=dclient), patch(
+        "app.services.slot_runtime.slot_container_name",
+        return_value="slgpu-vllm-myslot",
+    ):
+        out = gs._enrich_processes_with_slot_keys(data, [("myslot", "vllm")])
+    assert out["processes"][0].get("slot_key") == "myslot"

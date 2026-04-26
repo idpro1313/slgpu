@@ -201,6 +201,9 @@ npm run typecheck
 
 Из PowerShell в корне репо: `.\web\verify-frontend.ps1` (обёртка над `npm run typecheck`).
 
+С Linux-хоста (VM) одной командой — backend pytest + frontend typecheck: из корня репозитория
+`./scripts/test_web.sh` (см. [`../scripts/test_web.sh`](../scripts/test_web.sh)).
+
 Дополнительная статическая проверка для compose-файла:
 
 ```bash

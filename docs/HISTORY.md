@@ -1580,3 +1580,10 @@
 - **Почему:** сбой бенчмарка из Develonica.LLM на пути вроде `/opt/slgpu/data/bench/results/vllm/...`.
 - **Файлы:** `web/docker-entrypoint.sh`, `web/README.md`, `VERSION`, `web/backend/app/__init__.py`, `web/backend/pyproject.toml`, `web/frontend/package.json`, `docs/HISTORY.md`.
 - **Решение:** **PATCH** — на сервере после `git pull` пересобрать/перезапустить **slgpu-web** (`./slgpu web up --build` или `docker compose ... up --build -d`).
+
+### 4.0.2: План audit 3.4.x → 4.0.0 — доводка (логи, тесты, GRACE)
+
+- **Что:** Доведён §4 плана: маркеры **`[gpu_availability][compute_availability][BLOCK_HOST_INFO|BLOCK_BUSY|BLOCK_SUGGEST]`**, **`[slot_runtime][_run_slot_sync][BLOCK_FAIL]`**, **`[gpu_state][_enrich_processes_with_slot_keys][BLOCK_PIDS_MAP]`**; тест **`test_enrich_processes_maps_host_pid_to_slot_key`**; скрипт **[`scripts/test_web.sh`](../scripts/test_web.sh)** (pytest + `tsc`); **verification-plan** `scenario-25` + `check-5`. Версия **4.0.2**.
+- **Почему:** закрытие оставшихся `pending` из плана (лог-формат, тест маппинга PID↔slot, единая команда CI/локальной проверки web).
+- **Файлы:** `web/backend/app/services/gpu_*.py`, `slot_runtime.py`, `web/backend/tests/test_gpu_state.py`, `scripts/test_web.sh`, `web/README.md`, `VERSION`, `web/backend/*version*`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/verification/verification-plan.xml`, `docs/HISTORY.md`.
+- **Решение:** **PATCH** — поведение API без изменений.

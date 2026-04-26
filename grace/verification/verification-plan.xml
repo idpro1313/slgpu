@@ -215,6 +215,7 @@
         <check-2>cd web/backend &amp;&amp; pytest -q</check-2>
         <check-3>cd web/frontend &amp;&amp; npm run typecheck</check-3>
         <check-4>docker compose -f docker/docker-compose.web.yml config</check-4>
+        <check-5>из корня репо: `bash scripts/test_web.sh` (pytest web/backend + tsc web/frontend)</check-5>
       </module-checks>
       <scenarios>
         <scenario-1 kind="success">Whitelist в app.core.security принимает legitimate slug/HF id и отвергает строки с пробелами/`;`/`&amp;`.</scenario-1>
@@ -241,6 +242,7 @@
         <scenario-22 kind="success">`GET /api/v1/dashboard` включает объект `host` (ОС, CPU, RAM, диск по `slgpu_root`, блок `nvidia` с `smi_available`); Dashboard UI отображает секцию «Сервер».</scenario-22>
         <scenario-23 kind="success">`GET /api/v1/gpu/state` (при моке nvidia-smi) и `GET /api/v1/gpu/availability` (при моке списка GPU на хосте); `GET /dashboard` и `GET /runtime/snapshot` содержат `runtime.slots` (массив); `POST /api/v1/runtime/slots` при валидном пресете и `gpu_indices` — 202 `native.slot.up`; `POST /api/v1/presets/{id}/clone` — 201 и непустой `id` после flush.</scenario-23>
         <scenario-24 kind="failure">4.0.0 race: `POST /runtime/slots` с `gpu_indices`, пересекающимися с busy слотом или внешним `slot_key: external` в `GET /gpu/availability`, — HTTP 400/409; пересечение с другим `requested` в БД — отклонение.</scenario-24>
+        <scenario-25 kind="success">4.0.0: `stop_containers_for_slot_key_sync` / `native.slot.down` останавливают контейнеры по label `com.develonica.slgpu.slot={key}`; тест `test_4_0_concurrency` (mock) и unit `_enrich_processes_with_slot_keys` (mock docker top) закрепляют путь без опоры только на `engine` в БД.</scenario-25>
       </scenarios>
       <required-log-markers>
         <marker-1>[WEB][jobs][BLOCK_RUN_JOB]</marker-1>

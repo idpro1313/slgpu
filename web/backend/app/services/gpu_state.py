@@ -140,6 +140,11 @@ def _enrich_processes_with_slot_keys(
             continue
         pid = p.get("pid")
         p["slot_key"] = pid_to_slot.get(int(pid)) if isinstance(pid, int) else None
+    logger.info(
+        "[gpu_state][_enrich_processes_with_slot_keys][BLOCK_PIDS_MAP] n_slots=%s n_mapped=%s",
+        len(slot_key_engine),
+        len(pid_to_slot),
+    )
     return data
 
 
