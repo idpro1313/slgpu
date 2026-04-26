@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
 import type { JobAccepted, RuntimeSnapshot } from "@/api/types";
+import { BenchSummaryView } from "@/components/BenchSummaryView";
+import { Modal } from "@/components/Modal";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
 
@@ -16,7 +18,7 @@ type BenchRun = {
 export function BenchmarksPage() {
   const queryClient = useQueryClient();
   const appliedRuntimeKey = useRef<string | null>(null);
-  const [selected, setSelected] = useState<BenchRun | null>(null);
+  const [detailRun, setDetailRun] = useState<BenchRun | null>(null);
   const [scenarioEngine, setScenarioEngine] = useState("vllm");
   const [scenarioPreset, setScenarioPreset] = useState("");
   const [scenarioRounds, setScenarioRounds] = useState(1);
@@ -71,12 +73,12 @@ export function BenchmarksPage() {
   });
 
   const summary = useQuery({
-    queryKey: ["bench", "summary", selected?.engine, selected?.timestamp],
+    queryKey: ["bench", "summary", detailRun?.engine, detailRun?.timestamp],
     queryFn: () =>
       api.get<Record<string, unknown>>(
-        `/bench/runs/${selected!.engine}/${selected!.timestamp}/summary`,
+        `/bench/runs/${detailRun!.engine}/${detailRun!.timestamp}/summary`,
       ),
-    enabled: Boolean(selected),
+    enabled: Boolean(detailRun),
   });
 
   const scenarioMut = useMutation({
@@ -275,7 +277,10 @@ export function BenchmarksPage() {
         </form>
       </Section>
 
-      <Section title="Прогоны на диске" subtitle="Каталоги из `data/bench/results` (обновление каждые 8 с).">
+      <Section
+        title="Прогоны на диске"
+        subtitle="Каталоги из `data/bench/results` (обновление каждые 8 с). Нажмите строку — откроется отчёт."
+      >
         {runs.isLoading ? (
           <div className="empty-state">Загружаем…</div>
         ) : !runs.data?.length ? (
@@ -295,12 +300,20 @@ export function BenchmarksPage() {
                 {runs.data.map((r) => (
                   <tr
                     key={`${r.engine}-${r.timestamp}`}
-                    onClick={() => setSelected(r)}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setDetailRun(r)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setDetailRun(r);
+                      }
+                    }}
                     style={{
                       cursor: "pointer",
                       background:
-                        selected?.engine === r.engine && selected?.timestamp === r.timestamp
-                          ? "var(--color-surface-muted)"
+                        detailRun?.engine === r.engine && detailRun?.timestamp === r.timestamp
+                          ? "rgba(148, 203, 255, 0.22)"
                           : undefined,
                     }}
                   >
@@ -316,19 +329,25 @@ export function BenchmarksPage() {
         )}
       </Section>
 
-      <Section title="summary.json выбранного прогона" subtitle="Клик по строке в таблице выше.">
-        {!selected ? (
-          <div className="empty-state">Выберите прогон.</div>
-        ) : summary.isLoading ? (
-          <div className="empty-state">Загружаем…</div>
+      <Modal
+        title={detailRun ? `Результаты · ${detailRun.kind}` : "Результаты"}
+        subtitle={
+          detailRun ? `${detailRun.engine} · ${detailRun.timestamp} · ${detailRun.path}` : null
+        }
+        isOpen={Boolean(detailRun)}
+        onClose={() => setDetailRun(null)}
+        size="wide"
+      >
+        {!detailRun ? null : summary.isLoading ? (
+          <div className="empty-state">Загружаем summary…</div>
+        ) : summary.isError ? (
+          <div className="empty-state">Не удалось загрузить summary.json.</div>
         ) : summary.data ? (
-          <pre className="mono" style={{ overflow: "auto", maxHeight: "24rem", fontSize: "0.85rem" }}>
-            {JSON.stringify(summary.data, null, 2)}
-          </pre>
+          <BenchSummaryView data={summary.data} />
         ) : (
           <div className="empty-state">Нет данных.</div>
         )}
-      </Section>
+      </Modal>
 
       <Section title="report.md (пример в репозитории)" subtitle="Статический разбор; не генерируется автоматически.">
         {report.isLoading ? (

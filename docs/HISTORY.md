@@ -1525,3 +1525,10 @@
 - **Почему:** запрос пользователя — на сервере есть GPU, а в slgpu-web нет `nvidia-smi`; нужны параметры **сервера**, не изолированного контейнера web.
 - **Файлы:** `web/backend/app/services/host_info.py`, `web/backend/app/core/config.py`, `docker/docker-compose.web.yml`, `web/CONTRACT.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `VERSION`, `docs/HISTORY.md`.
 - **Решение:** PATCH 3.3.3.
+
+### 3.3.4: Бенчмарки — отчёт summary в модалке
+
+- **Что:** Клик по строке прогона открывает **`Modal` wide** с **`BenchSummaryView`**: для **load** — карточки RPS/tok/s/ошибки, сетка TTFT/latency, нагрузка, запросы; для **scenario** — таблица сценариев; иначе fallback JSON. У **`Modal`** опция **`size="wide"`**. Стили `.bench-summary__*`. Убрана нижняя секция с сырым JSON.
+- **Почему:** запрос пользователя — наглядное отображение результатов.
+- **Файлы:** `web/frontend/src/components/BenchSummaryView.tsx`, `web/frontend/src/components/Modal.tsx`, `web/frontend/src/pages/Benchmarks.tsx`, `web/frontend/src/styles/globals.css`, `grace/knowledge-graph/knowledge-graph.xml`, `VERSION`, `docs/HISTORY.md`.
+- **Решение:** PATCH 3.3.4.

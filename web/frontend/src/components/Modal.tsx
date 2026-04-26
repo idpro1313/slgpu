@@ -7,6 +7,8 @@ interface ModalProps {
   onClose: () => void;
   /** Дополнительные кнопки слева от «Закрыть» */
   actions?: ReactNode;
+  /** У широких форм (таблицы, дашборды) */
+  size?: "default" | "wide";
 }
 
 export function Modal({
@@ -15,6 +17,7 @@ export function Modal({
   isOpen,
   onClose,
   actions,
+  size = "default",
   children,
 }: PropsWithChildren<ModalProps>) {
   useEffect(() => {
@@ -42,7 +45,7 @@ export function Modal({
       }}
     >
       <div
-        className="modal"
+        className={size === "wide" ? "modal modal--wide" : "modal"}
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
