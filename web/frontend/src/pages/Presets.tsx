@@ -627,18 +627,18 @@ function ParameterRows({
               <input
                 className="input mono"
                 list="preset-parameter-keys"
-                placeholder="MAX_MODEL_LEN"
                 value={row.key}
                 onChange={(event) => updateRow(row.id, { key: event.target.value })}
+                autoComplete="off"
               />
             </div>
             <div>
               <label className="label">Значение</label>
               <input
                 className="input mono"
-                placeholder="262144"
                 value={row.value}
                 onChange={(event) => updateRow(row.id, { value: event.target.value })}
+                autoComplete="off"
               />
             </div>
             <div>
