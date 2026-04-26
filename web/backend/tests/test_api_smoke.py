@@ -159,3 +159,23 @@ async def test_runtime_logs_returns_empty_without_docker(client: httpx.AsyncClie
     assert body["tail"] == 50
     assert body["logs"] == ""
     assert body["container_name"] is None
+
+
+@pytest.mark.asyncio
+async def test_public_access_settings_drive_external_ui_links(client: httpx.AsyncClient) -> None:
+    async with client:
+        updated = await client.patch(
+            "/api/v1/settings/public-access",
+            json={"server_host": "llm.example.local"},
+        )
+        services = await client.get("/api/v1/monitoring/services")
+        litellm = await client.get("/api/v1/litellm/info")
+
+    assert updated.status_code == 200
+    assert updated.json()["effective_server_host"] == "llm.example.local"
+    assert services.status_code == 200
+    by_key = {item["key"]: item for item in services.json()}
+    assert by_key["grafana"]["url"] == "http://llm.example.local:3000"
+    assert by_key["litellm"]["url"] == "http://llm.example.local:4000/ui"
+    assert litellm.status_code == 200
+    assert litellm.json()["ui_url"] == "http://llm.example.local:4000/ui"

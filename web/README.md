@@ -12,6 +12,8 @@ Web control plane поверх существующего CLI [`./slgpu`](../slg
   запуска/рестарта/остановки, пока кнопки заблокированы.
 - Управление и наблюдение мониторинг-стека (`./slgpu monitoring …`).
 - Состояние и базовые маршруты LiteLLM Proxy.
+- Настройки публичного адреса сервера для корректных ссылок на Grafana,
+  Prometheus, Langfuse и LiteLLM Admin UI из браузера пользователя.
 - Журнал всех CLI-операций с stdout/stderr tail.
 
 Контракт и границы ответственности зафиксированы в
@@ -70,7 +72,7 @@ web/
         ├── app/App.tsx
         ├── api/           # типизированный fetch-клиент
         ├── components/
-        ├── pages/         # Dashboard, Models, Presets, Runtime, Monitoring, LiteLLM, Jobs
+        ├── pages/         # Dashboard, Models, Presets, Runtime, Monitoring, LiteLLM, Jobs, Settings
         └── styles/globals.css
 ```
 
@@ -119,7 +121,7 @@ daemon не нашёл бы файлы по `/slgpu/...` и создал бы п
 
 По умолчанию **слушает на всех интерфейсах** (`WEB_BIND=0.0.0.0` в `../main.env`): `http://127.0.0.1:8089/` с того же хоста или `http://<IP>:8089/` из сети. Только localhost: `WEB_BIND=127.0.0.1`.
 
-Страница **Мониторинг** опрашивает Prometheus/Grafana/Langfuse/LiteLLM по HTTP: с хоста это `127.0.0.1`, **из контейнера slgpu-web** — **`host.docker.internal`** (задано в `docker/docker-compose.web.yml` как `WEB_MONITORING_HTTP_HOST`), иначе пробы попадали бы в сам контейнер web, а не в стек на хосте.
+Страница **Мониторинг** опрашивает Prometheus/Grafana/Langfuse/LiteLLM по HTTP: с хоста это `127.0.0.1`, **из контейнера slgpu-web** — **`host.docker.internal`** (задано в `docker/docker-compose.web.yml` как `WEB_MONITORING_HTTP_HOST`), иначе пробы попадали бы в сам контейнер web, а не в стек на хосте. Это внутренний адрес только для health-probe. Ссылки, которые открывает браузер, строятся по публичному host из страницы **Настройки** (`/settings`); если он не задан, используется hostname текущего запроса к Develonica.LLM.
 
 ## API
 
@@ -143,6 +145,7 @@ daemon не нашёл бы файлы по `/slgpu/...` и создал бы п
 | POST | `/api/v1/monitoring/action` | `slgpu monitoring up\|down\|restart\|fix-perms` |
 | GET | `/api/v1/litellm/health\|info\|models` | LiteLLM proxy |
 | GET | `/api/v1/jobs` | журнал задач |
+| GET/PATCH | `/api/v1/settings/public-access` | публичный host сервера и итоговые UI-ссылки |
 
 ## Безопасность
 

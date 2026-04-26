@@ -158,3 +158,13 @@ export interface LiteLLMHealth {
   readiness: boolean;
   ui: boolean;
 }
+
+export interface PublicAccessSettings {
+  server_host: string | null;
+  effective_server_host: string;
+  grafana_url: string;
+  prometheus_url: string;
+  langfuse_url: string;
+  litellm_ui_url: string;
+  litellm_api_url: string;
+}

@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Request
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import db_session
 from app.core.config import get_settings
+from app.services import app_settings
 from app.services import litellm as litellm_service
 
 router = APIRouter()
@@ -23,11 +26,15 @@ async def list_models() -> list[dict[str, Any]]:
 
 
 @router.get("/info")
-async def info() -> dict[str, Any]:
+async def info(
+    request: Request,
+    session: AsyncSession = Depends(db_session),
+) -> dict[str, Any]:
     settings = get_settings()
+    urls = await app_settings.get_public_urls(session, request)
     return {
-        "ui_url": f"http://127.0.0.1:{settings.litellm_port}/ui",
-        "api_url": f"http://127.0.0.1:{settings.litellm_port}/v1",
+        "ui_url": urls["litellm"],
+        "api_url": urls["litellm_api"],
         "port": settings.litellm_port,
         "note": "Routes and pricing are configured in LiteLLM Admin UI / DB.",
     }

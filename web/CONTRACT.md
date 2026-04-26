@@ -26,6 +26,12 @@ Web-приложение **Develonica.LLM** (`slgpu-web`) — control plane по
 [`develonica.ru`](https://develonica.ru/): тёмная технологичная навигация,
 синие AI-акценты, крупные светлые enterprise-блоки и favicon в LLM-тематике.
 
+Отдельная страница **Настройки** хранит публичный IP/DNS сервера в SQLite
+(`settings.public_access.server_host`). Этот host используется только для
+ссылок, открываемых браузером пользователя: Grafana, Prometheus, Langfuse и
+LiteLLM Admin UI. Внутренние health-probe из web-контейнера продолжают
+использовать `WEB_MONITORING_HTTP_HOST` (`host.docker.internal` в compose).
+
 ## 2. Границы ответственности
 
 ### Источники правды (НЕ дублируем в БД приложения)
@@ -50,7 +56,7 @@ Web-приложение **Develonica.LLM** (`slgpu-web`) — control plane по
 | `services` | Состояние сервисов мониторинга и LiteLLM по последнему опросу. |
 | `jobs` | Долгие операции CLI: команда, статус, exit code, stdout/stderr tail, correlation id, инициатор. |
 | `audit_events` | Действия пользователей в UI (mutations). |
-| `settings` | Пути проекта, фичефлаги, видимые URL для UI. |
+| `settings` | Пользовательские настройки UI, включая публичный host сервера для ссылок на monitoring/LiteLLM. |
 
 ## 3. Операции
 

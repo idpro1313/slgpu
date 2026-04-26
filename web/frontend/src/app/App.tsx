@@ -8,6 +8,7 @@ import { ModelsPage } from "@/pages/Models";
 import { MonitoringPage } from "@/pages/Monitoring";
 import { PresetsPage } from "@/pages/Presets";
 import { RuntimePage } from "@/pages/Runtime";
+import { SettingsPage } from "@/pages/Settings";
 
 export function App() {
   return (
@@ -21,6 +22,7 @@ export function App() {
         <Route path="/monitoring" element={<MonitoringPage />} />
         <Route path="/litellm" element={<LiteLLMPage />} />
         <Route path="/jobs" element={<JobsPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate replace to="/dashboard" />} />
       </Routes>
     </Layout>

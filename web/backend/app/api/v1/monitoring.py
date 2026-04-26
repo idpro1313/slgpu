@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import actor_from_header
+from app.api.deps import actor_from_header, db_session
 from app.core.config import get_settings
 from app.schemas.common import JobAccepted
 from app.schemas.monitoring import ServiceOut, StackActionRequest
 from app.services import jobs as jobs_service
+from app.services import app_settings
 from app.services.monitoring import probe_all
 from app.services.slgpu_cli import cmd_monitoring
 
@@ -18,8 +20,12 @@ _ALLOWED_ACTIONS = {"up", "down", "restart", "fix-perms"}
 
 
 @router.get("/services", response_model=list[ServiceOut])
-async def services() -> list[ServiceOut]:
+async def services(
+    request: Request,
+    session: AsyncSession = Depends(db_session),
+) -> list[ServiceOut]:
     probes = await probe_all()
+    urls = await app_settings.get_public_urls(session, request)
     return [
         ServiceOut(
             key=probe.probe.key,
@@ -27,7 +33,7 @@ async def services() -> list[ServiceOut]:
             category=probe.probe.category,
             status=probe.status,
             container_id=probe.container.id if probe.container else None,
-            url=probe.probe.web_url,
+            url=urls.get(probe.probe.key) if probe.probe.web_url else None,
             detail=probe.detail,
             extra={
                 "container_status": probe.container.status if probe.container else None,

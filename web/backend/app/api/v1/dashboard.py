@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +15,7 @@ from app.models.model import HFModel, ModelDownloadStatus
 from app.models.preset import Preset
 from app.services.docker_client import get_docker_inspector
 from app.services.hf_models import sync_local_models
+from app.services import app_settings
 from app.services.monitoring import probe_all
 from app.services.runtime import attach_run_metadata, snapshot as runtime_snapshot
 
@@ -23,7 +24,10 @@ router = APIRouter()
 
 
 @router.get("")
-async def dashboard(session: AsyncSession = Depends(db_session)) -> dict[str, Any]:
+async def dashboard(
+    request: Request,
+    session: AsyncSession = Depends(db_session),
+) -> dict[str, Any]:
     await sync_local_models(session)
     await session.flush()
     models_total = (await session.execute(select(func.count(HFModel.id)))).scalar_one()
@@ -44,6 +48,7 @@ async def dashboard(session: AsyncSession = Depends(db_session)) -> dict[str, An
     runtime = await runtime_snapshot()
     await attach_run_metadata(session, runtime)
     services = await probe_all()
+    public_urls = await app_settings.get_public_urls(session, request)
     healthy = sum(1 for s in services if s.status.value == "healthy")
     total = len(services)
     logger.info(
@@ -85,7 +90,7 @@ async def dashboard(session: AsyncSession = Depends(db_session)) -> dict[str, An
                 "category": probe.probe.category,
                 "status": probe.status,
                 "detail": probe.detail,
-                "url": probe.probe.web_url,
+                "url": public_urls.get(probe.probe.key) if probe.probe.web_url else None,
                 "container_status": probe.container.status if probe.container else None,
             }
             for probe in services

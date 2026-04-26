@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { to: "/monitoring", label: "Мониторинг" },
   { to: "/litellm", label: "LiteLLM" },
   { to: "/jobs", label: "Задачи" },
+  { to: "/settings", label: "Настройки" },
 ];
 
 export function Layout({ children }: PropsWithChildren) {
