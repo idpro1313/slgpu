@@ -1,5 +1,5 @@
 <KnowledgeGraph>
-  <Project NAME="slgpu" VERSION="3.3.1">
+  <Project NAME="slgpu" VERSION="3.3.2">
     <keywords>slgpu, vllm, sglang, llm-inference, benchmark, docker-compose, gpu, prometheus, grafana, sglang-dashboard-slgpu, sglangdash2-slgpu</keywords>
     <annotation>Стенд для сравнения движков LLM-инференса vLLM и SGLang на Linux-сервере с NVIDIA GPU.</annotation>
 
@@ -186,7 +186,7 @@
         <fn-services_litellm PURPOSE="LiteLLM HTTP: порт из слитого стека; public URLs из app_settings + ports_for_probes_sync" />
         <fn-services_app_settings PURPOSE="Persistent UI settings в SQLite: /api/v1/settings/public-access хранит публичный server_host для Grafana/Prometheus/Langfuse/LiteLLM ссылок" />
         <fn-core_logging PURPOSE="JSON stdout logging: one LogRecord → one line; root/app/httpx/uvicorn handlers заменяются идемпотентно без propagation-дублей" />
-        <fn-frontend_app PURPOSE="React SPA: Dashboard (блок Сервер: CPU/RAM/диск/GPU), Models (прогресс pull в строке таблицы), Presets, Runtime, Monitoring, LiteLLM, Jobs (модалка), Benchmarks, Settings; бренд develonica.ru/guideline" />
+        <fn-frontend_app PURPOSE="React SPA: Dashboard (блок Сервер: CPU/RAM/диск/GPU), Models (прогресс pull в строке таблицы), Presets, Runtime, Monitoring, LiteLLM, Jobs (модалка), Benchmarks (поля engine/preset из /runtime/snapshot), Settings; бренд develonica.ru/guideline" />
         <export-web-image PURPOSE="slgpu-web:dev, подъём: ./slgpu web up; тома: repo root по тому же абсолютному хост-пути (SLGPU_HOST_REPO=$(pwd) в scripts/cmd_web.sh), ./data/web, ./data/models, docker.sock; entrypoint chown'ит /data и ${WEB_SLGPU_ROOT}/data/{models,presets} под uid 10001; working_dir из compose НЕ задаётся (uvicorn стартует из WORKDIR /srv/app в Dockerfile.web); huggingface_hub[cli] + hf_transfer установлены для slgpu pull, HF_HOME=/data/huggingface и /home/slgpuweb writable; критично для команд из web → docker compose monitoring/llm с корректными bind-маунтами" />
         <export-contract PURPOSE="web/CONTRACT.md — границы CLI/Docker API/SQLite" />
       </annotations>

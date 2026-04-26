@@ -81,7 +81,7 @@ Footer приложения показывает версию из `/healthz`; b
 
 `CliCommand.argv` для этих операций **пустой**; параметры в `Job.args`. Унаследованный путь с subprocess `./slgpu` не используется для стека.
 
-API: `GET /api/v1/dashboard` — метрики БД, runtime, пробы сервисов и объект **`host`** (ОС/ядро/архитектура, hostname, CPU, RAM, диск по `WEB_SLGPU_ROOT`, NVIDIA+CUDA через `nvidia-smi`, если бинарь доступен в контейнере web). `GET/PATCH /app-config/stack`, `POST /app-config/install`, `GET /app-config/status`; бенчмарк: `GET /bench/runs`, `GET /bench/report.md`, `POST /bench/scenario`, `POST /bench/load`.
+API: `GET /api/v1/dashboard` — метрики БД, runtime, пробы сервисов и объект **`host`** (ОС/ядро/архитектура, hostname, CPU, RAM, диск по `WEB_SLGPU_ROOT`, NVIDIA+CUDA через `nvidia-smi`, если бинарь доступен в контейнере web). `GET/PATCH /app-config/stack`, `POST /app-config/install`, `GET /app-config/status`; бенчмарк: `GET /bench/runs`, `GET /bench/report.md`, `POST /bench/scenario`, `POST /bench/load`; страница бенчмарков в UI подставляет **движок** и **slug пресета** из `GET /runtime/snapshot`, когда в snapshot есть активный запуск с известным пресетом.
 
 Зависимости образа web: `docker` (socket), `huggingface_hub` (pull), `docker compose` на хосте репо — для LLM/monitoring up (см. `app/services/compose_exec.py`).
 

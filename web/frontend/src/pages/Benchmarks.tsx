@@ -1,8 +1,8 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
-import type { JobAccepted } from "@/api/types";
+import type { JobAccepted, RuntimeSnapshot } from "@/api/types";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
 
@@ -15,6 +15,7 @@ type BenchRun = {
 
 export function BenchmarksPage() {
   const queryClient = useQueryClient();
+  const appliedRuntimeKey = useRef<string | null>(null);
   const [selected, setSelected] = useState<BenchRun | null>(null);
   const [scenarioEngine, setScenarioEngine] = useState("vllm");
   const [scenarioPreset, setScenarioPreset] = useState("");
@@ -26,6 +27,37 @@ export function BenchmarksPage() {
   const [loadDuration, setLoadDuration] = useState(900);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const runtime = useQuery({
+    queryKey: ["runtime-snapshot"],
+    queryFn: () => api.get<RuntimeSnapshot>("/runtime/snapshot"),
+    refetchInterval: 8_000,
+  });
+
+  useEffect(() => {
+    const s = runtime.data;
+    if (!s) {
+      return;
+    }
+    if (!s.engine) {
+      appliedRuntimeKey.current = null;
+      return;
+    }
+    if (!s.preset_name?.trim()) {
+      return;
+    }
+    const eng = s.engine;
+    const preset = s.preset_name.trim();
+    const key = `${eng}\0${preset}`;
+    if (appliedRuntimeKey.current === key) {
+      return;
+    }
+    appliedRuntimeKey.current = key;
+    setScenarioEngine(eng);
+    setLoadEngine(eng);
+    setScenarioPreset(preset);
+    setLoadPreset(preset);
+  }, [runtime.data]);
 
   const runs = useQuery({
     queryKey: ["bench", "runs"],
@@ -98,7 +130,9 @@ export function BenchmarksPage() {
   function onScenario(event: FormEvent) {
     event.preventDefault();
     if (!scenarioPreset.trim()) {
-      setError("Укажите пресет (slug).");
+      setError(
+        "Укажите пресет (slug) или поднимите Inference с пресетом — поля подставятся из runtime.",
+      );
       return;
     }
     scenarioMut.mutate();
@@ -107,7 +141,9 @@ export function BenchmarksPage() {
   function onLoad(event: FormEvent) {
     event.preventDefault();
     if (!loadPreset.trim()) {
-      setError("Укажите пресет (slug).");
+      setError(
+        "Укажите пресет (slug) или поднимите Inference с пресетом — поля подставятся из runtime.",
+      );
       return;
     }
     loadMut.mutate();
@@ -117,8 +153,21 @@ export function BenchmarksPage() {
     <>
       <PageHeader
         title="Бенчмарки"
-        subtitle="Прогоны scenario (`bench_openai.py`) и load (`bench_load.py`) через API; артефакты в `data/bench/results/` на хосте. Движок должен быть запущен."
+        subtitle="Прогоны scenario (`bench_openai.py`) и load (`bench_load.py`) через API; артефакты в `data/bench/results/` на хосте. Движок и пресет подставляются из текущего запуска Inference (`/runtime/snapshot`), если известны."
       />
+
+      {runtime.data?.engine && runtime.data.preset_name?.trim() ? (
+        <p className="muted" style={{ marginTop: 0 }}>
+          Текущий runtime: <span className="mono">{runtime.data.engine}</span>, пресет{" "}
+          <span className="mono">{runtime.data.preset_name.trim()}</span>
+          {runtime.isFetching ? " (обновление…)" : ""}.
+        </p>
+      ) : runtime.isSuccess ? (
+        <p className="muted" style={{ marginTop: 0 }}>
+          Нет пары «движок + пресет» в snapshot (запустите Inference и выберите пресет, либо введите slug
+          вручную).
+        </p>
+      ) : null}
 
       {message ? <p style={{ color: "var(--color-success)" }}>{message}</p> : null}
       {error ? <p style={{ color: "var(--color-danger)" }}>{error}</p> : null}

@@ -1511,3 +1511,10 @@
 - **Почему:** запрос пользователя — подгрузка эталонов из папки `examples`.
 - **Файлы:** `web/backend/app/services/presets.py`, `app/schemas/presets.py`, `app/api/v1/presets.py`, `web/frontend/src/api/types.ts`, `web/frontend/src/pages/Presets.tsx`, `web/backend/tests/test_api_smoke.py`, `web/CONTRACT.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `VERSION`, `docs/HISTORY.md`.
 - **Решение:** PATCH 3.3.1.
+
+### 3.3.2: Бенчмарки — движок и пресет из runtime
+
+- **Что:** Страница **Benchmarks** опрашивает **`GET /runtime/snapshot`**; при наличии **`engine`** и **`preset_name`** подставляет их в формы scenario и load (обновление при смене пары; сброс ключа при остановке движка). Подсказка под заголовком и уточнён текст ошибки валидации.
+- **Почему:** запрос пользователя — бенч после уже загруженной модели, без ручного ввода slug.
+- **Файлы:** `web/frontend/src/pages/Benchmarks.tsx`, `web/CONTRACT.md`, `grace/knowledge-graph/knowledge-graph.xml`, `VERSION`, `docs/HISTORY.md`.
+- **Решение:** PATCH 3.3.2.
