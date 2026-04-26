@@ -602,6 +602,16 @@ button.btn--icon,
   height: 40px;
   padding: 0;
   line-height: 0;
+  /* .btn оставляет justify-content: flex-start — одна иконка уезжала влево */
+  justify-content: center;
+  align-items: center;
+  gap: 0;
+}
+
+/* inline-SVG в кнопке иначе даёт сдвиг по baseline */
+.btn--icon svg {
+  display: block;
+  flex-shrink: 0;
 }
 
 .code-block {
