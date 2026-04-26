@@ -1571,3 +1571,12 @@
 - **Почему:** план «Чистка 3.4.x → 4.0.0 (radical)» — единая модель мультислота без дублирующих путей и глобальных runtime-логов.
 - **Файлы:** `VERSION`, `web/backend/app/**` (в т.ч. `__init__.py`/`pyproject.toml` v4.0.0), `web/frontend/package.json` (версия), `web/frontend/src/**`, `web/backend/tests/**` (`test_gpu_availability` — REQUESTED-бронь), `web/README.md`, `web/CONTRACT.md`, `docs/AGENTS.md`, `docs/HISTORY.md`, `grace/**/*.xml`.
 - **Решение:** **MAJOR** — ломающие изменения публичного Web API и схемы БД.
+
+### 4.0.1: Web — права на `data/bench` для бенчмарка из UI
+
+- **Что:** В **`web/docker-entrypoint.sh`** при старте от root создаётся
+  `${WEB_SLGPU_ROOT}/data/bench/results` и **`chown -R` на `.../data/bench`**, как для models/presets. Иначе job **`native.bench.***` (uid 10001) ловит **`[Errno 13] Permission denied`** при `mkdir` под
+  `data/bench/results/<engine>/<ts>`, если каталог на хосте остался root-only. Обновлены **`web/README.md`**, **VERSION 4.0.1** и мелкие поля версии (backend/frontend).
+- **Почему:** сбой бенчмарка из Develonica.LLM на пути вроде `/opt/slgpu/data/bench/results/vllm/...`.
+- **Файлы:** `web/docker-entrypoint.sh`, `web/README.md`, `VERSION`, `web/backend/app/__init__.py`, `web/backend/pyproject.toml`, `web/frontend/package.json`, `docs/HISTORY.md`.
+- **Решение:** **PATCH** — на сервере после `git pull` пересобрать/перезапустить **slgpu-web** (`./slgpu web up --build` или `docker compose ... up --build -d`).
