@@ -95,7 +95,10 @@ def render_env_text(values: dict[str, str], header: str | None = None) -> str:
 
     groups: list[tuple[str, list[str]]] = [
         ("Identity", ["VLLM_DOCKER_IMAGE", "MODEL_ID", "MODEL_REVISION", "SLGPU_SERVED_MODEL_NAME"]),
-        ("Runtime", ["MAX_MODEL_LEN", "TP", "KV_CACHE_DTYPE", "GPU_MEM_UTIL"]),
+        (
+            "Runtime",
+            ["SLGPU_ENGINE", "MAX_MODEL_LEN", "TP", "KV_CACHE_DTYPE", "GPU_MEM_UTIL"],
+        ),
         (
             "vLLM",
             [

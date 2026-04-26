@@ -402,6 +402,12 @@ export function PresetsPage() {
                   <option value="vllm">vLLM</option>
                   <option value="sglang">SGLang</option>
                 </select>
+                <p className="section__subtitle" style={{ marginTop: 6, marginBottom: 0, fontSize: 13 }}>
+                  Сохраняется в БД; при экспорте в <span className="mono">.env</span> пишется{" "}
+                  <span className="mono">SLGPU_ENGINE</span>. Какой контейнер реально поднимется, задаётся
+                  командой <span className="mono">./slgpu up vllm|sglang -m …</span> или выбором движка на
+                  странице Inference, а не только этой строкой.
+                </p>
               </div>
               <div>
                 <label className="label">TP</label>

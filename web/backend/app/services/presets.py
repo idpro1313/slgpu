@@ -62,6 +62,11 @@ def presets_dir() -> Path:
 
 
 def _engine_from_values(values: dict[str, str]) -> str:
+    """Infer vllm|sglang from .env. Prefer explicit SLGPU_ENGINE; else heuristic."""
+
+    raw = (values.get("SLGPU_ENGINE") or "").strip().lower()
+    if raw in ("vllm", "sglang"):
+        return raw
     if "SGLANG_MEM_FRACTION_STATIC" in values:
         return "sglang"
     return "vllm"
@@ -141,6 +146,7 @@ async def export_preset_to_file(session: AsyncSession, preset: Preset) -> Path:
     validate_slug(preset.name)
     values: dict[str, str] = {}
     values["MODEL_ID"] = preset.hf_id
+    values["SLGPU_ENGINE"] = preset.engine if preset.engine in ("vllm", "sglang") else "vllm"
     if preset.served_model_name:
         values["SLGPU_SERVED_MODEL_NAME"] = preset.served_model_name
     if preset.tp is not None:
