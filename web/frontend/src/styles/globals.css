@@ -573,9 +573,10 @@ pre {
   table-layout: auto;
 }
 
+/* Последняя колонка — иконки: заголовок и кнопки по центру, иначе «Действия» визуально уезжает */
 .table--registry th:last-child,
 .table--registry td:last-child {
-  text-align: right;
+  text-align: center;
   white-space: nowrap;
   width: 1%;
   vertical-align: middle;
@@ -585,7 +586,7 @@ pre {
   display: inline-flex;
   gap: 8px;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: center;
   flex-wrap: wrap;
 }
 
