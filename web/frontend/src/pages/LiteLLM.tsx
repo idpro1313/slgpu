@@ -1,7 +1,7 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
-import type { JobAccepted, LiteLLMHealth } from "@/api/types";
+import type { LiteLLMHealth } from "@/api/types";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -14,7 +14,6 @@ interface LiteLLMInfo {
 }
 
 export function LiteLLMPage() {
-  const queryClient = useQueryClient();
   const health = useQuery({
     queryKey: ["litellm", "health"],
     queryFn: () => api.get<LiteLLMHealth>("/litellm/health"),
@@ -30,34 +29,15 @@ export function LiteLLMPage() {
     refetchInterval: 15_000,
   });
 
-  const action = useMutation({
-    mutationFn: (act: string) =>
-      api.post<JobAccepted>("/monitoring/action", { action: act }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["jobs"] });
-      void queryClient.invalidateQueries({ queryKey: ["activity"] });
-    },
-  });
-
   return (
     <>
       <PageHeader
         title="LiteLLM Proxy"
-        subtitle="Single OpenAI-compatible API в проект slgpu. Маршрутами и ключами управляет Admin UI самого LiteLLM."
+        subtitle="Single OpenAI-compatible API в проект slgpu. Маршрутами и ключами управляет Admin UI самого LiteLLM. Подъём стека мониторинга — со страницы «Мониторинг» или CLI."
         actions={
-          <>
-            <a className="btn" href={info.data?.ui_url} target="_blank" rel="noreferrer">
-              Открыть Admin UI
-            </a>
-            <button
-              type="button"
-              className="btn btn--primary"
-              onClick={() => action.mutate("up")}
-              disabled={action.isPending}
-            >
-              monitoring up (поднимет LiteLLM)
-            </button>
-          </>
+          <a className="btn" href={info.data?.ui_url} target="_blank" rel="noreferrer">
+            Открыть Admin UI
+          </a>
         }
       />
 
