@@ -38,6 +38,8 @@ Web control plane поверх существующего CLI [`./slgpu`](../slg
   статику.
 - **БД**: SQLite, путь приходит из переменной `WEB_DATABASE_URL`,
   по умолчанию `/data/slgpu-web.db`. Папка `/data` всегда bind-mount.
+- **Версия UI**: footer читает `/healthz`, backend берёт номер из корневого
+  [`VERSION`](../VERSION), единственного источника версии проекта.
 - **Веса моделей**: `MODELS_DIR` с хоста (см. `../main.env`, по умолчанию **`../data/models`**)
   → `${SLGPU_HOST_REPO}/data/models` в контейнере (тот же абсолютный путь, что разрешает CLI на хосте), `rw`
   (скан, `./slgpu pull` из job runner). Страница **Модели** синхронизируется с реальными каталогами

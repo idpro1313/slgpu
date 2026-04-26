@@ -29,14 +29,15 @@ logger = logging.getLogger(__name__)
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    app_version = _runtime_version(settings.slgpu_root)
     configure_logging(settings.log_level)
     logger.info(
         "[main][create_app] log_level=%s app_version=%s",
         settings.log_level,
-        __version__,
+        app_version,
     )
 
-    app = FastAPI(title=settings.app_name, version=__version__)
+    app = FastAPI(title=settings.app_name, version=app_version)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -50,7 +51,7 @@ def create_app() -> FastAPI:
     async def healthz() -> HealthResponse:
         return HealthResponse(
             status="ok",
-            version=__version__,
+            version=app_version,
             slgpu_root=str(settings.slgpu_root),
             database_url_masked=_mask_db_url(settings.database_url),
         )
@@ -71,6 +72,15 @@ def create_app() -> FastAPI:
 
 def _mask_db_url(url: str) -> str:
     return re.sub(r"://[^@]+@", "://***@", url)
+
+
+def _runtime_version(slgpu_root) -> str:
+    version_file = slgpu_root / "VERSION"
+    try:
+        value = version_file.read_text(encoding="utf-8").strip()
+    except OSError:
+        return __version__
+    return value or __version__
 
 
 def _mount_spa(app: FastAPI, static_dir) -> None:

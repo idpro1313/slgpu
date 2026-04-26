@@ -168,3 +168,10 @@ export interface PublicAccessSettings {
   litellm_ui_url: string;
   litellm_api_url: string;
 }
+
+export interface Healthz {
+  status: string;
+  version: string;
+  slgpu_root: string;
+  database_url_masked: string;
+}

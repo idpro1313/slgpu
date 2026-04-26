@@ -1,5 +1,8 @@
 import type { PropsWithChildren } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { NavLink } from "react-router-dom";
+
+import type { Healthz } from "@/api/types";
 
 const NAV_ITEMS = [
   { to: "/dashboard", label: "Dashboard" },
@@ -13,6 +16,18 @@ const NAV_ITEMS = [
 ];
 
 export function Layout({ children }: PropsWithChildren) {
+  const health = useQuery({
+    queryKey: ["healthz"],
+    queryFn: async () => {
+      const response = await fetch("/healthz");
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      return (await response.json()) as Healthz;
+    },
+    staleTime: 60_000,
+  });
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -38,6 +53,10 @@ export function Layout({ children }: PropsWithChildren) {
         </nav>
       </header>
       <main className="app-main">{children}</main>
+      <footer className="app-footer">
+        <span>Develonica.LLM v{health.data?.version ?? "..."}</span>
+        <span>© {new Date().getFullYear()} Igor Yatsishen, Develonica</span>
+      </footer>
     </div>
   );
 }
