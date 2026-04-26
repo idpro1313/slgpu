@@ -29,6 +29,23 @@ from app.services.slgpu_cli import CliCommand
 logger = logging.getLogger(__name__)
 
 
+def _exec_argv_for_cli(command: CliCommand, cwd: Path) -> list[str]:
+    """Run the repo `slgpu` entrypoint with bash.
+
+    `asyncio.create_subprocess_exec` uses execve(2) on argv[0]. If the bind mount
+    dropped the executable bit (common for repos edited on Windows / synced via
+    OneDrive), ``./slgpu`` fails with EACCES even though ``bash slgpu`` works.
+    All allowlisted CLI commands use ``{cwd}/slgpu`` as argv[0].
+    """
+
+    if not command.argv:
+        return list(command.argv)
+    entry = str(cwd / "slgpu")
+    if command.argv[0] == entry:
+        return ["/bin/bash", entry, *command.argv[1:]]
+    return list(command.argv)
+
+
 _active_locks: dict[tuple[str, str], int] = {}
 _lock_guard = asyncio.Lock()
 
@@ -116,9 +133,13 @@ async def _run_job(job_id: int, command: CliCommand) -> None:
         job.started_at = datetime.now(timezone.utc)
 
     exit_code = -1
+    argv = _exec_argv_for_cli(command, cwd)
+    slgpu_entry = str(cwd / "slgpu")
+    if len(argv) >= 2 and argv[0] == "/bin/bash" and argv[1] == slgpu_entry:
+        logger.info("[jobs] slgpu via bash (cwd=%s): %s", cwd, join_for_display(argv))
     try:
         process = await asyncio.create_subprocess_exec(
-            *command.argv,
+            *argv,
             cwd=str(cwd),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,

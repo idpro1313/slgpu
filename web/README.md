@@ -171,7 +171,9 @@ daemon не нашёл бы файлы по `/slgpu/...` и создал бы п
 - Любой аргумент, идущий в shell, проходит через
   [`app.core.security`](backend/app/core/security.py) с whitelist-регулярками.
 - Команды формируются ТОЛЬКО в [`app.services.slgpu_cli`](backend/app/services/slgpu_cli.py)
-  и исполняются через `asyncio.create_subprocess_exec(*argv)`, без shell.
+  и исполняются через `asyncio.create_subprocess_exec` **без** оболочки для разбора строки;
+  сам репозиторный `slgpu` вызывается как `/bin/bash /…/slgpu …`, чтобы на bind mount не
+  зависеть от бита исполняемости файла `slgpu`.
 - На каждый mutating job ставится in-memory advisory lock на
   `(scope, resource)` — runtime-команды лочатся на `("engine", "runtime")`,
   monitoring-команды на `("monitoring", "stack")`; повторный конфликтующий клик
