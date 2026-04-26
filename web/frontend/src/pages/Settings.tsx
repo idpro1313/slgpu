@@ -225,7 +225,7 @@ export function SettingsPage() {
     <>
       <PageHeader
         title="Настройки"
-        subtitle="Публичный адрес сервера, импорт стека из main.env и правка плоских ключей в SQLite (таблица stack_params: одна строка на параметр). Секреты в API маскируются; для смены введите новое значение в строке (не вставляйте ***)."
+        subtitle="Блоки ниже сгруппированы: как открывать сервисы из браузера, откуда берётся стек (файлы и БД), разовое обслуживание каталогов мониторинга."
       />
 
       {(cfgMessage || cfgError) && (
@@ -234,230 +234,257 @@ export function SettingsPage() {
         </p>
       )}
 
-      <Section
-        title="Установка стека из файлов"
-        subtitle="Читает `main.env` в корне репозитория и опционально `configs/secrets/hf.env`, `configs/secrets/langfuse-litellm.env`. Повтор без force вернёт 409."
-      >
-        <div className="flex flex--col flex--gap-sm">
-          <p className="section__subtitle" style={{ margin: 0 }}>
-            Статус:{" "}
-            {appStatus.isLoading
-              ? "…"
-              : appStatus.data?.installed
-                ? "установлено"
-                : "не импортировано"}
-            {appStatus.data?.meta && typeof appStatus.data.meta.installed_at === "string"
-              ? ` · ${appStatus.data.meta.installed_at}`
-              : null}
-          </p>
-          <label className="flex flex--gap-sm" style={{ alignItems: "center" }}>
-            <input
-              type="checkbox"
-              checked={installForce}
-              onChange={(e) => setInstallForce(e.target.checked)}
-            />
-            <span>Принудительно перезаписать (force)</span>
-          </label>
-          <button
-            type="button"
-            className="btn btn--primary"
-            disabled={installCfg.isPending}
-            onClick={() => installCfg.mutate(installForce)}
-          >
-            {installCfg.isPending ? "Импорт…" : "Импортировать из main.env"}
-          </button>
-        </div>
-      </Section>
+      <div className="settings-group">
+        <h2 className="settings-group__heading">Внешний доступ и ссылки</h2>
+        <p className="settings-group__lead">
+          Адрес, который подставляется в URL Grafana, Prometheus, Langfuse и LiteLLM для пользователей.
+          Внутренние проверки из контейнера по-прежнему используют{" "}
+          <span className="mono">WEB_MONITORING_HTTP_HOST</span> и порты из стека.
+        </p>
 
-      <Section
-        title="Стек и секреты (БД)"
-        subtitle="Каждый параметр — отдельная строка в таблице `stack_params`. Галочка «секрет» — значение не отдаётся в API; оставьте поле пустым, если не меняете. Удаление строки удаляет ключ из БД."
-      >
-        {appStack.isLoading ? (
-          <div className="empty-state">Загружаем…</div>
-        ) : (
-          <form className="flex flex--col flex--gap-md" onSubmit={onSaveStack}>
+        <Section
+          title="Публичный адрес сервера"
+          subtitle="Если пусто — в ссылках используется hostname текущего запроса к приложению."
+        >
+          <form className="flex flex--col flex--gap-md" onSubmit={onSubmit}>
+            <label>
+              <span className="label">IP адрес или DNS имя</span>
+              <input
+                className="input"
+                placeholder="например: 10.10.10.25 или llm.example.local"
+                value={serverHost}
+                onChange={(event) => setServerHost(event.target.value)}
+              />
+            </label>
+            <p className="section__subtitle">
+              Не указывайте путь. Сейчас эффективный host:{" "}
+              <span className="mono">{data?.effective_server_host ?? "загрузка..."}</span>.
+            </p>
             <div className="flex flex--gap-sm flex--wrap">
+              <button type="submit" className="btn btn--primary" disabled={save.isPending}>
+                {save.isPending ? "Сохраняем..." : "Сохранить"}
+              </button>
               <button
                 type="button"
                 className="btn btn--ghost"
-                onClick={() =>
-                  setStackRows((prev) => [
-                    ...prev,
-                    { id: newRowId(), key: "", value: "", isSecret: false },
-                  ])
-                }
+                disabled={save.isPending}
+                onClick={() => setServerHost("")}
               >
-                + параметр
+                Использовать host приложения
               </button>
             </div>
-            <div style={{ overflowX: "auto" }}>
-              <table className="table table--compact" style={{ width: "100%", minWidth: "520px" }}>
-                <thead>
-                  <tr>
-                    <th>Ключ</th>
-                    <th>Значение</th>
-                    <th>Секрет</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {stackRows.map((row) => (
-                    <tr key={row.id}>
-                      <td>
-                        <input
-                          className="input"
-                          value={row.key}
-                          onChange={(e) =>
-                            setStackRows((prev) =>
-                              prev.map((r) =>
-                                r.id === row.id ? { ...r, key: e.target.value } : r,
-                              ),
-                            )
-                          }
-                          spellCheck={false}
-                          placeholder="VAR_NAME"
-                          disabled={patchStack.isPending}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          className="input"
-                          value={row.value}
-                          onChange={(e) =>
-                            setStackRows((prev) =>
-                              prev.map((r) =>
-                                r.id === row.id ? { ...r, value: e.target.value } : r,
-                              ),
-                            )
-                          }
-                          spellCheck={false}
-                          placeholder={
-                            row.isSecret ? "новое значение (пусто = не менять)" : ""
-                          }
-                          disabled={patchStack.isPending}
-                          type={row.isSecret ? "password" : "text"}
-                          autoComplete="off"
-                        />
-                      </td>
-                      <td style={{ width: "1%" }}>
-                        <input
-                          type="checkbox"
-                          checked={row.isSecret}
-                          onChange={(e) =>
-                            setStackRows((prev) =>
-                              prev.map((r) =>
-                                r.id === row.id ? { ...r, isSecret: e.target.checked } : r,
-                              ),
-                            )
-                          }
-                          disabled={patchStack.isPending}
-                          title="Секрет: не показывается в API после сохранения"
-                        />
-                      </td>
-                      <td style={{ width: "1%" }}>
-                        <button
-                          type="button"
-                          className="btn btn--ghost"
-                          disabled={patchStack.isPending}
-                          onClick={() =>
-                            setStackRows((prev) => prev.filter((r) => r.id !== row.id))
-                          }
-                        >
-                          Удалить
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <p className="section__subtitle">
-              Ключи с маской в ответе API:{" "}
-              <span className="mono">
-                {appStack.data ? JSON.stringify(Object.keys(appStack.data.secrets).sort()) : "—"}
-              </span>
-            </p>
-            <button type="submit" className="btn btn--ghost" disabled={patchStack.isPending}>
-              {patchStack.isPending ? "Сохранение…" : "Сохранить в БД"}
-            </button>
+            {message ? <p style={{ color: "var(--color-success)" }}>{message}</p> : null}
+            {error ? <p style={{ color: "var(--color-danger)" }}>{error}</p> : null}
           </form>
-        )}
-      </Section>
+        </Section>
 
-      <Section
-        title="Адрес сервера"
-        subtitle="Внутренние health-пробы из контейнера по-прежнему используют WEB_MONITORING_HTTP_HOST; здесь задаётся внешний host для пользователей."
-      >
-        <form className="flex flex--col flex--gap-md" onSubmit={onSubmit}>
-          <label>
-            <span className="label">IP адрес или DNS имя</span>
-            <input
-              className="input"
-              placeholder="например: 10.10.10.25 или llm.example.local"
-              value={serverHost}
-              onChange={(event) => setServerHost(event.target.value)}
-            />
-          </label>
-          <p className="section__subtitle">
-            Не указывайте путь. Если поле пустое, Develonica.LLM использует hostname текущего
-            запроса к приложению:{" "}
-            <span className="mono">{data?.effective_server_host ?? "загрузка..."}</span>.
-          </p>
-          <div className="flex flex--gap-sm flex--wrap">
-            <button type="submit" className="btn btn--primary" disabled={save.isPending}>
-              {save.isPending ? "Сохраняем..." : "Сохранить"}
+        <Section
+          title="Итоговые ссылки"
+          subtitle="Те же URL, что на Dashboard, Monitoring и LiteLLM (после сохранения адреса — обновите данные на этих страницах при необходимости)."
+        >
+          {publicAccess.isLoading || !data ? (
+            <div className="empty-state">Загружаем...</div>
+          ) : (
+            <div className="cards-grid">
+              <LinkCard title="Grafana" url={data.grafana_url} />
+              <LinkCard title="Prometheus" url={data.prometheus_url} />
+              <LinkCard title="Langfuse" url={data.langfuse_url} />
+              <LinkCard title="LiteLLM Admin UI" url={data.litellm_ui_url} />
+              <LinkCard title="LiteLLM API" url={data.litellm_api_url} />
+            </div>
+          )}
+        </Section>
+      </div>
+
+      <div className="settings-group">
+        <h2 className="settings-group__heading">Стек в базе данных</h2>
+        <p className="settings-group__lead">
+          Первичный импорт из <span className="mono">main.env</span> и связанных secret-файлов; дальнейшая
+          правка — таблица параметров (<span className="mono">stack_params</span>). Секреты в API
+          маскируются; новое значение — только в поле строки, не вставляйте <span className="mono">***</span>.
+        </p>
+
+        <Section
+          title="Импорт из файлов"
+          subtitle="Читает `main.env` в корне репозитория и опционально `configs/secrets/hf.env`, `configs/secrets/langfuse-litellm.env`. Повтор без force вернёт 409."
+        >
+          <div className="flex flex--col flex--gap-sm">
+            <p className="section__subtitle" style={{ margin: 0 }}>
+              Статус:{" "}
+              {appStatus.isLoading
+                ? "…"
+                : appStatus.data?.installed
+                  ? "установлено"
+                  : "не импортировано"}
+              {appStatus.data?.meta && typeof appStatus.data.meta.installed_at === "string"
+                ? ` · ${appStatus.data.meta.installed_at}`
+                : null}
+            </p>
+            <label className="flex flex--gap-sm" style={{ alignItems: "center" }}>
+              <input
+                type="checkbox"
+                checked={installForce}
+                onChange={(e) => setInstallForce(e.target.checked)}
+              />
+              <span>Принудительно перезаписать (force)</span>
+            </label>
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={installCfg.isPending}
+              onClick={() => installCfg.mutate(installForce)}
+            >
+              {installCfg.isPending ? "Импорт…" : "Импортировать из main.env"}
             </button>
+          </div>
+        </Section>
+
+        <Section
+          title="Параметры окружения"
+          subtitle="Каждый параметр — отдельная строка. Галочка «секрет» — значение не отдаётся в API; для существующего секрета пустое поле значит «не менять». Удаление строки удаляет ключ из БД."
+        >
+          {appStack.isLoading ? (
+            <div className="empty-state">Загружаем…</div>
+          ) : (
+            <form className="flex flex--col flex--gap-md" onSubmit={onSaveStack}>
+              <div className="flex flex--gap-sm flex--wrap">
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  onClick={() =>
+                    setStackRows((prev) => [
+                      ...prev,
+                      { id: newRowId(), key: "", value: "", isSecret: false },
+                    ])
+                  }
+                >
+                  + параметр
+                </button>
+              </div>
+              <div style={{ overflowX: "auto" }}>
+                <table className="table table--compact" style={{ width: "100%", minWidth: "520px" }}>
+                  <thead>
+                    <tr>
+                      <th>Ключ</th>
+                      <th>Значение</th>
+                      <th>Секрет</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stackRows.map((row) => (
+                      <tr key={row.id}>
+                        <td>
+                          <input
+                            className="input"
+                            value={row.key}
+                            onChange={(e) =>
+                              setStackRows((prev) =>
+                                prev.map((r) =>
+                                  r.id === row.id ? { ...r, key: e.target.value } : r,
+                                ),
+                              )
+                            }
+                            spellCheck={false}
+                            placeholder="VAR_NAME"
+                            disabled={patchStack.isPending}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            className="input"
+                            value={row.value}
+                            onChange={(e) =>
+                              setStackRows((prev) =>
+                                prev.map((r) =>
+                                  r.id === row.id ? { ...r, value: e.target.value } : r,
+                                ),
+                              )
+                            }
+                            spellCheck={false}
+                            placeholder={
+                              row.isSecret ? "новое значение (пусто = не менять)" : ""
+                            }
+                            disabled={patchStack.isPending}
+                            type={row.isSecret ? "password" : "text"}
+                            autoComplete="off"
+                          />
+                        </td>
+                        <td style={{ width: "1%" }}>
+                          <input
+                            type="checkbox"
+                            checked={row.isSecret}
+                            onChange={(e) =>
+                              setStackRows((prev) =>
+                                prev.map((r) =>
+                                  r.id === row.id ? { ...r, isSecret: e.target.checked } : r,
+                                ),
+                              )
+                            }
+                            disabled={patchStack.isPending}
+                            title="Секрет: не показывается в API после сохранения"
+                          />
+                        </td>
+                        <td style={{ width: "1%" }}>
+                          <button
+                            type="button"
+                            className="btn btn--ghost"
+                            disabled={patchStack.isPending}
+                            onClick={() =>
+                              setStackRows((prev) => prev.filter((r) => r.id !== row.id))
+                            }
+                          >
+                            Удалить
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="section__subtitle">
+                Ключи с маской в ответе API:{" "}
+                <span className="mono">
+                  {appStack.data ? JSON.stringify(Object.keys(appStack.data.secrets).sort()) : "—"}
+                </span>
+              </p>
+              <button type="submit" className="btn btn--ghost" disabled={patchStack.isPending}>
+                {patchStack.isPending ? "Сохранение…" : "Сохранить в БД"}
+              </button>
+            </form>
+          )}
+        </Section>
+      </div>
+
+      <div className="settings-group">
+        <h2 className="settings-group__heading">Обслуживание хоста</h2>
+        <p className="settings-group__lead">
+          Разовые операции на стороне сервера: права на каталоги данных мониторинга (bind mount).
+        </p>
+
+        <Section
+          title="Права на каталоги мониторинга"
+          subtitle="Команда `./slgpu monitoring fix-perms`: создаёт/чинит владельца bind-mount каталогов стека (Loki, Langfuse, LiteLLM и др.). Обычно нужна один раз на новом сервере; выполняется как фоновая задача. Пока идёт любая job мониторинга, кнопка заблокирована."
+        >
+          <div className="flex flex--col flex--gap-sm">
             <button
               type="button"
               className="btn btn--ghost"
-              disabled={save.isPending}
-              onClick={() => setServerHost("")}
+              disabled={monitoringBusy}
+              onClick={() => monitoringAction.mutate("fix-perms")}
             >
-              Использовать host приложения
+              {monitoringAction.isPending ? "Запуск fix-perms…" : "fix-perms (chmod/chown mount’ов)"}
             </button>
+            {activeMonitoringJob ? (
+              <p className="section__subtitle" style={{ margin: 0 }}>
+                Выполняется job мониторинга #{activeMonitoringJob.id} — дождитесь окончания или смотрите
+                «Задачи».
+              </p>
+            ) : null}
+            {jobError ? <p style={{ color: "var(--color-danger)" }}>{jobError}</p> : null}
           </div>
-          {message ? <p style={{ color: "var(--color-success)" }}>{message}</p> : null}
-          {error ? <p style={{ color: "var(--color-danger)" }}>{error}</p> : null}
-        </form>
-      </Section>
-
-      <Section
-        title="Права на каталоги мониторинга"
-        subtitle="Команда `./slgpu monitoring fix-perms`: создаёт/чинит владельца bind-mount каталогов стека (Loki, Langfuse, LiteLLM и др.). Обычно нужна один раз на новом сервере; выполняется как фоновая задача. Пока идёт любая job мониторинга, кнопка заблокирована."
-      >
-        <div className="flex flex--col flex--gap-sm">
-          <button
-            type="button"
-            className="btn btn--ghost"
-            disabled={monitoringBusy}
-            onClick={() => monitoringAction.mutate("fix-perms")}
-          >
-            {monitoringAction.isPending ? "Запуск fix-perms…" : "fix-perms (chmod/chown mount’ов)"}
-          </button>
-          {activeMonitoringJob ? (
-            <p className="section__subtitle" style={{ margin: 0 }}>
-              Выполняется job мониторинга #{activeMonitoringJob.id} — дождитесь окончания или смотрите
-              «Задачи».
-            </p>
-          ) : null}
-          {jobError ? <p style={{ color: "var(--color-danger)" }}>{jobError}</p> : null}
-        </div>
-      </Section>
-
-      <Section title="Итоговые ссылки" subtitle="Именно эти URL будут показаны на Dashboard, Monitoring и LiteLLM.">
-        {publicAccess.isLoading || !data ? (
-          <div className="empty-state">Загружаем...</div>
-        ) : (
-          <div className="cards-grid">
-            <LinkCard title="Grafana" url={data.grafana_url} />
-            <LinkCard title="Prometheus" url={data.prometheus_url} />
-            <LinkCard title="Langfuse" url={data.langfuse_url} />
-            <LinkCard title="LiteLLM Admin UI" url={data.litellm_ui_url} />
-            <LinkCard title="LiteLLM API" url={data.litellm_api_url} />
-          </div>
-        )}
-      </Section>
+        </Section>
+      </div>
     </>
   );
 }
