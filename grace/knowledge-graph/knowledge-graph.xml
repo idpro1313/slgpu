@@ -1,5 +1,5 @@
 <KnowledgeGraph>
-  <Project NAME="slgpu" VERSION="4.0.2">
+  <Project NAME="slgpu" VERSION="4.0.3">
     <keywords>slgpu, vllm, sglang, llm-inference, benchmark, docker-compose, gpu, prometheus, grafana, sglang-dashboard-slgpu, sglangdash2-slgpu</keywords>
     <annotation>Стенд для сравнения движков LLM-инференса vLLM и SGLang на Linux-сервере с NVIDIA GPU.</annotation>
 
@@ -190,8 +190,8 @@
         <fn-api_runtime_slots PURPOSE="GET/POST /runtime/slots, POST /slots/{key}/down|restart, GET slots/{key}/logs; list EngineSlot" />
         <fn-api_presets_clone PURPOSE="POST /presets/{id}/clone (PresetCloneRequest), flush перед ответом" />
         <fn-services_monitoring PURPOSE="Probe: Docker + HTTP; порта и compose project monitoring из слитого стека (БД)" />
-        <fn-services_litellm PURPOSE="LiteLLM HTTP: порт из слитого стека; public URLs из app_settings + ports_for_probes_sync" />
-        <fn-services_app_settings PURPOSE="Persistent UI settings в SQLite: /api/v1/settings/public-access хранит публичный server_host для Grafana/Prometheus/Langfuse/LiteLLM ссылок" />
+        <fn-services_litellm PURPOSE="LiteLLM: GET /v1/models и /health* с `Authorization: Bearer` при наличии `litellm_api_key` в public_access (настройки); порт — слитый стек; public URLs — app_settings + ports_for_probes_sync" />
+        <fn-services_app_settings PURPOSE="Persistent UI settings: /api/v1/settings/public-access — `server_host` + опциональный `litellm_api_key` (не отдаётся в GET, только `litellm_api_key_set`)" />
         <fn-core_logging PURPOSE="JSON stdout: один StreamHandler на root; у app/httpx/httpcore/h11/uvicorn*/fastapi/starlette handlers сняты, propagate=True; повторный вызов в startup сбрасывает handler'ы uvicorn" />
         <fn-frontend_app PURPOSE="React SPA: Dashboard (Сервер + GPU live), Presets, Inference (слоты + запуск через POST /runtime/slots, без дублирующей формы /runtime/up), Models, Monitoring, Jobs, Benchmarks, Settings" />
         <export-web-image PURPOSE="slgpu-web:dev, подъём: ./slgpu web up; тома: repo root по тому же абсолютному хост-пути (SLGPU_HOST_REPO=$(pwd) в scripts/cmd_web.sh), ./data/web, ./data/models, docker.sock; entrypoint chown'ит /data и ${WEB_SLGPU_ROOT}/data/{models,presets,bench} под uid 10001 (bench — native.bench.* → data/bench/results); working_dir из compose НЕ задаётся (uvicorn стартует из WORKDIR /srv/app в Dockerfile.web); huggingface_hub[cli] + hf_transfer установлены для slgpu pull, HF_HOME=/data/huggingface и /home/slgpuweb writable; критично для команд из web → docker compose monitoring/llm с корректными bind-маунтами" />

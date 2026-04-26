@@ -1587,3 +1587,10 @@
 - **Почему:** закрытие оставшихся `pending` из плана (лог-формат, тест маппинга PID↔slot, единая команда CI/локальной проверки web).
 - **Файлы:** `web/backend/app/services/gpu_*.py`, `slot_runtime.py`, `web/backend/tests/test_gpu_state.py`, `scripts/test_web.sh`, `web/README.md`, `VERSION`, `web/backend/*version*`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/verification/verification-plan.xml`, `docs/HISTORY.md`.
 - **Решение:** **PATCH** — поведение API без изменений.
+
+### 4.0.3: Настройки — API-ключ LiteLLM для backend-запросов
+
+- **Что:** В **`GET/PATCH /api/v1/settings/public-access`** добавлены **`litellm_api_key_set`** (ответ) и опциональное поле **`litellm_api_key`** (тело PATCH; не возвращается). Ключ хранится в JSON **`public_access`** в SQLite. Сервис **`app.services.litellm`** передаёт **`Authorization: Bearer …`** при вызовах к прокси (**`/v1/models`**, health/UI-пробы), если ключ задан. UI **Настройки**: поле пароля, статус «ключ задан», кнопка сброса. **`web/CONTRACT.md`**, GRACE, smoke-assert.
+- **Почему:** запрос пользователя — читать данные LiteLLM по API при включённой авторизации на прокси.
+- **Файлы:** `web/backend/app/services/app_settings.py`, `schemas/settings.py`, `api/v1/settings.py`, `services/litellm.py`, `api/v1/litellm.py`, `web/frontend/src/pages/Settings.tsx`, `api/types.ts`, `web/CONTRACT.md`, `grace/knowledge-graph/knowledge-graph.xml`, `VERSION`, `docs/HISTORY.md`.
+- **Решение:** **PATCH** (новые поля API, обратно совместимо).

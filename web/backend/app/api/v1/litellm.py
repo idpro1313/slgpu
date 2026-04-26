@@ -16,13 +16,13 @@ router = APIRouter()
 
 
 @router.get("/health")
-async def health() -> dict[str, Any]:
-    return await litellm_service.health()
+async def health(session: AsyncSession = Depends(db_session)) -> dict[str, Any]:
+    return await litellm_service.health(session)
 
 
 @router.get("/models")
-async def list_models() -> list[dict[str, Any]]:
-    return await litellm_service.list_models()
+async def list_models(session: AsyncSession = Depends(db_session)) -> list[dict[str, Any]]:
+    return await litellm_service.list_models(session)
 
 
 @router.get("/info")

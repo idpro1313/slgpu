@@ -304,6 +304,8 @@ export interface PublicAccessSettings {
   langfuse_url: string;
   litellm_ui_url: string;
   litellm_api_url: string;
+  /** Ключ в БД есть (значение никогда не отдаётся). */
+  litellm_api_key_set: boolean;
 }
 
 export interface Healthz {

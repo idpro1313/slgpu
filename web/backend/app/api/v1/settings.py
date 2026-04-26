@@ -22,6 +22,7 @@ async def get_public_access(
     configured_host = await app_settings.get_public_server_host(session)
     effective_host = app_settings.effective_server_host(request, configured_host)
     urls = app_settings.public_urls(effective_host)
+    key_set = (await app_settings.get_litellm_api_key(session)) is not None
     return PublicAccessSettings(
         server_host=configured_host,
         effective_server_host=effective_host,
@@ -30,6 +31,7 @@ async def get_public_access(
         langfuse_url=urls["langfuse"],
         litellm_ui_url=urls["litellm"],
         litellm_api_url=urls["litellm_api"],
+        litellm_api_key_set=key_set,
     )
 
 
@@ -40,16 +42,29 @@ async def update_public_access(
     session: AsyncSession = Depends(db_session),
     actor: str | None = Depends(actor_from_header),
 ) -> PublicAccessSettings:
-    try:
-        await app_settings.set_public_server_host(session, payload.server_host)
-    except ValidationError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    body = payload.model_dump(exclude_unset=True)
+    if "server_host" in body:
+        try:
+            await app_settings.set_public_server_host(session, body.get("server_host"))
+        except ValidationError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if "litellm_api_key" in body:
+        d = await app_settings.get_public_access_value(session)
+        lk = body["litellm_api_key"]
+        if lk is None or (isinstance(lk, str) and not str(lk).strip()):
+            d.pop("litellm_api_key", None)
+        else:
+            d["litellm_api_key"] = str(lk).strip()[:2000]
+        await app_settings.set_public_access_value(session, d)
     await record_ui_action(
         session,
         action="settings.public_access",
         actor=actor,
-        target="server_host",
-        note="public links host",
-        payload={"server_host": payload.server_host},
+        target="public_access",
+        note="public links / LiteLLM API key",
+        payload={
+            "server_host": body.get("server_host") if "server_host" in body else None,
+            "litellm_api_key_updated": "litellm_api_key" in body,
+        },
     )
     return await get_public_access(request=request, session=session)

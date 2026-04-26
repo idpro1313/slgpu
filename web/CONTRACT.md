@@ -59,7 +59,7 @@ radius `10px`. Favicon остаётся в LLM-тематике, но испол
 | `services` | Состояние сервисов мониторинга и LiteLLM по последнему опросу. |
 | `jobs` | Долгие операции CLI: команда, статус, exit code, stdout/stderr tail, correlation id, инициатор. |
 | `audit_events` | Действия: при `jobs.submit` — запись **с** `correlation_id` (дублирует job для трассировки). Отдельно — **только UI** (`correlation_id IS NULL`): пресеты, модель в реестре, настройки public-access. Лента «Задачи» строится из `GET /activity`: `jobs` + UI-`audit` без дубля CLI-строк. |
-| `settings` | Публичный host (`public_access`), **`cfg.meta`**, плюс унаследованные пустые **`cfg.stack`** / **`cfg.secrets`** после миграции. |
+| `settings` | Ключ `public_access`: JSON с **`server_host`** (для ссылок в UI) и опциональным **`litellm_api_key`** (тот же смысл, что **`LITELLM_MASTER_KEY`** у прокси; в ответах API **не** возвращается, только флаг **`litellm_api_key_set`**). Плюс **`cfg.meta`**, унаследованные пустые **`cfg.stack`** / **`cfg.secrets`**. |
 | `stack_params` | Плоский стек: `param_key`, `param_value`, `is_secret` (секреты маскируются в `GET /app-config/stack`). |
 
 Footer приложения показывает версию из `/healthz`; backend читает её из

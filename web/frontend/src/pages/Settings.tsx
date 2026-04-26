@@ -208,6 +208,8 @@ function buildStackPatch(
 export function SettingsPage() {
   const queryClient = useQueryClient();
   const [serverHost, setServerHost] = useState("");
+  /** Пусто = не менять; ввод = новый ключ; сброс — отдельная кнопка. */
+  const [litellmKey, setLiteLLMKey] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [jobError, setJobError] = useState<string | null>(null);
@@ -302,14 +304,36 @@ export function SettingsPage() {
     }
   }, [appStack.data]);
 
-  const save = useMutation({
+  const clearLiteLLMKey = useMutation({
     mutationFn: () =>
-      api.patch<PublicAccessSettings>("/settings/public-access", {
+      api.patch<PublicAccessSettings>("/settings/public-access", { litellm_api_key: null }),
+    onSuccess: () => {
+      setError(null);
+      setMessage("API-ключ LiteLLM сброшен в БД.");
+      setLiteLLMKey("");
+      queryClient.invalidateQueries({ queryKey: ["settings", "public-access"] });
+      queryClient.invalidateQueries({ queryKey: ["monitoring", "services"] });
+      queryClient.invalidateQueries({ queryKey: ["litellm", "info"] });
+    },
+    onError: (err: Error) => {
+      setMessage(null);
+      setError(err.message);
+    },
+  });
+
+  const save = useMutation({
+    mutationFn: () => {
+      const body: { server_host: string | null; litellm_api_key?: string } = {
         server_host: serverHost.trim() || null,
-      }),
+      };
+      const k = litellmKey.trim();
+      if (k) body.litellm_api_key = k;
+      return api.patch<PublicAccessSettings>("/settings/public-access", body);
+    },
     onSuccess: () => {
       setError(null);
       setMessage("Настройки сохранены. Ссылки на других страницах обновятся после перезагрузки данных.");
+      setLiteLLMKey("");
       queryClient.invalidateQueries({ queryKey: ["settings", "public-access"] });
       queryClient.invalidateQueries({ queryKey: ["monitoring", "services"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
@@ -379,9 +403,41 @@ export function SettingsPage() {
               Не указывайте путь. Сейчас эффективный host:{" "}
               <span className="mono">{data?.effective_server_host ?? "загрузка..."}</span>.
             </p>
+            <label>
+              <span className="label">API-ключ LiteLLM (LITELLM_MASTER_KEY / proxy key)</span>
+              <input
+                className="input"
+                type="password"
+                autoComplete="off"
+                placeholder="оставьте пустым, чтобы не менять; новый ключ — для запросов /v1 из backend"
+                value={litellmKey}
+                onChange={(e) => setLiteLLMKey(e.target.value)}
+              />
+            </label>
+            <p className="section__subtitle" style={{ margin: 0 }}>
+              Ключ в базе:{" "}
+              {publicAccess.isLoading
+                ? "…"
+                : data?.litellm_api_key_set
+                  ? "задан (значение не показывается)"
+                  : "не задан — при необходимости заполните, если у LiteLLM включена авторизация."}
+            </p>
             <div className="flex flex--gap-sm flex--wrap">
               <button type="submit" className="btn btn--primary" disabled={save.isPending}>
                 {save.isPending ? "Сохраняем..." : "Сохранить"}
+              </button>
+              <button
+                type="button"
+                className="btn btn--ghost"
+                disabled={clearLiteLLMKey.isPending || publicAccess.isLoading}
+                onClick={() => {
+                  if (!data?.litellm_api_key_set) return;
+                  if (!globalThis.confirm("Удалить сохранённый API-ключ LiteLLM?")) return;
+                  clearLiteLLMKey.mutate();
+                }}
+                title="Очистить ключ в настройках"
+              >
+                {clearLiteLLMKey.isPending ? "…" : "Сбросить API-ключ"}
               </button>
               <button
                 type="button"

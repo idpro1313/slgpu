@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from typing import Any
 from urllib.parse import urlsplit
 
 from fastapi import Request
@@ -17,6 +18,24 @@ from app.models.setting import Setting
 PUBLIC_ACCESS_KEY = "public_access"
 _HOST_RE = re.compile(r"^(localhost|[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?)$")
 _INTERNAL_HOSTS = {"host.docker.internal"}
+
+
+async def get_public_access_value(session: AsyncSession) -> dict[str, Any]:
+    result = await session.execute(select(Setting).where(Setting.key == PUBLIC_ACCESS_KEY))
+    setting = result.scalar_one_or_none()
+    if setting is None or not isinstance(setting.value, dict):
+        return {}
+    return dict(setting.value)
+
+
+async def set_public_access_value(session: AsyncSession, value: dict[str, Any]) -> None:
+    result = await session.execute(select(Setting).where(Setting.key == PUBLIC_ACCESS_KEY))
+    setting = result.scalar_one_or_none()
+    if setting is None:
+        setting = Setting(key=PUBLIC_ACCESS_KEY, value={})
+        session.add(setting)
+    setting.value = value
+    await session.flush()
 
 
 def normalize_server_host(value: str | None) -> str | None:
@@ -41,23 +60,28 @@ def normalize_server_host(value: str | None) -> str | None:
 
 
 async def get_public_server_host(session: AsyncSession) -> str | None:
-    result = await session.execute(select(Setting).where(Setting.key == PUBLIC_ACCESS_KEY))
-    setting = result.scalar_one_or_none()
-    if setting is None:
+    raw = (await get_public_access_value(session)).get("server_host")
+    if not isinstance(raw, str) or not raw.strip():
         return None
-    raw = setting.value.get("server_host")
-    return normalize_server_host(raw if isinstance(raw, str) else None)
+    return normalize_server_host(raw)
+
+
+async def get_litellm_api_key(session: AsyncSession) -> str | None:
+    raw = (await get_public_access_value(session)).get("litellm_api_key")
+    if not isinstance(raw, str):
+        return None
+    s = raw.strip()
+    return s if s else None
 
 
 async def set_public_server_host(session: AsyncSession, server_host: str | None) -> str | None:
     normalized = normalize_server_host(server_host)
-    result = await session.execute(select(Setting).where(Setting.key == PUBLIC_ACCESS_KEY))
-    setting = result.scalar_one_or_none()
-    if setting is None:
-        setting = Setting(key=PUBLIC_ACCESS_KEY, value={})
-        session.add(setting)
-    setting.value = {"server_host": normalized} if normalized else {}
-    await session.flush()
+    d = await get_public_access_value(session)
+    if normalized:
+        d["server_host"] = normalized
+    else:
+        d.pop("server_host", None)
+    await set_public_access_value(session, d)
     return normalized
 
 

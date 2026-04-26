@@ -233,7 +233,9 @@ async def test_public_access_settings_drive_external_ui_links(client: httpx.Asyn
         litellm = await client.get("/api/v1/litellm/info")
 
     assert updated.status_code == 200
-    assert updated.json()["effective_server_host"] == "llm.example.local"
+    uj = updated.json()
+    assert uj["effective_server_host"] == "llm.example.local"
+    assert uj.get("litellm_api_key_set") is False
     assert services.status_code == 200
     by_key = {item["key"]: item for item in services.json()}
     assert by_key["grafana"]["url"] == "http://llm.example.local:3000"
