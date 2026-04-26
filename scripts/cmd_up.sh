@@ -118,32 +118,36 @@ fi
 
 echo "Модель: ${MODEL_ID}  TP=${TP} (${tp_src})  NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES}  (MAX_MODEL_LEN=${MAX_MODEL_LEN:-<default>}, KV=${KV_CACHE_DTYPE:-<default>}, reasoning=${REASONING_PARSER:-<off>})"
 
-# Для docker compose: подстановка ${VAR} в docker/docker-compose.llm.yml берётся из окружения
-# процесса `docker compose`. Файл `.env` в корне репо (gitignore) тоже участвует в
-# подстановке и часто переопределяет GPU_MEM_UTIL / MAX_MODEL_LEN — с пресетом из
-# `./slgpu up` тогда несоответствие. Явно прокидываем критичные для образа/инференса
-# (JSON в SLGPU_VLLM_COMPILATION_CONFIG — только через унаследованный export после source).
+# Подстановка ${VAR} в docker-compose.llm.yml: у Docker Compose переменные **shell** процесса
+# `docker compose` имеют приоритет над отдельными KEY=value в обёртке `env … docker compose`.
+# slgpu-web (и любой родитель с export из main.env) тогда перебивает пресет → в логе vLLM остаются
+# 32768 / hermes / 0.92. Пишем снимок после source и вызываем compose под `env -i` + `--env-file`.
+# Не дублируйте MAX_MODEL_LEN/GPU_MEM_UTIL/парсеры в корневом `.env` проекта — см. docker/README.md.
+SLGPU_LLM_COMPOSE_INTERP_ENV=""
+slgpu_cleanup_llm_interp_env() {
+  if [[ -n "${SLGPU_LLM_COMPOSE_INTERP_ENV}" && -f "${SLGPU_LLM_COMPOSE_INTERP_ENV}" ]]; then
+    rm -f "${SLGPU_LLM_COMPOSE_INTERP_ENV}"
+  fi
+}
+trap slgpu_cleanup_llm_interp_env EXIT
+SLGPU_LLM_COMPOSE_INTERP_ENV="$(mktemp "${TMPDIR:-/tmp}/slgpu-compose-interp.XXXXXX.env")"
+slgpu_write_llm_compose_interp_env "${SLGPU_LLM_COMPOSE_INTERP_ENV}"
+
 compose_llm_env() {
-  env \
-    LLM_API_PORT="${API_PORT}" \
-    LLM_API_BIND="${LLM_API_BIND:-0.0.0.0}" \
-    TP="${TP}" \
-    NVIDIA_VISIBLE_DEVICES="${NVIDIA_VISIBLE_DEVICES}" \
-    VLLM_DOCKER_IMAGE="${VLLM_DOCKER_IMAGE:-}" \
-    MODEL_ID="${MODEL_ID}" \
-    MODEL_REVISION="${MODEL_REVISION:-}" \
-    MAX_MODEL_LEN="${MAX_MODEL_LEN:-32768}" \
-    GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.92}" \
-    KV_CACHE_DTYPE="${KV_CACHE_DTYPE}" \
-    SLGPU_VLLM_BLOCK_SIZE="${SLGPU_VLLM_BLOCK_SIZE:-}" \
-    SLGPU_MAX_NUM_BATCHED_TOKENS="${SLGPU_MAX_NUM_BATCHED_TOKENS:-${VLLM_MAX_NUM_BATCHED_TOKENS:-8192}}" \
-    SLGPU_VLLM_MAX_NUM_SEQS="${SLGPU_VLLM_MAX_NUM_SEQS:-}" \
-    TOOL_CALL_PARSER="${TOOL_CALL_PARSER:-hermes}" \
-    REASONING_PARSER="${REASONING_PARSER:-qwen3}" \
-    VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS="${VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS:-1}" \
-    SGLANG_MEM_FRACTION_STATIC="${SGLANG_MEM_FRACTION_STATIC:-0.90}" \
-    SLGPU_VLLM_ENFORCE_EAGER="${SLGPU_VLLM_ENFORCE_EAGER:-0}" \
-    docker compose --project-directory "${ROOT}" "$@"
+  env -i \
+    "PATH=${PATH:-/usr/sbin:/usr/bin:/sbin:/bin}" \
+    "HOME=${HOME:-/root}" \
+    "USER=${USER:-root}" \
+    "DOCKER_HOST=${DOCKER_HOST:-}" \
+    "DOCKER_CONTEXT=${DOCKER_CONTEXT:-}" \
+    "SSH_AUTH_SOCK=${SSH_AUTH_SOCK:-}" \
+    "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-}" \
+    "TMPDIR=${TMPDIR:-/tmp}" \
+    "LANG=${LANG:-C.UTF-8}" \
+    docker compose \
+      --project-directory "${ROOT}" \
+      --env-file "${SLGPU_LLM_COMPOSE_INTERP_ENV}" \
+      "$@"
 }
 
 slgpu_ensure_slgpu_network

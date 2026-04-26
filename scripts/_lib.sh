@@ -315,6 +315,60 @@ slgpu_validate_running_config() {
   return 0
 }
 
+# Снимок переменных для подстановки ${VAR} в docker/docker-compose.llm.yml после `source main.env` + пресет.
+# Файл используют с `docker compose --env-file` под «чистым» env (см. cmd_up.sh:compose_llm_env), иначе
+# родительский процесс (slgpu-web, CI, shell с export из main.env) может перебить пресет: у Compose shell
+# выше приоритет, чем у отдельных пар в обёртке `env A=1 B=2 docker compose`.
+# $1 — путь к выходному файлу (обычно mktemp).
+slgpu_write_llm_compose_interp_env() {
+  local out="${1:?}"
+  local batch="${SLGPU_MAX_NUM_BATCHED_TOKENS:-${VLLM_MAX_NUM_BATCHED_TOKENS:-8192}}"
+  umask 077
+  {
+    echo "VLLM_DOCKER_IMAGE=${VLLM_DOCKER_IMAGE:-}"
+    echo "LLM_API_BIND=${LLM_API_BIND:-0.0.0.0}"
+    echo "LLM_API_PORT=${LLM_API_PORT:-8111}"
+    echo "SLGPU_MODEL_ROOT=${SLGPU_MODEL_ROOT:-/models}"
+    echo "SLGPU_VLLM_TRUST_REMOTE_CODE=${SLGPU_VLLM_TRUST_REMOTE_CODE:-1}"
+    echo "SLGPU_VLLM_ENABLE_CHUNKED_PREFILL=${SLGPU_VLLM_ENABLE_CHUNKED_PREFILL:-1}"
+    echo "SLGPU_VLLM_ENABLE_AUTO_TOOL_CHOICE=${SLGPU_VLLM_ENABLE_AUTO_TOOL_CHOICE:-1}"
+    echo "MODEL_ID=${MODEL_ID:-}"
+    echo "MODEL_REVISION=${MODEL_REVISION:-}"
+    echo "MAX_MODEL_LEN=${MAX_MODEL_LEN:-32768}"
+    echo "SLGPU_VLLM_BLOCK_SIZE=${SLGPU_VLLM_BLOCK_SIZE:-}"
+    echo "TP=${TP:-8}"
+    echo "GPU_MEM_UTIL=${GPU_MEM_UTIL:-0.92}"
+    echo "KV_CACHE_DTYPE=${KV_CACHE_DTYPE:-fp8_e4m3}"
+    echo "SLGPU_MAX_NUM_BATCHED_TOKENS=${batch}"
+    echo "VLLM_MAX_NUM_BATCHED_TOKENS=${VLLM_MAX_NUM_BATCHED_TOKENS:-}"
+    echo "SLGPU_VLLM_MAX_NUM_SEQS=${SLGPU_VLLM_MAX_NUM_SEQS:-}"
+    echo "SLGPU_DISABLE_CUSTOM_ALL_REDUCE=${SLGPU_DISABLE_CUSTOM_ALL_REDUCE:-1}"
+    echo "SLGPU_ENABLE_PREFIX_CACHING=${SLGPU_ENABLE_PREFIX_CACHING:-1}"
+    echo "TOOL_CALL_PARSER=${TOOL_CALL_PARSER:-hermes}"
+    echo "REASONING_PARSER=${REASONING_PARSER:-qwen3}"
+    echo "CHAT_TEMPLATE_CONTENT_FORMAT=${CHAT_TEMPLATE_CONTENT_FORMAT:-}"
+    echo "SLGPU_VLLM_COMPILATION_CONFIG=${SLGPU_VLLM_COMPILATION_CONFIG:-}"
+    echo "SLGPU_VLLM_ENFORCE_EAGER=${SLGPU_VLLM_ENFORCE_EAGER:-0}"
+    echo "SLGPU_VLLM_SPECULATIVE_CONFIG=${SLGPU_VLLM_SPECULATIVE_CONFIG:-}"
+    echo "SLGPU_ENABLE_EXPERT_PARALLEL=${SLGPU_ENABLE_EXPERT_PARALLEL:-0}"
+    echo "SLGPU_VLLM_DATA_PARALLEL_SIZE=${SLGPU_VLLM_DATA_PARALLEL_SIZE:-}"
+    echo "MM_ENCODER_TP_MODE=${MM_ENCODER_TP_MODE:-}"
+    echo "SLGPU_VLLM_ATTENTION_BACKEND=${SLGPU_VLLM_ATTENTION_BACKEND:-}"
+    echo "SLGPU_VLLM_TOKENIZER_MODE=${SLGPU_VLLM_TOKENIZER_MODE:-}"
+    echo "VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=${VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS:-1}"
+    echo "NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-0,1,2,3,4,5,6,7}"
+    echo "MODELS_DIR=${MODELS_DIR:-./data/models}"
+    echo "SGLANG_TRUST_REMOTE_CODE=${SGLANG_TRUST_REMOTE_CODE:-1}"
+    echo "SGLANG_MEM_FRACTION_STATIC=${SGLANG_MEM_FRACTION_STATIC:-0.90}"
+    echo "SGLANG_CUDA_GRAPH_MAX_BS=${SGLANG_CUDA_GRAPH_MAX_BS:-}"
+    echo "SGLANG_ENABLE_TORCH_COMPILE=${SGLANG_ENABLE_TORCH_COMPILE:-1}"
+    echo "SGLANG_DISABLE_CUDA_GRAPH=${SGLANG_DISABLE_CUDA_GRAPH:-0}"
+    echo "SGLANG_DISABLE_CUSTOM_ALL_REDUCE=${SGLANG_DISABLE_CUSTOM_ALL_REDUCE:-0}"
+    echo "SGLANG_ENABLE_METRICS=${SGLANG_ENABLE_METRICS:-1}"
+    echo "SGLANG_ENABLE_MFU_METRICS=${SGLANG_ENABLE_MFU_METRICS:-0}"
+  } > "${out}"
+}
+
 # Унифицированный `docker compose`: project directory = корень репо (тома и `main.env` с путями `./data/...`).
 slgpu_docker_compose() {
   local _here _root

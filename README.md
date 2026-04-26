@@ -62,7 +62,7 @@
 
 Логи контейнеров: **Grafana → Explore → Loki**; данные Loki на диске: `LOKI_DATA_DIR` (см. [configs/monitoring/LOGS.md](configs/monitoring/LOGS.md)).
 
-Переменные модели передаются в контейнер через блок **`environment`** в `docker/docker-compose.llm.yml` и значения, экспортированные в shell командой **`./slgpu up`** (после слияния [`main.env`](main.env) + пресет). Файл **`.env`** в корне репозитория (в `.gitignore`) Docker Compose использует для **подстановки** `${VAR}` в YAML: старый **`GPU_MEM_UTIL`** там может перебить пресет — **`./slgpu up`** прокидывает критичные переменные в `docker compose` явно (см. [`scripts/cmd_up.sh`](scripts/cmd_up.sh)).
+Переменные модели попадают в контейнер через блок **`environment`** в `docker/docker-compose.llm.yml`; подстановка `${VAR}` в YAML делается **`./slgpu up`** после слияния [`main.env`](main.env) + пресет: снимок пишется во временный файл и передаётся как **`docker compose --env-file`** под **`env -i`**, чтобы родительский процесс (в т.ч. **slgpu-web**) не перебивал пресет своим shell environment. Корневой **`.env`** по-прежнему может влиять на интерполяцию — не дублируйте там **`MAX_MODEL_LEN`** / **`GPU_MEM_UTIL`** / парсеры, если они задаются пресетом (см. [`docker/README.md`](docker/README.md)).
 
 ---
 
