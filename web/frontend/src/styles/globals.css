@@ -586,7 +586,12 @@ pre {
   gap: 8px;
   align-items: center;
   justify-content: flex-end;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
+}
+
+/* Второе опасное действие: удаление и .env с диска (отличие от «только БД»). */
+.btn--icon.icon-btn--file-wipe {
+  border-style: dashed;
 }
 
 button.btn--icon,

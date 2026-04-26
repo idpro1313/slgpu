@@ -10,6 +10,7 @@ import {
   IconActionButton,
   IconArrowUpTray,
   IconEdit,
+  IconFileX,
   IconTrash,
 } from "@/components/TableActionIcons";
 
@@ -594,7 +595,7 @@ export function PresetsPage() {
                           <IconArrowUpTray />
                         </IconActionButton>
                         <IconActionButton
-                          label="Удалить пресет из БД"
+                          label="Удалить пресет из БД (запись в web-реестре)"
                           variant="danger"
                           disabled={deletePreset.isPending}
                           onClick={() => {
@@ -604,6 +605,23 @@ export function PresetsPage() {
                           }}
                         >
                           <IconTrash />
+                        </IconActionButton>
+                        <IconActionButton
+                          label="Удалить пресет и файл .env с диска"
+                          variant="danger"
+                          className="icon-btn--file-wipe"
+                          disabled={deletePreset.isPending}
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                `Удалить пресет ${preset.name} и стереть файл .env в PRESETS_DIR?`,
+                              )
+                            ) {
+                              deletePreset.mutate({ id: preset.id, deleteFile: true });
+                            }
+                          }}
+                        >
+                          <IconFileX />
                         </IconActionButton>
                       </div>
                     </td>
