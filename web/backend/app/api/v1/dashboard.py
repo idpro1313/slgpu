@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -10,12 +11,14 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import db_session
+from app.core.config import get_settings
 from app.models.job import Job, JobStatus
 from app.models.model import HFModel, ModelDownloadStatus
 from app.models.preset import Preset
 from app.services.docker_client import get_docker_inspector
 from app.services.hf_models import sync_local_models
 from app.services import app_settings
+from app.services.host_info import collect_host_info
 from app.services.monitoring import probe_all
 from app.services.runtime import attach_run_metadata, snapshot as runtime_snapshot
 
@@ -51,6 +54,7 @@ async def dashboard(
     public_urls = await app_settings.get_public_urls(session, request)
     healthy = sum(1 for s in services if s.status.value == "healthy")
     total = len(services)
+    host_info = await asyncio.to_thread(collect_host_info, get_settings().slgpu_root)
     logger.info(
         "[api][dashboard][BLOCK_AGGREGATE] docker=%s models=%s presets=%s jobs_active=%s "
         "services_healthy=%s/%s runtime_engine=%s",
@@ -95,4 +99,5 @@ async def dashboard(
             }
             for probe in services
         ],
+        "host": host_info,
     }

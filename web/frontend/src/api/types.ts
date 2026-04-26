@@ -45,10 +45,41 @@ export interface DashboardServiceCard {
   container_status: string | null;
 }
 
+export interface DashboardHostNvidiaGpu {
+  index: number;
+  name: string;
+  memory_total_mib: number | string;
+}
+
+export interface DashboardHostNvidia {
+  smi_available: boolean;
+  note?: string;
+  driver_version?: string | null;
+  cuda_version?: string | null;
+  gpus?: DashboardHostNvidiaGpu[];
+}
+
+export interface DashboardHostInfo {
+  hostname: string | null;
+  os_pretty: string;
+  kernel: string;
+  arch: string;
+  cpu_model: string | null;
+  cpu_logical_cores: number;
+  memory_total_bytes: number | null;
+  memory_available_bytes: number | null;
+  disk_slgpu_path: string;
+  disk_slgpu_total_bytes: number;
+  disk_slgpu_used_bytes: number;
+  disk_slgpu_free_bytes: number;
+  nvidia: DashboardHostNvidia;
+}
+
 export interface DashboardData {
   metrics: DashboardMetrics;
   runtime: DashboardRuntime;
   services: DashboardServiceCard[];
+  host: DashboardHostInfo;
 }
 
 export interface HFModel {

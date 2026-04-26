@@ -36,6 +36,21 @@ async def test_healthz_returns_200(client: httpx.AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_dashboard_includes_host_snapshot(client: httpx.AsyncClient) -> None:
+    async with client:
+        response = await client.get("/api/v1/dashboard")
+    assert response.status_code == 200
+    body = response.json()
+    assert "host" in body
+    host = body["host"]
+    assert "os_pretty" in host and host["os_pretty"]
+    assert "kernel" in host
+    assert "cpu_logical_cores" in host
+    assert "nvidia" in host
+    assert "smi_available" in host["nvidia"]
+
+
+@pytest.mark.asyncio
 async def test_monitoring_action_rejects_unknown(client: httpx.AsyncClient) -> None:
     async with client:
         response = await client.post(

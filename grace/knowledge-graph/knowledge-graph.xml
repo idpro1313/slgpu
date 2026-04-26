@@ -1,5 +1,5 @@
 <KnowledgeGraph>
-  <Project NAME="slgpu" VERSION="3.1.4">
+  <Project NAME="slgpu" VERSION="3.2.0">
     <keywords>slgpu, vllm, sglang, llm-inference, benchmark, docker-compose, gpu, prometheus, grafana, sglang-dashboard-slgpu, sglangdash2-slgpu</keywords>
     <annotation>Стенд для сравнения движков LLM-инференса vLLM и SGLang на Linux-сервере с NVIDIA GPU.</annotation>
 
@@ -171,6 +171,8 @@
         <fn-services_stack_config PURPOSE="stack_params (param_key, param_value, is_secret) + cfg.meta; миграция JSON cfg.stack/cfg.secrets → строки; sync_merged_flat (приоритет stack_params), ports_for_probes_sync, presets_dir_sync; init_db: migrate_legacy_json_to_rows, ensure_default_settings, ensure_default_stack_params; ORM app.models.stack_param.StackParam" />
         <fn-api_app_config PURPOSE="GET/POST /app-config/status|install, GET/PATCH /app-config/stack" />
         <fn-api_bench PURPOSE="GET /bench/runs, report.md, summary; POST scenario|load → native.bench.* jobs" />
+        <fn-api_dashboard PURPOSE="GET /dashboard: metrics, runtime, services, host (collect_host_info: /proc, diskUsage(slgpu_root), nvidia-smi при наличии)" />
+        <fn-services_host_info PURPOSE="Снимок ОС/CPU/RAM/диска/NVIDIA для дашборда; subprocess nvidia-smi в thread pool" />
         <fn-services_compose_exec PURPOSE="async docker compose для LLM и monitoring стеков, subprocess logged" />
         <fn-services_native_jobs PURPOSE="handle_native_job: llm/monitoring/bench/pull без ./slgpu" />
         <fn-services_slgpu_cli PURPOSE="CliCommand kind=native.* с пустым argv; валидация slug/engine/port/tp" />
@@ -184,7 +186,7 @@
         <fn-services_litellm PURPOSE="LiteLLM HTTP: порт из слитого стека; public URLs из app_settings + ports_for_probes_sync" />
         <fn-services_app_settings PURPOSE="Persistent UI settings в SQLite: /api/v1/settings/public-access хранит публичный server_host для Grafana/Prometheus/Langfuse/LiteLLM ссылок" />
         <fn-core_logging PURPOSE="JSON stdout logging: one LogRecord → one line; root/app/httpx/uvicorn handlers заменяются идемпотентно без propagation-дублей" />
-        <fn-frontend_app PURPOSE="React SPA: Dashboard, Models, Presets, Runtime, Monitoring, LiteLLM, Jobs (детали строки — модальное окно), Benchmarks, Settings; бренд develonica.ru/guideline" />
+        <fn-frontend_app PURPOSE="React SPA: Dashboard (блок Сервер: CPU/RAM/диск/GPU), Models, Presets, Runtime, Monitoring, LiteLLM, Jobs (модалка), Benchmarks, Settings; бренд develonica.ru/guideline" />
         <export-web-image PURPOSE="slgpu-web:dev, подъём: ./slgpu web up; тома: repo root по тому же абсолютному хост-пути (SLGPU_HOST_REPO=$(pwd) в scripts/cmd_web.sh), ./data/web, ./data/models, docker.sock; entrypoint chown'ит /data и ${WEB_SLGPU_ROOT}/data/{models,presets} под uid 10001; working_dir из compose НЕ задаётся (uvicorn стартует из WORKDIR /srv/app в Dockerfile.web); huggingface_hub[cli] + hf_transfer установлены для slgpu pull, HF_HOME=/data/huggingface и /home/slgpuweb writable; критично для команд из web → docker compose monitoring/llm с корректными bind-маунтами" />
         <export-contract PURPOSE="web/CONTRACT.md — границы CLI/Docker API/SQLite" />
       </annotations>

@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
 import type { DashboardData } from "@/api/types";
+import { formatBytesIEC } from "@/components/formatters";
 import { MetricCard } from "@/components/MetricCard";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
@@ -18,7 +19,7 @@ export function DashboardPage() {
     <>
       <PageHeader
         title="Обзор стенда"
-        subtitle="Сводка по моделям, активным запускам, мониторингу и LiteLLM. Обновляется каждые 10 секунд."
+        subtitle="Сводка по моделям, серверу (CPU/RAM/диск/GPU), активным запускам, мониторингу и LiteLLM. Обновляется каждые 10 секунд."
       />
 
       {isError ? (
@@ -52,6 +53,110 @@ export function DashboardPage() {
           hint="прометей, графана, локи, лангфуз, литеЛЛМ"
         />
       </div>
+
+      <Section
+        title="Сервер"
+        subtitle="ОС и железо в том виде, в каком их видит контейнер slgpu-web (/proc, диск по пути репозитория). Память может отражать лимит cgroup. NVIDIA/CUDA — если в контейнере доступен nvidia-smi (опционально подключите GPU к slgpu-web)."
+      >
+        {isError ? (
+          <div className="empty-state">Блок недоступен.</div>
+        ) : isLoading || !data?.host ? (
+          <div className="empty-state">Загружаем…</div>
+        ) : (
+          <div className="cards-grid">
+            <div className="status-card">
+              <div className="status-card__head">
+                <span className="status-card__name">ОС и ядро</span>
+              </div>
+              <div className="status-card__detail">
+                <div>{data.host.os_pretty}</div>
+                <div className="mono" style={{ marginTop: 6, fontSize: 13 }}>
+                  kernel {data.host.kernel} · {data.host.arch}
+                </div>
+                {data.host.hostname ? (
+                  <div className="mono" style={{ marginTop: 4, fontSize: 13 }}>
+                    host {data.host.hostname}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+            <div className="status-card">
+              <div className="status-card__head">
+                <span className="status-card__name">CPU</span>
+              </div>
+              <div className="status-card__detail">
+                <div>{data.host.cpu_model ?? "—"}</div>
+                <div style={{ marginTop: 6 }}>
+                  Логических ядер: <span className="mono">{data.host.cpu_logical_cores}</span>
+                </div>
+              </div>
+            </div>
+            <div className="status-card">
+              <div className="status-card__head">
+                <span className="status-card__name">RAM</span>
+              </div>
+              <div className="status-card__detail">
+                <div>
+                  Всего:{" "}
+                  <span className="mono">{formatBytesIEC(data.host.memory_total_bytes)}</span>
+                </div>
+                <div style={{ marginTop: 6 }}>
+                  Доступно:{" "}
+                  <span className="mono">{formatBytesIEC(data.host.memory_available_bytes)}</span>
+                </div>
+              </div>
+            </div>
+            <div className="status-card">
+              <div className="status-card__head">
+                <span className="status-card__name">Диск (корень репо)</span>
+              </div>
+              <div className="status-card__detail mono" style={{ fontSize: 13, wordBreak: "break-all" }}>
+                {data.host.disk_slgpu_path}
+              </div>
+              <div className="status-card__detail" style={{ marginTop: 8 }}>
+                <div>
+                  Всего / занято / свободно:{" "}
+                  <span className="mono">
+                    {formatBytesIEC(data.host.disk_slgpu_total_bytes)} /{" "}
+                    {formatBytesIEC(data.host.disk_slgpu_used_bytes)} /{" "}
+                    {formatBytesIEC(data.host.disk_slgpu_free_bytes)}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="status-card">
+              <div className="status-card__head">
+                <span className="status-card__name">NVIDIA / CUDA</span>
+              </div>
+              <div className="status-card__detail">
+                {data.host.nvidia.smi_available ? (
+                  <>
+                    <div>
+                      Драйвер:{" "}
+                      <span className="mono">{data.host.nvidia.driver_version ?? "—"}</span>
+                      {" · CUDA "}
+                      <span className="mono">{data.host.nvidia.cuda_version ?? "—"}</span>
+                    </div>
+                    {data.host.nvidia.gpus && data.host.nvidia.gpus.length > 0 ? (
+                      <ul style={{ margin: "10px 0 0 0", paddingLeft: 18 }}>
+                        {data.host.nvidia.gpus.map((g) => (
+                          <li key={g.index} className="mono" style={{ fontSize: 13 }}>
+                            [{g.index}] {g.name} — {g.memory_total_mib} MiB
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <div style={{ marginTop: 8 }}>GPU не перечислены.</div>
+                    )}
+                  </>
+                ) : (
+                  <div>{data.host.nvidia.note ?? "nvidia-smi недоступен."}</div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </Section>
 
       <Section
         title="Inference Runtime"

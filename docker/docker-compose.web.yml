@@ -63,6 +63,14 @@ services:
       - "${WEB_BIND:-0.0.0.0}:${WEB_PORT:-8089}:8000"
     networks:
       - slgpu
+    # Опционально: GPU в контейнер web — чтобы на дашборде работал nvidia-smi (нужен NVIDIA Container Toolkit на хосте).
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
     extra_hosts:
       - "host.docker.internal:host-gateway"
     logging:

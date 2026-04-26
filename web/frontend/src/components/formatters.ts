@@ -7,6 +7,20 @@ export function formatBytes(bytes: number | null | undefined): string {
   return `${value.toFixed(value >= 100 || exp === 0 ? 0 : 1)} ${units[exp]}`;
 }
 
+/** Двоичные единицы (KiB, GiB) — для RAM/диска на дашборде сервера. */
+export function formatBytesIEC(bytes: number | null | undefined): string {
+  if (bytes == null || bytes < 0) return "—";
+  if (bytes === 0) return "0 B";
+  const units = ["B", "KiB", "MiB", "GiB", "TiB"];
+  let i = 0;
+  let v = bytes;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i += 1;
+  }
+  return `${i === 0 ? v : v.toFixed(v >= 100 || i === 1 ? 0 : 1)} ${units[i]}`;
+}
+
 export function formatDate(value: string | null | undefined): string {
   if (!value) return "—";
   const date = new Date(value);
