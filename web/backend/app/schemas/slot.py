@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.run import RunStatus
+from app.models.slot import RunStatus
 
 
 class EngineSlotOut(BaseModel):
@@ -37,7 +38,7 @@ class SlotCreateRequest(BaseModel):
     """Launch a new slot; auto GPU/port when omitted (server computes)."""
 
     slot_key: str | None = None
-    engine: str = "vllm"
+    engine: Literal["vllm", "sglang"] = "vllm"
     preset: str
     host_api_port: int | None = None
     tp: int | None = None

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
-import type { DashboardData, GpuStateResponse, RuntimeSlotView } from "@/api/types";
+import type { DashboardData, GpuProcessState, GpuStateResponse, RuntimeSlotView } from "@/api/types";
 import { formatBytesIEC } from "@/components/formatters";
 import { MetricCard } from "@/components/MetricCard";
 import { PageHeader } from "@/components/PageHeader";
@@ -214,6 +214,11 @@ export function DashboardPage() {
               const util = numGpu(g.utilization_gpu);
               const vramPct = t > 0 ? Math.min(100, Math.round((u / t) * 100)) : 0;
               const preset = presetForGpuIndex(g.index, data?.runtime.slots);
+              const gid = g.uuid != null && g.uuid !== "" ? String(g.uuid) : null;
+              const procsOnGpu = (gpuLive.data?.processes ?? []).filter((p: GpuProcessState) => {
+                const pu = p.gpu_uuid != null && p.gpu_uuid !== "" ? String(p.gpu_uuid) : null;
+                return Boolean(gid && pu && gid === pu);
+              });
               return (
                 <div className="status-card" key={g.index}>
                   <div className="status-card__head">
@@ -254,6 +259,17 @@ export function DashboardPage() {
                       />
                     </div>
                   </div>
+                  {procsOnGpu.length ? (
+                    <div className="status-card__detail" style={{ marginTop: 10 }}>
+                      <div style={{ fontSize: 11, opacity: 0.85 }}>Процессы (nvidia-smi)</div>
+                      {procsOnGpu.map((p: GpuProcessState) => (
+                        <div key={p.pid} className="mono" style={{ fontSize: 11, marginTop: 4 }}>
+                          pid {p.pid} {p.process_name ?? "—"} · {String(p.used_memory_mib ?? "—")} MiB
+                          {p.slot_key ? ` · slot:${p.slot_key}` : " · external"}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               );
             })}
@@ -262,66 +278,56 @@ export function DashboardPage() {
       </Section>
 
       <Section
-        title="Inference Runtime"
-        subtitle="Реальный движок vLLM/SGLang в проекте slgpu по данным Docker и /v1/models."
+        title="Слоты инференса"
+        subtitle="Записи engine_slots с пробой /v1/models (primary-строка в API — слот default или первый по имени)."
       >
         {isLoading || !data ? (
           <div className="empty-state">Загружаем…</div>
-        ) : data.runtime.engine ? (
-          <div className="cards-grid">
-            <div className="status-card">
-              <div className="status-card__head">
-                <span className="status-card__name">Движок</span>
-                <StatusBadge status={data.runtime.container_status ?? "unknown"} />
-              </div>
-              <div className="status-card__detail mono">
-                {data.runtime.engine} • порт {data.runtime.api_port ?? "—"}
-              </div>
-            </div>
-            <div className="status-card">
-              <div className="status-card__head">
-                <span className="status-card__name">Метрики</span>
-                <StatusBadge
-                  status={data.runtime.metrics_available ? "healthy" : "down"}
-                  label={data.runtime.metrics_available ? "ok" : "нет"}
-                />
-              </div>
-              <div className="status-card__detail">
-                {data.runtime.metrics_available
-                  ? "Проверка /metrics из slgpu-web: ответ 200. Prometheus на хосте может собирать тот же endpoint."
-                  : "Проверка /metrics из slgpu-web не прошла (см. WEB_LLM_HTTP_HOST и сеть slgpu). На хосте /metrics у движка всё ещё может быть доступен."}
-              </div>
-            </div>
-            <div className="status-card">
-              <div className="status-card__head">
-                <span className="status-card__name">Пресет запуска</span>
-              </div>
-              <div className="status-card__detail mono">
-                {data.runtime.preset_name ?? "—"}
-                {data.runtime.tp ? ` • TP ${data.runtime.tp}` : ""}
-              </div>
-            </div>
-            <div className="status-card">
-              <div className="status-card__head">
-                <span className="status-card__name">Модель пресета</span>
-              </div>
-              <div className="status-card__detail mono">
-                {data.runtime.hf_id ?? "—"}
-              </div>
-            </div>
-            <div className="status-card">
-              <div className="status-card__head">
-                <span className="status-card__name">Обслуживаемые модели</span>
-              </div>
-              <div className="status-card__detail mono">
-                {data.runtime.served_models.length === 0
-                  ? "—"
-                  : data.runtime.served_models.join(", ")}
-              </div>
-            </div>
+        ) : data.runtime.slots.length === 0 ? (
+          <div className="empty-state">
+            Нет активных слотов в БД. Возможен запуск только через compose/bash без web — тогда
+            сводка по primary в API и GPU live выше.
           </div>
         ) : (
-          <div className="empty-state">Контейнеры vLLM/SGLang не запущены.</div>
+          <div style={{ overflowX: "auto" }}>
+            <table className="table table--registry">
+              <thead>
+                <tr>
+                  <th>Слот</th>
+                  <th>Движок</th>
+                  <th>Пресет</th>
+                  <th>Порт</th>
+                  <th>TP</th>
+                  <th>GPU</th>
+                  <th>Контейнер</th>
+                  <th>Модели</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.runtime.slots.map((s: RuntimeSlotView) => (
+                  <tr key={s.slot_key}>
+                    <td className="mono">{s.slot_key}</td>
+                    <td className="mono">{s.engine}</td>
+                    <td>{s.preset_name ?? "—"}</td>
+                    <td className="mono">{s.api_port ?? "—"}</td>
+                    <td>{s.tp ?? "—"}</td>
+                    <td className="mono" style={{ maxWidth: 120 }}>
+                      {s.gpu_indices ?? "—"}
+                    </td>
+                    <td>
+                      <StatusBadge status={s.container_status ?? "unknown"} />
+                      <div className="mono" style={{ fontSize: 11, marginTop: 4 }}>
+                        {s.container_name ?? "—"}
+                      </div>
+                    </td>
+                    <td className="mono" style={{ fontSize: 12, maxWidth: 200 }}>
+                      {s.served_models.length ? s.served_models.join(", ") : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </Section>
 

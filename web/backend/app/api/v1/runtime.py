@@ -20,13 +20,9 @@ from app.core.security import (
     validate_tp,
 )
 from app.models.preset import Preset
-from app.models.run import EngineRun, RunStatus
-from app.models.slot import EngineSlot
+from app.models.slot import EngineSlot, RunStatus
 from app.schemas.common import JobAccepted
 from app.schemas.runtime import (
-    EngineDownRequest,
-    EngineRestartRequest,
-    EngineUpRequest,
     RuntimeLogs,
     RuntimeSlotView,
     RuntimeSnapshot,
@@ -35,22 +31,19 @@ from app.schemas.slot import EngineSlotOut, SlotCreateRequest, SlotRestartReques
 from app.services import gpu_availability
 from app.services import jobs as jobs_service
 from app.services import runtime as runtime_service
+from app.services.slot_runtime import internal_api_port_for
 from app.services.slgpu_cli import (
-    cmd_down,
-    cmd_restart,
     cmd_slot_down,
     cmd_slot_restart,
     cmd_slot_up,
-    cmd_up,
 )
 
 router = APIRouter()
 
 
 @router.get("/snapshot", response_model=RuntimeSnapshot)
-async def get_snapshot(session: AsyncSession = Depends(db_session)) -> RuntimeSnapshot:
+async def get_snapshot() -> RuntimeSnapshot:
     snap = await runtime_service.snapshot()
-    await runtime_service.attach_run_metadata(session, snap)
     return RuntimeSnapshot(
         engine=snap.engine,
         api_port=snap.api_port,
@@ -77,19 +70,6 @@ async def get_snapshot(session: AsyncSession = Depends(db_session)) -> RuntimeSn
             )
             for s in snap.slots
         ],
-    )
-
-
-@router.get("/logs", response_model=RuntimeLogs)
-async def get_logs(tail: int = Query(default=300, ge=1, le=2000)) -> RuntimeLogs:
-    logs = runtime_service.tail_container_logs(tail=tail)
-    return RuntimeLogs(
-        engine=logs.engine,
-        container_name=logs.container_name,
-        container_status=logs.container_status,
-        tail=logs.tail,
-        logs=logs.logs,
-        last_checked_at=logs.last_checked_at,
     )
 
 
@@ -159,6 +139,14 @@ async def create_engine_slot(
             status_code=400,
             detail=f"len(gpu_indices)={len(gidx)} does not match tp={tpi}",
         )
+    av = await gpu_availability.compute_availability(tp=tpi, exclude_slot_key=None)
+    busy = {b["index"] for b in av.get("busy", []) if isinstance(b.get("index"), int)}
+    overlap = set(gidx) & busy
+    if overlap:
+        raise HTTPException(
+            status_code=409,
+            detail=f"GPUs already in use: {sorted(overlap)}",
+        )
     sk = (payload.slot_key or "").strip() or f"s{uuid.uuid4().hex[:8]}"
     try:
         sk = validate_slot_key(sk)
@@ -175,9 +163,26 @@ async def create_engine_slot(
             validate_port(hport)
         except ValidationError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+    int_port = internal_api_port_for(engine)
+    now = datetime.now(timezone.utc)
+    session.add(
+        EngineSlot(
+            slot_key=sk,
+            engine=engine,
+            preset_name=preset_name,
+            hf_id=p.hf_id,
+            tp=tpi,
+            gpu_indices=",".join(str(i) for i in gidx),
+            host_api_port=hport,
+            internal_api_port=int_port,
+            desired_status=RunStatus.RUNNING,
+            observed_status=RunStatus.REQUESTED,
+            started_at=now,
+        )
+    )
+    await session.flush()
     try:
         command = cmd_slot_up(
-            settings.slgpu_root,
             slot_key=sk,
             engine=engine,
             preset=preset_name,
@@ -213,10 +218,9 @@ async def slot_down(
     slot_key: str,
     actor: str | None = Depends(actor_from_header),
 ) -> JobAccepted:
-    settings = get_settings()
     try:
         validate_slot_key(slot_key)
-        command = cmd_slot_down(settings.slgpu_root, slot_key=slot_key)
+        command = cmd_slot_down(slot_key=slot_key)
     except ValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     try:
@@ -238,12 +242,10 @@ async def slot_restart(
     payload: SlotRestartRequest,
     actor: str | None = Depends(actor_from_header),
 ) -> JobAccepted:
-    settings = get_settings()
     try:
         validate_slot_key(slot_key)
         validate_slug(payload.preset)
         command = cmd_slot_restart(
-            settings.slgpu_root,
             slot_key=slot_key,
             preset=payload.preset,
             host_api_port=payload.host_api_port,
@@ -272,129 +274,10 @@ async def slot_restart(
     )
 
 
-@router.post("/up", response_model=JobAccepted, status_code=status.HTTP_202_ACCEPTED)
-async def runtime_up(
-    payload: EngineUpRequest,
-    actor: str | None = Depends(actor_from_header),
-    session: AsyncSession = Depends(db_session),
-) -> JobAccepted:
-    settings = get_settings()
-    try:
-        command = cmd_up(
-            settings.slgpu_root,
-            engine=payload.engine,
-            preset=payload.preset,
-            port=payload.port,
-            tp=payload.tp,
-        )
-    except ValidationError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    try:
-        job = await jobs_service.submit(
-            command,
-            actor=actor,
-            extra_args=payload.model_dump(),
-        )
-    except jobs_service.JobConflictError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-
-    preset = await _find_preset(session, payload.preset)
-    session.add(
-        EngineRun(
-            engine=payload.engine,
-            preset_name=payload.preset,
-            api_port=payload.port,
-            tp=payload.tp if payload.tp is not None else (preset.tp if preset else None),
-            gpu_mask=preset.gpu_mask if preset else None,
-            desired_status=RunStatus.RUNNING,
-            observed_status=RunStatus.RUNNING,
-            started_at=datetime.now(timezone.utc),
-            extra={"hf_id": preset.hf_id} if preset else {},
-        )
-    )
-
-    return JobAccepted(
-        job_id=job.id,
-        correlation_id=job.correlation_id,
-        kind=job.kind,
-        status=job.status.value,
-        message=command.summary,
-    )
-
-
-@router.post("/down", response_model=JobAccepted, status_code=status.HTTP_202_ACCEPTED)
-async def runtime_down(
-    payload: EngineDownRequest,
-    actor: str | None = Depends(actor_from_header),
-    session: AsyncSession = Depends(db_session),
-) -> JobAccepted:
-    settings = get_settings()
-    command = cmd_down(settings.slgpu_root, include_monitoring=payload.include_monitoring)
-    try:
-        job = await jobs_service.submit(command, actor=actor, extra_args=payload.model_dump())
-    except jobs_service.JobConflictError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    result = await session.execute(
-        select(EngineRun).where(EngineRun.observed_status != RunStatus.STOPPED)
-    )
-    now = datetime.now(timezone.utc)
-    for run in result.scalars().all():
-        run.desired_status = RunStatus.STOPPED
-        run.observed_status = RunStatus.STOPPED
-        run.stopped_at = now
-    return JobAccepted(
-        job_id=job.id,
-        correlation_id=job.correlation_id,
-        kind=job.kind,
-        status=job.status.value,
-        message=command.summary,
-    )
-
-
-@router.post("/restart", response_model=JobAccepted, status_code=status.HTTP_202_ACCEPTED)
-async def runtime_restart(
-    payload: EngineRestartRequest,
-    actor: str | None = Depends(actor_from_header),
-    session: AsyncSession = Depends(db_session),
-) -> JobAccepted:
-    settings = get_settings()
-    try:
-        command = cmd_restart(settings.slgpu_root, preset=payload.preset, tp=payload.tp)
-    except ValidationError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    try:
-        job = await jobs_service.submit(command, actor=actor, extra_args=payload.model_dump())
-    except jobs_service.JobConflictError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    snap = await runtime_service.snapshot()
-    latest = await _latest_active_run(session)
-    preset = await _find_preset(session, payload.preset)
-    engine = snap.engine or (latest.engine if latest else "vllm")
-    session.add(
-        EngineRun(
-            engine=engine,
-            preset_name=payload.preset,
-            api_port=snap.api_port or (latest.api_port if latest else None),
-            tp=payload.tp if payload.tp is not None else (preset.tp if preset else None),
-            gpu_mask=preset.gpu_mask if preset else None,
-            desired_status=RunStatus.RUNNING,
-            observed_status=RunStatus.RUNNING,
-            started_at=datetime.now(timezone.utc),
-            extra={"hf_id": preset.hf_id} if preset else {},
-        )
-    )
-    return JobAccepted(
-        job_id=job.id,
-        correlation_id=job.correlation_id,
-        kind=job.kind,
-        status=job.status.value,
-        message=command.summary,
-    )
-
-
 async def _next_free_port(session: AsyncSession, engine: str) -> int:
-    res = await session.execute(select(EngineSlot.host_api_port).where(EngineSlot.host_api_port.isnot(None)))
+    res = await session.execute(
+        select(EngineSlot.host_api_port).where(EngineSlot.host_api_port.isnot(None))
+    )
     used = {int(p) for p in res.scalars().all() if p is not None}
     start, end = (8111, 8130) if engine == "vllm" else (8222, 8241)
     for p in range(start, end + 1):
@@ -407,14 +290,4 @@ async def _next_free_port(session: AsyncSession, engine: str) -> int:
 
 async def _find_preset(session: AsyncSession, name: str) -> Preset | None:
     result = await session.execute(select(Preset).where(Preset.name == name))
-    return result.scalar_one_or_none()
-
-
-async def _latest_active_run(session: AsyncSession) -> EngineRun | None:
-    result = await session.execute(
-        select(EngineRun)
-        .where(EngineRun.observed_status != RunStatus.STOPPED)
-        .order_by(EngineRun.updated_at.desc(), EngineRun.id.desc())
-        .limit(1)
-    )
     return result.scalar_one_or_none()

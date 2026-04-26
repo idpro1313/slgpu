@@ -10,7 +10,7 @@ import pytest
 from app.db.session import init_db
 from app.services import jobs as jobs_service
 from app.services.jobs import _exec_argv_for_cli
-from app.services.slgpu_cli import CliCommand, cmd_up
+from app.services.slgpu_cli import CliCommand, cmd_slot_up
 
 
 @pytest.fixture
@@ -71,7 +71,13 @@ def test_session_scope_helper_exists():
 def test_exec_argv_empty_for_native_commands(tmp_path: Path) -> None:
     root = tmp_path / "repo"
     root.mkdir()
-    cmd = cmd_up(root, "vllm", "deepseek-v4-flash")
+    cmd = cmd_slot_up(
+        slot_key="s1",
+        engine="vllm",
+        preset="deepseek-v4-flash",
+        host_api_port=8111,
+        gpu_indices=[0, 1, 2, 3, 4, 5, 6, 7],
+    )
     assert _exec_argv_for_cli(cmd, root) == []
 
 

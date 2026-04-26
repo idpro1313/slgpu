@@ -109,6 +109,22 @@ def _sqlite_drop_legacy_preset_engine_column(connection: Connection) -> None:
         logger.warning("Could not drop legacy presets.engine column: %s", exc)
 
 
+def _sqlite_drop_runs_table(connection: Connection) -> None:
+    """Remove legacy ``runs`` table (EngineRun) removed in web 4.0.0."""
+
+    if connection.engine.dialect.name != "sqlite":
+        return
+    tables = connection.execute(
+        text("SELECT name FROM sqlite_master WHERE type='table' AND name='runs'")
+    ).fetchall()
+    if not tables:
+        return
+    try:
+        connection.execute(text("DROP TABLE runs"))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not drop legacy runs table: %s", exc)
+
+
 async def init_db() -> None:
     """Create tables on first run.
 
@@ -121,7 +137,6 @@ async def init_db() -> None:
         job,
         model,
         preset,
-        run,
         service,
         setting,
         slot,
@@ -137,6 +152,7 @@ async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await conn.run_sync(_sqlite_drop_legacy_preset_engine_column)
+        await conn.run_sync(_sqlite_drop_runs_table)
 
     async with session_scope() as session:
         await migrate_legacy_json_to_rows(session)

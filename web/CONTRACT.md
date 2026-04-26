@@ -55,8 +55,7 @@ radius `10px`. Favicon остаётся в LLM-тематике, но испол
 |---|---|
 | `models` | Кэш реестра HF-моделей: id, revision, slug, локальный путь, статус скачивания, размер, последняя ошибка, attempts. Источник правды для весов — папки `${MODELS_DIR}/<org>/<repo>`. `GET /models` и **`POST /models/sync`** подмешивают/обновляют записи по сканированию `MODELS_DIR`. В **`GET /models`** и **`GET /models/{id}`** вложенное поле **`pull_progress`** (активная `Job` `native.model.pull` по `resource` = `hf_id`): `job_id`, `status`, `progress` (0..1 при наличии tqdm от `huggingface_hub`), `message` — для отображения хода загрузки в списке моделей. UI: правка revision/notes, **удаление из реестра** (в т.ч. в строке таблицы) и, отдельно, удаление локальной папки весов внутри `MODELS_DIR` при явном подтверждении. |
 | `presets` | Декларация пресета в БД (имя, HF ID, model_id, параметры key/value для `.env`, GPU mask, путь к синхронизированному `.env`). **Движок** (vLLM/SGLang) в пресете **не** хранится: выбор — при запуске (`./slgpu up …`, страница Inference). Экспорт в `data/presets/<slug>.env` не добавляет `SLGPU_ENGINE`. **`POST /api/v1/presets/import-templates`** копирует эталонные `*.env` из **`examples/presets`** репозитория в `PRESETS_DIR` **без перезаписи** уже существующих файлов, затем выполняет импорт в БД (как **`POST /presets/sync`**). UI: просмотр, параметрическое редактирование, удаление; запись в файл — отдельный экспорт; удаление `.env` — отдельная подтверждаемая операция. |
-| `runs` | Желаемое и фактическое состояние запуска (engine, preset, HF ID в `extra`, port, TP, `gpu_mask`, started_at). Используется для истории/совместимости; активный **мультислот** — таблица `engine_slots`. |
-| `engine_slots` | Слот инференса: `slot_key` (уник.), `engine`, `preset_name`, `hf_id`, `tp`, `gpu_indices` (CSV физ. GPU), `host_api_port`, `internal_api_port` (8111/8222), `container_id`/`container_name`, `desired_status` / `observed_status`, `extra`. Запуск/остановка — **`native.slot.*`** (docker-py, не compose), см. §3. |
+| `engine_slots` | Слот инференса: `slot_key` (уник.), `engine`, `preset_name`, `hf_id`, `tp`, `gpu_indices` (CSV физ. GPU), `host_api_port`, `internal_api_port` (8111/8222), `container_id`/`container_name`, `desired_status` / `observed_status`, `extra`. При `POST /runtime/slots` строка создаётся сразу со статусом **`requested`** (бронь GPU/порта), job переводит в `running` / `failed`. Таблица **`runs` удалена в 4.0.0** (миграция startup: `DROP TABLE runs` на SQLite). Запуск/остановка — **`native.slot.*`** (docker-py), см. §3. |
 | `services` | Состояние сервисов мониторинга и LiteLLM по последнему опросу. |
 | `jobs` | Долгие операции CLI: команда, статус, exit code, stdout/stderr tail, correlation id, инициатор. |
 | `audit_events` | Действия: при `jobs.submit` — запись **с** `correlation_id` (дублирует job для трассировки). Отдельно — **только UI** (`correlation_id IS NULL`): пресеты, модель в реестре, настройки public-access. Лента «Задачи» строится из `GET /activity`: `jobs` + UI-`audit` без дубля CLI-строк. |
@@ -74,9 +73,7 @@ Footer приложения показывает версию из `/healthz`; b
 | kind | Назначение |
 |---|---|
 | `native.model.pull` | Скачать веса через `huggingface_hub.snapshot_download` (`HF_TOKEN` из слитого стека). |
-| `native.llm.up` | Тонкая обёртка: `native.slot.up` с `slot_key=default` (docker-py, контейнер `slgpu-vllm` / `slgpu-sglang`). |
-| `native.llm.down` / `native.llm.restart` | `down` — остановка всех слотов LLM (по БД + legacy compose-имена); `restart` — пересоздание слота `default`. |
-| `native.slot.up` / `down` / `restart` | Управление одним слотом: `args.slot_key`, `engine`, `preset`, `gpu_indices` (list int), `host_api_port`, опционально `tp`. Локи jobs: `("engine", "slot:{slot_key}")` — разные слоты не блокируют друг друга. |
+| `native.slot.up` / `down` / `restart` | Управление одним слотом: `args.slot_key`, `engine`, `preset`, `gpu_indices` (list int), `host_api_port`, опционально `tp`. `down` останавливает контейнеры по label `com.develonica.slgpu.slot={slot_key}` и по имени `slgpu-{engine}-{slot_key}`. Локи jobs: `("engine", "slot:{slot_key}")`. **Удалено в 4.0.0:** `native.llm.*` (больше нет веб-обёрток; bash `./slgpu` на хосте не использует web jobs). |
 | `native.monitoring.up` / `down` / `restart` | Стек мониторинга. |
 | `native.monitoring.fix-perms` | Права на data-dir через docker-py + helper-образ. |
 | `native.bench.scenario` / `native.bench.load` | Subprocess `scripts/bench_openai.py` / `bench_load.py`, вывод в `data/bench/results/`. |
@@ -87,7 +84,7 @@ API: `GET /api/v1/dashboard` — метрики БД, runtime, пробы сер
 
 Зависимости образа web: `docker` (socket), `huggingface_hub` (pull), `docker compose` на хосте репо — для LLM/monitoring up (см. `app/services/compose_exec.py`).
 
-**Inference (UI):** мультислотный запуск — `POST /api/v1/runtime/slots` (для слота `default` задайте `slot_key: "default"`). Отдельная форма «up/restart/down только для default» в UI **не** дублируется; при необходимости вызывайте `POST /api/v1/runtime/up` и соседние маршруты из CLI/скриптов или вручную.
+**Inference (UI), 4.0.0:** только мультислотный путь: `POST /api/v1/runtime/slots`, `POST /api/v1/runtime/slots/{key}/down`, `…/restart`, `GET /api/v1/runtime/snapshot`, `GET /api/v1/runtime/slots`, `GET /api/v1/runtime/slots/{key}/logs`. **Удалено:** `POST /api/v1/runtime/up|down|restart`, `GET /api/v1/runtime/logs` (без `slot_key`). Для слота `default` укажите `slot_key: "default"` в теле `POST /slots`. **Live GPU:** `GET /api/v1/gpu/state` (nvidia-smi + процессы с полем `slot_key` по `docker top`), `GET /api/v1/gpu/availability?tp=N` (занятость по `engine_slots` **и** по процессам на GPU без записи в БД — `slot_key: external` в `busy[]`).
 
 ### Docker API
 
@@ -108,9 +105,7 @@ API: `GET /api/v1/dashboard` — метрики БД, runtime, пробы сер
 ## 4. Безопасность
 
 - Секреты стека хранятся в **`stack_params`** с `is_secret=true`; в API отдаются **маскированными** (`***`). Пользователь может обновить значение через `PATCH /app-config/stack` (не отправляйте `***` как новое значение). В теле `stack` значение **`null`** удаляет ключ; в `secrets` — **`null`** удаляет секрет (после `merge_partial_secrets`).
-- Один mutating job на стек одновременно (advisory lock в БД на
-  `(scope, resource)`: **legacy** runtime `native.llm.*` — `("engine", "runtime")`; **слоты** — `("engine", "slot:{slot_key}")`; monitoring — `("monitoring", "stack")`. UI показывает активную
-  job и блокирует повторные конфликтующие кнопки до завершения.
+- Один mutating job на scope+resource (advisory lock в памяти job-runner): **слоты** — `("engine", "slot:{slot_key}")`; monitoring — `("monitoring", "stack")`; model pull — `("model", hf_id)`; bench — `("bench", …)`. **4.0.0:** `native.llm.*` и lock `("engine", "runtime")` **удалены**.
 - Mutations, **не** порождающие CLI-job, пишут `audit_events` с `correlation_id IS NULL` (см. `app.services.ui_audit`). Команды через `jobs.submit` дополнительно пишут audit **с** `correlation_id`; в ленте `GET /activity` для таких команд показывается только строка `jobs` (лог, exit).
 - Корневой запуск не нужен. Контейнер web-приложения работает от
   не-root пользователя; для CLI он `exec`-ает в slgpu-репозиторий через

@@ -178,7 +178,7 @@ async def test_delete_model_can_remove_local_files(client: httpx.AsyncClient) ->
 
 
 @pytest.mark.asyncio
-async def test_runtime_snapshot_includes_requested_preset_and_model(
+async def test_runtime_snapshot_includes_slot_after_reservation(
     client: httpx.AsyncClient,
 ) -> None:
     async with client:
@@ -193,33 +193,33 @@ async def test_runtime_snapshot_includes_requested_preset_and_model(
         )
         assert preset.status_code == 201
 
-        up = await client.post(
-            "/api/v1/runtime/up",
-            json={"engine": "vllm", "preset": "qwen3", "port": 8111, "tp": None},
-        )
+        from unittest.mock import patch
+
+        with patch("app.services.gpu_availability._all_host_gpu_indices", return_value=set(range(8))):
+            up = await client.post(
+                "/api/v1/runtime/slots",
+                json={
+                    "engine": "vllm",
+                    "preset": "qwen3",
+                    "host_api_port": 8111,
+                    "tp": 8,
+                    "gpu_indices": [0, 1, 2, 3, 4, 5, 6, 7],
+                    "slot_key": "smoke-slot",
+                },
+            )
         assert up.status_code == 202
 
         snapshot = await client.get("/api/v1/runtime/snapshot")
 
     assert snapshot.status_code == 200
     body = snapshot.json()
-    assert body["preset_name"] == "qwen3"
-    assert body["hf_id"] == "Qwen/Qwen3-30B-A3B"
-    assert body["tp"] == 8
     assert "slots" in body
     assert isinstance(body["slots"], list)
-
-
-@pytest.mark.asyncio
-async def test_runtime_logs_returns_empty_without_docker(client: httpx.AsyncClient) -> None:
-    async with client:
-        response = await client.get("/api/v1/runtime/logs?tail=50")
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["tail"] == 50
-    assert body["logs"] == ""
-    assert body["container_name"] is None
+    assert len(body["slots"]) >= 1
+    sk = next(s for s in body["slots"] if s.get("slot_key") == "smoke-slot")
+    assert sk["preset_name"] == "qwen3"
+    assert sk["hf_id"] == "Qwen/Qwen3-30B-A3B"
+    assert sk["tp"] == 8
 
 
 @pytest.mark.asyncio

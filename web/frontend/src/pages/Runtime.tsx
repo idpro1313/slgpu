@@ -423,6 +423,18 @@ export function RuntimePage() {
       >
         <p className="section__subtitle">
           Слот: <span className="mono">{logSlotKey ?? "не выбран"}</span>
+          {logSlotKey && slotLogs.data?.engine ? (
+            <>
+              {" "}
+              · движок <span className="mono">{slotLogs.data.engine}</span>
+              {slotLogs.data.container_name ? (
+                <>
+                  {" "}
+                  · <span className="mono">{slotLogs.data.container_name}</span>
+                </>
+              ) : null}
+            </>
+          ) : null}
         </p>
         <pre className="code-block" style={{ maxHeight: 420, overflow: "auto" }}>
           {logSlotKey

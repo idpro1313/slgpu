@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from app.core.security import (
+    ValidationError,
     validate_engine,
     validate_port,
     validate_revision,
@@ -43,30 +44,7 @@ def cmd_pull(slgpu_root: Path, target: str, revision: str | None = None) -> CliC
     )
 
 
-def cmd_up(
-    slgpu_root: Path,
-    engine: str,
-    preset: str,
-    port: int | None = None,
-    tp: int | None = None,
-) -> CliCommand:
-    engine = validate_engine(engine)
-    preset = validate_slug(preset)
-    if port is not None:
-        validate_port(port)
-    if tp is not None:
-        validate_tp(tp)
-    return CliCommand(
-        kind="native.llm.up",
-        argv=[],
-        scope="engine",
-        resource="slot:default",
-        summary=f"up {engine} -m {preset}",
-    )
-
-
 def cmd_slot_up(
-    slgpu_root: Path,
     *,
     slot_key: str,
     engine: str,
@@ -92,7 +70,7 @@ def cmd_slot_up(
     )
 
 
-def cmd_slot_down(slgpu_root: Path, *, slot_key: str) -> CliCommand:  # noqa: ARG001
+def cmd_slot_down(*, slot_key: str) -> CliCommand:
     slot_key = validate_slot_key(slot_key)
     return CliCommand(
         kind="native.slot.down",
@@ -104,14 +82,13 @@ def cmd_slot_down(slgpu_root: Path, *, slot_key: str) -> CliCommand:  # noqa: AR
 
 
 def cmd_slot_restart(
-    slgpu_root: Path,
     *,
     slot_key: str,
     preset: str,
     host_api_port: int | None = None,
     tp: int | None = None,
     gpu_indices: list[int] | None = None,
-) -> CliCommand:  # noqa: ARG001
+) -> CliCommand:
     slot_key = validate_slot_key(slot_key)
     validate_slug(preset)
     if host_api_port is not None:
@@ -128,29 +105,6 @@ def cmd_slot_restart(
         scope="engine",
         resource=f"slot:{slot_key}",
         summary=f"slot restart {slot_key} -m {preset}",
-    )
-
-
-def cmd_down(slgpu_root: Path, include_monitoring: bool = False) -> CliCommand:
-    return CliCommand(
-        kind="native.llm.down",
-        argv=[],
-        scope="engine",
-        resource="runtime",
-        summary="down" + (" --all" if include_monitoring else ""),
-    )
-
-
-def cmd_restart(slgpu_root: Path, preset: str, tp: int | None = None) -> CliCommand:
-    preset = validate_slug(preset)
-    if tp is not None:
-        validate_tp(tp)
-    return CliCommand(
-        kind="native.llm.restart",
-        argv=[],
-        scope="engine",
-        resource="slot:default",
-        summary=f"restart -m {preset}",
     )
 
 

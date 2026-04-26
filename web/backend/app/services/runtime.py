@@ -2,18 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 import httpx
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.db.session import session_scope
-from app.models.run import EngineRun, RunStatus
-from app.models.slot import EngineSlot
+from app.models.slot import EngineSlot, RunStatus
 from app.services.docker_client import get_docker_inspector
 from app.services.slot_runtime import slot_container_name
 from app.services.stack_config import ports_for_probes_sync
@@ -33,7 +32,6 @@ def _llm_probe_bases(settings: Settings, engine: str, api_port: int) -> list[str
         candidates.append(f"http://vllm:{internal_vllm}")
     elif engine == "sglang":
         candidates.append(f"http://sglang:{internal_sglang}")
-    # Fallback, если LLM на хосте, а llm_http_host ещё 127.0.0.1 (доп. дубли отфильтруем)
     hdi = f"http://host.docker.internal:{port}"
     if settings.llm_http_host not in ("host.docker.internal",):
         candidates.append(hdi)
@@ -127,7 +125,12 @@ async def snapshot() -> RuntimeSnapshot:
     ports = ports_for_probes_sync()
     now = datetime.now(timezone.utc)
 
-    active = (RunStatus.RUNNING, RunStatus.DEGRADED, RunStatus.STARTING)
+    active = (
+        RunStatus.REQUESTED,
+        RunStatus.STARTING,
+        RunStatus.RUNNING,
+        RunStatus.DEGRADED,
+    )
     slot_rows: list[EngineSlot] = []
     async with session_scope() as session:
         res = await session.execute(
@@ -138,8 +141,8 @@ async def snapshot() -> RuntimeSnapshot:
         slot_rows = list(res.scalars().all())
 
     if slot_rows:
-        slot_probes: list[RuntimeSlotProbe] = []
-        for row in slot_rows:
+
+        async def _probe_one(row: EngineSlot) -> RuntimeSlotProbe:
             eng = row.engine
             ap = row.host_api_port
             if ap is None:
@@ -154,21 +157,22 @@ async def snapshot() -> RuntimeSnapshot:
             if inspector.is_available:
                 csum = inspector.get_by_name(cname) if cname else None
                 cst = csum.status if csum else None
-            slot_probes.append(
-                RuntimeSlotProbe(
-                    slot_key=row.slot_key,
-                    engine=eng,
-                    preset_name=row.preset_name,
-                    hf_id=row.hf_id,
-                    api_port=ap,
-                    tp=row.tp,
-                    gpu_indices=row.gpu_indices,
-                    container_status=cst,
-                    container_name=cname,
-                    served_models=served,
-                    metrics_available=metrics_available,
-                )
+            return RuntimeSlotProbe(
+                slot_key=row.slot_key,
+                engine=eng,
+                preset_name=row.preset_name,
+                hf_id=row.hf_id,
+                api_port=ap,
+                tp=row.tp,
+                gpu_indices=row.gpu_indices,
+                container_status=cst,
+                container_name=cname,
+                served_models=served,
+                metrics_available=metrics_available,
             )
+
+        slot_probes = await asyncio.gather(*[_probe_one(r) for r in slot_rows])
+
         def _sort_key(s: RuntimeSlotProbe) -> tuple[int, str]:
             return (0 if s.slot_key == "default" else 1, s.slot_key)
 
@@ -184,7 +188,7 @@ async def snapshot() -> RuntimeSnapshot:
             served_models=top.served_models,
             metrics_available=top.metrics_available,
             last_checked_at=now,
-            slots=slot_probes,
+            slots=list(slot_probes),
         )
 
     engine: str | None = None
@@ -283,65 +287,6 @@ async def tail_slot_logs(slot_key: str, tail: int = 300) -> RuntimeLogs:
         logs=logs,
         last_checked_at=datetime.now(timezone.utc),
     )
-
-
-def tail_container_logs(tail: int = 300) -> RuntimeLogs:
-    settings = get_settings()
-    inspector = get_docker_inspector()
-    project = str(ports_for_probes_sync()["compose_project_infer"])
-    bounded_tail = max(1, min(tail, 2000))
-
-    selected_engine: str | None = None
-    selected = None
-    for candidate in ("vllm", "sglang"):
-        container = inspector.get_by_service(project, candidate)
-        if container is None:
-            continue
-        if container.status == "running":
-            selected_engine = candidate
-            selected = container
-            break
-        if selected is None:
-            selected_engine = candidate
-            selected = container
-
-    logs = inspector.tail_logs(selected.id, tail=bounded_tail) if selected is not None else ""
-    logger.info(
-        "[runtime][tail_container_logs] engine=%s container=%s status=%s tail=%s bytes=%s",
-        selected_engine,
-        selected.name if selected else None,
-        selected.status if selected else None,
-        bounded_tail,
-        len(logs),
-    )
-    return RuntimeLogs(
-        engine=selected_engine,
-        container_name=selected.name if selected else None,
-        container_status=selected.status if selected else None,
-        tail=bounded_tail,
-        logs=logs,
-        last_checked_at=datetime.now(timezone.utc),
-    )
-
-
-async def attach_run_metadata(session: AsyncSession, snap: RuntimeSnapshot) -> RuntimeSnapshot:
-    """Attach last web-requested preset/model; prefer **engine_slots** when present."""
-    if snap.slots:
-        return snap
-    query = select(EngineRun).where(EngineRun.observed_status != RunStatus.STOPPED)
-    if snap.engine:
-        query = query.where(EngineRun.engine == snap.engine)
-    query = query.order_by(EngineRun.updated_at.desc(), EngineRun.id.desc()).limit(1)
-    result = await session.execute(query)
-    run = result.scalar_one_or_none()
-    if run is None:
-        return snap
-
-    snap.preset_name = run.preset_name
-    snap.tp = run.tp
-    raw_hf_id = (run.extra or {}).get("hf_id")
-    snap.hf_id = str(raw_hf_id) if raw_hf_id else None
-    return snap
 
 
 def _extract_host_port(ports: list[dict]) -> int | None:

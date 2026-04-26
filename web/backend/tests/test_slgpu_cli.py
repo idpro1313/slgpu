@@ -8,11 +8,10 @@ import pytest
 
 from app.core.security import ValidationError
 from app.services.slgpu_cli import (
-    cmd_down,
     cmd_monitoring,
     cmd_pull,
-    cmd_restart,
-    cmd_up,
+    cmd_slot_down,
+    cmd_slot_up,
 )
 
 
@@ -38,37 +37,36 @@ def test_cmd_pull_rejects_injection():
         cmd_pull(_root(), "Qwen/Qwen; rm -rf /")
 
 
-def test_cmd_up_native():
-    cmd = cmd_up(_root(), "vllm", "qwen3.6-35b-a3b")
+def test_cmd_slot_up_native():
+    cmd = cmd_slot_up(
+        slot_key="a1",
+        engine="vllm",
+        preset="qwen3.6-35b-a3b",
+        host_api_port=8111,
+        gpu_indices=[0, 1, 2, 3, 4, 5, 6, 7],
+    )
     assert cmd.argv == []
-    assert cmd.kind == "native.llm.up"
+    assert cmd.kind == "native.slot.up"
     assert cmd.scope == "engine"
-    assert cmd.resource == "slot:default"
+    assert cmd.resource == "slot:a1"
 
 
-def test_cmd_up_with_port_and_tp_still_native():
-    cmd = cmd_up(_root(), "sglang", "deepseek-v4-pro", port=8222, tp=8)
-    assert cmd.argv == []
-    assert cmd.kind == "native.llm.up"
-
-
-def test_cmd_up_rejects_bad_engine():
+def test_cmd_slot_up_rejects_bad_engine():
     with pytest.raises(ValidationError):
-        cmd_up(_root(), "trtllm", "demo")
+        cmd_slot_up(
+            slot_key="a1",
+            engine="trtllm",
+            preset="qwen3.6-35b-a3b",
+            host_api_port=8111,
+            gpu_indices=[0, 1, 2, 3, 4, 5, 6, 7],
+        )
 
 
-def test_cmd_down_native():
-    assert cmd_down(_root()).argv == []
-    assert cmd_down(_root()).kind == "native.llm.down"
-    assert cmd_down(_root()).resource == "runtime"
-    assert cmd_down(_root(), include_monitoring=True).kind == "native.llm.down"
-
-
-def test_cmd_restart_native():
-    cmd = cmd_restart(_root(), "qwen3.6-35b-a3b", tp=4)
+def test_cmd_slot_down_native():
+    cmd = cmd_slot_down(slot_key="a1")
     assert cmd.argv == []
-    assert cmd.kind == "native.llm.restart"
-    assert cmd.resource == "slot:default"
+    assert cmd.kind == "native.slot.down"
+    assert cmd.resource == "slot:a1"
 
 
 @pytest.mark.parametrize("action", ["up", "down", "restart", "fix-perms"])

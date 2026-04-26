@@ -129,7 +129,6 @@ def _run_slot_sync(
         client.ping()
     except docker.errors.DockerException as exc:
         return {"ok": False, "error": f"docker: {exc}", "container_id": None, "container_name": cname}
-    _ensure_network_block(client, log)
 
     _stop_container_by_name(client, cname, log)
 
@@ -194,6 +193,9 @@ def _run_slot_sync(
     short = f"{cid[:12]}…" if cid else "?"
     log.append(f"[slot] up {cname} id={short} image={image!r} port={host_api_port} gpus={gpu_indices}")
     invalidate_gpu_state_cache()
+    from app.services.gpu_availability import invalidate_host_gpu_cache
+
+    invalidate_host_gpu_cache()
     return {
         "ok": True,
         "error": None,
@@ -202,42 +204,43 @@ def _run_slot_sync(
     }
 
 
-def _ensure_network_block(client: docker.DockerClient, log: list[str]) -> None:
-    try:
-        client.networks.get("slgpu")
-    except NotFound:
-        try:
-            client.networks.create("slgpu", driver="bridge", check_duplicate=True)
-            log.append("[slot] created network slgpu")
-        except docker.errors.DockerException as exc:
-            log.append(f"[slot] network: {exc}")
-
-
 def stop_slot_sync(cname: str, log: list[str]) -> int:
     client = docker.from_env()
     _stop_container_by_name(client, cname, log)
     invalidate_gpu_state_cache()
+    from app.services.gpu_availability import invalidate_host_gpu_cache
+
+    invalidate_host_gpu_cache()
     return 0
 
 
-def stop_all_llm_slots_sync(log: list[str]) -> int:
-    """Remove web-managed and legacy compose LLM containers."""
+def stop_containers_for_slot_key_sync(slot_key: str, log: list[str]) -> int:
+    """Stop all containers with ``com.develonica.slgpu.slot`` label; fallback to name patterns."""
     client = docker.from_env()
     if not _ping(client, log):
         return 1
+    label = f"{_LABEL_SLOT}={slot_key}"
     try:
-        for c in client.containers.list(all=True, filters={"label": [_LABEL_SLOT]}):
+        for c in client.containers.list(all=True, filters={"label": [label]}):
             try:
                 c.stop(timeout=20)
                 c.remove()
-                log.append(f"[slot] removed labeled {c.name}")
+                logger.info(
+                    "[slot_runtime][stop_containers_for_slot_key_sync][BLOCK_REMOVED] name=%s",
+                    c.name,
+                )
+                log.append(f"[slot] removed labeled {c.name or c.id[:12]}")
             except docker.errors.DockerException as exc:
                 log.append(f"[slot] remove {c.name}: {exc}")
     except docker.errors.DockerException as exc:
         log.append(f"[slot] list: {exc}")
-    for legacy in ("slgpu-vllm", "slgpu-sglang"):
-        _stop_container_by_name(client, legacy, log)
+    for eng in ("vllm", "sglang"):
+        cname = slot_container_name(eng, slot_key)
+        _stop_container_by_name(client, cname, log)
     invalidate_gpu_state_cache()
+    from app.services.gpu_availability import invalidate_host_gpu_cache
+
+    invalidate_host_gpu_cache()
     return 0
 
 

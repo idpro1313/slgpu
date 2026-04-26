@@ -1,4 +1,4 @@
-<VerificationPlan VERSION="2.3.0">
+<VerificationPlan VERSION="2.4.0">
   <GlobalPolicy>
     <log-format>[Module][function][BLOCK_NAME] message</log-format>
     <deterministic-first>true</deterministic-first>
@@ -208,6 +208,7 @@
         <file>web/backend/tests/test_gpu_availability.py</file>
         <file>web/backend/tests/test_slots_runtime.py</file>
         <file>web/backend/tests/test_preset_clone.py</file>
+        <file>web/backend/tests/test_4_0_concurrency.py</file>
       </test-files>
       <module-checks>
         <check-1>python -c "import compileall, sys; sys.exit(0 if compileall.compile_dir('web/backend/app', quiet=1) else 1)"</check-1>
@@ -218,7 +219,7 @@
       <scenarios>
         <scenario-1 kind="success">Whitelist в app.core.security принимает legitimate slug/HF id и отвергает строки с пробелами/`;`/`&amp;`.</scenario-1>
         <scenario-2 kind="success">Парсинг существующих configs/models/*.env возвращает MODEL_ID и набор runtime ключей.</scenario-2>
-        <scenario-3 kind="success">slgpu_cli: kind `native.*`, пустой `argv`; pull/up/down/restart/monitoring проходят валидацию.</scenario-3>
+        <scenario-3 kind="success">slgpu_cli: kind `native.*`, пустой `argv`; pull, `native.slot.up|down|restart`, monitoring проходят валидацию (4.0.0: без `native.llm.*`).</scenario-3>
         <scenario-4 kind="success">Job runner устанавливает advisory lock и вторая операция на тот же scope/resource падает с JobConflictError (HTTP 409).</scenario-4>
         <scenario-5 kind="success">FastAPI app стартует, /healthz возвращает 200 и версию из app.__version__.</scenario-5>
         <scenario-6 kind="failure">Невалидный action в /api/v1/monitoring/action возвращает 400.</scenario-6>
@@ -226,9 +227,9 @@
         <scenario-8 kind="success">В образе slgpu-web:dev доступна команда `hf` (`docker compose -f docker/docker-compose.web.yml exec slgpu-web hf --help`), `HF_HOME` указывает на writable `/data/huggingface`, а `slgpu pull qwen3.6-35b-a3b` из web запускается без ошибок «Не найдена команда «hf»», `Permission denied: /home/slgpuweb`, относительного `data/models/.../.cache` и отсутствующего каталога `--local-dir` модели.</scenario-8>
         <scenario-9 kind="success">`GET /api/v1/models` обнаруживает реальные каталоги `${MODELS_DIR}/&lt;org&gt;/&lt;repo&gt;` без зависимости от наличия пресета и возвращает статус `ready`, если есть `config.json` и файлы весов.</scenario-9>
         <scenario-10 kind="success">`PATCH /api/v1/presets/{id}` обновляет HF ID, TP и key/value параметры пресета, помечает запись как drift; UI открывает выбранный пресет, редактирует параметры без raw JSON и отдельно экспортирует в `.env`.</scenario-10>
-        <scenario-11 kind="success">`POST /api/v1/runtime/up` создаёт активный `EngineRun`, а `GET /api/v1/runtime/snapshot` возвращает `preset_name`, `hf_id` и `tp`; Runtime/Dashboard показывают эти поля вместе с engine и served models.</scenario-11>
-        <scenario-12 kind="success">`GET /api/v1/runtime/logs?tail=N` возвращает tail stdout/stderr текущего контейнера vLLM/SGLang; Runtime UI отображает лог и обновляет его периодически.</scenario-12>
-        <scenario-13 kind="success">Runtime/Inference UI: блокировка по активной job на том же `resource` (`slot:default`, `slot:{key}`, `runtime`); параллельно разные `slot:*` не конфликтуют. Monitoring: lock `("monitoring","stack")`.</scenario-13>
+        <scenario-11 kind="success">4.0.0: `POST /api/v1/runtime/slots` создаёт `EngineSlot` с `observed_status=requested` и ставит `native.slot.up`; после успеха `GET /api/v1/runtime/snapshot` возвращает `runtime.slots[]` с `preset_name`/`hf_id`/`tp` по слоту; легаси `EngineRun` и `POST /runtime/up` отсутствуют.</scenario-11>
+        <scenario-12 kind="success">4.0.0: `GET /api/v1/runtime/slots/{key}/logs?tail=N` — хвост логов слота; глобального `GET /runtime/logs` нет. Runtime UI показывает engine в заголовке лога.</scenario-12>
+        <scenario-13 kind="success">Runtime/Inference UI: блокировка по активной job на том же `resource` (`slot:default`, `slot:{key}`); параллельно разные `slot:*` не конфликтуют. Monitoring: lock `("monitoring","stack")`.</scenario-13>
         <scenario-14 kind="success">`./slgpu monitoring fix-perms` работает и из web (без `sudo`): создаёт каталоги `data/monitoring/...` и выставляет владельца через короткоживущий root-контейнер `docker run --rm -u 0:0` (образ из `SLGPU_FIXPERMS_HELPER_IMAGE`, по умолчанию `alpine:latest`).</scenario-14>
         <scenario-15 kind="success">Логи web в stdout — JSON one-record-one-line: `app`, `httpx` и `uvicorn*` не дублируют level/timestamp/logger/message через несколько handlers.</scenario-15>
         <scenario-16 kind="success">`PATCH /api/v1/settings/public-access` сохраняет публичный server_host; Monitoring/Dashboard/LiteLLM возвращают browser-ссылки с этим host, а внутренние probes продолжают использовать `WEB_MONITORING_HTTP_HOST`.</scenario-16>
@@ -239,6 +240,7 @@
         <scenario-21 kind="success">`GET /api/v1/bench/runs` и `GET /bench/report.md` доступны; `POST /bench/scenario|load` ставит native.bench.* job.</scenario-21>
         <scenario-22 kind="success">`GET /api/v1/dashboard` включает объект `host` (ОС, CPU, RAM, диск по `slgpu_root`, блок `nvidia` с `smi_available`); Dashboard UI отображает секцию «Сервер».</scenario-22>
         <scenario-23 kind="success">`GET /api/v1/gpu/state` (при моке nvidia-smi) и `GET /api/v1/gpu/availability` (при моке списка GPU на хосте); `GET /dashboard` и `GET /runtime/snapshot` содержат `runtime.slots` (массив); `POST /api/v1/runtime/slots` при валидном пресете и `gpu_indices` — 202 `native.slot.up`; `POST /api/v1/presets/{id}/clone` — 201 и непустой `id` после flush.</scenario-23>
+        <scenario-24 kind="failure">4.0.0 race: `POST /runtime/slots` с `gpu_indices`, пересекающимися с busy слотом или внешним `slot_key: external` в `GET /gpu/availability`, — HTTP 400/409; пересечение с другим `requested` в БД — отклонение.</scenario-24>
       </scenarios>
       <required-log-markers>
         <marker-1>[WEB][jobs][BLOCK_RUN_JOB]</marker-1>

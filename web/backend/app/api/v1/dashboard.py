@@ -20,7 +20,7 @@ from app.services.hf_models import sync_local_models
 from app.services import app_settings
 from app.services.host_info import collect_host_info
 from app.services.monitoring import probe_all
-from app.services.runtime import attach_run_metadata, snapshot as runtime_snapshot
+from app.services.runtime import snapshot as runtime_snapshot
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -49,7 +49,6 @@ async def dashboard(
     ).scalar_one()
 
     runtime = await runtime_snapshot()
-    await attach_run_metadata(session, runtime)
     services = await probe_all()
     public_urls = await app_settings.get_public_urls(session, request)
     healthy = sum(1 for s in services if s.status.value == "healthy")

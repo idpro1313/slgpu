@@ -34,7 +34,7 @@ export interface DashboardRuntime {
   metrics_available: boolean;
   last_checked_at: string | null;
   /** Мультислотный рантайм: карточки на Dashboard / привязка GPU live. */
-  slots?: RuntimeSlotView[];
+  slots: RuntimeSlotView[];
 }
 
 export interface DashboardServiceCard {
@@ -157,28 +157,6 @@ export interface RuntimeSnapshot {
   slots: RuntimeSlotView[];
 }
 
-export interface EngineSlotRow {
-  id: number;
-  slot_key: string;
-  engine: string;
-  preset_name: string | null;
-  hf_id: string | null;
-  tp: number | null;
-  gpu_indices: string | null;
-  host_api_port: number | null;
-  internal_api_port: number | null;
-  container_id: string | null;
-  container_name: string | null;
-  desired_status: RunStatus;
-  observed_status: RunStatus;
-  last_error: string | null;
-  started_at: string | null;
-  stopped_at: string | null;
-  created_at: string;
-  updated_at: string;
-  extra: Record<string, unknown>;
-}
-
 export interface GpuCardState {
   index: number;
   uuid?: string | null;
@@ -195,7 +173,16 @@ export interface GpuStateResponse {
   driver_version: string | null;
   cuda_version: string | null;
   gpus: GpuCardState[];
-  processes: Record<string, unknown>[];
+  /** Процессы compute на GPU; поле ``slot_key`` сопоставляется с контейнерами слотов (docker top). */
+  processes: GpuProcessState[];
+}
+
+export interface GpuProcessState {
+  pid: number;
+  process_name?: string;
+  used_memory_mib?: number | string;
+  gpu_uuid?: string | null;
+  slot_key?: string | null;
 }
 
 export interface GpuBusy {

@@ -3,48 +3,8 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
-
-from app.models.run import RunStatus
-
-
-class EngineRunOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    engine: str
-    preset_name: str | None
-    api_port: int | None
-    tp: int | None
-    gpu_mask: str | None
-    desired_status: RunStatus
-    observed_status: RunStatus
-    container_id: str | None
-    started_at: datetime | None
-    stopped_at: datetime | None
-    last_error: str | None
-    extra: dict[str, Any]
-    created_at: datetime
-    updated_at: datetime
-
-
-class EngineUpRequest(BaseModel):
-    engine: str = Field(examples=["vllm", "sglang"])
-    preset: str
-    port: int | None = None
-    tp: int | None = None
-
-
-class EngineRestartRequest(BaseModel):
-    preset: str
-    tp: int | None = None
-
-
-class EngineDownRequest(BaseModel):
-    include_monitoring: bool = False
-
+from pydantic import BaseModel, Field
 
 class RuntimeSlotView(BaseModel):
     """One inference slot: runtime probe + optional DB join."""

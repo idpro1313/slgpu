@@ -20,7 +20,7 @@ from app.core.config import get_settings
 from app.db.session import session_scope
 from app.models.job import Job, JobStatus
 from app.models.preset import Preset
-from app.models.run import RunStatus
+from app.models.slot import RunStatus
 from app.models.slot import EngineSlot
 from app.services import compose_exec
 from app.services.llm_env import merge_llm_stack_env, parse_gpu_mask
@@ -28,8 +28,7 @@ from app.services.slot_runtime import (
     internal_api_port_for,
     run_slot_docker,
     slot_container_name,
-    stop_all_llm_slots_sync,
-    stop_slot_sync,
+    stop_containers_for_slot_key_sync,
 )
 from app.services.stack_config import (
     sync_merged_flat,
@@ -141,13 +140,7 @@ async def handle_native_job(job_id: int, command: CliCommand, args: dict[str, An
     log: list[str] = []
     code = 0
     try:
-        if command.kind == "native.llm.up":
-            code = await _native_llm_up(args, log)
-        elif command.kind == "native.llm.down":
-            code = await _native_llm_down(args, log)
-        elif command.kind == "native.llm.restart":
-            code = await _native_llm_restart(args, log)
-        elif command.kind == "native.slot.up":
+        if command.kind == "native.slot.up":
             code = await _native_slot_up(args, log)
         elif command.kind == "native.slot.down":
             code = await _native_slot_down(args, log)
@@ -212,7 +205,7 @@ def _default_host_port(merged: dict[str, str], engine: str, port_arg: Any) -> in
     return int(merged.get("LLM_API_PORT", merged.get("LLM_API_PORT_SGLANG", "8222")))
 
 
-async def _db_upsert_slot_after_up(
+async def _db_mark_slot_running(
     slot_key: str,
     engine: str,
     preset: str,
@@ -224,16 +217,18 @@ async def _db_upsert_slot_after_up(
     cname: str,
     hf_id: str | None,
 ) -> None:
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc)
     async with session_scope() as s:
         r = await s.execute(select(EngineSlot).where(EngineSlot.slot_key == slot_key))
         row = r.scalar_one_or_none()
         if row is None:
-            row = EngineSlot(
-                slot_key=slot_key,
-                engine=engine,
-                gpu_indices=",".join(str(i) for i in gpu_indices),
+            logger.error(
+                "[native_jobs][_db_mark_slot_running][BLOCK_MISSING_ROW] slot_key=%s",
+                slot_key,
             )
-            s.add(row)
+            return
         row.engine = engine
         row.preset_name = preset
         row.hf_id = hf_id
@@ -247,9 +242,7 @@ async def _db_upsert_slot_after_up(
         row.observed_status = RunStatus.RUNNING
         row.last_error = None
         row.stopped_at = None
-        from datetime import datetime, timezone
-
-        row.started_at = datetime.now(timezone.utc)
+        row.started_at = now
 
 
 async def _db_mark_slot_failed(slot_key: str, err: str | None) -> None:
@@ -281,21 +274,6 @@ async def _db_mark_stopped_by_key(slot_key: str) -> None:
         row.stopped_at = now
         row.container_id = None
         row.container_name = None
-
-
-async def _db_mark_all_llm_stopped() -> None:
-    from datetime import datetime, timezone
-
-    now = datetime.now(timezone.utc)
-    active = (RunStatus.STARTING, RunStatus.REQUESTED, RunStatus.RUNNING, RunStatus.DEGRADED)
-    async with session_scope() as s:
-        res = await s.execute(select(EngineSlot).where(EngineSlot.observed_status.in_(active)))
-        for row in res.scalars().all():
-            row.desired_status = RunStatus.STOPPED
-            row.observed_status = RunStatus.STOPPED
-            row.stopped_at = now
-            row.container_id = None
-            row.container_name = None
 
 
 async def _native_slot_up(args: dict[str, Any], log: list[str]) -> int:
@@ -352,7 +330,7 @@ async def _native_slot_up(args: dict[str, Any], log: list[str]) -> int:
         return 1
     cid = str(res.get("container_id") or "")
     cname = str(res.get("container_name") or slot_container_name(engine, slot_key))
-    await _db_upsert_slot_after_up(
+    await _db_mark_slot_running(
         slot_key,
         engine,
         preset,
@@ -367,85 +345,11 @@ async def _native_slot_up(args: dict[str, Any], log: list[str]) -> int:
     return 0
 
 
-async def _native_llm_up(args: dict[str, Any], log: list[str]) -> int:
-    u = {**args, "slot_key": "default", "host_api_port": _default_host_port(sync_merged_flat(), str(args.get("engine", "vllm")), args.get("port"))}
-    u.pop("port", None)
-    return await _native_slot_up(u, log)
-
-
 async def _native_slot_down(args: dict[str, Any], log: list[str]) -> int:
-    settings = get_settings()
-    root = settings.slgpu_root
-    _ = root
     slot_key = str(args.get("slot_key", "default"))
-    engine = str(args.get("engine", "vllm"))
-    cname: str
-    async with session_scope() as s:
-        r = await s.execute(select(EngineSlot).where(EngineSlot.slot_key == slot_key))
-        row = r.scalar_one_or_none()
-    if row is not None and row.engine:
-        engine = row.engine
-    cname = slot_container_name(engine, slot_key)
-    await asyncio.to_thread(stop_slot_sync, cname, log)
+    code = await asyncio.to_thread(stop_containers_for_slot_key_sync, slot_key, log)
     await _db_mark_stopped_by_key(slot_key)
-    return 0
-
-
-async def _native_llm_down(args: dict[str, Any], log: list[str]) -> int:
-    settings = get_settings()
-    root = settings.slgpu_root
-    all_mon = bool(args.get("include_monitoring"))
-    if all_mon:
-        c, o, e = await compose_exec.compose_inherit_env(root, "-f", _LL_YML, "stop")
-        log.append(o + e)
-        c2, o2, e2 = await compose_exec.compose_inherit_env(root, "-f", _MON_YML, "stop")
-        log.append(o2 + e2)
-        await _db_mark_all_llm_stopped()
-        return 0 if c == 0 and c2 == 0 else 1
-    code = await asyncio.to_thread(stop_all_llm_slots_sync, log)
-    await _db_mark_all_llm_stopped()
     return int(code)
-
-
-async def _find_engine_for_default_restart(log: list[str]) -> str | None:
-    async with session_scope() as s:
-        r = await s.execute(
-            select(EngineSlot)
-            .where(EngineSlot.slot_key == "default")
-            .where(EngineSlot.observed_status == RunStatus.RUNNING)
-        )
-        row = r.scalar_one_or_none()
-    if row and row.engine:
-        log.append(f"[restart] engine from engine_slots: {row.engine}")
-        return row.engine
-    return None
-
-
-async def _native_llm_restart(args: dict[str, Any], log: list[str]) -> int:
-    engine = await _find_engine_for_default_restart(log)
-    if not engine:
-        log.append("[restart] no engine in slot default; try vllm")
-        engine = "vllm"
-    merged = sync_merged_flat()
-    preset = str(args.get("preset", ""))
-    tp = args.get("tp")
-    port_i: int
-    async with session_scope() as s:
-        r = await s.execute(select(EngineSlot).where(EngineSlot.slot_key == "default"))
-        sl = r.scalar_one_or_none()
-    if sl and sl.host_api_port:
-        port_i = int(sl.host_api_port)
-    else:
-        port_i = int(merged.get("LLM_API_PORT", "8111" if engine == "vllm" else "8222"))
-    await _native_slot_down({"slot_key": "default", "engine": engine}, log)
-    up_args: dict[str, Any] = {
-        "slot_key": "default",
-        "engine": engine,
-        "preset": preset,
-        "host_api_port": port_i,
-        "tp": tp,
-    }
-    return await _native_slot_up(up_args, log)
 
 
 async def _native_slot_restart(args: dict[str, Any], log: list[str]) -> int:

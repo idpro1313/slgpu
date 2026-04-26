@@ -1546,3 +1546,28 @@
 - **Почему:** запрос пользователя — длинный статический разбор в репозитории и превью в UI не нужны; достаточно модалки по `summary.json`.
 - **Файлы:** `web/frontend/src/pages/Benchmarks.tsx`, `web/backend/app/api/v1/bench.py`, `.gitignore`, `data/bench/.gitkeep`, удалён `data/bench/report.md`, `README.md`, `data/README.md`, `web/CONTRACT.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/plan/development-plan.xml`, `VERSION`, `docs/HISTORY.md`.
 - **Решение:** PATCH 3.3.6.
+
+## Фаза: multi-slot inference 3.4.0
+
+### 3.4.0: Мультислотный инференс, GPU live, клон пресета
+
+- **Что:** Таблица **`engine_slots`**, сервисы **`gpu_state`** / **`gpu_availability`**, **`slot_runtime`** (docker-py), jobs **`native.slot.*`**, locks по `slot:{key}`; API **`/api/v1/gpu/state`**, **`/gpu/availability`**, **`/runtime/slots`** (list/create/down/restart/logs); **`GET /dashboard`** отдаёт **`runtime.slots`**. **`POST /presets/{id}/clone`** с **`await session.flush()`** для валидного `PresetOut`. Frontend: **Inference** — матрица GPU, карточки слотов, диалог нового слота, логи по слоту; **Dashboard** — блок **GPU (live)**; **Пресеты** — кнопка «Копия» + модалка. Тесты: `test_gpu_state.py`, `test_gpu_availability.py`, `test_slots_runtime.py`, `test_preset_clone.py`; smoke: `runtime.slots` в dashboard/snapshot. GRACE, **`docs/AGENTS.md`**, план `development-plan.xml` v3.4.0.
+- **Почему:** план multi-slot inference control — полный контроль слотов, live VRAM/util, клонирование пресетов.
+- **Файлы:** `web/backend/app/**` (модели, API, services), `web/frontend/src/pages/Runtime.tsx`, `Dashboard.tsx`, `Presets.tsx`, `api/types.ts`, `components/TableActionIcons.tsx`, `web/backend/tests/test_*.py`, `test_api_smoke.py`, `VERSION`, `grace/**`, `docs/AGENTS.md`, `docs/HISTORY.md`.
+- **Решение:** **MINOR 3.4.0** — новые публичные API и сценарии UI.
+
+### 3.4.1: Inference — убрана дублирующая форма default
+
+- **Что:** На странице **Inference** удалены секции **«Слот default (CLI-совместимый)»**, **«Запуск (default)»** (up/restart/down/down --all) и баннер «Команда выполняется (default / runtime)»; кнопка **«Обновить снимок»** перенесена в шапку секции **«Слоты»**, CTA **«Запустить слот»**. Подсказка: `slot_key=default` — через поле имени в диалоге. **`web/CONTRACT.md`**, **GRACE** `fn-frontend_app`, **VERSION** 3.4.1.
+- **Почему:** запрос пользователя — дублирующий UI не нужен при мультислотной модели; CLI остаётся (`./slgpu up`).
+- **Файлы:** `web/frontend/src/pages/Runtime.tsx`, `web/CONTRACT.md`, `VERSION`, `grace/knowledge-graph/knowledge-graph.xml`, `docs/HISTORY.md`.
+- **Решение:** **PATCH 3.4.1**.
+
+## Фаза: radical web control plane 4.0.0
+
+### 4.0.0: Удаление легаси EngineRun / native.llm.*, слоты-only API
+
+- **Что:** **MAJOR 4.0.0** — таблица **`runs`** и модель **`EngineRun` удалены** (SQLite: `DROP TABLE runs` при старте); REST **`POST /runtime/up|down|restart`**, **`GET /runtime/logs`** убраны; jobs **`native.llm.*`** и lock **`("engine","runtime")`** удалены. Инференс только через **`engine_slots`**: `POST /runtime/slots` создаёт **`EngineSlot(REQUESTED)`** до submit job; **`compute_availability`** учитывает слоты и внешнюю нагрузку (`slot_key: external`); **`gpu_state`** обогащает процессы полем **`slot_key`**; **`snapshot`** — параллельные пробы слотов (`asyncio.gather`); **`_native_slot_down`** — по label/имени контейнера; TTL-кэш host GPU 30 с + инвалидация. Документация: **`web/README.md`**, **`web/CONTRACT.md`**, **`docs/AGENTS.md`**, GRACE (`knowledge-graph`, `development-plan` 4.0.0, `verification-plan` 2.4.0 + scenario-24). Тесты: `test_4_0_concurrency.py`, smoke на слотах.
+- **Почему:** план «Чистка 3.4.x → 4.0.0 (radical)» — единая модель мультислота без дублирующих путей и глобальных runtime-логов.
+- **Файлы:** `VERSION`, `web/backend/app/**` (в т.ч. `__init__.py`/`pyproject.toml` v4.0.0), `web/frontend/package.json` (версия), `web/frontend/src/**`, `web/backend/tests/**` (`test_gpu_availability` — REQUESTED-бронь), `web/README.md`, `web/CONTRACT.md`, `docs/AGENTS.md`, `docs/HISTORY.md`, `grace/**/*.xml`.
+- **Решение:** **MAJOR** — ломающие изменения публичного Web API и схемы БД.

@@ -68,7 +68,7 @@ web/
 │   │   ├── api/v1/        # роутеры FastAPI
 │   │   ├── core/          # конфигурация, логирование, валидация аргументов
 │   │   ├── db/            # SQLAlchemy base и session
-│   │   ├── models/        # таблицы models, presets, runs, services, jobs, audit, settings
+│   │   ├── models/        # таблицы models, presets, engine_slots, services, jobs, audit, settings, stack_params
 │   │   ├── schemas/       # Pydantic модели для API
 │   │   ├── services/      # CLI runner, Docker inspect, HF, LiteLLM, monitoring, env_files
 │   │   └── workers/
@@ -157,9 +157,9 @@ daemon не нашёл бы файлы по `/slgpu/...` и создал бы п
 | GET/PATCH/DELETE | `/api/v1/presets/{id}` | просмотр, параметрическое редактирование и удаление пресета |
 | POST | `/api/v1/presets/sync` | импорт `data/presets/*.env` (или `PRESETS_DIR`) в БД |
 | POST | `/api/v1/presets/{id}/export` | экспорт пресета в файл |
-| POST | `/api/v1/runtime/up\|down\|restart` | управление движком |
-| GET | `/api/v1/runtime/snapshot` | состояние движка, запрошенный пресет/HF ID/TP и served models |
-| GET | `/api/v1/runtime/logs` | хвост stdout/stderr текущего контейнера vLLM/SGLang |
+| GET/POST | `/api/v1/runtime/slots`, `POST …/slots/{key}/down`, `POST …/restart`, `GET …/slots/{key}/logs` | мультислотный инференс (4.0.0) |
+| GET | `/api/v1/gpu/state`, `GET /api/v1/gpu/availability` | live GPU и свободные индексы |
+| GET | `/api/v1/runtime/snapshot` | состояние движка(ов), пресеты, `slots[]` |
 | GET | `/api/v1/monitoring/services` | состояние сервисов |
 | POST | `/api/v1/monitoring/action` | `slgpu monitoring up\|down\|restart\|fix-perms` |
 | GET | `/api/v1/litellm/health\|info\|models` | LiteLLM proxy |
@@ -178,8 +178,8 @@ daemon не нашёл бы файлы по `/slgpu/...` и создал бы п
   сам репозиторный `slgpu` вызывается как `/bin/bash /…/slgpu …`, чтобы на bind mount не
   зависеть от бита исполняемости файла `slgpu`.
 - На каждый mutating job ставится in-memory advisory lock на
-  `(scope, resource)` — runtime-команды лочатся на `("engine", "runtime")`,
-  monitoring-команды на `("monitoring", "stack")`; повторный конфликтующий клик
+  `(scope, resource)` — слоты `("engine", "slot:{slot_key}")`,
+  monitoring — `("monitoring", "stack")`; повторный конфликтующий клик
   в UI блокируется, а прямой повторный запрос вернёт `409`.
 - Секреты HF/Grafana/LiteLLM/Langfuse в БД не пишутся; UI показывает
   лишь наличие/отсутствие.
@@ -197,6 +197,8 @@ cd web/frontend
 npm install
 npm run typecheck
 ```
+
+Из PowerShell в корне репо: `.\web\verify-frontend.ps1` (обёртка над `npm run typecheck`).
 
 Дополнительная статическая проверка для compose-файла:
 

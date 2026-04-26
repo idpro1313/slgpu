@@ -2,27 +2,28 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
+import time
 from typing import Any
 
 from sqlalchemy import select
 
 from app.core.config import get_settings
 from app.db.session import session_scope
-from app.models.run import RunStatus
-from app.models.slot import EngineSlot
+from app.models.slot import EngineSlot, RunStatus
 from app.services import host_info
 
+logger = logging.getLogger(__name__)
 
-def _parse_indices_csv(s: str | None) -> set[int]:
-    if not s or not str(s).strip():
-        return set()
-    out: set[int] = set()
-    for p in str(s).split(","):
-        p = p.strip()
-        if not p:
-            continue
-        out.add(int(p))
-    return out
+_HOST_CACHE: tuple[float, set[int]] | None = None
+_HOST_LOCK = asyncio.Lock()
+_HOST_TTL_S = 30.0
+
+
+def invalidate_host_gpu_cache() -> None:
+    global _HOST_CACHE
+    _HOST_CACHE = None
 
 
 def _all_host_gpu_indices() -> set[int]:
@@ -38,6 +39,30 @@ def _all_host_gpu_indices() -> set[int]:
                 out.add(int(g["index"]))
             except (TypeError, ValueError):
                 continue
+    return out
+
+
+async def _cached_host_indices() -> set[int]:
+    global _HOST_CACHE
+    now = time.monotonic()
+    async with _HOST_LOCK:
+        if _HOST_CACHE is not None and now - _HOST_CACHE[0] < _HOST_TTL_S:
+            return _HOST_CACHE[1]
+        host = await asyncio.to_thread(_all_host_gpu_indices)
+        _HOST_CACHE = (time.monotonic(), host)
+        logger.info("[gpu_availability][cached_host_indices][BLOCK_REFRESH] n=%s", len(host))
+        return host
+
+
+def _parse_indices_csv(s: str | None) -> set[int]:
+    if not s or not str(s).strip():
+        return set()
+    out: set[int] = set()
+    for p in str(s).split(","):
+        p = p.strip()
+        if not p:
+            continue
+        out.add(int(p))
     return out
 
 
@@ -65,7 +90,7 @@ async def compute_availability(
     exclude_slot_key: str | None = None,
 ) -> dict[str, Any]:
     """Return available / busy (with slot ref) / suggested first ``tp`` indices."""
-    host = _all_host_gpu_indices()
+    host = await _cached_host_indices()
     if not host:
         return {
             "all_indices": [],
@@ -95,7 +120,54 @@ async def compute_availability(
                             "engine": row.engine,
                         }
                     )
-    # dedupe busy_rows by (index, slot) — if duplicate index from bug, last wins
+    from app.services import gpu_state
+
+    snap = await gpu_state.get_gpu_state_snapshot()
+    uuid_to_index: dict[str, int] = {}
+    for g in snap.get("gpus") or []:
+        if not isinstance(g, dict):
+            continue
+        u, idx = g.get("uuid"), g.get("index")
+        if u is not None and idx is not None:
+            try:
+                uuid_to_index[str(u)] = int(idx)
+            except (TypeError, ValueError):
+                continue
+    for proc in snap.get("processes") or []:
+        if not isinstance(proc, dict):
+            continue
+        u = proc.get("gpu_uuid")
+        if u is None:
+            continue
+        try:
+            idx = uuid_to_index.get(str(u))
+        except (TypeError, KeyError):
+            continue
+        if idx is None or idx not in host:
+            continue
+        if idx in busy:
+            continue
+        busy.add(idx)
+        sk = proc.get("slot_key")
+        if sk:
+            busy_rows.append(
+                {
+                    "index": idx,
+                    "slot_key": sk,
+                    "preset_name": None,
+                    "engine": f"process:{proc.get('process_name', '')!s}"[:64],
+                }
+            )
+        else:
+            busy_rows.append(
+                {
+                    "index": idx,
+                    "slot_key": "external",
+                    "preset_name": None,
+                    "engine": f"process:{proc.get('process_name', '')!s}"[:64],
+                }
+            )
+
     seen: set[tuple[str, int]] = set()
     unique_busy: list[dict[str, Any]] = []
     for b in busy_rows:

@@ -2,13 +2,22 @@
 
 from __future__ import annotations
 
+import enum
 from datetime import datetime
 
 from sqlalchemy import JSON, DateTime, Enum, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
-from app.models.run import RunStatus
+
+
+class RunStatus(str, enum.Enum):
+    REQUESTED = "requested"
+    STARTING = "starting"
+    RUNNING = "running"
+    DEGRADED = "degraded"
+    STOPPED = "stopped"
+    FAILED = "failed"
 
 
 class EngineSlot(Base):

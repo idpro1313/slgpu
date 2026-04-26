@@ -31,7 +31,7 @@ def _run_nvidia_smi_probes() -> dict[str, Any]:
         client = docker.from_env()
         client.ping()
     except docker.errors.DockerException as exc:
-        logger.info("[gpu_state] docker %s", exc)
+        logger.info("[gpu_state][run_nvidia_smi_probes][BLOCK_DOCKER] %s", exc)
         return {"available": False, "error": "docker_unavailable", "gpus": []}
 
     image = settings.nvidia_smi_docker_image
@@ -54,7 +54,7 @@ nvidia-smi --query-compute-apps=pid,process_name,used_memory,gpu_uuid --format=c
             network_mode="none",
         )
     except (docker.errors.ImageNotFound, docker.errors.ContainerError, docker.errors.DockerException) as exc:
-        logger.info("[gpu_state] nvidia-smi run failed: %s", exc)
+        logger.info("[gpu_state][run_nvidia_smi_probes][BLOCK_SMI_RUN] %s", exc)
         return {"available": False, "error": str(exc)[:500], "gpus": []}
 
     text = out.decode("utf-8", errors="replace") if isinstance(out, bytes) else str(out)
@@ -90,6 +90,57 @@ def _parse_smi_csv(text: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]
         }
         procs.append(pid_entry)
     return gpus, procs
+
+
+def _enrich_processes_with_slot_keys(
+    data: dict[str, Any], slot_key_engine: list[tuple[str, str]]
+) -> dict[str, Any]:
+    """Map host PIDs from nvidia-smi to slot_key via ``docker top`` (sync, in worker thread)."""
+    procs = data.get("processes")
+    if not isinstance(procs, list) or not procs:
+        return data
+    try:
+        import docker
+    except ImportError:
+        for p in procs:
+            if isinstance(p, dict):
+                p.setdefault("slot_key", None)
+        return data
+
+    from app.services.slot_runtime import slot_container_name
+
+    pid_to_slot: dict[int, str] = {}
+    try:
+        client = docker.from_env()
+        client.ping()
+    except docker.errors.DockerException:
+        for p in procs:
+            if isinstance(p, dict):
+                p.setdefault("slot_key", None)
+        return data
+
+    for slot_key, engine in slot_key_engine:
+        cname = slot_container_name(engine, slot_key)
+        try:
+            c = client.containers.get(cname)
+            top = c.top()
+            for row in top.get("Processes") or []:
+                if not row:
+                    continue
+                try:
+                    pid = int(row[1]) if len(row) > 1 else int(row[0])
+                except (ValueError, TypeError, IndexError):
+                    continue
+                pid_to_slot[pid] = slot_key
+        except (docker.errors.DockerException, KeyError, TypeError):
+            continue
+
+    for p in procs:
+        if not isinstance(p, dict):
+            continue
+        pid = p.get("pid")
+        p["slot_key"] = pid_to_slot.get(int(pid)) if isinstance(pid, int) else None
+    return data
 
 
 def _parse_gpus_only(text: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -130,17 +181,34 @@ def _lines_to_gpu_rows(block: str) -> list[dict[str, Any]]:
 
 
 async def get_gpu_state_snapshot() -> dict[str, Any]:
+    from sqlalchemy import select
+
+    from app.db.session import session_scope
+    from app.models.slot import EngineSlot, RunStatus
+
     global _cache
     now = time.monotonic()
     async with _lock:
         if _cache is not None and now - _cache[0] < _TTL_S:
             return _cache[1]
+        active = (
+            RunStatus.STARTING,
+            RunStatus.REQUESTED,
+            RunStatus.RUNNING,
+            RunStatus.DEGRADED,
+        )
+        sk_eng: list[tuple[str, str]] = []
+        async with session_scope() as s:
+            res = await s.execute(
+                select(EngineSlot.slot_key, EngineSlot.engine).where(
+                    EngineSlot.observed_status.in_(active)
+                )
+            )
+            sk_eng = [(row[0], row[1]) for row in res.all()]
         data = await asyncio.to_thread(_run_nvidia_smi_probes)
+        data = await asyncio.to_thread(_enrich_processes_with_slot_keys, data, sk_eng)
         driver_ver, cuda_ver = _driver_cuda()
-        if data.get("available") and data.get("gpus"):
-            payload = {**data, "driver_version": driver_ver, "cuda_version": cuda_ver}
-        else:
-            payload = {**data, "driver_version": driver_ver, "cuda_version": cuda_ver}
+        payload = {**data, "driver_version": driver_ver, "cuda_version": cuda_ver}
         _cache = (time.monotonic(), payload)
         return payload
 

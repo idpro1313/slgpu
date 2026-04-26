@@ -139,6 +139,8 @@ export function PresetsPage() {
   const [templatesResult, setTemplatesResult] = useState<PresetImportTemplatesResult | null>(null);
   const [cloneSource, setCloneSource] = useState<Preset | null>(null);
   const [cloneName, setCloneName] = useState("");
+  const [cloneTp, setCloneTp] = useState<string>("");
+  const [cloneDescription, setCloneDescription] = useState<string>("");
 
   const presets = useQuery({
     queryKey: ["presets"],
@@ -224,6 +226,8 @@ export function PresetsPage() {
     onSuccess: () => {
       setCloneSource(null);
       setCloneName("");
+      setCloneTp("");
+      setCloneDescription("");
       setError(null);
       queryClient.invalidateQueries({ queryKey: ["presets"] });
       queryClient.invalidateQueries({ queryKey: ["activity"] });
@@ -679,6 +683,8 @@ export function PresetsPage() {
         onClose={() => {
           setCloneSource(null);
           setCloneName("");
+          setCloneTp("");
+          setCloneDescription("");
         }}
         actions={
           <button
@@ -689,7 +695,13 @@ export function PresetsPage() {
               if (!cloneSource) return;
               const name = cloneName.trim();
               if (!name) return;
-              clonePresetMut.mutate({ id: cloneSource.id, body: { name } });
+              const body: PresetCloneRequest = { name };
+              if (cloneTp.trim()) {
+                const n = Number(cloneTp);
+                if (!Number.isNaN(n)) body.tp = n;
+              }
+              if (cloneDescription.trim()) body.description = cloneDescription.trim();
+              clonePresetMut.mutate({ id: cloneSource.id, body });
             }}
           >
             {clonePresetMut.isPending ? "Создаём…" : "Создать копию"}
@@ -707,6 +719,33 @@ export function PresetsPage() {
                 autoComplete="off"
               />
             </div>
+            <details style={{ gridColumn: "1 / -1" }}>
+              <summary className="section__subtitle" style={{ cursor: "pointer" }}>
+                Дополнительно: TP и описание (необязательно)
+              </summary>
+              <div className="form-grid" style={{ marginTop: 12 }}>
+                <div>
+                  <label className="label">TP (пусто = как в источнике)</label>
+                  <input
+                    className="input mono"
+                    type="number"
+                    min={1}
+                    value={cloneTp}
+                    onChange={(e) => setCloneTp(e.target.value)}
+                    placeholder={cloneSource.tp != null ? String(cloneSource.tp) : ""}
+                  />
+                </div>
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <label className="label">Описание</label>
+                  <input
+                    className="input"
+                    value={cloneDescription}
+                    onChange={(e) => setCloneDescription(e.target.value)}
+                    placeholder={cloneSource.description ?? ""}
+                  />
+                </div>
+              </div>
+            </details>
             <p className="section__subtitle" style={{ gridColumn: "1 / -1" }}>
               Остальные поля копируются с исходного пресета; запись будет{" "}
               <span className="mono">is_synced=false</span> до экспорта.

@@ -1,4 +1,4 @@
-<DevelopmentPlan VERSION="3.4.0">
+<DevelopmentPlan VERSION="4.0.0">
   <!--
     GRACE development plan — methodology: https://github.com/osovv/grace-marketplace
     Upstream ships Agent Skills + optional CLI (@osovv/grace-cli): grace lint | module find | module show | file show.
@@ -9,7 +9,7 @@
   -->
   <ArchitectureNotes>
     <objective>Унифицированный CLI для жизненного цикла стенда LLM-инференса.</objective>
-    <web-inference-3-4>Web: мультислотный инференс (таблица engine_slots, docker-py `slot_runtime`), API `/api/v1/gpu/*`, `/runtime/slots*`, клон пресета; UI Inference + GPU live на Dashboard.</web-inference-3-4>
+    <web-inference-4-0>Web 4.0.0: мультислотный инференс (engine_slots, docker-py, бронь REQUESTED), только `POST /runtime/slots*`; удалены EngineRun/таблица `runs`, REST `/runtime/up|down|restart|/logs`, jobs `native.llm.*`, lock `("engine","runtime")`; `gpu_state` с `slot_key` на процессах; TTL-кэш host GPU + инвалидация на up/down.</web-inference-4-0>
     <non-goal>Нет оркестрации Kubernetes, нет хранилища истории бенчей.</non-goal>
     <risk-1>Образы latest — невоспроизводимость между запусками.</risk-1>
     <risk-2>Парсеры и `MAX_MODEL_LEN` только в пресетах: ошибка в пресете или смена образа vLLM/SGLang без правки пресета даёт сбои при старте или в tool/reasoning.</risk-2>
@@ -379,7 +379,7 @@
 
     <M-WEB NAME="WebControlPlane" TYPE="ENTRY_POINT" LAYER="2" ORDER="12" STATUS="implemented">
       <contract>
-        <purpose>Develonica.LLM: FastAPI + React; стек в SQLite (`stack_params` + install); native compose jobs; страницы Benchmarks и расширенные Настройки; models/presets/runtime/monitoring/LiteLLM как раньше.</purpose>
+        <purpose>Develonica.LLM: FastAPI + React; стек в SQLite (`stack_params` + install); native jobs (`native.slot.*`, bench, pull, monitoring); models/presets/Inference по слотам, GPU state/availability, monitoring/LiteLLM.</purpose>
         <inputs>
           <param name="server_host" type="hostname|ip|null" />
           <param name="api_requests" type="HTTP /api/v1/*" />

@@ -1,5 +1,5 @@
 <KnowledgeGraph>
-  <Project NAME="slgpu" VERSION="3.4.1">
+  <Project NAME="slgpu" VERSION="4.0.0">
     <keywords>slgpu, vllm, sglang, llm-inference, benchmark, docker-compose, gpu, prometheus, grafana, sglang-dashboard-slgpu, sglangdash2-slgpu</keywords>
     <annotation>Стенд для сравнения движков LLM-инференса vLLM и SGLang на Linux-сервере с NVIDIA GPU.</annotation>
 
@@ -179,14 +179,14 @@
         <fn-services_slot_runtime PURPOSE="app.services.slot_runtime: run_slot_docker, контейнер slgpu-{engine} или slgpu-{engine}-{slot_key}, сеть slgpu" />
         <fn-services_host_info PURPOSE="Снимок ОС/CPU/RAM/диска/NVIDIA для дашборда: docker run с bind /proc,/etc хоста (busybox) и nvidia-smi в GPU-контейнере; fallback — локальный /proc и nvidia-smi в namespace web" />
         <fn-services_compose_exec PURPOSE="async docker compose для LLM и monitoring стеков, subprocess logged" />
-        <fn-services_native_jobs PURPOSE="handle_native_job: native.llm.* → слот default (docker-py); native.slot.up|down|restart с lock resource slot:{key}; native.model.pull, monitoring, bench" />
-        <fn-services_slgpu_cli PURPOSE="CliCommand kind=native.* с пустым argv; resource slot:default|slot:{key}|runtime; валидация slot_key/slug/engine/port/tp" />
+        <fn-services_native_jobs PURPOSE="handle_native_job: native.slot.up|down|restart (docker-py, мультислот); lock resource slot:{key}; native.model.pull, monitoring, bench. Удалено в 4.0.0: native.llm.*" />
+        <fn-services_slgpu_cli PURPOSE="CliCommand kind=native.* с пустым argv; resource slot:default|slot:{key} (4.0.0: без lock runtime); валидация slot_key/slug/engine/port/tp" />
         <fn-services_jobs PURPOSE="Job runner: native.* → native_jobs; иначе legacy argv; advisory lock (scope, resource)" />
         <fn-services_docker_client PURPOSE="get_docker_inspector(): get_by_service — label filter, fallback: нормализованные лейблы, имена Compose v1/v2, жёсткие имена slgpu-* и slgpu-monitoring-*" />
         <fn-services_env_files PURPOSE="Парсер и рендер data/presets/<slug>.env, совместимые с serve.sh" />
         <fn-services_presets PURPOSE="Двусторонняя синхронизация Preset DB ↔ data/presets/*.env; POST /presets/import-templates копирует examples/presets/*.env в PRESETS_DIR без перезаписи и импортирует в БД; просмотр/key-value редактирование через GET/PATCH /api/v1/presets/{id}, DELETE удаляет запись и опционально .env, экспорт в .env отдельной операцией" />
         <fn-services_hf_models PURPOSE="Реестр HF моделей и статусы скачивания: GET /models синхронизирует DB с фактическими папками MODELS_DIR/&lt;org&gt;/&lt;repo&gt;; в ответе HFModelOut.pull_progress (активная Job native.model.pull по resource=hf_id); active_pull_jobs_by_resource; PATCH меняет revision/notes, DELETE удаляет запись и опционально локальные веса внутри MODELS_DIR" />
-        <fn-services_runtime PURPOSE="snapshot: при активных EngineSlot — пробы по каждому слоту (RuntimeSlotProbe); иначе compose legacy; tail_slot_logs по slot_key; attach_run_metadata" />
+        <fn-services_runtime PURPOSE="snapshot: при активных EngineSlot — пробы по каждому слоту (asyncio.gather, RuntimeSlotProbe); иначе compose legacy; tail_slot_logs по slot_key. Удалено в 4.0.0: EngineRun/attach_run_metadata, REST /runtime/up|down|restart|/logs" />
         <fn-api_runtime_slots PURPOSE="GET/POST /runtime/slots, POST /slots/{key}/down|restart, GET slots/{key}/logs; list EngineSlot" />
         <fn-api_presets_clone PURPOSE="POST /presets/{id}/clone (PresetCloneRequest), flush перед ответом" />
         <fn-services_monitoring PURPOSE="Probe: Docker + HTTP; порта и compose project monitoring из слитого стека (БД)" />
@@ -219,8 +219,8 @@
     <CrossLink from="M-WEB" to="M-MODELS" relation="syncs data/presets/*.env presets to/from SQLite" />
     <CrossLink from="M-WEB" to="M-MONITOR" relation="Docker read + compose up monitoring из web" />
     <CrossLink from="M-WEB" to="M-PULL" relation="native.model.pull (HF snapshot) как job" />
-    <CrossLink from="M-WEB" to="M-UP" relation="native.llm.up/restart как job" />
-    <CrossLink from="M-WEB" to="M-DOWN" relation="native.llm.down как job" />
+    <CrossLink from="M-WEB" to="M-UP" relation="хост: ./slgpu up|restart; web — native.slot.* (docker-py), не веб-обёртка на llm.up" />
+    <CrossLink from="M-WEB" to="M-DOWN" relation="хост: ./slgpu down; web — native.slot.down / остановка по label слота" />
     <CrossLink from="M-WEB" to="M-BENCH" relation="native.bench.* + data/bench/results" />
   </Project>
 </KnowledgeGraph>
