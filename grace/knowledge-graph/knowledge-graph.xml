@@ -176,7 +176,7 @@
         <fn-services_hf_models PURPOSE="Реестр HF моделей и статусы скачивания: GET /models синхронизирует DB с фактическими папками MODELS_DIR/&lt;org&gt;/&lt;repo&gt;; PATCH меняет revision/notes, DELETE удаляет запись и опционально локальные веса внутри MODELS_DIR" />
         <fn-services_runtime PURPOSE="Runtime snapshot/logs: Docker + /v1/models и /metrics через WEB_LLM_HTTP_HOST (compose: host.docker.internal) и запас http://vllm:8111|sglang:8222 в сети slgpu — не 127.0.0.1:порт из web; последний активный EngineRun (preset_name, hf_id, TP); GET /runtime/logs — tail логов контейнера" />
         <fn-services_monitoring PURPOSE="Probe мониторинг-стека: Docker (лейблы compose project из WEB_COMPOSE_PROJECT_*) + HTTP healthchecks; browser URLs строятся отдельно через public_access settings" />
-        <fn-services_litellm PURPOSE="Read-only обёртка над /v1/models и /health/* у LiteLLM; /info возвращает публичные UI/API ссылки из settings" />
+        <fn-services_litellm PURPOSE="Read-only /v1/models и /health/* у LiteLLM через WEB_MONITORING_HTTP_HOST (не 127.0.0.1 из контейнера); /info — публичные UI/API ссылки из settings" />
         <fn-services_app_settings PURPOSE="Persistent UI settings в SQLite: /api/v1/settings/public-access хранит публичный server_host для Grafana/Prometheus/Langfuse/LiteLLM ссылок" />
         <fn-core_logging PURPOSE="JSON stdout logging: one LogRecord → one line; root/app/httpx/uvicorn handlers заменяются идемпотентно без propagation-дублей" />
         <fn-frontend_app PURPOSE="React SPA Develonica.LLM: Dashboard, Models, Presets, Runtime, Monitoring, LiteLLM, Jobs, Settings; брендовая тема по develonica.ru/guideline; footer показывает VERSION и copyright Igor Yatsishen, Develonica" />

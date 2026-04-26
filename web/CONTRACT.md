@@ -123,7 +123,8 @@ Mutations контейнеров идут только через CLI allowlist.
   `127.0.0.1:порт` на публикованный порт движка).
 - `GET http://127.0.0.1:${PROMETHEUS_PORT}/-/healthy` и `/api/v1/query`.
 - `GET http://127.0.0.1:${GRAFANA_PORT}/api/health`.
-- `GET http://127.0.0.1:${LITELLM_PORT}/health`.
+- `GET http://${WEB_MONITORING_HTTP_HOST:-host.docker.internal}:${LITELLM_PORT}/health/*` (страница
+  LiteLLM в slgpu-web, не `127.0.0.1` из контейнера).
 
 ## 4. Безопасность
 

@@ -14,7 +14,8 @@ logger = logging.getLogger(__name__)
 
 async def list_models() -> list[dict[str, Any]]:
     settings = get_settings()
-    url = f"http://127.0.0.1:{settings.litellm_port}/v1/models"
+    h = settings.monitoring_http_host
+    url = f"http://{h}:{settings.litellm_port}/v1/models"
     async with httpx.AsyncClient(timeout=3.0) as client:
         try:
             response = await client.get(url)
@@ -28,7 +29,8 @@ async def list_models() -> list[dict[str, Any]]:
 
 async def health() -> dict[str, Any]:
     settings = get_settings()
-    base = f"http://127.0.0.1:{settings.litellm_port}"
+    h = settings.monitoring_http_host
+    base = f"http://{h}:{settings.litellm_port}"
     out: dict[str, Any] = {"liveliness": False, "readiness": False, "ui": False}
     async with httpx.AsyncClient(timeout=2.0) as client:
         for key, path in (("liveliness", "/health/liveliness"), ("readiness", "/health/readiness")):

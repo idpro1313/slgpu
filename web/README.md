@@ -136,6 +136,8 @@ daemon не нашёл бы файлы по `/slgpu/...` и создал бы п
 
 **Инференс-пробы** (`/v1/models`, `/metrics` к vLLM/SGLang) из backend используют `WEB_LLM_HTTP_HOST` (в compose тоже `host.docker.internal`) и при необходимости прямой DNS сервиса `http://vllm:8111` / `http://sglang:8222` в сети `slgpu`, потому что `127.0.0.1` внутри web — не хост с опубликованным портом движка.
 
+**LiteLLM** (`GET /api/v1/litellm/health` и `…/models`) ходит к тому же хосту, что и пробы мониторинга: `WEB_MONITORING_HTTP_HOST` + `WEB_LITELLM_PORT` (порт из `main.env` / compose).
+
 ## API
 
 Все ручки версионированы под `/api/v1`. Подробное описание выдаёт
