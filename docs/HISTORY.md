@@ -1674,6 +1674,13 @@
 - **Файлы:** `web/backend/app/services/env_key_aliases.py`, `stack_config.py`, `llm_env.py`, `presets.py`, `env_files.py`, `native_jobs.py`; `scripts/serve.sh`, `_lib.sh`, `monitoring_fix_permissions.sh`, `cmd_monitoring.sh`; `docker/docker-compose.llm.yml`, `docker/docker-compose.monitoring.yml`; `main.env`, `main.env.example`, `examples/presets/*.env`; `web/frontend` `Presets.tsx`, `Settings.tsx`; `README.md`, `configs/models/README.md`; `VERSION`, версии web/backend, `grace/knowledge-graph/knowledge-graph.xml`, `docs/HISTORY.md`.
 - **Решение:** **MINOR 4.2.0** — обратная совместимость через fallback в скриптах, compose и Python.
 
+### 4.3.6: Monitoring/proxy без обязательного `main.env` — `.slgpu/compose-service.env`
+
+- **Что:** `env_file` в **docker-compose.monitoring.yml** / **proxy** → **`.slgpu/compose-service.env`**; **`write_compose_service_env_file`** в **stack_config**; native jobs пишут снимок **БД** в этот файл (вместо ephemeral tmp + требования **main.env** на диске для сервисов); **cmd_monitoring.sh**, **cmd_down.sh**, **`_lib.sh`** (`slgpu_ensure_compose_service_env`); **.gitignore** `.slgpu/`; дока **configs/monitoring/README**, **AGENTS**, **README**, **GRACE**.
+- **Почему:** В UI стек в **SQLite**, а compose требовал физический **`main.env`** из-за **`env_file: main.env`** в YAML — ошибка *env file … main.env not found*.
+- **Файлы:** `docker/docker-compose.monitoring.yml`, `docker/docker-compose.proxy.yml`, `stack_config.py`, `native_jobs.py`, `scripts/_lib.sh`, `scripts/cmd_monitoring.sh`, `scripts/cmd_down.sh`, `.gitignore`, `configs/monitoring/README.md`, `docs/AGENTS.md`, `README.md`, `docs/HISTORY.md`, `grace/knowledge-graph/knowledge-graph.xml`, `VERSION`, версии web.
+- **Решение:** **PATCH**.
+
 ### 4.3.5: UI LiteLLM — отдельно старт/стоп/рестарт прокси (`native.proxy.*`)
 
 - **Что:** API и UI для **`native.proxy.up|down|restart`** (только `docker-compose.proxy.yml`).

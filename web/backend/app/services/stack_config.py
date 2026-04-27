@@ -227,6 +227,25 @@ def sync_merged_flat() -> dict[str, str]:
     return merged
 
 
+def compose_service_env_path(root: Path) -> Path:
+    """Файл со снимком стека для `docker compose --env-file` и `env_file:` в monitoring/proxy YAML.
+
+    Заполняется из **БД** (`sync_merged_flat`) в native jobs или из **main.env** в bash (см. ``scripts/_lib.sh``).
+    Не храните в git — каталог ``.slgpu/`` в ``.gitignore``.
+    """
+    return (root / ".slgpu" / "compose-service.env").resolve()
+
+
+def write_compose_service_env_file(root: Path, merged: dict[str, str]) -> Path:
+    """Записать плоский стек в ``.slgpu/compose-service.env`` (права 0600)."""
+    p = compose_service_env_path(root)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    body = "\n".join(f"{k}={v}" for k, v in sorted(merged.items()) if v is not None) + "\n"
+    p.write_text(body, encoding="utf-8")
+    p.chmod(0o600)
+    return p
+
+
 def resolve_path_relative(root: Path, value: str) -> Path:
     if value.startswith("./"):
         return (root / value[2:]).resolve()

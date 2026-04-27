@@ -1,6 +1,6 @@
 # dcgm, node-exporter, Prometheus, Grafana, Loki, Promtail, Langfuse, litellm-pg-init — ./slgpu monitoring up
 # (LiteLLM в отдельном проекте: docker/docker-compose.proxy.yml, имя `slgpu-proxy`, см. ./slgpu monitoring up).
-# Внешняя сеть `slgpu` (с llm: метрики, логи, Langfuse, MinIO). main.env: PROMETHEUS_*, GRAFANA_*, LITELLM_*, …
+# Внешняя сеть `slgpu` (с llm: метрики, логи, Langfuse, MinIO). env для контейнеров: `.slgpu/compose-service.env` (bash: из main.env; web: снимок БД + дефолты).
 
 name: slgpu-monitoring
 
@@ -10,7 +10,7 @@ services:
     container_name: slgpu-monitoring-dcgm-exporter
     image: ${DCGM_EXPORTER_IMAGE:-${SLGPU_DCGM_EXPORTER_IMAGE:-nvidia/dcgm-exporter:3.3.5-3.4.0-ubuntu22.04}}
     env_file:
-      - main.env
+      - .slgpu/compose-service.env
     restart: unless-stopped
     gpus: all
     cap_add:
@@ -29,7 +29,7 @@ services:
     container_name: slgpu-monitoring-node-exporter
     image: ${NODE_EXPORTER_IMAGE:-${SLGPU_NODE_EXPORTER_IMAGE:-prom/node-exporter:v1.8.2}}
     env_file:
-      - main.env
+      - .slgpu/compose-service.env
     restart: unless-stopped
     pid: host
     command:
@@ -56,7 +56,7 @@ services:
     image: ${LOKI_IMAGE:-${SLGPU_LOKI_IMAGE:-grafana/loki:2.9.8}}
     # Данные Loki: chunks, index, wal — на хосте; права: ./slgpu monitoring fix-perms
     env_file:
-      - main.env
+      - .slgpu/compose-service.env
     restart: unless-stopped
     # Каталог целиком в /etc/loki (не один файл): иначе при отсутствии файла на хосте Docker
     # может создать каталог `loki-config.yaml` → «is a directory».
@@ -79,7 +79,7 @@ services:
     image: ${PROMTAIL_IMAGE:-${SLGPU_PROMTAIL_IMAGE:-grafana/promtail:2.9.8}}
     # Сбор json-логов Docker: socket + /var/lib/docker/containers; позиции — PROMTAIL_DATA_DIR
     env_file:
-      - main.env
+      - .slgpu/compose-service.env
     restart: unless-stopped
     user: root
     # Аналогично Loki: монтирование каталога, чтобы путь к конфигу оставался файлом.
@@ -106,7 +106,7 @@ services:
     # Скрейп vLLM/SGLang идёт на host.docker.internal:порт (см. prometheus.yml) — шлюз в хост, где
     # слушают опубликованные 8111/8222. Нужен для Linux (compose: host-gateway).
     env_file:
-      - main.env
+      - .slgpu/compose-service.env
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -135,7 +135,7 @@ services:
     image: ${GRAFANA_IMAGE:-${SLGPU_GRAFANA_IMAGE:-grafana/grafana:11.3.0}}
     # Права на GRAFANA_DATA_DIR: ./slgpu monitoring fix-perms (uid/gid из образа, без угадывания)
     env_file:
-      - main.env
+      - .slgpu/compose-service.env
     restart: unless-stopped
     depends_on:
       - prometheus
@@ -315,7 +315,7 @@ services:
     ports:
       - "${LANGFUSE_WORKER_BIND:-127.0.0.1}:${LANGFUSE_WORKER_PORT:-3030}:3030"
     env_file:
-      - main.env
+      - .slgpu/compose-service.env
     environment:
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://127.0.0.1:3001}
       SALT: ${LANGFUSE_SALT:-slgpu-salt}
@@ -373,7 +373,7 @@ services:
     ports:
       - "${LANGFUSE_BIND:-0.0.0.0}:${LANGFUSE_PORT:-3001}:3000"
     env_file:
-      - main.env
+      - .slgpu/compose-service.env
     environment:
       # Next.js: иначе часто listen только на hostname контейнера — с хоста будет RST/refused (см. FAQ Langfuse: HOSTNAME=0.0.0.0)
       HOSTNAME: "0.0.0.0"

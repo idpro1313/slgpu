@@ -14,7 +14,7 @@ services:
       - slgpu
     entrypoint: ["/bin/sh", "/etc/slgpu/litellm-entrypoint.sh"]
     env_file:
-      - main.env
+      - .slgpu/compose-service.env
       - data/web/secrets/langfuse-litellm.env
     environment:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}

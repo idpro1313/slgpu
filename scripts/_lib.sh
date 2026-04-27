@@ -164,6 +164,32 @@ slgpu_web_compose_env_file() {
   fi
 }
 
+# Единый снимок для monitoring/proxy: `env_file` в compose — `.slgpu/compose-service.env`. Web пишет из БД; bash — **slgpu_ensure_compose_service_env**.
+slgpu_compose_service_env_basename() {
+  echo ".slgpu/compose-service.env"
+}
+
+slgpu_ensure_compose_service_env() {
+  local root d f
+  root="$(slgpu_root)"
+  d="${root}/.slgpu"
+  f="${d}/compose-service.env"
+  mkdir -p "${d}"
+  if [[ -f "${root}/main.env" ]]; then
+    cp -f "${root}/main.env" "${f}"
+    return 0
+  fi
+  if [[ -f "${f}" ]]; then
+    return 0
+  fi
+  if [[ -f "${root}/docker/web-compose.defaults.env" ]]; then
+    cp -f "${root}/docker/web-compose.defaults.env" "${f}"
+    return 0
+  fi
+  : > "${f}"
+  chmod 600 "${f}" 2>/dev/null || true
+}
+
 # `main.env` (пути, мониторинг). Без пресета.
 slgpu_load_server_env() {
   set -a

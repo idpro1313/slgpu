@@ -6,7 +6,6 @@ import asyncio
 import logging
 import os
 import shutil
-import tempfile
 import threading
 from contextlib import suppress
 from datetime import datetime, timezone
@@ -33,6 +32,7 @@ from app.services.slot_runtime import (
 )
 from app.services.stack_config import (
     sync_merged_flat,
+    write_compose_service_env_file,
     write_langfuse_litellm_env,
     write_llm_interp_env,
 )
@@ -154,19 +154,6 @@ def _mkdir_data_dirs(
             p.mkdir(parents=True, exist_ok=True)
         except OSError as exc:
             append_job_log(log, log_lock, f"[mkdir] {k}={p} err={exc}")
-
-
-def _write_tmp_monitoring_env(merged: dict[str, str]) -> Path:
-    # Ephemeral file for a single `docker compose --env-file` call. Must not live under
-    # repo `data/`: on the host that tree is often root-owned or chowned to another
-    # UID than the web app, which causes EACCES on mkstemp.
-    fd, name = tempfile.mkstemp(prefix="slgpu-mon-", suffix=".env")
-    os.close(fd)
-    p = Path(name)
-    body = "\n".join(f"{k}={v}" for k, v in sorted(merged.items()) if v is not None) + "\n"
-    p.write_text(body, encoding="utf-8")
-    os.chmod(p, 0o600)
-    return p
 
 
 async def _finalize_native_job(
@@ -534,28 +521,25 @@ async def _native_monitoring_up(log: list[str], log_lock: threading.Lock) -> int
     )
     _mkdir_data_dirs(root, merged, log, log_lock)
     await _ensure_config_files_async(root, log, log_lock)
-    env_file = _write_tmp_monitoring_env(merged)
-    try:
-        await compose_exec.ensure_slgpu_network(log, log_lock)
-        await _monitoring_bootstrap(root, env_file, log, log_lock)
-        c, o, e = await compose_exec.compose_monitoring(
-            root, env_file, "-f", _MON_YML, "up", "-d", "--remove-orphans"
-        )
-        append_job_log(log, log_lock, o.strip())
-        if e.strip():
-            append_job_log(log, log_lock, e.strip())
-        if c != 0:
-            return c
-        c2, o2, e2 = await compose_exec.compose_with_env_file(
-            root, env_file, "-f", _PROXY_YML, "up", "-d"
-        )
-        if o2.strip():
-            append_job_log(log, log_lock, o2.strip())
-        if e2.strip():
-            append_job_log(log, log_lock, e2.strip())
-        return 0 if c2 == 0 else c2
-    finally:
-        env_file.unlink(missing_ok=True)
+    env_file = write_compose_service_env_file(root, merged)
+    await compose_exec.ensure_slgpu_network(log, log_lock)
+    await _monitoring_bootstrap(root, env_file, log, log_lock)
+    c, o, e = await compose_exec.compose_monitoring(
+        root, env_file, "-f", _MON_YML, "up", "-d", "--remove-orphans"
+    )
+    append_job_log(log, log_lock, o.strip())
+    if e.strip():
+        append_job_log(log, log_lock, e.strip())
+    if c != 0:
+        return c
+    c2, o2, e2 = await compose_exec.compose_with_env_file(
+        root, env_file, "-f", _PROXY_YML, "up", "-d"
+    )
+    if o2.strip():
+        append_job_log(log, log_lock, o2.strip())
+    if e2.strip():
+        append_job_log(log, log_lock, e2.strip())
+    return 0 if c2 == 0 else c2
 
 
 async def _native_monitoring_down(log: list[str], log_lock: threading.Lock) -> int:
@@ -567,18 +551,15 @@ async def _native_monitoring_down(log: list[str], log_lock: threading.Lock) -> i
         {k: merged[k] for k in ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY") if k in merged},
         merged,
     )
-    env_file = _write_tmp_monitoring_env(merged)
-    try:
-        c0, o0, e0 = await compose_exec.compose_with_env_file(
-            root, env_file, "-f", _PROXY_YML, "down"
-        )
-        if (o0 + e0).strip():
-            append_job_log(log, log_lock, (o0 + e0).strip())
-        c, o, e = await compose_exec.compose_monitoring(root, env_file, "-f", _MON_YML, "down")
-        append_job_log(log, log_lock, o + e)
-        return 0 if c == 0 and c0 == 0 else (c if c != 0 else c0)
-    finally:
-        env_file.unlink(missing_ok=True)
+    env_file = write_compose_service_env_file(root, merged)
+    c0, o0, e0 = await compose_exec.compose_with_env_file(
+        root, env_file, "-f", _PROXY_YML, "down"
+    )
+    if (o0 + e0).strip():
+        append_job_log(log, log_lock, (o0 + e0).strip())
+    c, o, e = await compose_exec.compose_monitoring(root, env_file, "-f", _MON_YML, "down")
+    append_job_log(log, log_lock, o + e)
+    return 0 if c == 0 and c0 == 0 else (c if c != 0 else c0)
 
 
 async def _native_monitoring_restart(log: list[str], log_lock: threading.Lock) -> int:
@@ -595,23 +576,20 @@ async def _native_monitoring_restart(log: list[str], log_lock: threading.Lock) -
         merged,
     )
     await _ensure_config_files_async(root, log, log_lock)
-    env_file = _write_tmp_monitoring_env(merged)
-    try:
-        await compose_exec.ensure_slgpu_network(log, log_lock)
-        c, o, e = await compose_exec.compose_monitoring(
-            root, env_file, "-f", _MON_YML, "up", "-d", "--force-recreate", "--remove-orphans"
-        )
-        append_job_log(log, log_lock, o + e)
-        if c != 0:
-            return c
-        c2, o2, e2 = await compose_exec.compose_with_env_file(
-            root, env_file, "-f", _PROXY_YML, "up", "-d", "--force-recreate"
-        )
-        if (o2 + e2).strip():
-            append_job_log(log, log_lock, (o2 + e2).strip())
-        return 0 if c2 == 0 else c2
-    finally:
-        env_file.unlink(missing_ok=True)
+    env_file = write_compose_service_env_file(root, merged)
+    await compose_exec.ensure_slgpu_network(log, log_lock)
+    c, o, e = await compose_exec.compose_monitoring(
+        root, env_file, "-f", _MON_YML, "up", "-d", "--force-recreate", "--remove-orphans"
+    )
+    append_job_log(log, log_lock, o + e)
+    if c != 0:
+        return c
+    c2, o2, e2 = await compose_exec.compose_with_env_file(
+        root, env_file, "-f", _PROXY_YML, "up", "-d", "--force-recreate"
+    )
+    if (o2 + e2).strip():
+        append_job_log(log, log_lock, (o2 + e2).strip())
+    return 0 if c2 == 0 else c2
 
 
 async def _native_proxy_up(log: list[str], log_lock: threading.Lock) -> int:
@@ -625,18 +603,15 @@ async def _native_proxy_up(log: list[str], log_lock: threading.Lock) -> int:
         merged,
     )
     await _ensure_config_files_async(root, log, log_lock)
-    env_file = _write_tmp_monitoring_env(merged)
-    try:
-        await compose_exec.ensure_slgpu_network(log, log_lock)
-        c, o, e = await compose_exec.compose_with_env_file(
-            root, env_file, "-f", _PROXY_YML, "up", "-d", "--remove-orphans"
-        )
-        append_job_log(log, log_lock, o.strip())
-        if e.strip():
-            append_job_log(log, log_lock, e.strip())
-        return c
-    finally:
-        env_file.unlink(missing_ok=True)
+    env_file = write_compose_service_env_file(root, merged)
+    await compose_exec.ensure_slgpu_network(log, log_lock)
+    c, o, e = await compose_exec.compose_with_env_file(
+        root, env_file, "-f", _PROXY_YML, "up", "-d", "--remove-orphans"
+    )
+    append_job_log(log, log_lock, o.strip())
+    if e.strip():
+        append_job_log(log, log_lock, e.strip())
+    return c
 
 
 async def _native_proxy_down(log: list[str], log_lock: threading.Lock) -> int:
@@ -648,16 +623,13 @@ async def _native_proxy_down(log: list[str], log_lock: threading.Lock) -> int:
         {k: merged[k] for k in ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY") if k in merged},
         merged,
     )
-    env_file = _write_tmp_monitoring_env(merged)
-    try:
-        c, o, e = await compose_exec.compose_with_env_file(
-            root, env_file, "-f", _PROXY_YML, "down"
-        )
-        if (o + e).strip():
-            append_job_log(log, log_lock, (o + e).strip())
-        return c
-    finally:
-        env_file.unlink(missing_ok=True)
+    env_file = write_compose_service_env_file(root, merged)
+    c, o, e = await compose_exec.compose_with_env_file(
+        root, env_file, "-f", _PROXY_YML, "down"
+    )
+    if (o + e).strip():
+        append_job_log(log, log_lock, (o + e).strip())
+    return c
 
 
 async def _native_proxy_restart(log: list[str], log_lock: threading.Lock) -> int:
@@ -674,17 +646,14 @@ async def _native_proxy_restart(log: list[str], log_lock: threading.Lock) -> int
         merged,
     )
     await _ensure_config_files_async(root, log, log_lock)
-    env_file = _write_tmp_monitoring_env(merged)
-    try:
-        await compose_exec.ensure_slgpu_network(log, log_lock)
-        c, o, e = await compose_exec.compose_with_env_file(
-            root, env_file, "-f", _PROXY_YML, "up", "-d", "--force-recreate", "--remove-orphans"
-        )
-        if (o + e).strip():
-            append_job_log(log, log_lock, (o + e).strip())
-        return c
-    finally:
-        env_file.unlink(missing_ok=True)
+    env_file = write_compose_service_env_file(root, merged)
+    await compose_exec.ensure_slgpu_network(log, log_lock)
+    c, o, e = await compose_exec.compose_with_env_file(
+        root, env_file, "-f", _PROXY_YML, "up", "-d", "--force-recreate", "--remove-orphans"
+    )
+    if (o + e).strip():
+        append_job_log(log, log_lock, (o + e).strip())
+    return c
 
 
 def _id_from_image(

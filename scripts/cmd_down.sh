@@ -30,9 +30,11 @@ done
 if [[ "${ALL}" -eq 1 ]]; then
   echo "Останавливаю vllm, sglang, proxy (LiteLLM), мониторинг и slgpu-web…"
   _web_env="$(slgpu_web_compose_env_file)"
+  slgpu_ensure_compose_service_env
+  _ce="$(slgpu_compose_service_env_basename)"
   slgpu_docker_compose -f docker/docker-compose.llm.yml stop 2>/dev/null || true
-  slgpu_docker_compose -f docker/docker-compose.proxy.yml --env-file main.env stop 2>/dev/null || true
-  slgpu_docker_compose -f docker/docker-compose.monitoring.yml stop 2>/dev/null || true
+  slgpu_docker_compose -f docker/docker-compose.proxy.yml --env-file "${_ce}" stop 2>/dev/null || true
+  slgpu_docker_compose -f docker/docker-compose.monitoring.yml --env-file "${_ce}" stop 2>/dev/null || true
   slgpu_docker_compose -f docker/docker-compose.web.yml --env-file "${_web_env}" stop 2>/dev/null || true
 else
   echo "Останавливаю vllm и sglang…"

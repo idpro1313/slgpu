@@ -30,7 +30,7 @@ usage() {
 
 Конфиг: `docker/docker-compose.monitoring.yml` + `docker/docker-compose.proxy.yml` (LiteLLM); сеть `slgpu` — общая с `docker/docker-compose.llm.yml`.
 
-Переменные портов и ретенции — main.env (как раньше).
+Порты/секреты: при наличии **`main.env`** — копируется в **`.slgpu/compose-service.env`** перед compose; иначе используется уже записанный снимок (например из slgpu-web из БД) или **`docker/web-compose.defaults.env`**.
 
 EOF
 }
@@ -100,9 +100,11 @@ slgpu_monitoring_run_bootstrap_service() {
   fi
 
   echo "Bootstrap ${svc}: одноразовый запуск…"
-  slgpu_docker_compose -f docker/docker-compose.monitoring.yml --env-file main.env --profile bootstrap rm -f -s -v "${svc}" >/dev/null 2>&1 || true
-  slgpu_docker_compose -f docker/docker-compose.monitoring.yml --env-file main.env --profile bootstrap up --abort-on-container-exit --exit-code-from "${svc}" "${svc}"
-  slgpu_docker_compose -f docker/docker-compose.monitoring.yml --env-file main.env --profile bootstrap rm -f -s -v "${svc}" >/dev/null 2>&1 || true
+  slgpu_ensure_compose_service_env
+  _ce="$(slgpu_compose_service_env_basename)"
+  slgpu_docker_compose -f docker/docker-compose.monitoring.yml --env-file "${_ce}" --profile bootstrap rm -f -s -v "${svc}" >/dev/null 2>&1 || true
+  slgpu_docker_compose -f docker/docker-compose.monitoring.yml --env-file "${_ce}" --profile bootstrap up --abort-on-container-exit --exit-code-from "${svc}" "${svc}"
+  slgpu_docker_compose -f docker/docker-compose.monitoring.yml --env-file "${_ce}" --profile bootstrap rm -f -s -v "${svc}" >/dev/null 2>&1 || true
   touch "${marker}"
   echo "Bootstrap ${svc}: готово."
 }
@@ -122,20 +124,24 @@ case "${SUB}" in
     slgpu_ensure_langfuse_litellm_secrets
     slgpu_load_server_env
     slgpu_ensure_data_dirs
+    slgpu_ensure_compose_service_env
+    _ce="$(slgpu_compose_service_env_basename)"
     slgpu_ensure_monitoring_bind_config_files
     slgpu_monitoring_bootstrap_once
     echo "Поднимаю мониторинг (slgpu-monitoring)…"
-    slgpu_docker_compose -f docker/docker-compose.monitoring.yml --env-file main.env up -d --remove-orphans
+    slgpu_docker_compose -f docker/docker-compose.monitoring.yml --env-file "${_ce}" up -d --remove-orphans
     echo "Поднимаю LiteLLM (slgpu-proxy)…"
-    slgpu_docker_compose -f docker/docker-compose.proxy.yml --env-file main.env up -d
+    slgpu_docker_compose -f docker/docker-compose.proxy.yml --env-file "${_ce}" up -d
     echo "Проверка: Prometheus /targets (http://<хост>:9090/targets) · Grafana: GRAFANA_PORT · Loki: Explore → Loki · Langfuse: :${LANGFUSE_PORT:-3001} · LiteLLM: :${LITELLM_PORT:-4000} (vLLM: LLM_API_PORT → configs/monitoring/litellm/config.yaml, devllm = SERVED_MODEL_NAME)"
     ;;
   down)
     slgpu_require_docker
+    slgpu_ensure_compose_service_env
+    _ce="$(slgpu_compose_service_env_basename)"
     echo "Останавливаю LiteLLM (slgpu-proxy)…"
-    slgpu_docker_compose -f docker/docker-compose.proxy.yml --env-file main.env down 2>/dev/null || true
+    slgpu_docker_compose -f docker/docker-compose.proxy.yml --env-file "${_ce}" down 2>/dev/null || true
     echo "Останавливаю мониторинг (slgpu-monitoring)…"
-    slgpu_docker_compose -f docker/docker-compose.monitoring.yml down
+    slgpu_docker_compose -f docker/docker-compose.monitoring.yml --env-file "${_ce}" down
     echo "Готово."
     ;;
   restart)
@@ -143,11 +149,13 @@ case "${SUB}" in
     slgpu_ensure_slgpu_network
     slgpu_ensure_langfuse_litellm_secrets
     slgpu_load_server_env
+    slgpu_ensure_compose_service_env
+    _ce="$(slgpu_compose_service_env_basename)"
     slgpu_ensure_monitoring_bind_config_files
     echo "Перезапуск мониторинга…"
-    slgpu_docker_compose -f docker/docker-compose.monitoring.yml --env-file main.env up -d --force-recreate --remove-orphans
+    slgpu_docker_compose -f docker/docker-compose.monitoring.yml --env-file "${_ce}" up -d --force-recreate --remove-orphans
     echo "Перезапуск LiteLLM (slgpu-proxy)…"
-    slgpu_docker_compose -f docker/docker-compose.proxy.yml --env-file main.env up -d --force-recreate
+    slgpu_docker_compose -f docker/docker-compose.proxy.yml --env-file "${_ce}" up -d --force-recreate
     echo "Готово."
     ;;
   bootstrap)
@@ -156,6 +164,7 @@ case "${SUB}" in
     slgpu_ensure_langfuse_litellm_secrets
     slgpu_load_server_env
     slgpu_ensure_data_dirs
+    slgpu_ensure_compose_service_env
     slgpu_ensure_monitoring_bind_config_files
     SLGPU_MONITORING_BOOTSTRAP_FORCE="${SLGPU_MONITORING_BOOTSTRAP_FORCE:-1}" slgpu_monitoring_bootstrap_once
     echo "Bootstrap готов."
