@@ -101,7 +101,6 @@
         <export-loki_tmpl PURPOSE="loki-config.yaml.tmpl: http_listen_port=${LOKI_INTERNAL_PORT}" />
         <export-promtail_tmpl PURPOSE="promtail-config.yml.tmpl: clients[].url=http://${LOKI_SERVICE_NAME}:${LOKI_INTERNAL_PORT}" />
         <export-grafana_datasource_tmpl PURPOSE="datasource.yml.tmpl: prometheus/loki URLs из stack_params" />
-        <export-grafana-slgpu-overview PURPOSE="slgpu-overview.json" />
         <export-grafana-sglang-dashboard-slgpu PURPOSE="sglang-dashboard-slgpu.json (оф. SGLang, slgpu-адаптация)" />
         <export-grafana-sglangdash2-slgpu PURPOSE="sglangdash2-slgpu.json — расширенный; генератор _build_sglangdash2.py от vllmdash2" />
         <export-grafana-vllmdash2 PURPOSE="grafana/templates/vllmdash2.json — vLLM V2, эталон для ручного импорта" />

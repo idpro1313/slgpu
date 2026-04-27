@@ -2044,6 +2044,12 @@
 - **Почему:** Запрос пользователя на опциональный показ сохранённых секретов в явном виде в форме стека.
 - **Решение:** Режим включается явно чекбоксом и отдельным GET; авторизация на уровне доступа к тому же API, что и остальной UI (**без доп. пароля на бэкенде** при текущей модели).
 
+### Что: Grafana — убран провиженинг дашборда «slgpu overview»
+
+- **Что:** Удалён JSON [`configs/monitoring/grafana/provisioning/dashboards/json/slgpu-overview.json`](configs/monitoring/grafana/provisioning/dashboards/json/slgpu-overview.json) (dash «slgpu overview», UID `slgpu-overview`). Провайдер [`dashboards.yml`](configs/monitoring/grafana/provisioning/dashboards/dashboards.yml) по-прежнему подставляет всю папку `json/`. **README.md**, GRACE (**`knowledge-graph.xml`**, **`development-plan.xml`**, **`verification-plan.xml`**, **`requirements.xml`** UC-008, **`grace/README.md`**). **VERSION 6.0.10**, синхронизация версий web.
+- **Почему:** Запрос пользователя — дашборд не нужен.
+- **Решение:** На VM после перерендера конфигов Grafana / **`native.monitoring.up`** старый импорт исчезнет при синхронизации; уже созданный дашборд в БД Grafana при необходимости удалите в UI вручную.
+
 ### Что: Loki 3 — `compactor.delete_request_store` при включённом retention
 
 - **Что сделано:** В [`configs/monitoring/loki/loki-config.yaml.tmpl`](configs/monitoring/loki/loki-config.yaml.tmpl) в блок **`compactor`** добавлено **`delete_request_store: filesystem`** (при **`retention_enabled: true`** Loki 3 иначе падает при валидации: *delete-request-store should be configured when retention is enabled*). **VERSION 6.0.9**, синхронизация версий web.

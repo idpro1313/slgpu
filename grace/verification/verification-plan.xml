@@ -147,7 +147,7 @@
       </test-files>
       <module-checks>
         <check-1>promtool check config configs/monitoring/prometheus/prometheus.yml</check-1>
-        <check-2>JSON: валидный parse для grafana/provisioning/dashboards/json/*.json (sglang-dashboard-slgpu, sglangdash2-slgpu, slgpu-overview) и для grafana/templates/vllmdash2.json (эталон vLLM V2 для ручного импорта)</check-2>
+        <check-2>JSON: валидный parse для grafana/provisioning/dashboards/json/*.json (sglang-dashboard-slgpu, sglangdash2-slgpu) и для grafana/templates/vllmdash2.json (эталон vLLM V2 для ручного импорта)</check-2>
         <check-3>python -m py_compile configs/monitoring/grafana/provisioning/dashboards/json/_build_sglangdash2.py</check-3>
       </module-checks>
       <scenarios>

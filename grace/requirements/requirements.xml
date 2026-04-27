@@ -1,0 +1,111 @@
+<RequirementsAnalysis VERSION="2.4.0">
+  <Project>
+    <name>slgpu</name>
+    <annotation>Стенд для сравнения движков LLM-инференса vLLM и SGLang на Linux-сервере с NVIDIA GPU.</annotation>
+    <keywords>slgpu, vllm, sglang, llm-inference, benchmark, docker-compose, gpu, h200, prometheus, grafana</keywords>
+  </Project>
+
+  <Actors>
+    <actor-Operator>Оператор стенда: запускает движки, бенчмарки, анализирует отчёты.</actor-Operator>
+    <actor-Researcher>Исследователь: сравнивает метрики vLLM и SGLang, выбирает предпочтительный движок.</actor-Researcher>
+    <actor-Automated-Benchmark>Артефакты бенчей: `data/bench/results/&lt;engine&gt;/&lt;timestamp&gt;/summary.json`.</actor-Automated-Benchmark>
+  </Actors>
+
+  <UseCases>
+    <UC-001>
+      <Actor>Operator</Actor>
+      <Action>Подготовить хост Linux с GPU</Action>
+      <Goal>Установить драйвер NVIDIA, Docker, Compose v2, NVIDIA Container Toolkit</Goal>
+      <Preconditions>Свежая Ubuntu/Debian VM с GPU</Preconditions>
+      <AcceptanceCriteria>`./slgpu prepare` завершается без ошибок; `nvidia-smi` показывает GPU</AcceptanceCriteria>
+      <Priority>high</Priority>
+      <RelatedFlows>DF-HOST-PREPARE</RelatedFlows>
+    </UC-001>
+
+    <UC-002>
+      <Actor>Operator</Actor>
+      <Action>Скачать модель с Hugging Face</Action>
+      <Goal>Модель в `${MODELS_DIR}`, пресет в `data/presets/*.env` или эталон в `examples/presets/`</Goal>
+      <Preconditions>`hf` CLI установлен, HF_TOKEN доступен для gated моделей</Preconditions>
+      <AcceptanceCriteria>`./slgpu pull` скачивает веса; пресет — вручную или из репо</AcceptanceCriteria>
+      <Priority>high</Priority>
+      <RelatedFlows>DF-MODEL-PULL</RelatedFlows>
+    </UC-002>
+
+    <UC-003>
+      <Actor>Operator</Actor>
+      <Action>Запустить движок (vLLM или SGLang)</Action>
+      <Goal>Инференс-сервер на порту 8111 с OpenAI-совместимым API</Goal>
+      <Preconditions>Модель скачана, `main.env` / пресет настроены</Preconditions>
+      <AcceptanceCriteria>`curl http://127.0.0.1:8111/v1/models` возвращает список моделей</AcceptanceCriteria>
+      <Priority>high</Priority>
+      <RelatedFlows>DF-ENGINE-UP</RelatedFlows>
+    </UC-003>
+
+    <UC-004>
+      <Actor>Operator</Actor>
+      <Action>Остановить движок</Action>
+      <Goal>Освободить GPU для следующего движка</Goal>
+      <Preconditions>Движок запущен</Preconditions>
+      <AcceptanceCriteria>`docker compose ps` не показывает vllm/sglang контейнеры</AcceptanceCriteria>
+      <Priority>high</Priority>
+      <RelatedFlows>DF-ENGINE-DOWN</RelatedFlows>
+    </UC-004>
+
+    <UC-005>
+      <Actor>Operator</Actor>
+      <Action>Выполнить нагрузочный бенчмарк</Action>
+      <Goal>Получить метрики TTFT, RPS, throughput для заданного движка и модели</Goal>
+      <Preconditions>Движок запущен на 8111</Preconditions>
+      <AcceptanceCriteria><![CDATA[Артефакты в `data/bench/results/{engine}/{timestamp}/` с summary.json]]></AcceptanceCriteria>
+      <Priority>high</Priority>
+      <RelatedFlows>DF-BENCH</RelatedFlows>
+    </UC-005>
+
+    <UC-006>
+      <Actor>Researcher</Actor>
+      <Action>Сравнить результаты vLLM и SGLang</Action>
+      <Goal>Два прогона в `data/bench/results/{engine}/{ts}/summary.json`; сравнение — в UI «Бенчмарки», экспорт вручную или внешний отчёт</Goal>
+      <Preconditions>Есть summary.json для обоих движков</Preconditions>
+      <AcceptanceCriteria>Оба `summary.json` доступны; страница `/benchmarks` открывает детали прогона (модалка)</AcceptanceCriteria>
+      <Priority>medium</Priority>
+      <RelatedFlows>DF-BENCH</RelatedFlows>
+    </UC-006>
+
+    <UC-008>
+      <Actor>Operator</Actor>
+      <Action>Мониторить GPU и движок</Action>
+      <Goal>Визуализация метрик в Grafana: движок — SGLang (`sglang-dashboard-slgpu`, `sglangdash2-slgpu`, метрики `sglang:*`) или vLLM (`vllmdash2`); температура GPU, latency, токены</Goal>
+      <Preconditions>Мониторинг поднят (`./slgpu up` поднимает Prometheus + Grafana)</Preconditions>
+      <AcceptanceCriteria><![CDATA[Grafana :3000: datasource prometheus; в каталоге provisioning — JSON из configs/monitoring/grafana/provisioning/dashboards/json/; эталон vLLM V2 — configs/monitoring/grafana/templates/vllmdash2.json (ручной импорт); для SGLang — переменные instance/model_name (см. configs/monitoring/README.md)]]></AcceptanceCriteria>
+      <Priority>medium</Priority>
+      <RelatedFlows>DF-MONITOR</RelatedFlows>
+    </UC-008>
+  </UseCases>
+
+  <NonGoals>
+    <item-1>Нет поддержки Kubernetes или multi-node.</item-1>
+    <item-2>Нет хранения истории бенчмарков в БД — только файлы JSON и Markdown.</item-2>
+    <item-3>Нет автоматического масштабирования GPU или динамического TP.</item-3>
+    <item-4>Нет Kubernetes / multi-node; Web UI (Develonica.LLM) — опциональный control plane поверх CLI, не замена headless-сценариев на чистом `./slgpu`.</item-4>
+  </NonGoals>
+
+  <Constraints>
+    <constraint-1>Только Linux с NVIDIA GPU; Windows и macOS не поддерживаются для запуска.</constraint-1>
+    <constraint-2>Один движок за раз на порту 8111; переключение через down/up.</constraint-2>
+    <constraint-3>HF_TOKEN не должен попадать в git (исключён в `.gitignore`).</constraint-3>
+    <constraint-4>По умолчанию TP=8 и 8 GPU (0–7); на меньшем числе GPU нужно корректировать вручную.</constraint-4>
+  </Constraints>
+
+  <Risks>
+    <risk-1>OOM при загрузке больших MoE-моделей (Kimi-K2) — не всегда спасается снижением MAX_MODEL_LEN.</risk-1>
+    <risk-2>Образы на latest — воспроизводимость между запусками не гарантируется.</risk-2>
+    <risk-3>Неверный `MAX_MODEL_LEN` в пресете (без сверки с `config.json` / карточкой HF) — риск OOM или `ContextOverflowError`.</risk-3>
+  </Risks>
+
+  <OpenQuestions>
+    <question-1>Стоит ли зафиксировать digest образов vLLM/SGLang для воспроизводимости?</question-1>
+    <question-2>Нужен ли co-run (docker-compose.both.yml) в основной ветке?</question-2>
+    <question-3>Добавить ли unit-тесты для `_lib.sh` и `bench_openai.py`?</question-3>
+  </OpenQuestions>
+</RequirementsAnalysis>

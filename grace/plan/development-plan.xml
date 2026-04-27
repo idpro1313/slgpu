@@ -1,4 +1,4 @@
-<DevelopmentPlan VERSION="6.0.7">
+<DevelopmentPlan VERSION="6.0.10">
   <!--
     GRACE development plan — methodology: https://github.com/osovv/grace-marketplace
     Upstream ships Agent Skills + optional CLI (@osovv/grace-cli): grace lint | module find | module show | file show.
@@ -340,7 +340,6 @@
       <interface>
         <export-monitoring_compose PURPOSE="docker/docker-compose.monitoring.yml (slgpu-monitoring-*) + docker/docker-compose.proxy.yml (slgpu-proxy-*: Langfuse, LiteLLM) + configs/monitoring/*; web-native значения портов/project-name только из stack_params snapshot, без YAML fallback" />
         <export-prometheus_yml PURPOSE="Конфиг скрейпинга" />
-        <export-grafana-slgpu-overview PURPOSE="slgpu-overview (provisioning)" />
         <export-grafana-sglang-dashboard-slgpu PURPOSE="sglang-dashboard-slgpu.json" />
         <export-grafana-sglangdash2-slgpu PURPOSE="sglangdash2-slgpu.json + _build_sglangdash2.py от vllmdash2" />
         <export-grafana-vllmdash2 PURPOSE="grafana/templates/vllmdash2.json — исходник vLLM V2 (ручной импорт)" />
@@ -427,7 +426,7 @@
     <DF-MONITOR NAME="Мониторинг" TRIGGER="включён при ./slgpu up">
       <step-1>Prometheus собирает metrics с vllm/sglang, dcgm, node-exporter</step-1>
       <step-2>Grafana: datasource + JSON в <![CDATA[configs/monitoring/grafana/provisioning/dashboards/json/]]> (SGLang: sglang-dashboard-slgpu, sglangdash2-slgpu; vLLM: vllmdash2)</step-2>
-      <evidence><![CDATA[Grafana :3000: slgpu-overview; для SGLang — дашборды с instance/model_name; см. configs/monitoring/README.md]]></evidence>
+      <evidence><![CDATA[Grafana :3000: для SGLang — дашборды с instance/model_name; см. configs/monitoring/README.md]]></evidence>
     </DF-MONITOR>
   </DataFlow>
 
