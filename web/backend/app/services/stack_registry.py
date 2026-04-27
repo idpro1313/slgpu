@@ -100,7 +100,7 @@ def _e(
 # Порядок и группы (meta.group) **строго** соответствуют разделам `configs/main.env`:
 #   1. network    — Docker-сеть и compose-проекты
 #   2. web        — slgpu-web (образ, контейнер, порт/bind, логирование, host-проб)
-#   3. paths      — пути на хосте (bind mount), включая SLGPU_BENCH_CHOWN_IMAGE
+#   3. paths      — пути на хосте (bind mount)
 #   4. images     — Docker-образы для LLM/мониторинга/прокси
 #   5. inference  — LLM API, движок, vLLM, SGLang, кеши
 #   6. monitoring — Prometheus/Grafana/Loki/Promtail/DCGM/NodeExporter (имена/порты/binds/retention/auth)
@@ -171,9 +171,14 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
     "LANGFUSE_CLICKHOUSE_LOGS_DIR": _e("LANGFUSE_CLICKHOUSE_LOGS_DIR", "paths", "Каталог логов ClickHouse на хосте.", *S_MON, "fix_perms"),
     "LANGFUSE_MINIO_DATA_DIR": _e("LANGFUSE_MINIO_DATA_DIR", "paths", "Каталог MinIO на хосте.", *S_MON, "fix_perms"),
     "LANGFUSE_REDIS_DATA_DIR": _e("LANGFUSE_REDIS_DATA_DIR", "paths", "Каталог Redis (Langfuse) на хосте.", *S_MON, "fix_perms"),
-    "SLGPU_BENCH_CHOWN_IMAGE": _e("SLGPU_BENCH_CHOWN_IMAGE", "paths", "Образ для эфемерного chown в `monitoring fix-perms` и bench-job (alpine:3.21 / любой образ с chown).", "fix_perms"),
 
     # ----- 4. Образы Docker (LLM + monitoring + proxy) -----
+    "SLGPU_BENCH_CHOWN_IMAGE": _e(
+        "SLGPU_BENCH_CHOWN_IMAGE",
+        "images",
+        "Образ для эфемерного chown в `monitoring fix-perms` и bench-job (alpine:3.21 / любой образ с chown).",
+        "fix_perms",
+    ),
     "VLLM_DOCKER_IMAGE": _e("VLLM_DOCKER_IMAGE", "images", "Образ vLLM (OpenAI-совместимый сервер); пресет может перекрыть.", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
     "SGLANG_DOCKER_IMAGE": _e("SGLANG_DOCKER_IMAGE", "images", "Образ SGLang.", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
     "DCGM_EXPORTER_IMAGE": _e("DCGM_EXPORTER_IMAGE", "images", "Образ DCGM exporter (метрики GPU).", *S_MON, "fix_perms"),

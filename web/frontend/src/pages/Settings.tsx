@@ -78,12 +78,12 @@ const STACK_GROUP_META: Record<StackGroupId, { title: string; subtitle: string }
   paths: {
     title: "3. Пути на хосте (bind mount)",
     subtitle:
-      "Абсолютные пути для slgpu-web, моделей, пресетов, данных мониторинга и прокси (Prometheus TSDB, Grafana, Loki/Promtail, Postgres/ClickHouse/MinIO/Redis), а также образ для chown в fix-perms.",
+      "Абсолютные пути для slgpu-web, моделей, пресетов, данных мониторинга и прокси (Prometheus TSDB, Grafana, Loki/Promtail, Postgres/ClickHouse/MinIO/Redis).",
   },
   images: {
     title: "4. Образы Docker (LLM + monitoring + proxy)",
     subtitle:
-      "Теги контейнеров vLLM, SGLang, Prometheus/Grafana/Loki/Promtail, DCGM/NodeExporter, Langfuse + Worker, Postgres/Redis/ClickHouse, MinIO/mc, LiteLLM.",
+      "Теги контейнеров и вспомогательный образ chown для fix-perms/bench (SLGPU_BENCH_CHOWN_IMAGE), далее vLLM, SGLang, Prometheus/Grafana/Loki/Promtail, DCGM/NodeExporter, Langfuse + Worker, Postgres/Redis/ClickHouse, MinIO/mc, LiteLLM.",
   },
   inference: {
     title: "5. Инференс — LLM API, движок, vLLM, SGLang, кеши",
