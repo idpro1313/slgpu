@@ -3,6 +3,8 @@
 .slgpu/
 __pycache__/
 *.pyc
+# Node (локальная dev-сборка фронта; lockfile — в git)
+web/frontend/node_modules/
 .DS_Store
 template/*
 

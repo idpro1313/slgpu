@@ -1,0 +1,72 @@
+<TechnologyStack VERSION="2.4.0">
+  <Runtime>Docker Engine + Docker Compose v2</Runtime>
+  <Language>Bash 4+, Python 3.10+</Language>
+  <Framework>None (standalone CLI scripts)</Framework>
+
+  <Dependencies>
+    <dep name="docker" version="latest" purpose="Контейнеризация сервисов" />
+    <dep name="docker-compose" version="v2" purpose="Оркестрация 6 сервисов" />
+    <dep name="nvidia-container-toolkit" version="latest" purpose="Проброс GPU в контейнеры" />
+    <dep name="huggingface_hub" version="latest" purpose="CLI `hf download` для скачивания моделей" />
+    <dep name="vllm/vllm-openai" version="latest" purpose="Инференс-движок vLLM" />
+    <dep name="lmsysorg/sglang" version="latest" purpose="Инференс-движок SGLang" />
+    <dep name="prom/prometheus" version="latest" purpose="Сбор метрик" />
+    <dep name="grafana/grafana" version="latest" purpose="Визуализация метрик" />
+    <dep name="nvidia/dcgm-exporter" version="latest" purpose="Метрики GPU (DCGM)" />
+    <dep name="prom/node-exporter" version="latest" purpose="Метрики хоста" />
+  </Dependencies>
+
+  <VersionConstraints>
+    <constraint lib="docker" min="24.0.0" reason="Compose v2 требуется для profiles" />
+    <constraint lib="nvidia-driver" min="560" reason="H200 / FP8 поддержка" />
+  </VersionConstraints>
+
+  <Tooling>
+    <tool name="editor" value="Cursor / VS Code / Kilo" version="latest" />
+    <tool name="linter" value="shellcheck" version="latest" />
+    <tool name="python-linter" value="ruff / flake8" version="latest" />
+    <tool name="test-runner" value="pytest" version="latest" />
+    <tool name="formatter" value="black / shfmt" version="latest" />
+    <tool name="version-control" value="git" version="latest" />
+    <tool name="web-image-build" value="`docker/Dockerfile.web`: `npm ci` + `package-lock.json`, BuildKit cache для `/root/.npm` и `/root/.cache/pip`" version="5.2.6" />
+  </Tooling>
+
+  <Testing>
+    <module-level>
+      <command>shellcheck scripts/_lib.sh scripts/cmd_*.sh</command>
+      <focus>Синтаксическая корректность shell-скриптов</focus>
+    </module-level>
+    <module-level>
+      <command>python -m py_compile scripts/bench_openai.py</command>
+      <focus>Синтаксическая корректность Python</focus>
+    </module-level>
+    <wave-level>
+      <command>grep MODEL_ID examples/presets/qwen3.6-35b-a3b.env</command>
+      <focus>Параметры пресетов вручную</focus>
+    </wave-level>
+    <phase-level>
+      <command>docker compose ps &amp;&amp; curl -s http://127.0.0.1:8111/v1/models</command>
+      <focus>Интеграция: compose, API</focus>
+    </phase-level>
+    <mocking-policy>Для бенчмарка — mock OpenAI API endpoint; для pull — mock huggingface_hub download.</mocking-policy>
+  </Testing>
+
+  <Observability>
+    <logger>Docker json-file (ротация 100 MiB × 5)</logger>
+    <log-format>[Module][function][BLOCK_NAME] message</log-format>
+    <required-fields>timestamp, engine (vllm/sglang), model, scenario</required-fields>
+    <redaction>Never log HF_TOKEN, Grafana passwords, raw request payloads.</redaction>
+    <metrics-source>Prometheus (vllm:8111/metrics, sglang:8222/metrics, dcgm-exporter:9400, node-exporter:9100)</metrics-source>
+    <grafana-provisioning>
+      <datasource-uid>prometheus</datasource-uid>
+      <json-dir>configs/monitoring/grafana/provisioning/dashboards/json</json-dir>
+      <dashboard name="SGLang (краткий)" file="sglang-dashboard-slgpu.json" uid="sglang-dashboard-slgpu" engine="SGLang" />
+      <dashboard name="SGLang (расширенный, по мотивам vLLM V2)" file="sglangdash2-slgpu.json" uid="sglangdash2-slgpu" engine="SGLang" build-script="_build_sglangdash2.py" />
+      <dashboard name="vLLM Monitoring V2 (эталон для импорта)" file="configs/monitoring/grafana/templates/vllmdash2.json" engine="vLLM" note="оригинал grafana.com; sglangdash2 derived; не в auto-provisioning" />
+    </grafana-provisioning>
+  </Observability>
+
+  <DeliveryShape>
+    <shape><![CDATA[Git-репозиторий с bash/python скриптами, `docker/*.yml` (Compose) и конфигами Grafana под `configs/monitoring/`. Запуск на целевой Linux VM: `git clone && ./slgpu prepare && ./slgpu pull && ./slgpu up` (пресет из `data/presets/<slug>.env` или эталон из `examples/presets/`). Опционально: `./slgpu web up` — Develonica.LLM.]]></shape>
+  </DeliveryShape>
+</TechnologyStack>

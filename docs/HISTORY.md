@@ -1930,3 +1930,16 @@
 - **Файлы:** удалён `scripts/monitoring_fix_permissions.sh`; обновлены `scripts/_lib.sh`, `scripts/serve.sh`, `web/backend/app/services/env_files.py`, `README.md`, `web/README.md`, `configs/monitoring/README.md`, `configs/monitoring/LOGS.md`, `data/README.md`, `docker/docker-compose.monitoring.yml`, `VERSION` (5.2.5), `web/backend/app/__init__.py`, `web/backend/pyproject.toml`, `web/frontend/package.json`, `docs/HISTORY.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/plan/development-plan.xml`, `grace/verification/verification-plan.xml`.
 - **Решение:** PATCH 5.2.5 — изменения только в host-bash и документации. Backend, API, БД, фронтенд не затронуты. Альтернатива «оставить `monitoring_fix_permissions.sh` как fallback на случай, если web-UI недоступен» отвергнута: backend job уже не требует sudo и работает через docker.sock и helper-контейнер; на хосте без UI доступен ровно тот же helper через `docker run --rm -u 0:0 -v ... alpine:latest sh -c 'mkdir -p ... && chown -R ...'` — это уже инструкция в `configs/monitoring/README.md`.
 
+## Фаза 5.2.6 (Вариант A: ускорение и стабилизация сборки Docker-образа `slgpu-web`)
+
+### Что: `package-lock.json`, `npm ci`, кэш pip BuildKit, один `pip install -e .`
+
+- **Что сделано:**
+  - **Добавлен `web/frontend/package-lock.json`** — фиксированные версии дерева npm (commit в git).
+  - **`docker/Dockerfile.web` (стадия `frontend`)**: `COPY package.json` + `package-lock.json` (оба обязательны) и **`npm ci`** вместо **`npm install`**; по-прежнему `--mount=type=cache,target=/root/.npm` для кэша npm между сборками.
+  - **Стадия `runtime`:** из `ENV` убран **`PIP_NO_CACHE_DIR=1`**, иначе pip не пишет в каталог, пригодный для bind-mount кэша BuildKit. К `RUN` с `pip` добавлен **`--mount=type=cache,target=/root/.cache/pip`** — при повторных `docker build` wheel’и Python не скачиваются заново (кэш снаружи слоя образа).
+  - **Упрощён шаг pip:** вместо пары `pip install .` + `pip install --no-deps -e .` — один вызов **`pip install -e .`** (зависимости из `pyproject.toml` + editable-установка до `COPY backend/`), затем по-прежнему `pip install "huggingface_hub[cli]" hf_transfer`.
+- **Почему:** Запрос: «Вариант A» к обсуждению долгой сборки web — при отсутствии lockfile `npm install` на каждом «чистом» слое пересчитывал дерево; дублирующий `pip install` и отключение кэша pip замедляли и инвалидировали кэш при смене только backend-кода. Вариант A: lockfile + `npm ci` + кэш pip + убрать лишний pip-шаг.
+- **Файлы:** `web/frontend/package-lock.json` (новый), `web/frontend/package.json` (5.2.6), `docker/Dockerfile.web`, `README.md` (блок «Версия 5.2.6»), `web/README.md` (раздел «Тесты»: `npm ci`), `VERSION`, `web/backend/app/__init__.py`, `web/backend/pyproject.toml`, `docs/HISTORY.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/plan/development-plan.xml`, `grace/verification/verification-plan.xml` (scenario-38), `grace/technology/technology.xml` (запись в `<Tooling>`, `git add -f` — `grace/` в `.gitignore`), `.gitignore` (`web/frontend/node_modules/`).
+- **Решение:** PATCH 5.2.6 — инфраструктура образа, без изменения API и кода приложения. Для dev после `git pull` в `web/frontend` выполнять **`npm ci`**, а при изменении зависимостей в `package.json` — **`npm install`** локально и коммит обновлённого `package-lock.json`.
+

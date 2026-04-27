@@ -183,9 +183,11 @@ pytest
 
 ```bash
 cd web/frontend
-npm install
+npm ci
 npm run typecheck
 ```
+
+`package-lock.json` в репозитории: после изменения `package.json` сделайте `npm install` локально и закоммитьте lockfile — так совпадёт `npm ci` в `docker/Dockerfile.web` (стадия frontend).
 
 Из PowerShell в корне репо: `.\web\verify-frontend.ps1` (обёртка над `npm run typecheck`).
 
