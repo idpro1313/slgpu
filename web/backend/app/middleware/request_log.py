@@ -17,7 +17,7 @@ log = logging.getLogger("app.http")
 
 # Не пишем пачку access при опросе версии/health (фоновый refetch)
 _SKIP_PREFIXES: tuple[str, ...] = ("/assets/",)
-_SKIP_PATHS: frozenset[str] = frozenset({"/favicon.ico", "/healthz"})
+_SKIP_PATHS: frozenset[str] = frozenset({"/favicon.ico", "/favicon.svg", "/healthz"})
 
 
 def _path_for_log(request: Request) -> str:
@@ -43,6 +43,8 @@ class AppHttpRequestLogMiddleware(BaseHTTPMiddleware):
         p = request.url.path
         if p in _SKIP_PATHS or p.startswith(_SKIP_PREFIXES):
             return await call_next(request)
+        if p == "/api/v1/app-logs/tail" or p.startswith("/api/v1/app-logs/tail"):
+            return await call_next(request)
 
         t0 = time.perf_counter()
         method = request.method
@@ -50,11 +52,13 @@ class AppHttpRequestLogMiddleware(BaseHTTPMiddleware):
 
         try:
             response = await call_next(request)
-        except Exception:
+        except Exception as exc:
+            # Полный traceback пишет uvicorn/starlette; здесь — кратко, без дубля «ExceptionGroup».
             log.error(
-                "[app][http][BLOCK_API_ERROR] %s",
-                "method=" + method + " path=" + sp,
-                exc_info=True,
+                "[app][http][BLOCK_API_ERROR] method=%s path=%s err=%s",
+                method,
+                sp,
+                exc,
             )
             raise
         else:

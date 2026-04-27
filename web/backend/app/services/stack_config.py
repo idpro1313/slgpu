@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import sqlite3
 from contextlib import suppress
 from pathlib import Path
@@ -40,15 +39,32 @@ _PUBLIC_ACCESS_KEY = "public_access"
 
 
 def sqlite_path_from_database_url(url: str) -> Path | None:
-    if "sqlite" not in url:
+    """Сопоставить ``WEB_DATABASE_URL`` с путём к файлу SQLite (не ``:memory:``).
+
+    URL вида ``sqlite+aiosqlite:////data/slgpu-web.db`` (четыре слеша — абсолютный путь в Unix)
+    должен давать **абсолютный** путь. Старое регулярное выражение обрезало ведущий ``/`` и
+    оставляло ``data/...`` относительно CWD процесса — тогда ``_connect_ro()`` не находил файл
+    при работе из ``/srv/app`` и ``sync_merged_flat()`` видел «DB unavailable».
+    """
+    from sqlalchemy.engine.url import make_url
+
+    try:
+        u = make_url(url)
+    except Exception:  # noqa: BLE001
         return None
-    m = re.search(r"sqlite\+?[a-z]*:///(?:/)?(.+)", url, re.I)
-    if not m:
+    driver = u.drivername or ""
+    if "sqlite" not in driver:
         return None
-    raw = m.group(1).strip()
-    if raw == ":memory:" or not raw:
+    raw = (u.database or "").strip()
+    if not raw or raw == ":memory:":
         return None
-    return Path(raw)
+    p = Path(raw)
+    if p.is_absolute():
+        return p
+    candidate = Path("/") / raw
+    if candidate.is_file():
+        return candidate
+    return p
 
 
 def parse_dotenv_text(text: str) -> dict[str, str]:

@@ -166,6 +166,7 @@ API (все публичные ручки под префиксом **`/api/v1`*
 - Имена стеков Compose для **опроса Docker** (`com.docker.compose.project`) читаются из
   `stack_params`: `WEB_COMPOSE_PROJECT_INFER`, `WEB_COMPOSE_PROJECT_MONITORING`,
   `WEB_COMPOSE_PROJECT_PROXY`.
+- **DSN SQLite (sync read):** путь к файлу БД для `sync_merged_flat` / read-only `sqlite3` разбирается через **SQLAlchemy `make_url`** (URL вида `sqlite+aiosqlite:////data/slgpu-web.db` — абсолютный путь в Unix; старый regex, обрезавший ведущий `/`, **не** используется).
 - **Наблюдаемость:** логи в **stdout** и (при доступном `WEB_DATA_DIR`) в **`${WEB_DATA_DIR}/.slgpu/app.log`** в JSON (`app.core.logging`); один
   `LogRecord` — одна строка. `configure_logging(data_dir=…)` оставляет **StreamHandler** и **RotatingFileHandler** на **root**, снимает handlers с `app`, `httpx`, `httpcore`, `h11`, `uvicorn*`,
   `fastapi`, `starlette` и включает у них `propagate`, чтобы не было дублей

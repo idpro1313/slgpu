@@ -1815,3 +1815,9 @@
 - Файлы: `web/backend/app/core/logging.py`, `main.py`, `middleware/request_log.py`, `services/app_log_file.py`, `api/v1/app_logs.py`, `schemas/app_logs.py`, `api/v1/__init__.py`, `web/frontend` (AppLogs, App, Layout, types), `web/backend/tests/test_api_smoke.py`, `web/CONTRACT.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/plan/development-plan.xml`, `VERSION` 5.0.2, pyproject, package.json, `__init__.py`, `docs/HISTORY.md`.
 - Решение: MINOR 5.0.2; тела запросов в лог не пишем (секреты); бизнес-логи — существующие `logger` в сервисах + новый access-слой.
 
+### 5.0.3: DSN SQLite и sync_merged_flat — исправлен абсолютный путь
+- Что: `sqlite_path_from_database_url` переведён на `sqlalchemy.engine.url.make_url` (и fallback `/` + relative); удалён regex, обрезавший ведущий `/` у `sqlite+aiosqlite:////data/...` → `RuntimeError: stack_params DB is unavailable` при `GET /runtime/snapshot`. Middleware: без `exc_info` на `BLOCK_API_ERROR` (краткая строка); пропуск логов для `GET /app-logs/tail`, `/favicon.svg`. Тесты `test_stack_config_sqlite_path.py`.
+- Почему: Сообщение пользователя с логами с контейнера: падение `sync_merged_flat` / `_connect_ro` при валидном `WEB_DATABASE_URL`.
+- Файлы: `web/backend/app/services/stack_config.py`, `middleware/request_log.py`, `tests/test_stack_config_sqlite_path.py`, `VERSION` 5.0.3, pyproject, package.json, `__init__.py`, README, `grace/knowledge-graph/knowledge-graph.xml`, `development-plan.xml`, `docs/HISTORY.md`.
+- Решение: PATCH; корневая причина — неверный разбор DSN, не отсутствие БД.
+

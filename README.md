@@ -2,7 +2,7 @@
 
 Репозиторий **стенда для сравнения LLM-инференса** на Linux-сервере с GPU: два движка (**vLLM** и **SGLang**) в Docker, общий локальный кэш моделей, OpenAI-совместимый HTTP API, нагрузочный бенчмарк, **Prometheus + Grafana Loki (логи) + Promtail + Langfuse (трейсинг) + LiteLLM Proxy (шлюз) + NVIDIA DCGM Exporter** (см. [§3](#3-сервисы-и-порты), [`configs/monitoring/README.md`](configs/monitoring/README.md)).
 
-> **Версия 5.0.2:** на хосте — только bootstrap web: **`./slgpu help`** и **`./slgpu web up|down|restart|logs|build|install`**. Стек в рантайме — **SQLite** (`stack_params`); стартовый импорт — **`POST /api/v1/app-config/install`** читает **`main.env` в корне** (копия из [`configs/main.env`](configs/main.env)). Старые host-команды **`./slgpu` `up|pull|monitoring|bench|load|prepare`** **удалены** — вместо них jobs **`native.*`** в **slgpu-web** (см. [`web/CONTRACT.md`](web/CONTRACT.md), [`docs/HISTORY.md`](docs/HISTORY.md)).
+> **Версия 5.0.3:** на хосте — только bootstrap web: **`./slgpu help`** и **`./slgpu web up|down|restart|logs|build|install`**. Стек в рантайме — **SQLite** (`stack_params`); стартовый импорт — **`POST /api/v1/app-config/install`** читает **`main.env` в корне** (копия из [`configs/main.env`](configs/main.env)). Старые host-команды **`./slgpu` `up|pull|monitoring|bench|load|prepare`** **удалены** — вместо них jobs **`native.*`** в **slgpu-web** (см. [`web/CONTRACT.md`](web/CONTRACT.md), [`docs/HISTORY.md`](docs/HISTORY.md)).
 
 Целевая конфигурация при разработке: **8× NVIDIA H200**. **Tensor parallel по умолчанию `TP=8`**: в пресетах в БД и в [`serve.sh`](scripts/serve.sh). GPU-маска — **`NVIDIA_VISIBLE_DEVICES`** в импортированном стеке. Проект рассчитан на один хост без Kubernetes.
 

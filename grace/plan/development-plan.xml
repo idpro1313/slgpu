@@ -1,4 +1,4 @@
-<DevelopmentPlan VERSION="5.0.2">
+<DevelopmentPlan VERSION="5.0.3">
   <!--
     GRACE development plan — methodology: https://github.com/osovv/grace-marketplace
     Upstream ships Agent Skills + optional CLI (@osovv/grace-cli): grace lint | module find | module show | file show.
