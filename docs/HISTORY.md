@@ -1674,6 +1674,13 @@
 - **Файлы:** `web/backend/app/services/env_key_aliases.py`, `stack_config.py`, `llm_env.py`, `presets.py`, `env_files.py`, `native_jobs.py`; `scripts/serve.sh`, `_lib.sh`, `monitoring_fix_permissions.sh`, `cmd_monitoring.sh`; `docker/docker-compose.llm.yml`, `docker/docker-compose.monitoring.yml`; `main.env`, `main.env.example`, `examples/presets/*.env`; `web/frontend` `Presets.tsx`, `Settings.tsx`; `README.md`, `configs/models/README.md`; `VERSION`, версии web/backend, `grace/knowledge-graph/knowledge-graph.xml`, `docs/HISTORY.md`.
 - **Решение:** **MINOR 4.2.0** — обратная совместимость через fallback в скриптах, compose и Python.
 
+### 4.4.2: Удалён `main.env.example` (дубль `configs/main.env`)
+
+- **Что:** Удалён корневой **`main.env.example`**; комментарий в **`docker/web-compose.defaults.env`**; **README** §5: источник правды для web — БД/`DEFAULT_STACK`, человеко читаемый шаблон — **`configs/main.env`**; **VERSION** 4.4.2.
+- **Почему:** Файл не использовался рантаймом (ни Python, ни compose), дублировал **`configs/main.env`**, путал относительно «обязательного» шаблона.
+- **Файлы:** (удалён) `main.env.example`, `docker/web-compose.defaults.env`, `README.md`, `VERSION`, версии web, `docs/HISTORY.md`.
+- **Решение:** **PATCH** — кто копировал `main.env` из `main.env.example`, переключиться на `configs/main.env`.
+
 ### 4.4.1: Снимок compose для monitoring — под `data/web`, не `<repo>/.slgpu`
 
 - **Что:** `write_compose_service_env_file` / `compose_service_env_path` → **`${WEB_DATA_DIR}/.slgpu/compose-service.env`** (по умолч. `data/web/…`); в **docker-compose.monitoring.yml** и **proxy** — `env_file: ${WEB_DATA_DIR}/.slgpu/compose-service.env`; **`scripts/_lib.sh`**, **web/docker-entrypoint.sh** (`mkdir data/web/.slgpu`); документация; **VERSION** 4.4.1.
