@@ -1,5 +1,5 @@
 <KnowledgeGraph>
-  <Project NAME="slgpu" VERSION="4.0.9">
+  <Project NAME="slgpu" VERSION="4.1.0">
     <keywords>slgpu, vllm, sglang, llm-inference, benchmark, docker-compose, gpu, prometheus, grafana, sglang-dashboard-slgpu, sglangdash2-slgpu</keywords>
     <annotation>Стенд для сравнения движков LLM-инференса vLLM и SGLang на Linux-сервере с NVIDIA GPU.</annotation>
 
@@ -189,12 +189,13 @@
         <fn-services_hf_models PURPOSE="Реестр HF моделей и статусы скачивания: GET /models синхронизирует DB с фактическими папками MODELS_DIR/&lt;org&gt;/&lt;repo&gt;; в ответе HFModelOut.pull_progress (активная Job native.model.pull по resource=hf_id); active_pull_jobs_by_resource; PATCH меняет revision/notes, DELETE удаляет запись и опционально локальные веса внутри MODELS_DIR" />
         <fn-services_runtime PURPOSE="snapshot: при активных EngineSlot — пробы по каждому слоту (asyncio.gather, RuntimeSlotProbe); иначе compose legacy; tail_slot_logs по slot_key. Удалено в 4.0.0: EngineRun/attach_run_metadata, REST /runtime/up|down|restart|/logs" />
         <fn-api_runtime_slots PURPOSE="GET/POST /runtime/slots, POST /slots/{key}/down|restart, GET slots/{key}/logs; list EngineSlot" />
+        <fn-api_docker_logs PURPOSE="GET /docker/containers?scope=slgpu|all, GET /docker/containers/{ref}/logs; read-only, DockerInspector" />
         <fn-api_presets_clone PURPOSE="POST /presets/{id}/clone (PresetCloneRequest), flush перед ответом" />
         <fn-services_monitoring PURPOSE="Probe: Docker + HTTP; порта и compose project monitoring из слитого стека (БД)" />
         <fn-services_litellm PURPOSE="LiteLLM: GET /v1/models и /health* с `Authorization: Bearer` при наличии `litellm_api_key` в public_access (настройки); порт — слитый стек; public URLs — app_settings + ports_for_probes_sync" />
         <fn-services_app_settings PURPOSE="Persistent UI settings: /api/v1/settings/public-access — `server_host` + опциональный `litellm_api_key` (не отдаётся в GET, только `litellm_api_key_set`)" />
         <fn-core_logging PURPOSE="JSON stdout: один StreamHandler на root; у app/httpx/httpcore/h11/uvicorn*/fastapi/starlette handlers сняты, propagate=True; повторный вызов в startup сбрасывает handler'ы uvicorn" />
-        <fn-frontend_app PURPOSE="React SPA: Dashboard (Сервер + GPU live), Presets, Inference (слоты + запуск через POST /runtime/slots, без дублирующей формы /runtime/up), Models, Monitoring, Jobs, Benchmarks, Settings" />
+        <fn-frontend_app PURPOSE="React SPA: Dashboard (Сервер + GPU live), Presets, Inference (слоты + запуск через POST /runtime/slots), Docker (/docker-logs — логи контейнеров), Models, Monitoring, Jobs, Benchmarks, Settings" />
         <export-web-image PURPOSE="slgpu-web:dev, подъём: ./slgpu web up; тома: repo root по тому же абсолютному хост-пути (SLGPU_HOST_REPO=$(pwd) в scripts/cmd_web.sh), ./data/web, ./data/models, docker.sock; entrypoint chown'ит /data и ${WEB_SLGPU_ROOT}/data/{models,presets,bench} под uid 10001 (bench — native.bench.* → data/bench/results); working_dir из compose НЕ задаётся (uvicorn стартует из WORKDIR /srv/app в Dockerfile.web); huggingface_hub[cli] + hf_transfer установлены для slgpu pull, HF_HOME=/data/huggingface и /home/slgpuweb writable; критично для команд из web → docker compose monitoring/llm с корректными bind-маунтами" />
         <export-contract PURPOSE="web/CONTRACT.md — границы CLI/Docker API/SQLite" />
       </annotations>

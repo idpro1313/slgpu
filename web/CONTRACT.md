@@ -88,7 +88,8 @@ API (все публичные ручки под префиксом **`/api/v1`*
 
 ### Docker API
 
-- **Чтение:** список контейнеров по `com.docker.compose.project`, атрибуты, хвост логов; слоты — по `com.develonica.slgpu.slot` / имени `slgpu-{engine}-{slot_key}`.
+- **UI «Docker» (логи), read-only (4.1.0+):** `GET /api/v1/docker/containers?scope=slgpu|all` — список контейнеров на хосте (`slgpu` — фильтр по префиксу/compose/лейблу `com.develonica.slgpu.*`). `GET /api/v1/docker/containers/{name_or_id}/logs?tail=1..5000` — tail stdout+stderr. Страница `/docker-logs` в SPA. При недоступном socket — `docker_available: false` в списке, `503` на логах.
+- **Чтение (внутр.):** список контейнеров по `com.docker.compose.project`, атрибуты, хвост логов; слоты — по `com.develonica.slgpu.slot` / имени `slgpu-{engine}-{slot_key}`.
 - **Запись:** `native.monitoring.fix-perms` (chown через ephemeral контейнер); **LLM-слоты** — `docker run` / stop через **docker-py** (`app.services.slot_runtime`); стек мониторинга — `docker compose`. Ручной `./slgpu up` с хоста по-прежнему использует `docker/docker-compose.llm.yml`.
 
 ### HTTP-проверки

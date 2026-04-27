@@ -314,3 +314,21 @@ async def test_import_templates_from_examples_presets(client: httpx.AsyncClient)
         r2 = await client.post("/api/v1/presets/import-templates")
     assert r2.status_code == 200
     assert r2.json()["files_skipped_existing"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_docker_containers_list_shape(client: httpx.AsyncClient) -> None:
+    async with client:
+        r = await client.get("/api/v1/docker/containers?scope=slgpu")
+    assert r.status_code == 200
+    b = r.json()
+    assert "docker_available" in b
+    assert "containers" in b and isinstance(b["containers"], list)
+    assert b["scope"] == "slgpu"
+
+
+@pytest.mark.asyncio
+async def test_docker_containers_rejects_bad_scope(client: httpx.AsyncClient) -> None:
+    async with client:
+        r = await client.get("/api/v1/docker/containers?scope=noop")
+    assert r.status_code == 400

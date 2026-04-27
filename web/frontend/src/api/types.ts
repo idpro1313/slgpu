@@ -338,3 +338,32 @@ export interface Healthz {
   slgpu_root: string;
   database_url_masked: string;
 }
+
+/** GET /docker/containers */
+export interface DockerContainerRow {
+  id: string;
+  short_id: string;
+  name: string;
+  image: string;
+  status: string;
+  health: string | null;
+  compose_project: string | null;
+  compose_service: string | null;
+}
+
+export interface DockerContainersList {
+  docker_available: boolean;
+  scope: string;
+  containers: DockerContainerRow[];
+  last_checked_at: string;
+}
+
+/** GET /docker/containers/.../logs */
+export interface DockerContainerLogs {
+  container_id: string;
+  container_name: string | null;
+  tail: number;
+  logs: string;
+  docker_available: boolean;
+  last_checked_at: string;
+}

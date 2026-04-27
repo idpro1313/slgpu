@@ -170,6 +170,37 @@ class DockerInspector:
             return None
         return self._summary(c)
 
+    def resolve_container(self, ref: str) -> ContainerSummary | None:
+        """Name, full id, or short id — whatever :meth:`docker.models.containers.ContainerCollection.get` accepts."""
+
+        if not self._client or not (ref or "").strip():
+            return None
+        key = ref.strip()
+        try:
+            c = self._client.containers.get(key)
+        except NotFound:
+            return None
+        except DockerException as exc:
+            logger.warning(
+                "[docker_client][resolve_container][BLOCK_DOCKER_ERROR] %s", exc
+            )
+            return None
+        return self._summary(c)
+
+    def list_all_containers(self) -> list[ContainerSummary]:
+        """All containers (running and stopped) for log browser UI."""
+
+        if not self._client:
+            return []
+        try:
+            containers = self._client.containers.list(all=True)
+        except DockerException as exc:
+            logger.warning(
+                "[docker_client][list_all_containers][BLOCK_DOCKER_ERROR] %s", exc
+            )
+            return []
+        return [self._summary(c) for c in containers]
+
     def tail_logs(self, container_id: str, tail: int = 200) -> str:
         if not self._client:
             return ""

@@ -1611,6 +1611,13 @@
 - **Файлы:** `grace/**/*.xml`, `docs/AGENTS.md`, `web/CONTRACT.md`, `web/README.md`, `VERSION`, `web/backend/pyproject.toml`, `web/backend/app/__init__.py`, `web/frontend/package.json`, `docs/HISTORY.md`.
 - **Решение:** **PATCH 4.0.8** для документации и метаданных версии; функциональные правки предыдущих волон — в тех же коммитах/истории.
 
+### 4.1.0: Страница «Docker: логи» + API `/api/v1/docker/*`
+
+- **Что:** **`GET /api/v1/docker/containers`** (`scope=slgpu|all`), **`GET /api/v1/docker/containers/{name_or_id}/logs`**. `DockerInspector.list_all_containers`, **`resolve_container`**, сервис **`app/services/docker_logs.py`**, роутер **`app/api/v1/docker_logs.py`**. SPA **`/docker-logs`**, nav «Docker».
+- **Почему:** запрос — отдельный мониторинг логов docker в приложении (не только лог зарегистрированного слота).
+- **Файлы:** `web/backend/app/services/docker_client.py`, `docker_logs.py`, `schemas/docker_logs.py`, `api/v1/docker_logs.py`, `api/v1/__init__.py`, `web/frontend/src/pages/DockerLogs.tsx`, `App.tsx`, `Layout.tsx`, `api/types.ts`, `web/CONTRACT.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `VERSION`, `web/backend/*version*`, `docs/HISTORY.md`.
+- **Решение:** **MINOR 4.1.0** — только read-only, без mutation в docker_logs.
+
 ### 4.0.9: Живой лог native-задач (docker pull / slot up)
 
 - **Что:** Для **`handle_native_job`** добавлены фоновый poll **~1.2 с** → запись **`stdout_tail`** / **`message`** в SQLite (кроме перетирания **`message`** у **`native.model.pull`**, там tqdm). В **`slot_runtime`** перед **`containers.run`** — **stream `docker.api.pull`** со строками **`[docker] …`** в лог. Потокобезопасный **`append_job_log`** (`job_log.py`), lock на весь список логов native; **`ensure_slgpu_network`** / **`run_subprocess_logged`** принимают опциональный lock. UI **Задачи**: refetch **~2 с** при **running/queued**.

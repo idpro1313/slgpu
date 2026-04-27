@@ -9,6 +9,7 @@ import { MonitoringPage } from "@/pages/Monitoring";
 import { PresetsPage } from "@/pages/Presets";
 import { RuntimePage } from "@/pages/Runtime";
 import { BenchmarksPage } from "@/pages/Benchmarks";
+import { DockerLogsPage } from "@/pages/DockerLogs";
 import { SettingsPage } from "@/pages/Settings";
 
 export function App() {
@@ -23,6 +24,7 @@ export function App() {
         <Route path="/monitoring" element={<MonitoringPage />} />
         <Route path="/litellm" element={<LiteLLMPage />} />
         <Route path="/jobs" element={<JobsPage />} />
+        <Route path="/docker-logs" element={<DockerLogsPage />} />
         <Route path="/benchmarks" element={<BenchmarksPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate replace to="/dashboard" />} />

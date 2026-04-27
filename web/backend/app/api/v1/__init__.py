@@ -7,6 +7,7 @@ from app.api.v1 import (
     app_config,
     bench,
     dashboard,
+    docker_logs,
     gpu,
     jobs,
     litellm,
@@ -30,3 +31,6 @@ api_router.include_router(activity.router, prefix="/activity", tags=["activity"]
 api_router.include_router(settings.router, prefix="/settings", tags=["settings"])
 api_router.include_router(app_config.router, prefix="/app-config", tags=["app-config"])
 api_router.include_router(bench.router, prefix="/bench", tags=["bench"])
+api_router.include_router(
+    docker_logs.router, prefix="/docker", tags=["docker-logs"]
+)
