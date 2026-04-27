@@ -24,12 +24,12 @@ LF_CDIR="${LANGFUSE_CLICKHOUSE_DATA_DIR:-${ROOT}/data/monitoring/langfuse/clickh
 LF_CLDIR="${LANGFUSE_CLICKHOUSE_LOGS_DIR:-${ROOT}/data/monitoring/langfuse/clickhouse-logs}"
 LF_MDIR="${LANGFUSE_MINIO_DATA_DIR:-${ROOT}/data/monitoring/langfuse/minio}"
 LF_RDIR="${LANGFUSE_REDIS_DATA_DIR:-${ROOT}/data/monitoring/langfuse/redis}"
-GIMG="${SLGPU_GRAFANA_IMAGE:-grafana/grafana:latest}"
-PIMG="${SLGPU_PROMETHEUS_IMAGE:-prom/prometheus:latest}"
-LIMG="${SLGPU_LOKI_IMAGE:-grafana/loki:2.9.8}"
-PGSQL_IMG="${SLGPU_LANGFUSE_POSTGRES_IMAGE:-postgres:17}"
-MINIO_IMG="${SLGPU_MINIO_IMAGE:-minio/minio:latest}"
-REDIS_IMG="${SLGPU_LANGFUSE_REDIS_IMAGE:-redis:7}"
+GIMG="${GRAFANA_IMAGE:-${SLGPU_GRAFANA_IMAGE:-grafana/grafana:11.3.0}}"
+PIMG="${PROMETHEUS_IMAGE:-${SLGPU_PROMETHEUS_IMAGE:-prom/prometheus:v2.55.1}}"
+LIMG="${LOKI_IMAGE:-${SLGPU_LOKI_IMAGE:-grafana/loki:2.9.8}}"
+PGSQL_IMG="${LANGFUSE_POSTGRES_IMAGE:-${SLGPU_LANGFUSE_POSTGRES_IMAGE:-postgres:17.4}}"
+MINIO_IMG="${MINIO_IMAGE:-${SLGPU_MINIO_IMAGE:-minio/minio:RELEASE.2024-11-07T00-52-20Z}}"
+REDIS_IMG="${LANGFUSE_REDIS_IMAGE:-${SLGPU_LANGFUSE_REDIS_IMAGE:-redis:7}}"
 
 # Образ-помощник для root-операций (mkdir/chown). Должен иметь `sh` и `chown` —
 # `alpine:latest` минимален и работает и на хосте, и из контейнера web (через docker.sock).

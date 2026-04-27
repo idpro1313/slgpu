@@ -1,29 +1,34 @@
 #!/usr/bin/env bash
 # Универсальный entrypoint: vLLM или SGLang по SLGPU_ENGINE=vllm|sglang.
 # Env: main.env → пресет (через compose + ./slgpu up). Монтируется в контейнер как /etc/slgpu/serve.sh.
+# Имена vLLM-флагов — без префикса SLGPU_ (SERVED_MODEL_NAME, MAX_NUM_BATCHED_TOKENS, …); устаревший SLGPU_* читается как fallback.
 set -euo pipefail
 
 slgpu_run_vllm() {
-  # Служебные listen/batch — SLGPU_* (см. main.env), чтобы vLLM 0.19+ не предупреждало о «Unknown VLLM_*».
   local MODEL_PATH SERVED_NAME HOST PORT TP GPU_MEM MAX_LEN KV BATCH TOOL REASON DISABLE_CAR PREFIX_CACHE \
-    TRUST CR_PREFILL AUTO_TOOL cmd
+    TRUST CR_PREFILL AUTO_TOOL BS MAXSEQ AB TM DPS cmd
   MODEL_PATH="${SLGPU_MODEL_ROOT:-/models}/${MODEL_ID}"
   # Имя в OpenAI API (/v1/models, choice.model). Пусто/не задано → MODEL_ID; задайте devllm для фиксированного имени.
-  SERVED_NAME="${SLGPU_SERVED_MODEL_NAME:-$MODEL_ID}"
-  HOST="${SLGPU_VLLM_HOST:-0.0.0.0}"
-  PORT="${SLGPU_VLLM_PORT:-8111}"
+  SERVED_NAME="${SERVED_MODEL_NAME:-${SLGPU_SERVED_MODEL_NAME:-$MODEL_ID}}"
+  HOST="${VLLM_HOST:-${SLGPU_VLLM_HOST:-0.0.0.0}}"
+  PORT="${VLLM_PORT:-${SLGPU_VLLM_PORT:-${LLM_API_PORT:-8111}}}"
   TP="${TP:-8}"
   GPU_MEM="${GPU_MEM_UTIL:-0.92}"
   MAX_LEN="${MAX_MODEL_LEN:-32768}"
   KV="${KV_CACHE_DTYPE:-fp8_e4m3}"
-  BATCH="${SLGPU_MAX_NUM_BATCHED_TOKENS:-8192}"
+  BATCH="${MAX_NUM_BATCHED_TOKENS:-${SLGPU_MAX_NUM_BATCHED_TOKENS:-${VLLM_MAX_NUM_BATCHED_TOKENS:-8192}}}"
   TOOL="${TOOL_CALL_PARSER:-hermes}"
   REASON="${REASONING_PARSER:-qwen3}"
-  DISABLE_CAR="${SLGPU_DISABLE_CUSTOM_ALL_REDUCE:-1}"
-  PREFIX_CACHE="${SLGPU_ENABLE_PREFIX_CACHING:-1}"
-  TRUST="${SLGPU_VLLM_TRUST_REMOTE_CODE:-1}"
-  CR_PREFILL="${SLGPU_VLLM_ENABLE_CHUNKED_PREFILL:-1}"
-  AUTO_TOOL="${SLGPU_VLLM_ENABLE_AUTO_TOOL_CHOICE:-1}"
+  DISABLE_CAR="${DISABLE_CUSTOM_ALL_REDUCE:-${SLGPU_DISABLE_CUSTOM_ALL_REDUCE:-1}}"
+  PREFIX_CACHE="${ENABLE_PREFIX_CACHING:-${SLGPU_ENABLE_PREFIX_CACHING:-1}}"
+  TRUST="${TRUST_REMOTE_CODE:-${SLGPU_VLLM_TRUST_REMOTE_CODE:-1}}"
+  CR_PREFILL="${ENABLE_CHUNKED_PREFILL:-${SLGPU_VLLM_ENABLE_CHUNKED_PREFILL:-1}}"
+  AUTO_TOOL="${ENABLE_AUTO_TOOL_CHOICE:-${SLGPU_VLLM_ENABLE_AUTO_TOOL_CHOICE:-1}}"
+  BS="${BLOCK_SIZE:-${SLGPU_VLLM_BLOCK_SIZE:-}}"
+  MAXSEQ="${MAX_NUM_SEQS:-${SLGPU_VLLM_MAX_NUM_SEQS:-}}"
+  AB="${ATTENTION_BACKEND:-${SLGPU_VLLM_ATTENTION_BACKEND:-}}"
+  TM="${TOKENIZER_MODE:-${SLGPU_VLLM_TOKENIZER_MODE:-}}"
+  DPS="${DATA_PARALLEL_SIZE:-${SLGPU_VLLM_DATA_PARALLEL_SIZE:-}}"
 
   cmd=(
     vllm serve "${MODEL_PATH}"
@@ -34,8 +39,8 @@ slgpu_run_vllm() {
     --gpu-memory-utilization "${GPU_MEM}"
     --max-model-len "${MAX_LEN}"
   )
-  if [[ -n "${SLGPU_VLLM_BLOCK_SIZE:-}" ]] && [[ "${SLGPU_VLLM_BLOCK_SIZE}" =~ ^[1-9][0-9]*$ ]]; then
-    cmd+=(--block-size "${SLGPU_VLLM_BLOCK_SIZE}")
+  if [[ -n "${BS}" ]] && [[ "${BS}" =~ ^[1-9][0-9]*$ ]]; then
+    cmd+=(--block-size "${BS}")
   fi
   if [[ "${TRUST}" == "1" ]]; then
     cmd+=(--trust-remote-code)
@@ -49,14 +54,14 @@ slgpu_run_vllm() {
     --tool-call-parser "${TOOL}"
     --reasoning-parser "${REASON}"
   )
-  if [[ -n "${SLGPU_VLLM_MAX_NUM_SEQS:-}" ]] && [[ "${SLGPU_VLLM_MAX_NUM_SEQS}" =~ ^[1-9][0-9]*$ ]]; then
-    cmd+=(--max-num-seqs "${SLGPU_VLLM_MAX_NUM_SEQS}")
+  if [[ -n "${MAXSEQ}" ]] && [[ "${MAXSEQ}" =~ ^[1-9][0-9]*$ ]]; then
+    cmd+=(--max-num-seqs "${MAXSEQ}")
   fi
-  if [[ -n "${SLGPU_VLLM_ATTENTION_BACKEND:-}" ]]; then
-    cmd+=(--attention-backend "${SLGPU_VLLM_ATTENTION_BACKEND}")
+  if [[ -n "${AB}" ]]; then
+    cmd+=(--attention-backend "${AB}")
   fi
-  if [[ -n "${SLGPU_VLLM_TOKENIZER_MODE:-}" ]]; then
-    cmd+=(--tokenizer-mode "${SLGPU_VLLM_TOKENIZER_MODE}")
+  if [[ -n "${TM}" ]]; then
+    cmd+=(--tokenizer-mode "${TM}")
   fi
   if [[ "${CR_PREFILL}" == "1" ]]; then
     cmd+=(--enable-chunked-prefill)
@@ -67,20 +72,20 @@ slgpu_run_vllm() {
   if [[ -n "${CHAT_TEMPLATE_CONTENT_FORMAT:-}" ]]; then
     cmd+=(--chat-template-content-format "${CHAT_TEMPLATE_CONTENT_FORMAT}")
   fi
-  if [[ -n "${SLGPU_VLLM_COMPILATION_CONFIG:-}" ]]; then
-    cmd+=(--compilation-config "${SLGPU_VLLM_COMPILATION_CONFIG}")
+  if [[ -n "${COMPILATION_CONFIG:-${SLGPU_VLLM_COMPILATION_CONFIG:-}}" ]]; then
+    cmd+=(--compilation-config "${COMPILATION_CONFIG:-$SLGPU_VLLM_COMPILATION_CONFIG}")
   fi
-  if [[ "${SLGPU_VLLM_ENFORCE_EAGER:-0}" == "1" ]]; then
+  if [[ "${ENFORCE_EAGER:-${SLGPU_VLLM_ENFORCE_EAGER:-0}}" == "1" ]]; then
     cmd+=(--enforce-eager)
   fi
-  if [[ -n "${SLGPU_VLLM_SPECULATIVE_CONFIG:-}" ]]; then
-    cmd+=(--speculative-config "${SLGPU_VLLM_SPECULATIVE_CONFIG}")
+  if [[ -n "${SPECULATIVE_CONFIG:-${SLGPU_VLLM_SPECULATIVE_CONFIG:-}}" ]]; then
+    cmd+=(--speculative-config "${SPECULATIVE_CONFIG:-$SLGPU_VLLM_SPECULATIVE_CONFIG}")
   fi
-  if [[ "${SLGPU_ENABLE_EXPERT_PARALLEL:-0}" == "1" ]]; then
+  if [[ "${ENABLE_EXPERT_PARALLEL:-${SLGPU_ENABLE_EXPERT_PARALLEL:-0}}" == "1" ]]; then
     cmd+=(--enable-expert-parallel)
   fi
-  if [[ -n "${SLGPU_VLLM_DATA_PARALLEL_SIZE:-}" ]] && [[ "${SLGPU_VLLM_DATA_PARALLEL_SIZE}" =~ ^[1-9][0-9]*$ ]]; then
-    cmd+=(--data-parallel-size "${SLGPU_VLLM_DATA_PARALLEL_SIZE}")
+  if [[ -n "${DPS}" ]] && [[ "${DPS}" =~ ^[1-9][0-9]*$ ]]; then
+    cmd+=(--data-parallel-size "${DPS}")
   fi
   if [[ -n "${MM_ENCODER_TP_MODE:-}" ]]; then
     cmd+=(--mm-encoder-tp-mode "${MM_ENCODER_TP_MODE}")
@@ -96,7 +101,7 @@ slgpu_run_vllm() {
 slgpu_run_sglang() {
   local MODEL_PATH SERVED_NAME HOST PORT TP MEM_FRAC MAX_LEN KV REASON TOOL SGL_TORCH SGL_NO_CG SGL_NO_CAR SGL_METRICS SGL_MFU cmd
   MODEL_PATH="${SLGPU_MODEL_ROOT:-/models}/${MODEL_ID}"
-  SERVED_NAME="${SLGPU_SERVED_MODEL_NAME:-$MODEL_ID}"
+  SERVED_NAME="${SERVED_MODEL_NAME:-${SLGPU_SERVED_MODEL_NAME:-$MODEL_ID}}"
   HOST="${SGLANG_LISTEN_HOST:-0.0.0.0}"
   PORT="${SGLANG_LISTEN_PORT:-8222}"
   TP="${TP:-8}"

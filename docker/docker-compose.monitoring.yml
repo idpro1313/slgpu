@@ -8,7 +8,7 @@ services:
   dcgm-exporter:
     # Жёсткие имена без …-1; внутри сети `slgpu` обращайтесь по имени сервиса (dcgm-exporter, postgres, …)
     container_name: slgpu-monitoring-dcgm-exporter
-    image: ${SLGPU_DCGM_EXPORTER_IMAGE:-nvidia/dcgm-exporter:3.3.5-3.4.0-ubuntu22.04}
+    image: ${DCGM_EXPORTER_IMAGE:-${SLGPU_DCGM_EXPORTER_IMAGE:-nvidia/dcgm-exporter:3.3.5-3.4.0-ubuntu22.04}}
     env_file:
       - main.env
     restart: unless-stopped
@@ -27,7 +27,7 @@ services:
 
   node-exporter:
     container_name: slgpu-monitoring-node-exporter
-    image: ${SLGPU_NODE_EXPORTER_IMAGE:-prom/node-exporter:v1.8.2}
+    image: ${NODE_EXPORTER_IMAGE:-${SLGPU_NODE_EXPORTER_IMAGE:-prom/node-exporter:v1.8.2}}
     env_file:
       - main.env
     restart: unless-stopped
@@ -53,7 +53,7 @@ services:
 
   loki:
     container_name: slgpu-monitoring-loki
-    image: ${SLGPU_LOKI_IMAGE:-grafana/loki:2.9.8}
+    image: ${LOKI_IMAGE:-${SLGPU_LOKI_IMAGE:-grafana/loki:2.9.8}}
     # Данные Loki: chunks, index, wal — на хосте; права: ./slgpu monitoring fix-perms
     env_file:
       - main.env
@@ -74,7 +74,7 @@ services:
 
   promtail:
     container_name: slgpu-monitoring-promtail
-    image: ${SLGPU_PROMTAIL_IMAGE:-grafana/promtail:2.9.8}
+    image: ${PROMTAIL_IMAGE:-${SLGPU_PROMTAIL_IMAGE:-grafana/promtail:2.9.8}}
     # Сбор json-логов Docker: socket + /var/lib/docker/containers; позиции — PROMTAIL_DATA_DIR
     env_file:
       - main.env
@@ -99,7 +99,7 @@ services:
 
   prometheus:
     container_name: slgpu-monitoring-prometheus
-    image: ${SLGPU_PROMETHEUS_IMAGE:-prom/prometheus:v2.55.1}
+    image: ${PROMETHEUS_IMAGE:-${SLGPU_PROMETHEUS_IMAGE:-prom/prometheus:v2.55.1}}
     # Права на PROMETHEUS_DATA_DIR: ./scripts/monitoring_fix_permissions.sh или ./slgpu monitoring fix-perms
     # Скрейп vLLM/SGLang идёт на host.docker.internal:порт (см. prometheus.yml) — шлюз в хост, где
     # слушают опубликованные 8111/8222. Нужен для Linux (compose: host-gateway).
@@ -130,7 +130,7 @@ services:
 
   grafana:
     container_name: slgpu-monitoring-grafana
-    image: ${SLGPU_GRAFANA_IMAGE:-grafana/grafana:11.3.0}
+    image: ${GRAFANA_IMAGE:-${SLGPU_GRAFANA_IMAGE:-grafana/grafana:11.3.0}}
     # Права на GRAFANA_DATA_DIR: ./slgpu monitoring fix-perms (uid/gid из образа, без угадывания)
     env_file:
       - main.env
@@ -161,7 +161,7 @@ services:
   # ---------------------------------------------------------------------------
   clickhouse:
     container_name: slgpu-monitoring-clickhouse
-    image: ${SLGPU_LANGFUSE_CLICKHOUSE_IMAGE:-clickhouse/clickhouse-server:24.3}
+    image: ${LANGFUSE_CLICKHOUSE_IMAGE:-${SLGPU_LANGFUSE_CLICKHOUSE_IMAGE:-clickhouse/clickhouse-server:24.3}}
     restart: unless-stopped
     user: "101:101"
     networks:
@@ -192,7 +192,7 @@ services:
   minio:
     # S3-совместимое хранилище для Langfuse. Порты на хосте: не 9090 (Prometheus) — MINIO_API_HOST_PORT
     container_name: slgpu-monitoring-minio
-    image: ${SLGPU_MINIO_IMAGE:-minio/minio:RELEASE.2024-11-07T00-52-20Z}
+    image: ${MINIO_IMAGE:-${SLGPU_MINIO_IMAGE:-minio/minio:RELEASE.2024-11-07T00-52-20Z}}
     restart: unless-stopped
     command: server /data --console-address ":9001"
     networks:
@@ -220,7 +220,7 @@ services:
   # Бакеты Langfuse в MinIO (иначе NoSuchBucket при upload в events/otel/…). Идемпотентно.
   minio-bucket-init:
     container_name: slgpu-monitoring-minio-bucket-init
-    image: ${SLGPU_MINIO_MC_IMAGE:-minio/mc:latest}
+    image: ${MINIO_MC_IMAGE:-${SLGPU_MINIO_MC_IMAGE:-minio/mc:latest}}
     profiles: ["bootstrap"]
     restart: "no"
     networks:
@@ -244,7 +244,7 @@ services:
 
   redis:
     container_name: slgpu-monitoring-redis
-    image: ${SLGPU_LANGFUSE_REDIS_IMAGE:-redis:7}
+    image: ${LANGFUSE_REDIS_IMAGE:-${SLGPU_LANGFUSE_REDIS_IMAGE:-redis:7}}
     restart: unless-stopped
     networks:
       - slgpu
@@ -271,7 +271,7 @@ services:
 
   postgres:
     container_name: slgpu-monitoring-postgres
-    image: ${SLGPU_LANGFUSE_POSTGRES_IMAGE:-postgres:17.4}
+    image: ${LANGFUSE_POSTGRES_IMAGE:-${SLGPU_LANGFUSE_POSTGRES_IMAGE:-postgres:17.4}}
     restart: unless-stopped
     networks:
       - slgpu
@@ -296,7 +296,7 @@ services:
 
   langfuse-worker:
     container_name: slgpu-monitoring-langfuse-worker
-    image: ${SLGPU_LANGFUSE_WORKER_IMAGE:-langfuse/langfuse-worker:3}
+    image: ${LANGFUSE_WORKER_IMAGE:-${SLGPU_LANGFUSE_WORKER_IMAGE:-langfuse/langfuse-worker:3}}
     restart: unless-stopped
     networks:
       - slgpu
@@ -354,7 +354,7 @@ services:
 
   langfuse-web:
     container_name: slgpu-monitoring-langfuse-web
-    image: ${SLGPU_LANGFUSE_IMAGE:-langfuse/langfuse:3}
+    image: ${LANGFUSE_IMAGE:-${SLGPU_LANGFUSE_IMAGE:-langfuse/langfuse:3}}
     restart: unless-stopped
     networks:
       - slgpu
@@ -416,7 +416,7 @@ services:
   # БД `litellm` в общем postgres (Prisma, Admin UI / виртуальные ключи). Идемпотентно, без `profiles`.
   litellm-pg-init:
     container_name: slgpu-monitoring-litellm-pg-init
-    image: ${SLGPU_LANGFUSE_POSTGRES_IMAGE:-postgres:17.4}
+    image: ${LANGFUSE_POSTGRES_IMAGE:-${SLGPU_LANGFUSE_POSTGRES_IMAGE:-postgres:17.4}}
     profiles: ["bootstrap"]
     restart: "no"
     networks:
@@ -442,7 +442,7 @@ services:
     # Admin UI / Prisma: DATABASE_URL — отдельная БД `litellm` (та же сеть slgpu → postgres)
     container_name: slgpu-monitoring-litellm
     # В проде задайте SLGPU_LITELLM_IMAGE конкретным тегом (см. ghcr.io/berriai/litellm).
-    image: ${SLGPU_LITELLM_IMAGE:-ghcr.io/berriai/litellm:main-latest}
+    image: ${LITELLM_IMAGE:-${SLGPU_LITELLM_IMAGE:-ghcr.io/berriai/litellm:main-latest}}
     restart: unless-stopped
     depends_on:
       postgres:

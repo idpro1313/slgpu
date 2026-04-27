@@ -23,6 +23,7 @@ from app.models.preset import Preset
 from app.models.slot import RunStatus
 from app.models.slot import EngineSlot
 from app.services import compose_exec
+from app.services.env_key_aliases import coalesce_str, monitoring_image
 from app.services.llm_env import merge_llm_stack_env, parse_gpu_mask
 from app.services.slot_runtime import (
     internal_api_port_for,
@@ -647,12 +648,12 @@ async def _native_fix_perms(log: list[str], log_lock: threading.Lock) -> int:
     lf_m = path_for("LANGFUSE_MINIO_DATA_DIR", "data/monitoring/langfuse/minio")
     lf_r = path_for("LANGFUSE_REDIS_DATA_DIR", "data/monitoring/langfuse/redis")
 
-    gimg = merged.get("SLGPU_GRAFANA_IMAGE", "grafana/grafana:latest")
-    pimg = merged.get("SLGPU_PROMETHEUS_IMAGE", "prom/prometheus:latest")
-    limg = merged.get("SLGPU_LOKI_IMAGE", "grafana/loki:2.9.8")
-    pgimg = merged.get("SLGPU_LANGFUSE_POSTGRES_IMAGE", "postgres:17")
-    minioimg = merged.get("SLGPU_MINIO_IMAGE", "minio/minio:latest")
-    redisimg = merged.get("SLGPU_LANGFUSE_REDIS_IMAGE", "redis:7")
+    gimg = monitoring_image(merged, "GRAFANA_IMAGE")
+    pimg = monitoring_image(merged, "PROMETHEUS_IMAGE")
+    limg = monitoring_image(merged, "LOKI_IMAGE")
+    pgimg = monitoring_image(merged, "LANGFUSE_POSTGRES_IMAGE")
+    minioimg = monitoring_image(merged, "MINIO_IMAGE")
+    redisimg = monitoring_image(merged, "LANGFUSE_REDIS_IMAGE")
 
     def run_sync() -> None:
         client = docker.from_env()
@@ -814,8 +815,9 @@ async def _native_bench_scenario(args: dict[str, Any], log: list[str], log_lock:
     base_url = f"http://{host}:{internal_port}/v1"
     env = os.environ.copy()
     env["MAX_MODEL_LEN"] = m.get("MAX_MODEL_LEN", "32768")
-    if m.get("SLGPU_SERVED_MODEL_NAME"):
-        env["BENCH_MODEL_NAME"] = m["SLGPU_SERVED_MODEL_NAME"]
+    bench_name = coalesce_str(m, "SERVED_MODEL_NAME", "SLGPU_SERVED_MODEL_NAME", default="")
+    if bench_name:
+        env["BENCH_MODEL_NAME"] = bench_name
     elif m.get("MODEL_ID"):
         env["BENCH_MODEL_NAME"] = m["MODEL_ID"]
     argv = [
@@ -854,8 +856,9 @@ async def _native_bench_load(args: dict[str, Any], log: list[str], log_lock: thr
     base_url = f"http://{host}:{internal_port}/v1"
     env = os.environ.copy()
     env["MAX_MODEL_LEN"] = m.get("MAX_MODEL_LEN", "32768")
-    if m.get("SLGPU_SERVED_MODEL_NAME"):
-        env["BENCH_MODEL_NAME"] = m["SLGPU_SERVED_MODEL_NAME"]
+    bench_name = coalesce_str(m, "SERVED_MODEL_NAME", "SLGPU_SERVED_MODEL_NAME", default="")
+    if bench_name:
+        env["BENCH_MODEL_NAME"] = bench_name
     elif m.get("MODEL_ID"):
         env["BENCH_MODEL_NAME"] = m["MODEL_ID"]
     burst = args.get("burst")

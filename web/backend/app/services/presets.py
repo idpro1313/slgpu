@@ -14,6 +14,7 @@ from app.core.config import get_settings
 from app.core.security import ValidationError, validate_slug
 from app.models.model import HFModel, ModelDownloadStatus
 from app.models.preset import Preset
+from app.services.env_key_aliases import LEGACY_VLLM_PARAM_KEYS, apply_vllm_aliases_to_merged
 from app.services.env_files import (
     EnvFile,
     hf_id_to_slug,
@@ -25,37 +26,46 @@ from app.services.env_files import (
 logger = logging.getLogger(__name__)
 
 
-_RUNTIME_KEYS = {
-    "MAX_MODEL_LEN",
-    "TP",
-    "KV_CACHE_DTYPE",
-    "GPU_MEM_UTIL",
-    "VLLM_DOCKER_IMAGE",
-    "MODEL_REVISION",
-    "SLGPU_MAX_NUM_BATCHED_TOKENS",
-    "SLGPU_VLLM_MAX_NUM_SEQS",
-    "SLGPU_VLLM_BLOCK_SIZE",
-    "SLGPU_DISABLE_CUSTOM_ALL_REDUCE",
-    "SLGPU_ENABLE_PREFIX_CACHING",
-    "SLGPU_ENABLE_EXPERT_PARALLEL",
-    "SLGPU_VLLM_DATA_PARALLEL_SIZE",
-    "SLGPU_VLLM_ATTENTION_BACKEND",
-    "SLGPU_VLLM_TOKENIZER_MODE",
-    "SLGPU_VLLM_COMPILATION_CONFIG",
-    "SLGPU_VLLM_ENFORCE_EAGER",
-    "SLGPU_VLLM_SPECULATIVE_CONFIG",
-    "MM_ENCODER_TP_MODE",
-    "TOOL_CALL_PARSER",
-    "REASONING_PARSER",
-    "CHAT_TEMPLATE_CONTENT_FORMAT",
-    "VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS",
-    "SGLANG_MEM_FRACTION_STATIC",
-    "SGLANG_CUDA_GRAPH_MAX_BS",
-    "SGLANG_ENABLE_TORCH_COMPILE",
-    "SGLANG_DISABLE_CUDA_GRAPH",
-    "SGLANG_DISABLE_CUSTOM_ALL_REDUCE",
-    "BENCH_MODEL_NAME",
-}
+# Канонические ключи vLLM/SGLang в parameters / экспорт; устаревшие SLGPU_* принимаем при импорте
+_RUNTIME_KEYS: frozenset[str] = frozenset(
+    {
+        "MAX_MODEL_LEN",
+        "TP",
+        "KV_CACHE_DTYPE",
+        "GPU_MEM_UTIL",
+        "VLLM_DOCKER_IMAGE",
+        "MODEL_REVISION",
+        "MAX_NUM_BATCHED_TOKENS",
+        "MAX_NUM_SEQS",
+        "BLOCK_SIZE",
+        "DISABLE_CUSTOM_ALL_REDUCE",
+        "ENABLE_PREFIX_CACHING",
+        "ENABLE_EXPERT_PARALLEL",
+        "DATA_PARALLEL_SIZE",
+        "ATTENTION_BACKEND",
+        "TOKENIZER_MODE",
+        "COMPILATION_CONFIG",
+        "ENFORCE_EAGER",
+        "SPECULATIVE_CONFIG",
+        "MM_ENCODER_TP_MODE",
+        "TOOL_CALL_PARSER",
+        "REASONING_PARSER",
+        "CHAT_TEMPLATE_CONTENT_FORMAT",
+        "VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS",
+        "SGLANG_MEM_FRACTION_STATIC",
+        "SGLANG_CUDA_GRAPH_MAX_BS",
+        "SGLANG_ENABLE_TORCH_COMPILE",
+        "SGLANG_DISABLE_CUDA_GRAPH",
+        "SGLANG_DISABLE_CUSTOM_ALL_REDUCE",
+        "BENCH_MODEL_NAME",
+    }
+)
+
+
+def _normalize_preset_param_dict(raw: dict[str, str]) -> dict[str, str]:
+    m = {k: v for k, v in raw.items() if v not in (None, "")}
+    apply_vllm_aliases_to_merged(m)
+    return {k: m[k] for k in _RUNTIME_KEYS if k in m and str(m[k]).strip() != ""}
 
 
 def presets_dir() -> Path:
@@ -136,7 +146,8 @@ async def import_files_into_db(
 
         existing = await session.execute(select(Preset).where(Preset.name == env.slug))
         preset = existing.scalar_one_or_none()
-        params = {k: v for k, v in env.values.items() if k in _RUNTIME_KEYS}
+        raw_p = {k: v for k, v in env.values.items() if k in _RUNTIME_KEYS or k in LEGACY_VLLM_PARAM_KEYS}
+        params = _normalize_preset_param_dict(raw_p)
 
         if preset is None:
             preset = Preset(
@@ -144,7 +155,8 @@ async def import_files_into_db(
                 description=f"Imported from {path.name}",
                 hf_id=env.hf_id,
                 tp=_int_or_none(env.values.get("TP")),
-                served_model_name=env.values.get("SLGPU_SERVED_MODEL_NAME"),
+                served_model_name=env.values.get("SERVED_MODEL_NAME")
+                or env.values.get("SLGPU_SERVED_MODEL_NAME"),
                 parameters=params,
                 file_path=str(path),
                 is_synced=True,
@@ -181,7 +193,7 @@ async def export_preset_to_file(session: AsyncSession, preset: Preset) -> Path:
     values: dict[str, str] = {}
     values["MODEL_ID"] = preset.hf_id
     if preset.served_model_name:
-        values["SLGPU_SERVED_MODEL_NAME"] = preset.served_model_name
+        values["SERVED_MODEL_NAME"] = preset.served_model_name
     if preset.tp is not None:
         values["TP"] = str(preset.tp)
     for key, raw in (preset.parameters or {}).items():
@@ -219,6 +231,9 @@ def env_to_preset_dict(env: EnvFile) -> dict[str, Any]:
         "name": env.slug,
         "hf_id": env.hf_id,
         "tp": _int_or_none(env.values.get("TP")),
-        "served_model_name": env.values.get("SLGPU_SERVED_MODEL_NAME"),
-        "parameters": {k: v for k, v in env.values.items() if k in _RUNTIME_KEYS},
+        "served_model_name": env.values.get("SERVED_MODEL_NAME")
+        or env.values.get("SLGPU_SERVED_MODEL_NAME"),
+        "parameters": _normalize_preset_param_dict(
+            {k: v for k, v in env.values.items() if k in _RUNTIME_KEYS or k in LEGACY_VLLM_PARAM_KEYS}
+        ),
     }

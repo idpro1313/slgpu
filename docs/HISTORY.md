@@ -1666,3 +1666,10 @@
 - **Почему:** запрос пользователя — при первом запуске с новым образом не было видно скачивания; лог попадал в БД только после завершения job.
 - **Файлы:** `web/backend/app/services/job_log.py`, `native_jobs.py`, `slot_runtime.py`, `compose_exec.py`, `web/frontend/src/pages/Jobs.tsx`, `web/CONTRACT.md`, `grace/knowledge-graph/knowledge-graph.xml`, `docs/AGENTS.md`, `VERSION`, `web/backend/pyproject.toml`, `web/backend/app/__init__.py`, `web/frontend/package.json`, `docs/HISTORY.md`.
 - **Решение:** **PATCH** — обратно совместимо по API (`JobOut` без изменений полей).
+
+### 4.2.0: Канонические имена env для vLLM/образов; SLGPU_* только для служебных и legacy
+
+- **Что:** Переименованы параметры, относящиеся к vLLM/SGLang и образам мониторинга, в «плоские» имена без префикса `SLGPU_` (`SERVED_MODEL_NAME`, `MAX_NUM_BATCHED_TOKENS`, `VLLM_HOST`/`VLLM_PORT`, `GRAFANA_IMAGE`, …). Модуль **`env_key_aliases`**: `apply_vllm_aliases_to_merged`, `coalesce_str`, `monitoring_image`. Bash/serve/compose: чтение **каноническое → legacy → default**. Префикс **`SLGPU_`** сохранён для **`SLGPU_ENGINE`**, **`SLGPU_MODEL_ROOT`**, **`SLGPU_NVIDIA_VISIBLE_DEVICES`**, **`SLGPU_HOST_REPO`**, **`SLGPU_FIXPERMS_HELPER_IMAGE`** и т.п. Импорт пресетов из `.env` принимает старые ключи и нормализует в канонические; экспорт пишет канонические имена.
+- **Почему:** Запрос пользователя — убрать путаницу `SLGPU_` при настройке пресетов и web; разделить «наши» и «как у движка».
+- **Файлы:** `web/backend/app/services/env_key_aliases.py`, `stack_config.py`, `llm_env.py`, `presets.py`, `env_files.py`, `native_jobs.py`; `scripts/serve.sh`, `_lib.sh`, `monitoring_fix_permissions.sh`, `cmd_monitoring.sh`; `docker/docker-compose.llm.yml`, `docker/docker-compose.monitoring.yml`; `main.env`, `main.env.example`, `examples/presets/*.env`; `web/frontend` `Presets.tsx`, `Settings.tsx`; `README.md`, `configs/models/README.md`; `VERSION`, версии web/backend, `grace/knowledge-graph/knowledge-graph.xml`, `docs/HISTORY.md`.
+- **Решение:** **MINOR 4.2.0** — обратная совместимость через fallback в скриптах, compose и Python.

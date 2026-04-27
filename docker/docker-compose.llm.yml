@@ -23,47 +23,50 @@ services:
     environment:
       SLGPU_ENGINE: vllm
       SLGPU_MODEL_ROOT: ${SLGPU_MODEL_ROOT:-/models}
-      SLGPU_VLLM_TRUST_REMOTE_CODE: ${SLGPU_VLLM_TRUST_REMOTE_CODE:-1}
-      SLGPU_VLLM_ENABLE_CHUNKED_PREFILL: ${SLGPU_VLLM_ENABLE_CHUNKED_PREFILL:-1}
-      SLGPU_VLLM_ENABLE_AUTO_TOOL_CHOICE: ${SLGPU_VLLM_ENABLE_AUTO_TOOL_CHOICE:-1}
+      SERVED_MODEL_NAME: ${SERVED_MODEL_NAME:-${SLGPU_SERVED_MODEL_NAME:-devllm}}
+      VLLM_HOST: ${VLLM_HOST:-${SLGPU_VLLM_HOST:-0.0.0.0}}
+      VLLM_PORT: ${VLLM_PORT:-${SLGPU_VLLM_PORT:-${LLM_API_PORT:-8111}}}
+      TRUST_REMOTE_CODE: ${TRUST_REMOTE_CODE:-${SLGPU_VLLM_TRUST_REMOTE_CODE:-1}}
+      ENABLE_CHUNKED_PREFILL: ${ENABLE_CHUNKED_PREFILL:-${SLGPU_VLLM_ENABLE_CHUNKED_PREFILL:-1}}
+      ENABLE_AUTO_TOOL_CHOICE: ${ENABLE_AUTO_TOOL_CHOICE:-${SLGPU_VLLM_ENABLE_AUTO_TOOL_CHOICE:-1}}
       MODEL_ID: ${MODEL_ID:-}
       MODEL_REVISION: ${MODEL_REVISION:-}
       MAX_MODEL_LEN: ${MAX_MODEL_LEN:-32768}
       # опционально: --block-size (DeepSeek V4: 256 в блоге vLLM)
-      SLGPU_VLLM_BLOCK_SIZE: ${SLGPU_VLLM_BLOCK_SIZE:-}
+      BLOCK_SIZE: ${BLOCK_SIZE:-${SLGPU_VLLM_BLOCK_SIZE:-}}
       TP: ${TP:-8}
       GPU_MEM_UTIL: ${GPU_MEM_UTIL:-0.92}
       KV_CACHE_DTYPE: ${KV_CACHE_DTYPE:-fp8_e4m3}
-      # SLGPU_* не сканируется vLLM как неизвестный VLLM_* (см. main.env, serve.sh). Для старых пресетов допускается VLLM_MAX_NUM_BATCHED_TOKENS на хосте.
-      SLGPU_MAX_NUM_BATCHED_TOKENS: ${SLGPU_MAX_NUM_BATCHED_TOKENS:-${VLLM_MAX_NUM_BATCHED_TOKENS:-8192}}
+      # max-num-batched-tokens; в старых .env: SLGPU_MAX_NUM_BATCHED_TOKENS, VLLM_MAX_NUM_BATCHED_TOKENS
+      MAX_NUM_BATCHED_TOKENS: ${MAX_NUM_BATCHED_TOKENS:-${SLGPU_MAX_NUM_BATCHED_TOKENS:-${VLLM_MAX_NUM_BATCHED_TOKENS:-8192}}}
       # опционально: --max-num-seqs (одновременные последовательности; упирается в KV, см. README)
-      SLGPU_VLLM_MAX_NUM_SEQS: ${SLGPU_VLLM_MAX_NUM_SEQS:-}
+      MAX_NUM_SEQS: ${MAX_NUM_SEQS:-${SLGPU_VLLM_MAX_NUM_SEQS:-}}
       # 1 (по умолчанию) = --disable-custom-all-reduce (NCCL). 0 = custom all-reduce; см. serve.sh
-      SLGPU_DISABLE_CUSTOM_ALL_REDUCE: ${SLGPU_DISABLE_CUSTOM_ALL_REDUCE:-1}
-      # 1 = --enable-prefix-caching, 0 = --no-enable-prefix-caching; иначе из пресета в контейнер не попадёт (см. sglang: «обязаны быть здесь»).
-      SLGPU_ENABLE_PREFIX_CACHING: ${SLGPU_ENABLE_PREFIX_CACHING:-1}
+      DISABLE_CUSTOM_ALL_REDUCE: ${DISABLE_CUSTOM_ALL_REDUCE:-${SLGPU_DISABLE_CUSTOM_ALL_REDUCE:-1}}
+      # 1 = --enable-prefix-caching, 0 = --no-enable-prefix-caching; иначе из пресета в контейнер не попадёт
+      ENABLE_PREFIX_CACHING: ${ENABLE_PREFIX_CACHING:-${SLGPU_ENABLE_PREFIX_CACHING:-1}}
       TOOL_CALL_PARSER: ${TOOL_CALL_PARSER:-hermes}
       REASONING_PARSER: ${REASONING_PARSER:-qwen3}
       # GLM-5.1 (FP8): string — см. GLM/GLM5.md в vllm-project/recipes
       CHAT_TEMPLATE_CONTENT_FORMAT: ${CHAT_TEMPLATE_CONTENT_FORMAT:-}
       # MiniMax M2: JSON для --compilation-config; см. MiniMax/MiniMax-M2.md
-      SLGPU_VLLM_COMPILATION_CONFIG: ${SLGPU_VLLM_COMPILATION_CONFIG:-}
+      COMPILATION_CONFIG: ${COMPILATION_CONFIG:-${SLGPU_VLLM_COMPILATION_CONFIG:-}}
       # 1 = --enforce-eager (Inductor/CUDA graph issues на части MoE+compile)
-      SLGPU_VLLM_ENFORCE_EAGER: ${SLGPU_VLLM_ENFORCE_EAGER:-0}
+      ENFORCE_EAGER: ${ENFORCE_EAGER:-${SLGPU_VLLM_ENFORCE_EAGER:-0}}
       # GLM-5.1-FP8 и др.: JSON для --speculative-config (напр. MTP); см. GLM/GLM5.md
-      SLGPU_VLLM_SPECULATIVE_CONFIG: ${SLGPU_VLLM_SPECULATIVE_CONFIG:-}
+      SPECULATIVE_CONFIG: ${SPECULATIVE_CONFIG:-${SLGPU_VLLM_SPECULATIVE_CONFIG:-}}
       # 1 = --enable-expert-parallel (8×GPU при TP4); 0 = не передавать
-      SLGPU_ENABLE_EXPERT_PARALLEL: ${SLGPU_ENABLE_EXPERT_PARALLEL:-0}
+      ENABLE_EXPERT_PARALLEL: ${ENABLE_EXPERT_PARALLEL:-${SLGPU_ENABLE_EXPERT_PARALLEL:-0}}
       # опционально: --data-parallel-size (сценарий DP8+EP в рецепте MiniMax)
-      SLGPU_VLLM_DATA_PARALLEL_SIZE: ${SLGPU_VLLM_DATA_PARALLEL_SIZE:-}
+      DATA_PARALLEL_SIZE: ${DATA_PARALLEL_SIZE:-${SLGPU_VLLM_DATA_PARALLEL_SIZE:-}}
       # Только vLLM (например moonshotai/Kimi-K2.6 — data; см. референс Moonshot / доку vLLM).
       MM_ENCODER_TP_MODE: ${MM_ENCODER_TP_MODE:-}
       # Опционально: --attention-backend (DeepSeek V4: см. INFO fp8_ds_mla vs FLASHINFER_MLA_SPARSE в serve.sh)
-      SLGPU_VLLM_ATTENTION_BACKEND: ${SLGPU_VLLM_ATTENTION_BACKEND:-}
+      ATTENTION_BACKEND: ${ATTENTION_BACKEND:-${SLGPU_VLLM_ATTENTION_BACKEND:-}}
       # Опционально: --tokenizer-mode (DeepSeek V4: deepseek_v4, см. vllm.ai/blog/deepseek-v4)
-      SLGPU_VLLM_TOKENIZER_MODE: ${SLGPU_VLLM_TOKENIZER_MODE:-}
+      TOKENIZER_MODE: ${TOKENIZER_MODE:-${SLGPU_VLLM_TOKENIZER_MODE:-}}
       VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS: ${VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS:-1}
-      # Согласовано с TP: первые N GPU (0..TP-1), выставляет ./slgpu up
+      # Согласовано с TP: первые N GPU (0..TP-1), выставляет ./slgpu up; override: SLGPU_NVIDIA_VISIBLE_DEVICES
       NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-0,1,2,3,4,5,6,7}
     volumes:
       - ${MODELS_DIR:-./data/models}:/models:ro

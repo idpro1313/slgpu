@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from app.services.env_key_aliases import apply_vllm_aliases_to_merged, coalesce_str
 from app.services.stack_config import parse_dotenv_text, presets_dir_sync, sync_merged_flat
 
 
@@ -65,6 +66,7 @@ def merge_llm_stack_env(
         m["LLM_API_PORT"] = str(port)
     elif engine == "sglang" and "LLM_API_PORT" not in m:
         m["LLM_API_PORT"] = m.get("LLM_API_PORT_SGLANG", "8222")
+    apply_vllm_aliases_to_merged(m)
     return m
 
 
@@ -75,9 +77,10 @@ def merged_flat() -> dict[str, str]:
 def container_env_for_engine(merged: dict[str, str], engine: str) -> dict[str, str]:
     """Build env for ``scripts/serve.sh`` (flat string dict)."""
     m: dict[str, str] = dict(merged)
+    apply_vllm_aliases_to_merged(m)
     m["SLGPU_ENGINE"] = engine
     if engine == "vllm":
-        m["SLGPU_VLLM_PORT"] = m.get("SLGPU_VLLM_PORT", "8111")
+        m["VLLM_PORT"] = coalesce_str(m, "VLLM_PORT", "SLGPU_VLLM_PORT", "LLM_API_PORT", default="8111")
     else:
         m["SGLANG_LISTEN_PORT"] = m.get("SGLANG_LISTEN_PORT", m.get("SGLANG_LISTEN", "8222"))
     return {k: str(v) for k, v in m.items() if v is not None and str(v) != ""}

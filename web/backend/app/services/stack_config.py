@@ -18,6 +18,8 @@ from typing import Any
 
 from sqlalchemy import delete, func, select
 
+from app.services.env_key_aliases import apply_vllm_aliases_to_merged
+
 logger = logging.getLogger(__name__)
 
 STACK_KEY = "cfg.stack"
@@ -66,7 +68,7 @@ DEFAULT_STACK: dict[str, str] = {
     "PRESETS_DIR": "./data/presets",
     "WEB_DATA_DIR": "./data/web",
     "SLGPU_MODEL_ROOT": "/models",
-    "SLGPU_SERVED_MODEL_NAME": "devllm",
+    "SERVED_MODEL_NAME": "devllm",
     "LLM_API_BIND": "0.0.0.0",
     "LLM_API_PORT": "8111",
     "LLM_API_PORT_SGLANG": "8222",
@@ -87,9 +89,15 @@ DEFAULT_STACK: dict[str, str] = {
     "TOOL_CALL_PARSER": "hermes",
     "REASONING_PARSER": "qwen3",
     "NVIDIA_VISIBLE_DEVICES": "0,1,2,3,4,5,6,7",
-    "SLGPU_MAX_NUM_BATCHED_TOKENS": "8192",
-    "SLGPU_DISABLE_CUSTOM_ALL_REDUCE": "1",
-    "SLGPU_ENABLE_PREFIX_CACHING": "1",
+    "MAX_NUM_BATCHED_TOKENS": "8192",
+    "DISABLE_CUSTOM_ALL_REDUCE": "1",
+    "ENABLE_PREFIX_CACHING": "1",
+    "ENABLE_EXPERT_PARALLEL": "0",
+    "VLLM_HOST": "0.0.0.0",
+    "VLLM_PORT": "8111",
+    "TRUST_REMOTE_CODE": "1",
+    "ENABLE_CHUNKED_PREFILL": "1",
+    "ENABLE_AUTO_TOOL_CHOICE": "1",
     "PROMETHEUS_DATA_DIR": "./data/monitoring/prometheus",
     "GRAFANA_DATA_DIR": "./data/monitoring/grafana",
     "LOKI_DATA_DIR": "./data/monitoring/loki",
@@ -195,6 +203,7 @@ def sync_merged_flat() -> dict[str, str]:
                     merged.update({k: str(v) for k, v in secrets.items() if v is not None})
         finally:
             conn.close()
+    apply_vllm_aliases_to_merged(merged)
     return merged
 
 
@@ -464,41 +473,48 @@ def write_langfuse_litellm_env(root: Path, secrets: dict[str, str]) -> None:
 
 
 def write_llm_interp_env(path: Path, merged: dict[str, str]) -> None:
-    def g(key: str, default: str = "") -> str:
-        return str(merged.get(key) or default)
+    from app.services.env_key_aliases import coalesce_str
 
-    batch = g("SLGPU_MAX_NUM_BATCHED_TOKENS") or g("VLLM_MAX_NUM_BATCHED_TOKENS") or "8192"
+    m = dict(merged)
+    apply_vllm_aliases_to_merged(m)
+
+    def g(key: str, default: str = "") -> str:
+        return str(m.get(key) or default)
+
+    batch = coalesce_str(m, "MAX_NUM_BATCHED_TOKENS", "SLGPU_MAX_NUM_BATCHED_TOKENS", "VLLM_MAX_NUM_BATCHED_TOKENS", default="8192")
     lines = [
         f"VLLM_DOCKER_IMAGE={g('VLLM_DOCKER_IMAGE')}",
         f"LLM_API_BIND={g('LLM_API_BIND', '0.0.0.0')}",
         f"LLM_API_PORT={g('LLM_API_PORT', '8111')}",
         f"SLGPU_MODEL_ROOT={g('SLGPU_MODEL_ROOT', '/models')}",
-        f"SLGPU_VLLM_TRUST_REMOTE_CODE={g('SLGPU_VLLM_TRUST_REMOTE_CODE', '1')}",
-        f"SLGPU_VLLM_ENABLE_CHUNKED_PREFILL={g('SLGPU_VLLM_ENABLE_CHUNKED_PREFILL', '1')}",
-        f"SLGPU_VLLM_ENABLE_AUTO_TOOL_CHOICE={g('SLGPU_VLLM_ENABLE_AUTO_TOOL_CHOICE', '1')}",
+        f"SERVED_MODEL_NAME={g('SERVED_MODEL_NAME', 'devllm')}",
+        f"VLLM_HOST={g('VLLM_HOST', '0.0.0.0')}",
+        f"VLLM_PORT={g('VLLM_PORT', '8111')}",
+        f"TRUST_REMOTE_CODE={g('TRUST_REMOTE_CODE', '1')}",
+        f"ENABLE_CHUNKED_PREFILL={g('ENABLE_CHUNKED_PREFILL', '1')}",
+        f"ENABLE_AUTO_TOOL_CHOICE={g('ENABLE_AUTO_TOOL_CHOICE', '1')}",
         f"MODEL_ID={g('MODEL_ID')}",
         f"MODEL_REVISION={g('MODEL_REVISION')}",
         f"MAX_MODEL_LEN={g('MAX_MODEL_LEN', '32768')}",
-        f"SLGPU_VLLM_BLOCK_SIZE={g('SLGPU_VLLM_BLOCK_SIZE')}",
+        f"BLOCK_SIZE={g('BLOCK_SIZE')}",
         f"TP={g('TP', '8')}",
         f"GPU_MEM_UTIL={g('GPU_MEM_UTIL', '0.92')}",
         f"KV_CACHE_DTYPE={g('KV_CACHE_DTYPE', 'fp8_e4m3')}",
-        f"SLGPU_MAX_NUM_BATCHED_TOKENS={batch}",
-        f"VLLM_MAX_NUM_BATCHED_TOKENS={g('VLLM_MAX_NUM_BATCHED_TOKENS')}",
-        f"SLGPU_VLLM_MAX_NUM_SEQS={g('SLGPU_VLLM_MAX_NUM_SEQS')}",
-        f"SLGPU_DISABLE_CUSTOM_ALL_REDUCE={g('SLGPU_DISABLE_CUSTOM_ALL_REDUCE', '1')}",
-        f"SLGPU_ENABLE_PREFIX_CACHING={g('SLGPU_ENABLE_PREFIX_CACHING', '1')}",
+        f"MAX_NUM_BATCHED_TOKENS={batch}",
+        f"MAX_NUM_SEQS={g('MAX_NUM_SEQS')}",
+        f"DISABLE_CUSTOM_ALL_REDUCE={g('DISABLE_CUSTOM_ALL_REDUCE', '1')}",
+        f"ENABLE_PREFIX_CACHING={g('ENABLE_PREFIX_CACHING', '1')}",
         f"TOOL_CALL_PARSER={g('TOOL_CALL_PARSER', 'hermes')}",
         f"REASONING_PARSER={g('REASONING_PARSER', 'qwen3')}",
         f"CHAT_TEMPLATE_CONTENT_FORMAT={g('CHAT_TEMPLATE_CONTENT_FORMAT')}",
-        f"SLGPU_VLLM_COMPILATION_CONFIG={g('SLGPU_VLLM_COMPILATION_CONFIG')}",
-        f"SLGPU_VLLM_ENFORCE_EAGER={g('SLGPU_VLLM_ENFORCE_EAGER', '0')}",
-        f"SLGPU_VLLM_SPECULATIVE_CONFIG={g('SLGPU_VLLM_SPECULATIVE_CONFIG')}",
-        f"SLGPU_ENABLE_EXPERT_PARALLEL={g('SLGPU_ENABLE_EXPERT_PARALLEL', '0')}",
-        f"SLGPU_VLLM_DATA_PARALLEL_SIZE={g('SLGPU_VLLM_DATA_PARALLEL_SIZE')}",
+        f"COMPILATION_CONFIG={g('COMPILATION_CONFIG')}",
+        f"ENFORCE_EAGER={g('ENFORCE_EAGER', '0')}",
+        f"SPECULATIVE_CONFIG={g('SPECULATIVE_CONFIG')}",
+        f"ENABLE_EXPERT_PARALLEL={g('ENABLE_EXPERT_PARALLEL', '0')}",
+        f"DATA_PARALLEL_SIZE={g('DATA_PARALLEL_SIZE')}",
         f"MM_ENCODER_TP_MODE={g('MM_ENCODER_TP_MODE')}",
-        f"SLGPU_VLLM_ATTENTION_BACKEND={g('SLGPU_VLLM_ATTENTION_BACKEND')}",
-        f"SLGPU_VLLM_TOKENIZER_MODE={g('SLGPU_VLLM_TOKENIZER_MODE')}",
+        f"ATTENTION_BACKEND={g('ATTENTION_BACKEND')}",
+        f"TOKENIZER_MODE={g('TOKENIZER_MODE')}",
         f"VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS={g('VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS', '1')}",
         f"NVIDIA_VISIBLE_DEVICES={g('NVIDIA_VISIBLE_DEVICES', '0,1,2,3,4,5,6,7')}",
         f"MODELS_DIR={g('MODELS_DIR', './data/models')}",
