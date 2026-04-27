@@ -1,5 +1,5 @@
 <KnowledgeGraph>
-  <Project NAME="slgpu" VERSION="4.1.0">
+  <Project NAME="slgpu" VERSION="4.1.1">
     <keywords>slgpu, vllm, sglang, llm-inference, benchmark, docker-compose, gpu, prometheus, grafana, sglang-dashboard-slgpu, sglangdash2-slgpu</keywords>
     <annotation>Стенд для сравнения движков LLM-инференса vLLM и SGLang на Linux-сервере с NVIDIA GPU.</annotation>
 
@@ -182,7 +182,7 @@
         <fn-services_native_jobs PURPOSE="handle_native_job: native.slot.up|down|restart (docker-py, мультислот); lock resource slot:{key}; native.model.pull, monitoring, bench; периодический flush stdout_tail/message во время RUNNING; stream docker pull перед containers.run. Удалено в 4.0.0: native.llm.*" />
         <fn-job_log PURPOSE="append_job_log: thread-safe строки лога native job; обновление UI по GET /jobs/{id}" />
         <fn-services_slgpu_cli PURPOSE="CliCommand kind=native.* с пустым argv; resource slot:default|slot:{key} (4.0.0: без lock runtime); валидация slot_key/slug/engine/port/tp" />
-        <fn-services_jobs PURPOSE="Job runner: native.* → native_jobs; иначе legacy argv; advisory lock (scope, resource)" />
+        <fn-services_jobs PURPOSE="Job runner: native.* → native_jobs; lock по ключу (set discard); task registry; force_engine_slot_halt + POST /runtime/slots/{k}/down?force=1; CancelledError → mark job cancelled" />
         <fn-services_docker_client PURPOSE="get_docker_inspector(): get_by_service — label filter, fallback: нормализованные лейблы, имена Compose v1/v2, жёсткие имена slgpu-* и slgpu-monitoring-*" />
         <fn-services_env_files PURPOSE="Парсер и рендер data/presets/<slug>.env, совместимые с serve.sh" />
         <fn-services_presets PURPOSE="Двусторонняя синхронизация Preset DB ↔ data/presets/*.env; POST /presets/import-templates копирует examples/presets/*.env в PRESETS_DIR без перезаписи и импортирует в БД; просмотр/key-value редактирование через GET/PATCH /api/v1/presets/{id}, DELETE удаляет запись и опционально .env, экспорт в .env отдельной операцией" />

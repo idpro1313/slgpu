@@ -218,6 +218,10 @@ async def create_engine_slot(
 @router.post("/slots/{slot_key}/down", response_model=JobAccepted, status_code=status.HTTP_202_ACCEPTED)
 async def slot_down(
     slot_key: str,
+    force: bool = Query(
+        default=False,
+        description="Сразу остановить контейнеры слота, отменить job в БД, снять lock (долгий pull/up).",
+    ),
     actor: str | None = Depends(actor_from_header),
 ) -> JobAccepted:
     try:
@@ -225,6 +229,17 @@ async def slot_down(
         command = cmd_slot_down(slot_key=slot_key)
     except ValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if force:
+        cancelled = await jobs_service.force_engine_slot_halt(slot_key)
+        return JobAccepted(
+            job_id=0,
+            correlation_id="00000000-0000-0000-0000-000000000000",
+            kind=command.kind,
+            status="forced",
+            message="Принудительная остановка: контейнеры слота, отмена задач, lock снят.",
+            forced=True,
+            cancelled_job_ids=cancelled,
+        )
     try:
         job = await jobs_service.submit(command, actor=actor, extra_args={"slot_key": slot_key})
     except jobs_service.JobConflictError as exc:

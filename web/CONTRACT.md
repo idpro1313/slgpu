@@ -84,7 +84,7 @@ API (все публичные ручки под префиксом **`/api/v1`*
 
 Зависимости образа web: `docker` (socket), `huggingface_hub` (pull), `docker compose` на хосте репо — для LLM/monitoring up (см. `app/services/compose_exec.py`).
 
-**Inference (UI), 4.0.0:** только мультислотный путь: `POST /api/v1/runtime/slots`, `POST /api/v1/runtime/slots/{key}/down`, `…/restart`, `GET /api/v1/runtime/snapshot`, `GET /api/v1/runtime/slots`, `GET /api/v1/runtime/slots/{key}/logs`. **Удалено:** `POST /api/v1/runtime/up|down|restart`, `GET /api/v1/runtime/logs` (без `slot_key`). Для слота `default` укажите `slot_key: "default"` в теле `POST /slots`. **Live GPU:** `GET /api/v1/gpu/state` (nvidia-smi + процессы с полем `slot_key` по `docker top`), `GET /api/v1/gpu/availability?tp=N` (занятость по `engine_slots` **и** по процессам на GPU без записи в БД — `slot_key: external` в `busy[]`).
+**Inference (UI), 4.0.0:** только мультислотный путь: `POST /api/v1/runtime/slots`, `POST /api/v1/runtime/slots/{key}/down` (опционально **`?force=1`** — принудительная остановка: отмена job по `resource=slot:{key}`, `docker stop` по слоту, снятие lock без ожидания долгого `native.slot.up`; ответ `JobAccepted` с `forced: true`), `…/restart`, `GET /api/v1/runtime/snapshot`, `GET /api/v1/runtime/slots`, `GET /api/v1/runtime/slots/{key}/logs`. **Удалено:** `POST /api/v1/runtime/up|down|restart`, `GET /api/v1/runtime/logs` (без `slot_key`). Для слота `default` укажите `slot_key: "default"` в теле `POST /slots`. **Live GPU:** `GET /api/v1/gpu/state` (nvidia-smi + процессы с полем `slot_key` по `docker top`), `GET /api/v1/gpu/availability?tp=N` (занятость по `engine_slots` **и** по процессам на GPU без записи в БД — `slot_key: external` в `busy[]`).
 
 ### Docker API
 

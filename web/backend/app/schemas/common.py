@@ -25,3 +25,6 @@ class JobAccepted(BaseModel):
     kind: str
     status: str
     message: str | None = None
+    # POST /runtime/slots/{key}/down?force=1 — немедленный stop, без новой job
+    forced: bool = False
+    cancelled_job_ids: list[int] = []

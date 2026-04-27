@@ -175,6 +175,8 @@ async def _finalize_native_job(
         job = await session.get(Job, job_id)
         if job is None:
             return
+        if job.status == JobStatus.CANCELLED:
+            return
         job.exit_code = exit_code
         job.finished_at = datetime.now(timezone.utc)
         job.status = JobStatus.SUCCEEDED if exit_code == 0 else JobStatus.FAILED

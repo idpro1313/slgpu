@@ -16,7 +16,6 @@ from collections import deque
 from collections.abc import Iterable
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
 from sqlalchemy import select
 
@@ -47,26 +46,29 @@ def _exec_argv_for_cli(command: CliCommand, cwd: Path) -> list[str]:
     return list(command.argv)
 
 
-_active_locks: dict[tuple[str, str], int] = {}
+def _lock_key(scope: str, resource: str | None) -> tuple[str, str]:
+    return (scope, resource or "*")
+
+
+# Один in-flight job на (scope, resource); discard() идемпотентен (force-stop + finally).
+_held: set[tuple[str, str]] = set()
 _lock_guard = asyncio.Lock()
+_task_by_lock: dict[tuple[str, str], asyncio.Task[None]] = {}
 
 
 async def _acquire_lock(scope: str, resource: str | None) -> bool:
-    key = (scope, resource or "*")
+    key = _lock_key(scope, resource)
     async with _lock_guard:
-        if _active_locks.get(key, 0) > 0:
+        if key in _held:
             return False
-        _active_locks[key] = _active_locks.get(key, 0) + 1
+        _held.add(key)
         return True
 
 
 async def _release_lock(scope: str, resource: str | None) -> None:
-    key = (scope, resource or "*")
+    key = _lock_key(scope, resource)
     async with _lock_guard:
-        if _active_locks.get(key, 0) > 0:
-            _active_locks[key] -= 1
-            if _active_locks[key] <= 0:
-                _active_locks.pop(key, None)
+        _held.discard(key)
 
 
 class JobConflictError(RuntimeError):
@@ -114,12 +116,46 @@ async def submit(
         await session.flush()
         job_id = job.id
 
-    asyncio.create_task(_run_job(job_id, command))
+    key = _lock_key(command.scope, command.resource)
+    task = asyncio.create_task(_run_job(job_id, command))
+    async with _lock_guard:
+        _task_by_lock[key] = task
+
     async with session_scope() as session:
         return await session.get(Job, job_id)  # type: ignore[return-value]
 
 
 async def _run_job(job_id: int, command: CliCommand) -> None:
+    key = _lock_key(command.scope, command.resource)
+    try:
+        await _run_job_body(job_id, command)
+    except asyncio.CancelledError:
+        logger.info(
+            "[jobs][_run_job][BLOCK_CANCELLED] job_id=%s kind=%s", job_id, command.kind
+        )
+        await _mark_job_cancelled(job_id)
+        raise
+    finally:
+        async with _lock_guard:
+            _task_by_lock.pop(key, None)
+        await _release_lock(command.scope, command.resource)
+
+
+async def _mark_job_cancelled(job_id: int) -> None:
+    async with session_scope() as session:
+        job = await session.get(Job, job_id)
+        if job is None:
+            return
+        if job.status in (JobStatus.SUCCEEDED, JobStatus.FAILED, JobStatus.CANCELLED):
+            return
+        job.status = JobStatus.CANCELLED
+        job.finished_at = datetime.now(timezone.utc)
+        job.exit_code = -1
+        if not job.message or "[cancelled" not in (job.message or ""):
+            job.message = f"{job.message or ''} [cancelled: asyncio task]".strip()
+
+
+async def _run_job_body(job_id: int, command: CliCommand) -> None:
     settings = get_settings()
     cwd = settings.slgpu_root
     stdout_tail: deque[str] = deque(maxlen=400)
@@ -128,7 +164,6 @@ async def _run_job(job_id: int, command: CliCommand) -> None:
     async with session_scope() as session:
         job = await session.get(Job, job_id)
         if job is None:
-            await _release_lock(command.scope, command.resource)
             return
         job.status = JobStatus.RUNNING
         job.started_at = datetime.now(timezone.utc)
@@ -136,7 +171,6 @@ async def _run_job(job_id: int, command: CliCommand) -> None:
 
     if command.kind.startswith("native."):
         await handle_native_job(job_id, command, job_args)
-        await _release_lock(command.scope, command.resource)
         return
 
     exit_code = -1
@@ -185,7 +219,6 @@ async def _run_job(job_id: int, command: CliCommand) -> None:
             stdout_tail=list(stdout_tail),
             stderr_tail=list(stderr_tail),
         )
-        await _release_lock(command.scope, command.resource)
 
 
 async def _finalize_job(
@@ -199,6 +232,8 @@ async def _finalize_job(
     async with session_scope() as session:
         job = await session.get(Job, job_id)
         if job is None:
+            return
+        if job.status == JobStatus.CANCELLED:
             return
         job.exit_code = exit_code
         job.finished_at = datetime.now(timezone.utc)
@@ -227,3 +262,62 @@ def is_within_root(target: Path, root: Path) -> bool:
     except ValueError:
         return False
     return True
+
+
+async def mark_resource_jobs_cancelled(
+    resource: str,
+    *,
+    note: str = "[cancelled: force stop]",
+) -> list[int]:
+    """Set queued/running jobs for this resource to cancelled (UI force-stop)."""
+
+    ids: list[int] = []
+    now = datetime.now(timezone.utc)
+    async with session_scope() as session:
+        r = await session.execute(
+            select(Job).where(
+                Job.resource == resource,
+                Job.status.in_((JobStatus.QUEUED, JobStatus.RUNNING)),
+            )
+        )
+        for j in r.scalars():
+            j.status = JobStatus.CANCELLED
+            j.finished_at = now
+            j.exit_code = -1
+            j.message = f"{(j.message or '').strip()} {note}".strip()[:2000]
+            ids.append(int(j.id))
+    return ids
+
+
+async def force_engine_slot_halt(slot_key: str) -> list[int]:
+    """Mark jobs cancelled, cancel asyncio task, clear lock, docker stop (best-effort)."""
+
+    from app.services.slot_runtime import stop_containers_for_slot_key_sync
+
+    resource = f"slot:{slot_key}"
+    key = _lock_key("engine", resource)
+
+    cancelled: list[int] = await mark_resource_jobs_cancelled(resource)
+
+    async with _lock_guard:
+        t = _task_by_lock.get(key)
+    if t is not None and not t.done():
+        t.cancel()
+    # Снимаем lock сразу (discard идемпотентен с finally задачи).
+    await _release_lock("engine", resource)
+
+    log: list[str] = []
+    await asyncio.to_thread(stop_containers_for_slot_key_sync, slot_key, log, None)
+
+    if t is not None and not t.done():
+        try:
+            await asyncio.wait_for(t, timeout=1.0)
+        except (TimeoutError, asyncio.CancelledError):
+            pass
+    if cancelled:
+        logger.info(
+            "[jobs][force_engine_slot_halt][BLOCK_OK] slot_key=%s cancelled_ids=%s",
+            slot_key,
+            cancelled,
+        )
+    return cancelled

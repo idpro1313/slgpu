@@ -236,12 +236,17 @@ export interface Job {
   updated_at: string;
 }
 
+export type JobAcceptedStatus = JobStatus | "forced";
+
 export interface JobAccepted {
   job_id: number;
   correlation_id: string;
   kind: string;
-  status: JobStatus;
+  status: JobAcceptedStatus;
   message: string | null;
+  /** true: POST /runtime/slots/.../down?force=1 — без новой job в очереди */
+  forced?: boolean;
+  cancelled_job_ids?: number[];
 }
 
 /** GET /activity: CLI-задача или запись о действии в UI (без дубля с job). */

@@ -113,7 +113,7 @@ function SlotCard(props: {
   slot: RuntimeSlotView;
   gpu: GpuStateResponse | undefined;
   jobs: Job[] | undefined;
-  onDown: (key: string) => void;
+  onDown: (key: string, force: boolean) => void;
   onRestart: (key: string) => void;
   onLogs: (key: string) => void;
   downPending: boolean;
@@ -146,8 +146,13 @@ function SlotCard(props: {
         <button
           type="button"
           className="btn btn--danger"
-          disabled={busy || props.downPending}
-          onClick={() => props.onDown(slot.slot_key)}
+          disabled={props.downPending}
+          title={
+            busy
+              ? "Принудительная остановка: отмена задачи в БД, docker stop, снятие lock (при pull это может занять мгновение после ответа)."
+              : "Остановить слот (docker)"
+          }
+          onClick={() => props.onDown(slot.slot_key, busy)}
         >
           Stop
         </button>
@@ -230,7 +235,13 @@ export function RuntimePage() {
   });
 
   const slotDownMutation = useMutation({
-    mutationFn: (slotKey: string) => api.post<JobAccepted>(`/runtime/slots/${encodeURIComponent(slotKey)}/down`, {}),
+    mutationFn: (opts: { slotKey: string; force: boolean }) =>
+      api.post<JobAccepted>(
+        `/runtime/slots/${encodeURIComponent(opts.slotKey)}/down${
+          opts.force ? "?force=1" : ""
+        }`,
+        {},
+      ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
       queryClient.invalidateQueries({ queryKey: ["activity"] });
@@ -361,7 +372,7 @@ export function RuntimePage() {
                 slot={s}
                 gpu={gpuState.data}
                 jobs={jobs.data}
-                onDown={(key) => slotDownMutation.mutate(key)}
+                onDown={(key, force) => slotDownMutation.mutate({ slotKey: key, force })}
                 onRestart={(key) => {
                   const p = s.preset_name;
                   if (p) slotRestartMutation.mutate({ slotKey: key, preset: p });

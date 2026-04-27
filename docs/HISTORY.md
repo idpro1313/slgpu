@@ -1611,6 +1611,13 @@
 - **Файлы:** `grace/**/*.xml`, `docs/AGENTS.md`, `web/CONTRACT.md`, `web/README.md`, `VERSION`, `web/backend/pyproject.toml`, `web/backend/app/__init__.py`, `web/frontend/package.json`, `docs/HISTORY.md`.
 - **Решение:** **PATCH 4.0.8** для документации и метаданных версии; функциональные правки предыдущих волон — в тех же коммитах/истории.
 
+### 4.1.1: Stop на Inference при `native.slot.up` + `POST .../down?force=1`
+
+- **Что:** Блокировка `(scope, resource)` как **множество ключей** (discard идемпотентен). **`force_engine_slot_halt`**: отмена asyncio-task, **`mark_resource_jobs_cancelled`**, **`_release_lock`**, sync **`stop_containers_for_slot_key_sync`**. **`POST /runtime/slots/{key}/down?force=1`** возвращает **`JobAccepted(forced=True, cancelled_job_ids=[])`**. UI: **Stop** не гасится при busy; при активной job на слоте вызывается **`force=1`**. **`_finalize_native_job`**: не перезаписывать **`CANCELLED`**.
+- **Почему:** кнопка Stop была **disabled** при running job; concurrent **down** получал **409**; пользователь не мог прервать зависший pull/up.
+- **Файлы:** `web/backend/app/services/jobs.py`, `native_jobs.py`, `api/v1/runtime.py`, `schemas/common.py`, `web/frontend/src/pages/Runtime.tsx`, `api/types.ts`, `web/CONTRACT.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `VERSION`, версии web, `docs/HISTORY.md`.
+- **Решение:** **PATCH** — поток **`docker pull`** в thread по-прежнему может дожиматься в фоне, но lock снят и контейнеры слота остановлены.
+
 ### 4.1.0: Страница «Docker: логи» + API `/api/v1/docker/*`
 
 - **Что:** **`GET /api/v1/docker/containers`** (`scope=slgpu|all`), **`GET /api/v1/docker/containers/{name_or_id}/logs`**. `DockerInspector.list_all_containers`, **`resolve_container`**, сервис **`app/services/docker_logs.py`**, роутер **`app/api/v1/docker_logs.py`**. SPA **`/docker-logs`**, nav «Docker».
