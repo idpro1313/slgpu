@@ -33,6 +33,7 @@ router = APIRouter()
 
 @router.get("", response_model=list[PresetOut])
 async def list_presets(session: AsyncSession = Depends(db_session)) -> list[Preset]:
+    await preset_service.migrate_preset_parameters_to_canonical_if_needed(session)
     result = await session.execute(select(Preset).order_by(Preset.name))
     return list(result.scalars().all())
 
@@ -119,7 +120,7 @@ async def create_preset(
         tp=payload.tp,
         gpu_mask=payload.gpu_mask,
         served_model_name=payload.served_model_name,
-        parameters=payload.parameters,
+        parameters=preset_service.presentation_preset_parameters(payload.parameters),
         is_active=True,
         is_synced=False,
     )
@@ -138,6 +139,7 @@ async def create_preset(
 
 @router.get("/{preset_id}", response_model=PresetOut)
 async def get_preset(preset_id: int, session: AsyncSession = Depends(db_session)) -> Preset:
+    await preset_service.migrate_preset_parameters_to_canonical_if_needed(session)
     preset = await session.get(Preset, preset_id)
     if preset is None:
         raise HTTPException(status_code=404, detail="preset not found")
@@ -171,6 +173,11 @@ async def clone_preset(
             validate_tp(payload.tp)
         except ValidationError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+    merged_params = (
+        payload.parameters
+        if payload.parameters is not None
+        else (base.parameters or {})
+    )
     new = Preset(
         name=payload.name,
         description=payload.description if payload.description is not None else base.description,
@@ -181,7 +188,7 @@ async def clone_preset(
         served_model_name=payload.served_model_name
         if payload.served_model_name is not None
         else base.served_model_name,
-        parameters=payload.parameters if payload.parameters is not None else (base.parameters or {}),
+        parameters=preset_service.presentation_preset_parameters(merged_params),
         is_active=True,
         is_synced=False,
     )
@@ -231,7 +238,7 @@ async def update_preset(
     if "served_model_name" in fields:
         preset.served_model_name = payload.served_model_name
     if "parameters" in fields:
-        preset.parameters = payload.parameters or {}
+        preset.parameters = preset_service.presentation_preset_parameters(payload.parameters or {})
     if "is_active" in fields and payload.is_active is not None:
         preset.is_active = payload.is_active
     preset.is_synced = False
@@ -252,6 +259,7 @@ async def export_preset(
     session: AsyncSession = Depends(db_session),
     actor: str | None = Depends(actor_from_header),
 ) -> Preset:
+    await preset_service.migrate_preset_parameters_to_canonical_if_needed(session)
     preset = await session.get(Preset, preset_id)
     if preset is None:
         raise HTTPException(status_code=404, detail="preset not found")

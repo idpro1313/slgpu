@@ -68,6 +68,34 @@ def _normalize_preset_param_dict(raw: dict[str, str]) -> dict[str, str]:
     return {k: m[k] for k in _RUNTIME_KEYS if k in m and str(m[k]).strip() != ""}
 
 
+def presentation_preset_parameters(params: Any) -> dict[str, str]:
+    """Канонические ключи `parameters` для API, БД и export (без SLGPU_*-алиасов)."""
+    if not params or not isinstance(params, dict):
+        return {}
+    raw = {str(k): str(v) for k, v in params.items() if v is not None and str(v).strip() != ""}
+    raw_p = {k: v for k, v in raw.items() if k in _RUNTIME_KEYS or k in LEGACY_VLLM_PARAM_KEYS}
+    return _normalize_preset_param_dict(raw_p)
+
+
+async def migrate_preset_parameters_to_canonical_if_needed(session: AsyncSession) -> None:
+    """Переписать устаревшие ключи в `presets.parameters` (строки с SLGPU_* из импорта <4.2)."""
+    r = await session.execute(select(Preset))
+    n = 0
+    for preset in r.scalars().all():
+        old = preset.parameters
+        if not old or not isinstance(old, dict):
+            continue
+        if not any(k in old for k in LEGACY_VLLM_PARAM_KEYS):
+            continue
+        preset.parameters = presentation_preset_parameters(old)
+        n += 1
+    if n:
+        logger.info(
+            "[presets][migrate_preset_parameters][BLOCK_MIGRATED] presets_updated=%s",
+            n,
+        )
+
+
 def presets_dir() -> Path:
     return get_settings().models_presets_dir
 
@@ -196,10 +224,8 @@ async def export_preset_to_file(session: AsyncSession, preset: Preset) -> Path:
         values["SERVED_MODEL_NAME"] = preset.served_model_name
     if preset.tp is not None:
         values["TP"] = str(preset.tp)
-    for key, raw in (preset.parameters or {}).items():
-        if raw is None or raw == "":
-            continue
-        values[str(key)] = str(raw)
+    for key, raw in presentation_preset_parameters(preset.parameters).items():
+        values[key] = raw
 
     target = write_preset_file(
         settings.models_presets_dir,

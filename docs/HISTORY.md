@@ -1674,6 +1674,13 @@
 - **Файлы:** `web/backend/app/services/env_key_aliases.py`, `stack_config.py`, `llm_env.py`, `presets.py`, `env_files.py`, `native_jobs.py`; `scripts/serve.sh`, `_lib.sh`, `monitoring_fix_permissions.sh`, `cmd_monitoring.sh`; `docker/docker-compose.llm.yml`, `docker/docker-compose.monitoring.yml`; `main.env`, `main.env.example`, `examples/presets/*.env`; `web/frontend` `Presets.tsx`, `Settings.tsx`; `README.md`, `configs/models/README.md`; `VERSION`, версии web/backend, `grace/knowledge-graph/knowledge-graph.xml`, `docs/HISTORY.md`.
 - **Решение:** **MINOR 4.2.0** — обратная совместимость через fallback в скриптах, compose и Python.
 
+### 4.2.2: Пресеты — канонические ключи в `parameters` и миграция БД
+
+- **Что:** `presentation_preset_parameters()`, `migrate_preset_parameters_to_canonical_if_needed()`; вызов при `GET /presets`, `GET /presets/{id}`, `POST .../export`; нормализация при create/patch/clone; `export_preset_to_file` пишет канонические имена.
+- **Почему:** В `presets.parameters` оставались ключи `SLGPU_*` после импорта старых `.env` / ручного ввода — UI показывал устаревшие имена.
+- **Файлы:** `web/backend/app/services/presets.py`, `api/v1/presets.py`, `VERSION`, версии web/backend, `grace/knowledge-graph/knowledge-graph.xml`, `docs/HISTORY.md`.
+- **Решение:** **PATCH**.
+
 ### 4.2.1: Настройки web — канонические ключи в API и миграция stack_params
 
 - **Что:** `presentation_stack()` для ответов `GET/PATCH /app-config/stack`; `migrate_stack_params_to_canonical_if_needed()` — перенос значений в канонические ключи и удаление строк с `SLGPU_*`-алиасами (vLLM + образы мониторинга) из `stack_params`.
