@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import os
+import threading
 from pathlib import Path
+
+from app.services.job_log import append_job_log
 
 
 def _clean_env() -> dict[str, str]:
@@ -131,16 +134,18 @@ async def docker_network_create_slgpu() -> tuple[int, str, str]:
     )
 
 
-async def ensure_slgpu_network(log: list[str]) -> None:
+async def ensure_slgpu_network(
+    log: list[str], log_lock: threading.Lock | None = None
+) -> None:
     code, out, err = await docker_network_inspect("slgpu")
     if code == 0:
         # Labels must match (simplified check via inspect json would be heavy; trust if exists)
-        log.append("[network] slgpu exists")
+        append_job_log(log, log_lock, "[network] slgpu exists")
         return
     c2, _, e2 = await docker_network_create_slgpu()
     if c2 != 0:
         raise RuntimeError(f"docker network create slgpu failed: {e2}")
-    log.append("[network] created slgpu")
+    append_job_log(log, log_lock, "[network] created slgpu")
 
 
 async def run_subprocess_logged(
@@ -148,6 +153,7 @@ async def run_subprocess_logged(
     cwd: Path | None,
     env: dict[str, str] | None,
     log: list[str],
+    log_lock: threading.Lock | None = None,
 ) -> int:
     proc = await asyncio.create_subprocess_exec(
         *argv,
@@ -161,5 +167,9 @@ async def run_subprocess_logged(
         line = await proc.stdout.readline()
         if not line:
             break
-        log.append(line.decode("utf-8", errors="replace").rstrip())
+        append_job_log(
+            log,
+            log_lock,
+            line.decode("utf-8", errors="replace").rstrip(),
+        )
     return await proc.wait()

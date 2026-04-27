@@ -1,5 +1,5 @@
 <KnowledgeGraph>
-  <Project NAME="slgpu" VERSION="4.0.8">
+  <Project NAME="slgpu" VERSION="4.0.9">
     <keywords>slgpu, vllm, sglang, llm-inference, benchmark, docker-compose, gpu, prometheus, grafana, sglang-dashboard-slgpu, sglangdash2-slgpu</keywords>
     <annotation>Стенд для сравнения движков LLM-инференса vLLM и SGLang на Linux-сервере с NVIDIA GPU.</annotation>
 
@@ -176,10 +176,11 @@
         <fn-models_engine_slot PURPOSE="app.models.slot.EngineSlot — слот инференса: slot_key, engine, gpu_indices CSV, host_api_port, observed_status" />
         <fn-services_gpu_state PURPOSE="app.services.gpu_state: nvidia-smi через docker-py DeviceRequest(gpu), invalidate_gpu_state_cache при slot up/down" />
         <fn-services_gpu_availability PURPOSE="app.services.gpu_availability: available/busy/suggested по host_info + активным EngineSlot" />
-        <fn-services_slot_runtime PURPOSE="app.services.slot_runtime: run_slot_docker, контейнер slgpu-{engine} или slgpu-{engine}-{slot_key}, сеть slgpu" />
+        <fn-services_slot_runtime PURPOSE="app.services.slot_runtime: run_slot_docker, stream docker pull (decode) перед run, контейнер slgpu-{engine} или slgpu-{engine}-{slot_key}, сеть slgpu" />
         <fn-services_host_info PURPOSE="Снимок ОС/CPU/RAM/диска/NVIDIA для дашборда: docker run с bind /proc,/etc хоста (busybox) и nvidia-smi в GPU-контейнере; fallback — локальный /proc и nvidia-smi в namespace web" />
         <fn-services_compose_exec PURPOSE="async docker compose для LLM и monitoring стеков, subprocess logged" />
-        <fn-services_native_jobs PURPOSE="handle_native_job: native.slot.up|down|restart (docker-py, мультислот); lock resource slot:{key}; native.model.pull, monitoring, bench. Удалено в 4.0.0: native.llm.*" />
+        <fn-services_native_jobs PURPOSE="handle_native_job: native.slot.up|down|restart (docker-py, мультислот); lock resource slot:{key}; native.model.pull, monitoring, bench; периодический flush stdout_tail/message во время RUNNING; stream docker pull перед containers.run. Удалено в 4.0.0: native.llm.*" />
+        <fn-job_log PURPOSE="append_job_log: thread-safe строки лога native job; обновление UI по GET /jobs/{id}" />
         <fn-services_slgpu_cli PURPOSE="CliCommand kind=native.* с пустым argv; resource slot:default|slot:{key} (4.0.0: без lock runtime); валидация slot_key/slug/engine/port/tp" />
         <fn-services_jobs PURPOSE="Job runner: native.* → native_jobs; иначе legacy argv; advisory lock (scope, resource)" />
         <fn-services_docker_client PURPOSE="get_docker_inspector(): get_by_service — label filter, fallback: нормализованные лейблы, имена Compose v1/v2, жёсткие имена slgpu-* и slgpu-monitoring-*" />

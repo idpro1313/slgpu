@@ -26,7 +26,10 @@ export function JobsPage() {
     queryKey: ["jobs", selected?.source === "job" ? selected.id : null],
     queryFn: ({ signal }) => api.get<Job>(`/jobs/${(selected as SelectedJob).id}`, { signal }),
     enabled: selected?.source === "job",
-    refetchInterval: 4_000,
+    refetchInterval: (query) => {
+      const st = query.state.data?.status;
+      return st === "running" || st === "queued" ? 2_000 : 6_000;
+    },
   });
 
   function activateRow(next: Selection) {
@@ -58,7 +61,7 @@ export function JobsPage() {
     <>
       <PageHeader
         title="Задачи"
-        subtitle="Фоновые native-задачи (слоты, pull, мониторинг, бенчи) и действия в UI (модели, пресеты, настройки). По строке или Enter/Space — подробности; Esc или фон — закрыть."
+        subtitle="Фоновые native-задачи (слоты, pull, мониторинг, бенчи) и действия в UI (модели, пресеты, настройки). Для running/queued лог в модалке подтягивается каждые ~2 с (docker pull / вывод). По строке или Enter/Space — подробности; Esc или фон — закрыть."
       />
 
       <Section title="История" subtitle="Объединённая лента по времени, лимит 100.">

@@ -1610,3 +1610,10 @@
 - **Почему:** закрытие волны 4.0.8 плана audit; выравнивание артефактов GRACE с кодом и репозиторием.
 - **Файлы:** `grace/**/*.xml`, `docs/AGENTS.md`, `web/CONTRACT.md`, `web/README.md`, `VERSION`, `web/backend/pyproject.toml`, `web/backend/app/__init__.py`, `web/frontend/package.json`, `docs/HISTORY.md`.
 - **Решение:** **PATCH 4.0.8** для документации и метаданных версии; функциональные правки предыдущих волон — в тех же коммитах/истории.
+
+### 4.0.9: Живой лог native-задач (docker pull / slot up)
+
+- **Что:** Для **`handle_native_job`** добавлены фоновый poll **~1.2 с** → запись **`stdout_tail`** / **`message`** в SQLite (кроме перетирания **`message`** у **`native.model.pull`**, там tqdm). В **`slot_runtime`** перед **`containers.run`** — **stream `docker.api.pull`** со строками **`[docker] …`** в лог. Потокобезопасный **`append_job_log`** (`job_log.py`), lock на весь список логов native; **`ensure_slgpu_network`** / **`run_subprocess_logged`** принимают опциональный lock. UI **Задачи**: refetch **~2 с** при **running/queued**.
+- **Почему:** запрос пользователя — при первом запуске с новым образом не было видно скачивания; лог попадал в БД только после завершения job.
+- **Файлы:** `web/backend/app/services/job_log.py`, `native_jobs.py`, `slot_runtime.py`, `compose_exec.py`, `web/frontend/src/pages/Jobs.tsx`, `web/CONTRACT.md`, `grace/knowledge-graph/knowledge-graph.xml`, `docs/AGENTS.md`, `VERSION`, `web/backend/pyproject.toml`, `web/backend/app/__init__.py`, `web/frontend/package.json`, `docs/HISTORY.md`.
+- **Решение:** **PATCH** — обратно совместимо по API (`JobOut` без изменений полей).

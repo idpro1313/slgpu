@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import logging
+import threading
 from pathlib import Path
 from typing import Any
 
 import docker
 from docker.errors import NotFound
+from docker.utils import parse_repository_tag
 from docker.types import DeviceRequest, LogConfig
+
+from app.services.job_log import append_job_log
 
 from app.services.compose_exec import ensure_slgpu_network
 from app.services.gpu_state import invalidate_gpu_state_cache
@@ -51,16 +55,56 @@ def _resolve_path(root: Path, p: str) -> Path:
     return (root / p).resolve()
 
 
-def _stop_container_by_name(client: docker.DockerClient, name: str, log: list[str]) -> None:
+def _stop_container_by_name(
+    client: docker.DockerClient, name: str, log: list[str], log_lock: threading.Lock | None
+) -> None:
     try:
         c = client.containers.get(name)
         c.stop(timeout=20)
         c.remove()
-        log.append(f"[slot] removed {name}")
+        append_job_log(log, log_lock, f"[slot] removed {name}")
     except NotFound:
         pass
     except docker.errors.DockerException as exc:
-        log.append(f"[slot] stop {name}: {exc}")
+        append_job_log(log, log_lock, f"[slot] stop {name}: {exc}")
+
+
+def _docker_pull_with_log(
+    client: docker.DockerClient, image: str, log: list[str], log_lock: threading.Lock | None
+) -> None:
+    """Stream ``docker pull`` into job log (``containers.run`` does not show layer progress)."""
+
+    try:
+        repository, tag = parse_repository_tag(image)
+    except (TypeError, ValueError):
+        repository, tag = image, None
+    append_job_log(log, log_lock, f"[slot] docker pull: {image}")
+    try:
+        stream = client.api.pull(
+            repository, tag=tag or "latest", stream=True, decode=True
+        )
+    except (docker.errors.DockerException, TypeError) as exc:
+        append_job_log(log, log_lock, f"[docker] pull init: {exc}")
+        return
+    try:
+        for chunk in stream:
+            if not chunk or not isinstance(chunk, dict):
+                continue
+            st = (chunk.get("status") or "").strip()
+            layer_id = (chunk.get("id") or "")[:12]
+            prog = chunk.get("progress")
+            if isinstance(prog, str) and prog.strip():
+                line = f"{st} {layer_id} {prog.strip()}".strip()
+            else:
+                pd = chunk.get("progressDetail")
+                if isinstance(pd, dict) and pd.get("total") and pd.get("current") is not None:
+                    line = f"{st} {layer_id} {pd.get('current')}/{pd.get('total')}"
+                else:
+                    line = f"{st} {layer_id}".strip() if (st or layer_id) else ""
+            if line:
+                append_job_log(log, log_lock, f"[docker] {line[:500]}")
+    except (docker.errors.DockerException, OSError) as exc:
+        append_job_log(log, log_lock, f"[docker] pull: {str(exc)[:1000]}")
 
 
 def _ensure_named_volume(client: docker.DockerClient, name: str) -> None:
@@ -80,14 +124,12 @@ async def run_slot_docker(
     gpu_indices: list[int],
     tp: int | None,
     log: list[str],
+    log_lock: threading.Lock | None = None,
 ) -> dict[str, Any]:
     """Start one slot; returns ``{ok, container_id, container_name, error}``."""
     from asyncio import to_thread
 
-    err_net: list[str] = []
-    await ensure_slgpu_network(err_net)
-    for line in err_net:
-        log.append(line)
+    await ensure_slgpu_network(log, log_lock=log_lock)
     return await to_thread(
         _run_slot_sync,
         root,
@@ -98,6 +140,7 @@ async def run_slot_docker(
         gpu_indices,
         tp,
         log,
+        log_lock,
     )
 
 
@@ -110,6 +153,7 @@ def _run_slot_sync(
     gpu_indices: list[int],
     tp: int | None,
     log: list[str],
+    log_lock: threading.Lock | None,
 ) -> dict[str, Any]:
     cname = slot_container_name(engine, slot_key)
     merged0 = sync_merged_flat()
@@ -130,7 +174,7 @@ def _run_slot_sync(
     except docker.errors.DockerException as exc:
         return {"ok": False, "error": f"docker: {exc}", "container_id": None, "container_name": cname}
 
-    _stop_container_by_name(client, cname, log)
+    _stop_container_by_name(client, cname, log, log_lock)
 
     models = _resolve_path(root, str(merged.get("MODELS_DIR", "./data/models")))
     serve = (root / "scripts" / "serve.sh").resolve()
@@ -157,6 +201,8 @@ def _run_slot_sync(
         aliases = [engine]
     else:
         aliases = [f"{engine}-{slot_key}"]
+
+    _docker_pull_with_log(client, image, log, log_lock)
 
     log_config = LogConfig(type="json-file", config={"max-size": "100m", "max-file": "5"})
     try:
@@ -190,12 +236,16 @@ def _run_slot_sync(
         net = client.networks.get("slgpu")
         net.connect(container, aliases=aliases)
     except NotFound as exc:
-        _stop_container_by_name(client, cname, log)
+        _stop_container_by_name(client, cname, log, log_lock)
         return {"ok": False, "error": f"network slgpu: {exc}", "container_id": None, "container_name": cname}
     except docker.errors.DockerException as exc:
-        log.append(f"[slot] network connect warning: {exc}")
+        append_job_log(log, log_lock, f"[slot] network connect warning: {exc}")
     short = f"{cid[:12]}…" if cid else "?"
-    log.append(f"[slot] up {cname} id={short} image={image!r} port={host_api_port} gpus={gpu_indices}")
+    append_job_log(
+        log,
+        log_lock,
+        f"[slot] up {cname} id={short} image={image!r} port={host_api_port} gpus={gpu_indices}",
+    )
     invalidate_gpu_state_cache()
     from app.services.gpu_availability import invalidate_host_gpu_cache
 
@@ -208,9 +258,9 @@ def _run_slot_sync(
     }
 
 
-def stop_slot_sync(cname: str, log: list[str]) -> int:
+def stop_slot_sync(cname: str, log: list[str], log_lock: threading.Lock | None = None) -> int:
     client = docker.from_env()
-    _stop_container_by_name(client, cname, log)
+    _stop_container_by_name(client, cname, log, log_lock)
     invalidate_gpu_state_cache()
     from app.services.gpu_availability import invalidate_host_gpu_cache
 
@@ -218,10 +268,12 @@ def stop_slot_sync(cname: str, log: list[str]) -> int:
     return 0
 
 
-def stop_containers_for_slot_key_sync(slot_key: str, log: list[str]) -> int:
+def stop_containers_for_slot_key_sync(
+    slot_key: str, log: list[str], log_lock: threading.Lock | None = None
+) -> int:
     """Stop all containers with ``com.develonica.slgpu.slot`` label; fallback to name patterns."""
     client = docker.from_env()
-    if not _ping(client, log):
+    if not _ping(client, log, log_lock):
         return 1
     label = f"{_LABEL_SLOT}={slot_key}"
     try:
@@ -233,14 +285,16 @@ def stop_containers_for_slot_key_sync(slot_key: str, log: list[str]) -> int:
                     "[slot_runtime][stop_containers_for_slot_key_sync][BLOCK_REMOVED] name=%s",
                     c.name,
                 )
-                log.append(f"[slot] removed labeled {c.name or c.id[:12]}")
+                append_job_log(
+                    log, log_lock, f"[slot] removed labeled {c.name or c.id[:12]}"
+                )
             except docker.errors.DockerException as exc:
-                log.append(f"[slot] remove {c.name}: {exc}")
+                append_job_log(log, log_lock, f"[slot] remove {c.name}: {exc}")
     except docker.errors.DockerException as exc:
-        log.append(f"[slot] list: {exc}")
+        append_job_log(log, log_lock, f"[slot] list: {exc}")
     for eng in ("vllm", "sglang"):
         cname = slot_container_name(eng, slot_key)
-        _stop_container_by_name(client, cname, log)
+        _stop_container_by_name(client, cname, log, log_lock)
     invalidate_gpu_state_cache()
     from app.services.gpu_availability import invalidate_host_gpu_cache
 
@@ -248,10 +302,10 @@ def stop_containers_for_slot_key_sync(slot_key: str, log: list[str]) -> int:
     return 0
 
 
-def _ping(client: docker.DockerClient, log: list[str]) -> bool:
+def _ping(client: docker.DockerClient, log: list[str], log_lock: threading.Lock | None) -> bool:
     try:
         client.ping()
         return True
     except docker.errors.DockerException as exc:
-        log.append(f"[slot] docker: {exc}")
+        append_job_log(log, log_lock, f"[slot] docker: {exc}")
         return False
