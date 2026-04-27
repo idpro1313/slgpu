@@ -140,11 +140,12 @@
         <fn-sync_merged_flat PURPOSE="Read-only SQLite snapshot всех ключей стека" />
         <fn-write_compose_service_env_file PURPOSE="Снимок env для docker compose monitoring/proxy в ${WEB_DATA_DIR}/.slgpu/compose-service.env" />
         <fn-render_monitoring_configs PURPOSE="string.Template подстановка из БД в *.tmpl → ${WEB_DATA_DIR}/.slgpu/monitoring/{prometheus.yml,loki-config.yaml,promtail-config.yml,datasource.yml}; в шаблонах НЕ должно быть буквальных ${VAR} в комментариях (substitute не различает комментарий и тело — упадёт KeyError)" />
-        <fn-STACK_KEY_REGISTRY PURPOSE="Каноничный реестр всех ключей стека (group/required_for/allow_empty/is_secret); dynamic группа `network` (5.2.0)" />
+        <fn-STACK_KEY_REGISTRY PURPOSE="Каноничный реестр всех ключей стека (group/required_for/allow_empty/is_secret/ui_hidden — 6.0.2: listen LLM в контейнере скрыты в UI)" />
         <fn-validate_required PURPOSE="Возвращает missing keys для scope (web_up/monitoring_up/proxy_up/llm_slot/...)" />
         <fn-raise_if_missing PURPOSE="HTTP 409 missing_stack_params в API при недостающих ключах" />
         <export-app_config_install PURPOSE="POST /api/v1/app-config/install: импорт configs/main.env + пресетов с диска в БД" />
         <export-app_config_missing PURPOSE="GET /api/v1/app-config/missing[?scope=...] (5.2.0)" />
+        <fn-presentation_stack PURPOSE="6.0.2: фильтрует ключи LISTEN-копий из ответа API; merge — apply_llm_listen_derived_defaults" />
       </annotations>
     </M-CONFIG>
 

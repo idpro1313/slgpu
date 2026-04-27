@@ -318,6 +318,8 @@ export interface AppConfigStack {
     is_secret: boolean;
     allow_empty: boolean;
     required_for: string[];
+    /** Backend: не показывать строку отдельно (значение выводится из других ключей стека). */
+    ui_hidden?: boolean;
   }>;
 }
 

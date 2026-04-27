@@ -73,6 +73,8 @@ class KeyMeta:
     allow_empty: bool
     is_secret: bool
     required_for: frozenset[StackScope]
+    # Не показывать отдельной строкой в «Настройки» — значение подставляется из LLM_API_* см. env_key_aliases
+    ui_hidden: bool = False
 
 
 def _e(
@@ -81,6 +83,7 @@ def _e(
     description: str,
     *req: str,
     allow_empty: bool = False,
+    ui_hidden: bool = False,
 ) -> KeyMeta:
     return KeyMeta(
         key=key,
@@ -89,6 +92,7 @@ def _e(
         allow_empty=allow_empty,
         is_secret=is_secret_key(key),
         required_for=_scopes(*req) if req else frozenset(),
+        ui_hidden=ui_hidden,
     )
 
 
@@ -223,12 +227,48 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
     "TOKENIZER_MODE": _e("TOKENIZER_MODE", "inference", "vLLM --tokenizer-mode (auto / slow / mistral).", *S_LLM, *S_ALL_COMPOSE, "fix_perms", allow_empty=True),
     "ATTENTION_BACKEND": _e("ATTENTION_BACKEND", "inference", "vLLM --attention-backend (FLASHINFER_MLA_SPARSE и др.). Пусто — не передавать.", *S_LLM, *S_ALL_COMPOSE, "fix_perms", allow_empty=True),
     "NVIDIA_VISIBLE_DEVICES": _e("NVIDIA_VISIBLE_DEVICES", "inference", "Маска видимых GPU контейнеру (0,1,2,3 / 0,1,…,7). Пусто — драйвер решает.", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
-    "VLLM_HOST": _e("VLLM_HOST", "inference", "Адрес listen HTTP сервера vLLM в контейнере.", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
-    "VLLM_PORT": _e("VLLM_PORT", "inference", "Порт vLLM **внутри** контейнера (mapping LLM_API_PORT:VLLM_PORT).", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
+    "VLLM_HOST": _e(
+        "VLLM_HOST",
+        "inference",
+        "Listen vLLM в контейнере; по умолчанию = LLM_API_BIND (дубль в UI скрыт).",
+        *S_LLM,
+        *S_ALL_COMPOSE,
+        "fix_perms",
+        allow_empty=True,
+        ui_hidden=True,
+    ),
+    "VLLM_PORT": _e(
+        "VLLM_PORT",
+        "inference",
+        "Порт vLLM внутри контейнера (по умолчанию как LLM_API_PORT; типичный mapping 8111:8111). Дубль в UI скрыт.",
+        *S_LLM,
+        *S_ALL_COMPOSE,
+        "fix_perms",
+        allow_empty=True,
+        ui_hidden=True,
+    ),
     "VLLM_LOGGING_LEVEL": _e("VLLM_LOGGING_LEVEL", "inference", "Уровень логов Python в vLLM-контейнере (DEBUG / INFO / WARNING).", *S_LLM, *S_ALL_COMPOSE, "fix_perms", allow_empty=True),
     "VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS": _e("VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS", "inference", "vLLM memory profiler — оценка CUDA graphs при старте (0/1).", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
-    "SGLANG_LISTEN_HOST": _e("SGLANG_LISTEN_HOST", "inference", "Адрес listen SGLang в контейнере.", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
-    "SGLANG_LISTEN_PORT": _e("SGLANG_LISTEN_PORT", "inference", "Порт SGLang внутри контейнера (mapping LLM_API_PORT_SGLANG:SGLANG_LISTEN_PORT).", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
+    "SGLANG_LISTEN_HOST": _e(
+        "SGLANG_LISTEN_HOST",
+        "inference",
+        "Listen SGLang в контейнере; по умолчанию = LLM_API_BIND (дубль в UI скрыт).",
+        *S_LLM,
+        *S_ALL_COMPOSE,
+        "fix_perms",
+        allow_empty=True,
+        ui_hidden=True,
+    ),
+    "SGLANG_LISTEN_PORT": _e(
+        "SGLANG_LISTEN_PORT",
+        "inference",
+        "Порт SGLang внутри контейнере (по умолчанию как LLM_API_PORT_SGLANG). Дубль в UI скрыт.",
+        *S_LLM,
+        *S_ALL_COMPOSE,
+        "fix_perms",
+        allow_empty=True,
+        ui_hidden=True,
+    ),
     "SGLANG_TRUST_REMOTE_CODE": _e("SGLANG_TRUST_REMOTE_CODE", "inference", "1 = SGLang --trust-remote-code.", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
     "SGLANG_MEM_FRACTION_STATIC": _e("SGLANG_MEM_FRACTION_STATIC", "inference", "SGLang --mem-fraction-static (0.7–0.95).", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
     "SGLANG_CUDA_GRAPH_MAX_BS": _e("SGLANG_CUDA_GRAPH_MAX_BS", "inference", "SGLang --cuda-graph-max-bs (1 / 2 / 4 / 8 / 16 / 32).", *S_LLM, *S_ALL_COMPOSE, "fix_perms", allow_empty=True),
@@ -401,6 +441,7 @@ def registry_to_public() -> list[dict[str, Any]]:
             "is_secret": m.is_secret,
             "allow_empty": m.allow_empty,
             "required_for": sorted(m.required_for),
+            "ui_hidden": m.ui_hidden,
         }
         for m in STACK_KEY_REGISTRY.values()
     ]

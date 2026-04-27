@@ -1996,3 +1996,11 @@
 - **Почему:** Запрос: «мониторинг отдельно, прокси стек — отдельно» — раньше `native.monitoring.up` последовательно поднимала proxy-compose.
 - **Решение:** PATCH 6.0.1 — поведение API/jobs; пользователь поднимает **LiteLLM Proxy** отдельной кнопкой/задачей, если нужны Langfuse/LiteLLM.
 
+## Фаза 6.0.2 (слушалки LLM в UI без дубликатов)
+
+### Что: один источник правды для типичного 1:1 host↔контейнер
+
+- **Что:** **`KeyMeta.ui_hidden`** (`stack_registry.py`); ключи **`VLLM_HOST`/`VLLM_PORT`/`SGLANG_LISTEN_*`** скрыты в «Настройки», в ответе **`stack`** убраны через **`presentation_stack`**; **`allow_empty=true`**; подстановка — **`apply_llm_listen_derived_defaults`** после **`apply_vllm_aliases_to_merged`** (`env_key_aliases.py`). Фронт: фильтр в **`rowsFromServer`**, флаг **`registry[].ui_hidden`**, **`buildStackPatch`** не шлёт `null` для отсутствующих скрытых ключей при сохранении. Документы (**`README.md`**, **`docs/AGENTS.md`**, **`web/CONTRACT.md`**), GRACE (**`grace/knowledge-graph/knowledge-graph.xml`**, **`grace/verification/verification-plan.xml`**, scenario **41**).
+- **Почему:** В UI трижды отображался один номер порта/bind (8111 / 0.0.0.0): хостовые параметры против внутриконтейнерных переменных vLLM и SGLang.
+- **Решение:** PATCH **6.0.2**. Редактировать остаются **`LLM_API_BIND`**, **`LLM_API_PORT`**, **`LLM_API_PORT_SGLANG`**; рантайм заполняет внутриконтейнерные listen если пусто. Явные значения **`VLLM_*`/`SGLANG_LISTEN_*`** в БД сохраняют действие но не показываются в форме.
+

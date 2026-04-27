@@ -88,7 +88,7 @@ const STACK_GROUP_META: Record<StackGroupId, { title: string; subtitle: string }
   inference: {
     title: "5. Инференс — LLM API, движок, vLLM, SGLang, кеши",
     subtitle:
-      "Движок (vllm|sglang), модель/ревизия, host bind и опубликованные порты LLM API, авто-диапазоны портов слотов, параметры vLLM (TP/MAX_MODEL_LEN/GPU_MEM_UTIL/KV/parsers/...) и SGLang.",
+      "Движок (vllm|sglang), модель/ревизия, LLM_API_BIND и хост-порты (vLLM / SGLang); listen внутри контейнеров подставляется из них автоматически — отдельные поля в UI скрыты. Далее авто-диапазоны слотов, параметры vLLM и SGLang.",
   },
   monitoring: {
     title: "6. Мониторинг — Prometheus, Grafana, Loki, Promtail, DCGM, NodeExporter",
@@ -156,6 +156,7 @@ function rowsFromServer(data: AppConfigStack): StackRow[] {
   // не сортирует — отдаёт порядок _STACK_KEY_REGISTRY). Поэтому идём по нему
   // как есть: секции 1..8 и внутри секции — порядок ключей из main.env.
   for (const meta of registry) {
+    if (meta.ui_hidden) continue;
     const k = meta.key;
     const isSecret = meta.is_secret;
     const value = isSecret ? "" : (stack[k] ?? "");
@@ -214,11 +215,16 @@ function stackGroupId(row: StackRow, regByKey: Map<string, RegistryEntry>): Stac
   return "other";
 }
 
+/** Ключи с ui_hidden не участвуют в форме; при сохранении не отправляют null для строк, отсутствующих в UI. */
 function buildStackPatch(
   data: AppConfigStack | undefined,
   rows: StackRow[],
+  registry: RegistryEntry[] | undefined,
 ): { stack?: Record<string, string | null>; secrets?: Record<string, string | null> } | null {
   if (!data) return null;
+  const hiddenKeys = new Set(
+    (registry ?? []).filter((e) => e.ui_hidden === true).map((e) => e.key.trim()),
+  );
   const norm = rows
     .map((r) => ({ ...r, k: r.key.trim() }))
     .filter((r) => r.k.length > 0);
@@ -247,7 +253,10 @@ function buildStackPatch(
   // Удалённые в форме ключи (отсутствуют в норме, но были в БД) — null.
   const formStackKeys = new Set(stackRows.map((r) => r.k));
   for (const k of existingStackKeys) {
-    if (!formStackKeys.has(k)) stack[k] = null;
+    if (!formStackKeys.has(k)) {
+      if (hiddenKeys.has(k)) continue;
+      stack[k] = null;
+    }
   }
 
   // secrets: пустое значение = «не менять»; ввод нового — апсёрт; удаление строки = null.
@@ -438,7 +447,7 @@ export function SettingsPage() {
     event.preventDefault();
     setCfgMessage(null);
     setCfgError(null);
-    const patch = buildStackPatch(appStack.data, stackRows);
+    const patch = buildStackPatch(appStack.data, stackRows, appStack.data.registry);
     if (!patch) {
       setCfgError("Нет изменений для сохранения (или данные ещё не загружены).");
       return;
