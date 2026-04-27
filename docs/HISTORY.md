@@ -1674,6 +1674,13 @@
 - **Файлы:** `web/backend/app/services/env_key_aliases.py`, `stack_config.py`, `llm_env.py`, `presets.py`, `env_files.py`, `native_jobs.py`; `scripts/serve.sh`, `_lib.sh`, `monitoring_fix_permissions.sh`, `cmd_monitoring.sh`; `docker/docker-compose.llm.yml`, `docker/docker-compose.monitoring.yml`; `main.env`, `main.env.example`, `examples/presets/*.env`; `web/frontend` `Presets.tsx`, `Settings.tsx`; `README.md`, `configs/models/README.md`; `VERSION`, версии web/backend, `grace/knowledge-graph/knowledge-graph.xml`, `docs/HISTORY.md`.
 - **Решение:** **MINOR 4.2.0** — обратная совместимость через fallback в скриптах, compose и Python.
 
+### 4.2.3: `native.monitoring.*` — временный env не в `data/`
+
+- **Что:** `_write_tmp_monitoring_env()` создаёт файл через `tempfile.mkstemp()` без `dir=…/data` (системный `TMPDIR`, обычно `/tmp` в контейнере web).
+- **Почему:** На хосте каталог `data/` часто принадлежит root или другому UID после entrypoint/chown; запись `slgpu-mon-*.env` в `data/` давала **`[Errno 13] Permission denied`** и падали **`native.monitoring.down`** / up / restart.
+- **Файлы:** `web/backend/app/services/native_jobs.py`, `VERSION`, версии web/backend, `docs/HISTORY.md`.
+- **Решение:** **PATCH** — семантика compose не меняется, только путь одноразового `--env-file`.
+
 ### 4.2.2: Пресеты — канонические ключи в `parameters` и миграция БД
 
 - **Что:** `presentation_preset_parameters()`, `migrate_preset_parameters_to_canonical_if_needed()`; вызов при `GET /presets`, `GET /presets/{id}`, `POST .../export`; нормализация при create/patch/clone; `export_preset_to_file` пишет канонические имена.

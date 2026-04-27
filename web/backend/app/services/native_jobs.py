@@ -155,8 +155,11 @@ def _mkdir_data_dirs(
             append_job_log(log, log_lock, f"[mkdir] {k}={p} err={exc}")
 
 
-def _write_tmp_monitoring_env(root: Path, merged: dict[str, str]) -> Path:
-    fd, name = tempfile.mkstemp(prefix="slgpu-mon-", suffix=".env", dir=str(root / "data"))
+def _write_tmp_monitoring_env(merged: dict[str, str]) -> Path:
+    # Ephemeral file for a single `docker compose --env-file` call. Must not live under
+    # repo `data/`: on the host that tree is often root-owned or chowned to another
+    # UID than the web app, which causes EACCES on mkstemp.
+    fd, name = tempfile.mkstemp(prefix="slgpu-mon-", suffix=".env")
     os.close(fd)
     p = Path(name)
     body = "\n".join(f"{k}={v}" for k, v in sorted(merged.items()) if v is not None) + "\n"
@@ -523,7 +526,7 @@ async def _native_monitoring_up(log: list[str], log_lock: threading.Lock) -> int
     )
     _mkdir_data_dirs(root, merged, log, log_lock)
     await _ensure_config_files_async(root, log, log_lock)
-    env_file = _write_tmp_monitoring_env(root, merged)
+    env_file = _write_tmp_monitoring_env(merged)
     try:
         await compose_exec.ensure_slgpu_network(log, log_lock)
         await _monitoring_bootstrap(root, env_file, log, log_lock)
@@ -540,7 +543,7 @@ async def _native_monitoring_down(log: list[str], log_lock: threading.Lock) -> i
     settings = get_settings()
     root = settings.slgpu_root
     merged = sync_merged_flat()
-    env_file = _write_tmp_monitoring_env(root, merged)
+    env_file = _write_tmp_monitoring_env(merged)
     try:
         c, o, e = await compose_exec.compose_monitoring(root, env_file, "-f", _MON_YML, "down")
         append_job_log(log, log_lock, o + e)
@@ -562,7 +565,7 @@ async def _native_monitoring_restart(log: list[str], log_lock: threading.Lock) -
         },
     )
     await _ensure_config_files_async(root, log, log_lock)
-    env_file = _write_tmp_monitoring_env(root, merged)
+    env_file = _write_tmp_monitoring_env(merged)
     try:
         await compose_exec.ensure_slgpu_network(log, log_lock)
         c, o, e = await compose_exec.compose_monitoring(
