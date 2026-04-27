@@ -127,7 +127,7 @@ async def docker_network_inspect(name: str) -> tuple[int, str, str]:
     )
 
 
-async def docker_network_create_slgpu() -> tuple[int, str, str]:
+async def docker_network_create(name: str, project_label: str) -> tuple[int, str, str]:
     proc = await asyncio.create_subprocess_exec(
         "docker",
         "network",
@@ -135,10 +135,10 @@ async def docker_network_create_slgpu() -> tuple[int, str, str]:
         "--driver",
         "bridge",
         "--label",
-        "com.docker.compose.project=slgpu",
+        f"com.docker.compose.project={project_label}",
         "--label",
-        "com.docker.compose.network=slgpu",
-        "slgpu",
+        f"com.docker.compose.network={name}",
+        name,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         env=_clean_env(),
@@ -150,17 +150,20 @@ async def docker_network_create_slgpu() -> tuple[int, str, str]:
 
 
 async def ensure_slgpu_network(
-    log: list[str], log_lock: threading.Lock | None = None
+    log: list[str],
+    log_lock: threading.Lock | None = None,
+    *,
+    network_name: str,
+    project_label: str,
 ) -> None:
-    code, out, err = await docker_network_inspect("slgpu")
+    code, _out, _err = await docker_network_inspect(network_name)
     if code == 0:
-        # Labels must match (simplified check via inspect json would be heavy; trust if exists)
-        append_job_log(log, log_lock, "[network] slgpu exists")
+        append_job_log(log, log_lock, f"[network] {network_name} exists")
         return
-    c2, _, e2 = await docker_network_create_slgpu()
+    c2, _, e2 = await docker_network_create(network_name, project_label)
     if c2 != 0:
-        raise RuntimeError(f"docker network create slgpu failed: {e2}")
-    append_job_log(log, log_lock, "[network] created slgpu")
+        raise RuntimeError(f"docker network create {network_name} failed: {e2}")
+    append_job_log(log, log_lock, f"[network] created {network_name}")
 
 
 async def run_subprocess_logged(

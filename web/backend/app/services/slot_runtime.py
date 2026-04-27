@@ -130,7 +130,15 @@ async def run_slot_docker(
     """Start one slot; returns ``{ok, container_id, container_name, error}``."""
     from asyncio import to_thread
 
-    await ensure_slgpu_network(log, log_lock=log_lock)
+    merged0 = sync_merged_flat()
+    network_name = str(merged0.get("SLGPU_NETWORK_NAME") or "slgpu")
+    project_label = str(merged0.get("WEB_COMPOSE_PROJECT_INFER") or "slgpu")
+    await ensure_slgpu_network(
+        log,
+        log_lock=log_lock,
+        network_name=network_name,
+        project_label=project_label,
+    )
     return await to_thread(
         _run_slot_sync,
         root,
@@ -240,15 +248,15 @@ def _run_slot_sync(
             return {"ok": False, "error": str(exc)[:800], "container_id": None, "container_name": cname}
 
         cid = container.id or ""
-        # Connect to slgpu with DNS aliases
+        network_name = str(merged.get("SLGPU_NETWORK_NAME") or "slgpu")
         try:
-            net = client.networks.get("slgpu")
+            net = client.networks.get(network_name)
             net.connect(container, aliases=aliases)
         except NotFound as exc:
             _stop_container_by_name(client, cname, log, log_lock)
             return {
                 "ok": False,
-                "error": f"network slgpu: {exc}",
+                "error": f"network {network_name}: {exc}",
                 "container_id": None,
                 "container_name": cname,
             }

@@ -2,7 +2,8 @@ name: slgpu-web
 
 # Single-container web control plane for the slgpu LLM bench.
 #
-# Project directory for `docker compose` — корень репозитория. `--env-file`: `configs/main.env` (обязателен).
+# Project directory for `docker compose` — корень репозитория. `--env-file`: `configs/bootstrap.env`
+# (минимальный bootstrap; полный шаблон импорта в БД — `configs/main.env`, его читает только UI).
 # What this compose file mounts and why:
 #   - SLGPU_HOST_REPO (host) -> SLGPU_HOST_REPO (container, тот же абсолютный путь!): репо CLI, configs, jobs.
 #       Это критично для команд, которые из web вызывают `./slgpu monitoring up`: docker compose внутри
@@ -15,25 +16,25 @@ name: slgpu-web
 #   - MODELS_DIR (host) -> $SLGPU_HOST_REPO/data/models: веса (default ./data/models)
 #   - /var/run/docker.sock so backend can read container statuses (read-only)
 #
-# It joins the existing `slgpu` bridge network (declared by
-# `docker/docker-compose.llm.yml` as `name: slgpu`) so DNS to vllm/sglang/litellm by
-# service name works when the upstream stack is up.
+# It joins the external `${SLGPU_NETWORK_NAME}` bridge network (создаётся
+# `./slgpu web up` через `slgpu_ensure_slgpu_network`) — так slgpu-web видит
+# DNS-имена LLM-слотов / monitoring / proxy в общей сети.
 # Build: context `./web`, Dockerfile — `docker/Dockerfile.web` (корень репо = --project-directory).
 
 services:
   slgpu-web:
-    image: slgpu-web:dev
+    image: ${WEB_DOCKER_IMAGE}
     build:
       context: ./web
       dockerfile: ../docker/Dockerfile.web
-    container_name: slgpu-web
+    container_name: ${WEB_CONTAINER_NAME}
     restart: unless-stopped
     # user: not set — entrypoint starts as root, chown /data and data/models|presets mounts, then runs app as 10001
     # working_dir НЕ переопределяем: uvicorn запускается из WORKDIR `/srv/app` (Dockerfile.web),
     # где лежит пакет `app/`. Иначе — `ModuleNotFoundError: No module named 'app'`.
     # Для CLI-вызовов backend сам устанавливает cwd=settings.slgpu_root в jobs.py.
     environment:
-      WEB_APP_NAME: slgpu-web
+      WEB_APP_NAME: ${WEB_CONTAINER_NAME}
       WEB_LOG_LEVEL: ${WEB_LOG_LEVEL}
       WEB_SLGPU_ROOT: ${SLGPU_HOST_REPO}
       WEB_DATA_DIR: /data
@@ -42,13 +43,14 @@ services:
       WEB_DOCKER_SOCKET: unix:///var/run/docker.sock
       WEB_MONITORING_HTTP_HOST: ${WEB_MONITORING_HTTP_HOST}
       WEB_LLM_HTTP_HOST: ${WEB_LLM_HTTP_HOST}
+      WEB_INTERNAL_PORT: ${WEB_INTERNAL_PORT}
     volumes:
       - ${SLGPU_HOST_REPO}:${SLGPU_HOST_REPO}
       - ${WEB_DATA_DIR}:/data
       - ${MODELS_DIR}:${SLGPU_HOST_REPO}/data/models:rw
       - /var/run/docker.sock:/var/run/docker.sock:ro
     ports:
-      - "${WEB_BIND}:${WEB_PORT}:8000"
+      - "${WEB_BIND}:${WEB_PORT}:${WEB_INTERNAL_PORT}"
     networks:
       - slgpu
     # GPU в slgpu-web не обязателен: блок «Сервер» опрашивает железо хоста через docker run
@@ -68,7 +70,7 @@ services:
           "CMD",
           "python",
           "-c",
-          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz').read()",
+          "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.environ.get('WEB_INTERNAL_PORT', '8000') + '/healthz').read()",
         ]
       interval: 30s
       timeout: 5s
@@ -83,4 +85,4 @@ services:
 networks:
   slgpu:
     external: true
-    name: slgpu
+    name: ${SLGPU_NETWORK_NAME}

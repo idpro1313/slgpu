@@ -34,6 +34,7 @@ from app.services.slot_runtime import (
     stop_containers_for_slot_key_sync,
 )
 from app.services.stack_config import (
+    render_monitoring_configs,
     resolve_path_relative,
     sync_merged_flat,
     write_compose_service_env_file,
@@ -90,15 +91,31 @@ async def _native_log_poller(
         except TimeoutError:
             await _flush_native_job_stream(job_id, log, lock, job_kind)
 
-_LL_YML = "docker/docker-compose.llm.yml"
 _MON_YML = "docker/docker-compose.monitoring.yml"
 _PROXY_YML = "docker/docker-compose.proxy.yml"
 
 _CONFIG_FILES: list[tuple[str, str]] = [
-    ("configs/monitoring/loki/loki-config.yaml", "configs/monitoring/loki/loki-config.yaml"),
-    ("configs/monitoring/promtail/promtail-config.yml", "configs/monitoring/promtail/promtail-config.yml"),
-    ("configs/monitoring/prometheus/prometheus.yml", "configs/monitoring/prometheus/prometheus.yml"),
-    ("configs/monitoring/prometheus/prometheus-alerts.yml", "configs/monitoring/prometheus/prometheus-alerts.yml"),
+    # Templates rendered into ${WEB_DATA_DIR}/.slgpu/monitoring/ via render_monitoring_configs.
+    (
+        "configs/monitoring/loki/loki-config.yaml.tmpl",
+        "configs/monitoring/loki/loki-config.yaml.tmpl",
+    ),
+    (
+        "configs/monitoring/promtail/promtail-config.yml.tmpl",
+        "configs/monitoring/promtail/promtail-config.yml.tmpl",
+    ),
+    (
+        "configs/monitoring/prometheus/prometheus.yml.tmpl",
+        "configs/monitoring/prometheus/prometheus.yml.tmpl",
+    ),
+    (
+        "configs/monitoring/prometheus/prometheus-alerts.yml",
+        "configs/monitoring/prometheus/prometheus-alerts.yml",
+    ),
+    (
+        "configs/monitoring/grafana/provisioning/datasources/datasource.yml.tmpl",
+        "configs/monitoring/grafana/provisioning/datasources/datasource.yml.tmpl",
+    ),
     ("configs/monitoring/langfuse/minio-bucket-init.sh", "configs/monitoring/langfuse/minio-bucket-init.sh"),
     ("configs/monitoring/litellm/init-litellm-db.sh", "configs/monitoring/litellm/init-litellm-db.sh"),
     ("configs/monitoring/litellm/litellm-entrypoint.sh", "configs/monitoring/litellm/litellm-entrypoint.sh"),
@@ -536,6 +553,8 @@ async def _native_monitoring_up(log: list[str], log_lock: threading.Lock) -> int
     )
     _mkdir_data_dirs(root, merged, log, log_lock)
     await _ensure_config_files_async(root, log, log_lock)
+    rendered = render_monitoring_configs(root, merged)
+    append_job_log(log, log_lock, f"[render] monitoring configs -> {rendered}")
     env_file = write_compose_service_env_file(root, merged)
     append_job_log(
         log,
@@ -548,7 +567,12 @@ async def _native_monitoring_up(log: list[str], log_lock: threading.Lock) -> int
         f"langfuse={merged.get('LANGFUSE_BIND')}:{merged.get('LANGFUSE_PORT')} "
         f"litellm={merged.get('LITELLM_BIND')}:{merged.get('LITELLM_PORT')}",
     )
-    await compose_exec.ensure_slgpu_network(log, log_lock)
+    await compose_exec.ensure_slgpu_network(
+        log,
+        log_lock,
+        network_name=str(merged.get("SLGPU_NETWORK_NAME") or "slgpu"),
+        project_label=str(merged.get("WEB_COMPOSE_PROJECT_MONITORING") or "slgpu-monitoring"),
+    )
     await _monitoring_bootstrap(root, env_file, log, log_lock)
     c, o, e = await compose_exec.compose_monitoring(
         root, env_file, "-f", _MON_YML, "up", "-d", "--force-recreate", "--remove-orphans"
@@ -604,8 +628,15 @@ async def _native_monitoring_restart(log: list[str], log_lock: threading.Lock) -
         merged,
     )
     await _ensure_config_files_async(root, log, log_lock)
+    rendered = render_monitoring_configs(root, merged)
+    append_job_log(log, log_lock, f"[render] monitoring configs -> {rendered}")
     env_file = write_compose_service_env_file(root, merged)
-    await compose_exec.ensure_slgpu_network(log, log_lock)
+    await compose_exec.ensure_slgpu_network(
+        log,
+        log_lock,
+        network_name=str(merged.get("SLGPU_NETWORK_NAME") or "slgpu"),
+        project_label=str(merged.get("WEB_COMPOSE_PROJECT_MONITORING") or "slgpu-monitoring"),
+    )
     c, o, e = await compose_exec.compose_monitoring(
         root, env_file, "-f", _MON_YML, "up", "-d", "--force-recreate", "--remove-orphans"
     )
@@ -641,7 +672,12 @@ async def _native_proxy_up(log: list[str], log_lock: threading.Lock) -> int:
         f"langfuse={merged.get('LANGFUSE_BIND')}:{merged.get('LANGFUSE_PORT')} "
         f"litellm={merged.get('LITELLM_BIND')}:{merged.get('LITELLM_PORT')}",
     )
-    await compose_exec.ensure_slgpu_network(log, log_lock)
+    await compose_exec.ensure_slgpu_network(
+        log,
+        log_lock,
+        network_name=str(merged.get("SLGPU_NETWORK_NAME") or "slgpu"),
+        project_label=str(merged.get("WEB_COMPOSE_PROJECT_PROXY") or "slgpu-proxy"),
+    )
     c, o, e = await compose_exec.compose_with_env_file(
         root, env_file, "-f", _PROXY_YML, "up", "-d", "--force-recreate", "--remove-orphans"
     )
@@ -686,7 +722,12 @@ async def _native_proxy_restart(log: list[str], log_lock: threading.Lock) -> int
     )
     await _ensure_config_files_async(root, log, log_lock)
     env_file = write_compose_service_env_file(root, merged)
-    await compose_exec.ensure_slgpu_network(log, log_lock)
+    await compose_exec.ensure_slgpu_network(
+        log,
+        log_lock,
+        network_name=str(merged.get("SLGPU_NETWORK_NAME") or "slgpu"),
+        project_label=str(merged.get("WEB_COMPOSE_PROJECT_PROXY") or "slgpu-proxy"),
+    )
     c, o, e = await compose_exec.compose_with_env_file(
         root, env_file, "-f", _PROXY_YML, "up", "-d", "--force-recreate", "--remove-orphans"
     )

@@ -12,8 +12,8 @@ slgpu, vllm, sglang, llm-inference, benchmark, docker-compose, gpu, h200, promet
 
 **slgpu** — стенд для сравнения движков LLM-инференса **vLLM** и **SGLang** на Linux-сервере с NVIDIA GPU.
 
-- **CLI (хост):** **`./slgpu help`** и **`./slgpu web up|down|restart|logs|build|install`**; env-файл — **`configs/main.env`**. LLM/мониторинг/proxy — из **slgpu-web** (`native.*` jobs, Docker API), не из host `./slgpu` (кроме web).
-- **Web UI — Develonica.LLM:** импорт стека: **`POST /api/v1/app-config/install`** читает **`configs/main.env`** и импортирует пресеты с диска в БД. Стек в рантайме — **только SQLite** (`stack_params`), без кодовых дефолтов и без `${VAR:-...}` в compose-YAML. Визуал в духе [`develonica.ru`](https://develonica.ru/) / [гайдлайна](https://develonica.ru/company/guideline/): **`IBM Plex Sans`**, **`Finlandica`**, палитра **`#59AFFF`** / **`#0A5AA4`**; footer — **`VERSION`** через **`/healthz`**, копирайт `Igor Yatsishen, Develonica`.
+- **CLI (хост):** **`./slgpu help`** и **`./slgpu web up|down|restart|logs|build|install`**; env-файл `docker compose` — **`configs/bootstrap.env`** (минимум для подъёма web). LLM/мониторинг/proxy — из **slgpu-web** (`native.*` jobs, Docker API), не из host `./slgpu` (кроме web).
+- **Web UI — Develonica.LLM:** импорт стека: **`POST /api/v1/app-config/install`** читает **`configs/main.env`** (это **только** шаблон импорта — backend больше не сидит БД при старте) и импортирует пресеты с диска в БД. Стек в рантайме — **только SQLite** (`stack_params`), без кодовых дефолтов и без `${VAR:-...}` в compose-YAML. Все имена сервисов / контейнеров / внутренних портов / сети / образов параметризованы через реестр (`SLGPU_NETWORK_NAME`, `WEB_DOCKER_IMAGE`, `*_SERVICE_NAME`, `*_CONTAINER_NAME`, `*_INTERNAL_PORT`); конфиги мониторинга — из `*.tmpl` в `configs/monitoring/...` рендерятся в `${WEB_DATA_DIR}/.slgpu/monitoring/` (`render_monitoring_configs`). Визуал в духе [`develonica.ru`](https://develonica.ru/) / [гайдлайна](https://develonica.ru/company/guideline/): **`IBM Plex Sans`**, **`Finlandica`**, палитра **`#59AFFF`** / **`#0A5AA4`**; footer — **`VERSION`** через **`/healthz`**, копирайт `Igor Yatsishen, Develonica`.
 - **Данные на хосте** — в **`data/`** (`data/README.md`): по умолчанию `MODELS_DIR=./data/models`, `PRESETS_DIR=./data/presets`, `WEB_DATA_DIR=./data/web`, **`WEB_BIND=0.0.0.0`**, **`WEB_MONITORING_HTTP_HOST=host.docker.internal`** (пробы из контейнера web); публичный host для ссылок в браузере — **`/api/v1/settings/public-access`**. Entrypoint web chown’ит `/data`, `…/data/models`, `…/data/presets`, `…/data/bench` под uid приложения.
 - **Модели и пресеты:** реестр в БД синхронизируется с **`MODELS_DIR/<org>/<repo>`**; **`pull_progress`** в **`GET /api/v1/models`** — активная **`native.model.pull`**. Пресеты: рабочие **`data/presets/*.env`**, эталоны **`examples/presets/`**, формат — **[`configs/models/README.md`](../configs/models/README.md)**; **UI** — CRUD, клон, **«Выгрузить в .env»** из карточки (`POST /presets/{id}/export`). В **v5.0.0** сняты **`POST /presets/sync`** и **`/import-templates`**. **Логи Docker (все слоты/мониторинг):** **`GET /api/v1/docker/containers`**, **`…/docker/containers/{id|name}/logs`**, **`/docker/engine-events`**, **`/docker/daemon-log`**; UI **`/docker-logs`**. **Логи приложения (таблица `app_log_event` в SQLite):** **`GET /api/v1/app-logs/events`**; опцион. файл `app.log` при `WEB_LOG_FILE_ENABLED`; UI **`/app-logs`**.
 - **Инференс (slots-only, 4.0.0+):** только **`native.slot.*`** и lock **`("engine","slot:{key}")`**; страница **`/runtime`** — слоты из **`GET /api/v1/runtime/snapshot`**, создание **`POST /api/v1/runtime/slots`**, GPU — **`GET /api/v1/gpu/state`**, **`/gpu/availability`**. **Лог слота:** **`GET /api/v1/runtime/slots/{key}/logs?tail=1..2000`**, в UI — выбор tail (не более 2000 строк). **Stop** при активной job — **`POST .../down?force=1`**. Нет **`native.llm.*`** и глобального lock **`("engine","runtime")`**. Лента **Задачи** / **`GET /jobs/{id}`**: для **`native.*`** при **running** лог подтягивается в БД периодически (в т.ч. **docker pull** по слоям до `containers.run`).
@@ -138,9 +138,12 @@ docs/
 scripts/
   _lib.sh, cmd_web.sh, cmd_help.sh, serve.sh, bench_openai.py, bench_load.py, …
 configs/
-  main.env (шаблон), models/ (README формата пресетов), monitoring/ …
-  monitoring/
-    prometheus/, grafana/provisioning/ (dashboards/json: slgpu-overview, sglang-*, sglangdash2; _build_sglangdash2.py),
+  bootstrap.env       - минимальный --env-file для ./slgpu web up
+  main.env            - шаблон импорта в UI (POST /app-config/install)
+  models/             - README формата пресетов
+  monitoring/         - *.tmpl (prometheus, loki, promtail, datasource) → render_monitoring_configs
+    prometheus/prometheus.yml.tmpl, loki/loki-config.yaml.tmpl, promtail/promtail-config.yml.tmpl,
+    grafana/provisioning/ (datasource.yml.tmpl + dashboards/json),
     grafana/templates/ (vllmdash2.json — ручной импорт), README.md, …
 data/bench/
   ... results/{engine}/{timestamp}/ (summary.json; локально, не в git) ...

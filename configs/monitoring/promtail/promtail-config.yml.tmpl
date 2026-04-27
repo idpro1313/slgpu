@@ -1,7 +1,6 @@
-# Promtail: Docker service discovery, чтение json-логов с хоста.
-# Требуется mount: /var/run/docker.sock, /var/lib/docker/containers:ro
-# (см. https://grafana.com/docs/loki/latest/send-data/promtail/installation/ + docker_sd).
-# Образ: grafana/promtail:2.9.8
+# Шаблон Promtail. Рендер backend'ом (render_monitoring_configs) в
+# `${WEB_DATA_DIR}/.slgpu/monitoring/promtail-config.yml`. Образ: ${PROMTAIL_IMAGE}.
+# Без хардкодов — только ${VAR}.
 server:
   http_listen_port: 9080
   grpc_listen_port: 0
@@ -10,7 +9,7 @@ positions:
   filename: /data/positions.yaml
 
 clients:
-  - url: http://loki:3100/loki/api/v1/push
+  - url: http://${LOKI_SERVICE_NAME}:${LOKI_INTERNAL_PORT}/loki/api/v1/push
 
 scrape_configs:
   - job_name: docker

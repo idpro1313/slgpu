@@ -208,6 +208,56 @@ def write_compose_service_env_file(root: Path, merged: dict[str, str]) -> Path:
     return p
 
 
+_MONITORING_RENDER_TARGETS: tuple[tuple[str, str], ...] = (
+    ("configs/monitoring/prometheus/prometheus.yml.tmpl", "prometheus.yml"),
+    ("configs/monitoring/prometheus/prometheus-alerts.yml", "prometheus-alerts.yml"),
+    ("configs/monitoring/loki/loki-config.yaml.tmpl", "loki-config.yaml"),
+    ("configs/monitoring/promtail/promtail-config.yml.tmpl", "promtail-config.yml"),
+    (
+        "configs/monitoring/grafana/provisioning/datasources/datasource.yml.tmpl",
+        "datasource.yml",
+    ),
+)
+
+
+def monitoring_configs_dir(root: Path, merged: dict[str, str] | None = None) -> Path:
+    """Каталог отрендеренных конфигов мониторинга (compose монтирует его как :ro)."""
+    m = merged if merged is not None else sync_merged_flat()
+    wdd = m["WEB_DATA_DIR"]
+    return (resolve_path_relative(root, wdd) / ".slgpu" / "monitoring").resolve()
+
+
+def _render_template_strict(text: str, mapping: dict[str, str]) -> str:
+    """Подставить ``${VAR}`` из ``mapping``; падать при пропусках (KeyError)."""
+    from string import Template
+
+    return Template(text).substitute(mapping)
+
+
+def render_monitoring_configs(root: Path, merged: dict[str, str]) -> Path:
+    """Сгенерировать конфиги мониторинга из БД в ``${WEB_DATA_DIR}/.slgpu/monitoring/``.
+
+    Вызывается перед ``monitoring up/restart`` (см. ``native_jobs.py``). Compose монтирует
+    каталог как :ro в /etc/prometheus, /etc/loki, /etc/promtail и точечно datasource.yml в Grafana.
+    Бывшие статические *.yml/*.yaml удалены из репозитория — единственный источник правды БД.
+    """
+    out_dir = monitoring_configs_dir(root, merged)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for src_rel, dst_name in _MONITORING_RENDER_TARGETS:
+        src = (root / src_rel).resolve()
+        if not src.is_file():
+            continue
+        text = src.read_text(encoding="utf-8")
+        if src.suffix == ".tmpl":
+            try:
+                text = _render_template_strict(text, merged)
+            except KeyError as exc:  # noqa: PERF203
+                missing = exc.args[0] if exc.args else "?"
+                raise MissingStackParams([str(missing)], "monitoring_up") from exc
+        (out_dir / dst_name).write_text(text, encoding="utf-8")
+    return out_dir
+
+
 def resolve_path_relative(root: Path, value: str) -> Path:
     if value.startswith("./"):
         return (root / value[2:]).resolve()
@@ -442,30 +492,6 @@ async def replace_all_params_from_flat(session, flat: dict[str, str]) -> None:
                 is_secret=is_secret_key(str(k)),
             )
         )
-
-
-async def seed_stack_params_from_main_env_if_empty(session) -> None:
-    """Если ``stack_params`` пуста и существует ``configs/main.env`` — загрузка (тесты, dev)."""
-    if await _stack_param_count(session) > 0:
-        return
-    from app.core.config import get_settings
-
-    p = get_settings().main_env_path
-    if not p.is_file():
-        return
-    try:
-        raw = p.read_text(encoding="utf-8")
-    except OSError:
-        return
-    flat = parse_dotenv_text(raw)
-    if not flat:
-        return
-    await replace_all_params_from_flat(session, flat)
-    logger.info(
-        "[stack_config][seed_stack_params_from_main_env_if_empty][BLOCK_OK] path=%s keys=%s",
-        p,
-        len(flat),
-    )
 
 
 async def upsert_stack_param(session, key: str, value: str) -> None:

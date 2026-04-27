@@ -1,20 +1,55 @@
 #!/usr/bin/env bash
 # Общие функции для slgpu (source из scripts/cmd_*.sh).
 # ВНИМАНИЕ: не вызывать set -e здесь — его задают вызывающие скрипты.
+#
+# v5.2.0:
+#   - host-bash отвечает только за bootstrap web-контейнера и за
+#     `./slgpu monitoring fix-perms`. Остальной стек (LLM-слоты,
+#     monitoring, proxy) поднимается из slgpu-web через `native.*` jobs.
+#   - источник переменных bash — `configs/bootstrap.env` (минимальный набор);
+#     `configs/main.env` ИСКЛЮЧИТЕЛЬНО шаблон для импорта в БД через UI.
 
 slgpu_root() {
   cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd
 }
 
-# stdout: абсолютный путь к каталогу пресетов *.env (PRESETS_DIR в main.env или data/presets).
+# Загрузить `configs/bootstrap.env` в текущий shell (set -a для compose).
+# Используется `cmd_web.sh` перед `docker compose --env-file …`.
+slgpu_source_bootstrap_env() {
+  local root f
+  root="$(slgpu_root)"
+  f="${root}/configs/bootstrap.env"
+  if [[ ! -f "${f}" ]]; then
+    echo "Ошибка: требуется ${f} (файл должен лежать в репозитории; не редактируйте main.env)." >&2
+    return 1
+  fi
+  set -a
+  # shellcheck disable=SC1091
+  source "${f}"
+  set +a
+}
+
+# Env-файл для `docker compose -f docker/docker-compose.web.yml`.
+slgpu_web_compose_env_file() {
+  local root f
+  root="$(slgpu_root)"
+  f="${root}/configs/bootstrap.env"
+  if [[ ! -f "${f}" ]]; then
+    echo "Ошибка: требуется ${f} (минимальный bootstrap для slgpu-web)." >&2
+    exit 1
+  fi
+  echo "${f}"
+}
+
+# stdout: абсолютный путь к каталогу пресетов *.env (PRESETS_DIR из bootstrap.env или data/presets).
 slgpu_presets_dir() {
   local root p
   root="$(slgpu_root)"
   p=""
-  if [[ -f "${root}/configs/main.env" ]]; then
+  if [[ -f "${root}/configs/bootstrap.env" ]]; then
     set -a
     # shellcheck disable=SC1091
-    source "${root}/configs/main.env" 2>/dev/null
+    source "${root}/configs/bootstrap.env" 2>/dev/null
     set +a
   fi
   p="${PRESETS_DIR:-./data/presets}"
@@ -25,22 +60,20 @@ slgpu_presets_dir() {
   esac
 }
 
-# Общая сеть vLLM/SGLang ↔ Prometheus/DCGM/… (см. docker/docker-compose.llm.yml, docker/docker-compose.monitoring.yml).
-# Раньше: «голый» `docker network create slgpu` без меток — docker compose v2 ожидает
-# com.docker.compose.project / com.docker.compose.network и падает с
-# "network ... has incorrect label com.docker.compose.network set to \"\"".
+# Общая Docker-сеть slgpu (видно из `docker/docker-compose.*.yml`).
+# Имя сети — из `${SLGPU_NETWORK_NAME}` (bootstrap.env); проект — `${WEB_COMPOSE_PROJECT_INFER}`.
+# Раньше «голый» `docker network create` без меток ломал docker compose v2 (incorrect label).
 slgpu_ensure_slgpu_network() {
   local want_net proj lbl_net lbl_proj
-  want_net="slgpu"
-  proj="slgpu"
+  want_net="${SLGPU_NETWORK_NAME:-slgpu}"
+  proj="${WEB_COMPOSE_PROJECT_INFER:-slgpu}"
   if docker network inspect "${want_net}" &>/dev/null; then
     lbl_net="$(docker network inspect "${want_net}" -f '{{index .Labels "com.docker.compose.network"}}' 2>/dev/null | tr -d '\r' || true)"
     lbl_proj="$(docker network inspect "${want_net}" -f '{{index .Labels "com.docker.compose.project"}}' 2>/dev/null | tr -d '\r' || true)"
     if [[ "${lbl_net}" != "${want_net}" || "${lbl_proj}" != "${proj}" ]]; then
-      echo "Сеть ${want_net} уже есть, но создана не через «этот» docker compose (нет меток com.docker.compose.*)." >&2
-      echo "Починка: остановить контейнеры, удалить сеть, поднять заново:" >&2
-      echo "  cd $(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd) && docker compose -f docker/docker-compose.llm.yml down && docker network rm ${want_net}" >&2
-      echo "  (если slgpu-monitoring: также docker compose -f docker/docker-compose.monitoring.yml down)" >&2
+      echo "Сеть ${want_net} уже есть, но создана не через docker compose (нет меток com.docker.compose.*)." >&2
+      echo "Починка: остановите все контейнеры стека и удалите сеть:" >&2
+      echo "  docker network rm ${want_net}" >&2
       return 1
     fi
     return 0
@@ -62,7 +95,7 @@ slgpu_list_presets() {
 # После -m|--model нет имени (или следующий токен — флаг): подсказка + список пресетов в stderr.
 slgpu_fail_if_missing_preset_arg() {
   local opt="$1"
-  echo "Опция ${opt} требует имя пресета (файл data/presets/<name>.env или PRESETS_DIR в main.env)." >&2
+  echo "Опция ${opt} требует имя пресета (файл data/presets/<name>.env или PRESETS_DIR в bootstrap.env)." >&2
   echo "Доступные пресеты:" >&2
   local list
   list="$(slgpu_list_presets)"
@@ -77,7 +110,7 @@ slgpu_fail_if_missing_preset_arg() {
 slgpu_interactive_choose_engine() {
   local choice
   if ! [[ -r /dev/tty ]]; then
-    echo "Интерактивный выбор невозможен: нет TTY. Для v5 поднимите слот движка в Develonica.LLM (Web UI) или задайте параметры вручную для docker compose LLM." >&2
+    echo "Интерактивный выбор невозможен: нет TTY. Поднимите слот движка в Develonica.LLM (Web UI)." >&2
     return 1
   fi
   while true; do
@@ -108,7 +141,7 @@ slgpu_interactive_choose_preset() {
     [[ -n "${line}" ]] && pres+=("$line")
   done < <(slgpu_list_presets)
   if [[ ${#pres[@]} -eq 0 ]]; then
-    echo "Нет пресетов: добавьте *.env в ${pdir#${root}/} (см. PRESETS_DIR в main.env)" >&2
+    echo "Нет пресетов: добавьте *.env в ${pdir#${root}/} (см. PRESETS_DIR в bootstrap.env)" >&2
     return 1
   fi
   if ! [[ -r /dev/tty ]]; then
@@ -141,180 +174,11 @@ slgpu_interactive_choose_preset() {
   done
 }
 
-# Базовый стек: `configs/main.env` (импорт в БД и bootstrap web).
-slgpu_source_main_env() {
-  local root
-  root="$(slgpu_root)"
-  local f="${root}/configs/main.env"
-  if [[ -f "${f}" ]]; then
-    # shellcheck disable=SC1091
-    source "${f}"
-  fi
-}
-
-# Env-файл для `docker compose -f docker/docker-compose.web.yml` (обязателен).
-slgpu_web_compose_env_file() {
-  local root
-  root="$(slgpu_root)"
-  local f="${root}/configs/main.env"
-  if [[ ! -f "${f}" ]]; then
-    echo "Ошибка: требуется ${f} (скопируйте и заполните параметры стека)." >&2
-    exit 1
-  fi
-  echo "${f}"
-}
-
-# Единый снимок для monitoring/proxy: `env_file` — `${WEB_DATA_DIR}/.slgpu/compose-service.env` (по умолч. data/web).
-# Web пишет из БД под каталог, доступный slgpuweb; bash — **slgpu_ensure_compose_service_env** (см. main.env → WEB_DATA_DIR).
-slgpu_compose_service_env_basename() {
-  local root wdd
-  root="$(slgpu_root)"
-  wdd="${WEB_DATA_DIR:-./data/web}"
-  if [[ -f "${root}/configs/main.env" ]]; then
-    set -a
-    # shellcheck disable=SC1090
-    source "${root}/configs/main.env" 2>/dev/null || true
-    set +a
-  fi
-  wdd="${WEB_DATA_DIR:-./data/web}"
-  case "${wdd}" in
-    /*) echo "${wdd}/.slgpu/compose-service.env" ;;
-    ./*) echo "${wdd#./}/.slgpu/compose-service.env" ;;
-    *) echo "${wdd}/.slgpu/compose-service.env" ;;
-  esac
-}
-
-slgpu_ensure_compose_service_env() {
-  local root wdd d f
-  root="$(slgpu_root)"
-  wdd="${WEB_DATA_DIR:-./data/web}"
-  if [[ -f "${root}/configs/main.env" ]]; then
-    set -a
-    # shellcheck disable=SC1090
-    source "${root}/configs/main.env" 2>/dev/null || true
-    set +a
-  fi
-  wdd="${WEB_DATA_DIR:-./data/web}"
-  case "${wdd}" in
-    /*) d="${wdd}/.slgpu" ; f="${d}/compose-service.env" ;;
-    ./*) d="${root}/${wdd#./}/.slgpu" ; f="${d}/compose-service.env" ;;
-    *) d="${root}/${wdd}/.slgpu" ; f="${d}/compose-service.env" ;;
-  esac
-  mkdir -p "${d}"
-  if [[ -f "${root}/configs/main.env" ]]; then
-    cp -f "${root}/configs/main.env" "${f}"
-    return 0
-  fi
-  if [[ -f "${f}" ]]; then
-    return 0
-  fi
-  : > "${f}"
-  chmod 600 "${f}" 2>/dev/null || true
-}
-
-# `main.env` (пути, мониторинг). Без пресета.
-slgpu_load_server_env() {
-  set -a
-  slgpu_source_main_env
-  set +a
-}
-
-# main.env + обязательный пресет <PRESETS_DIR>/<slug>.env (bench, load, …).
-slgpu_load_env() {
-  local preset="${1:-}"
-  local root pdir
-  root="$(slgpu_root)"
-  pdir="$(slgpu_presets_dir)"
-
-  if [[ -z "${preset}" ]]; then
-    echo "Укажите пресет: -m <slug> (файл в каталоге пресетов, см. PRESETS_DIR в main.env)" >&2
-    echo "Доступные пресеты:" >&2
-    slgpu_list_presets | sed 's/^/  /' >&2 || true
-    return 1
-  fi
-
-  set -a
-  slgpu_source_main_env
-
-  local f="${pdir}/${preset}.env"
-  if [[ ! -f "${f}" ]]; then
-    echo "Пресет не найден: ${f}" >&2
-    echo "Доступные пресеты:" >&2
-    local presets
-    presets="$(slgpu_list_presets)"
-    if [[ -n "${presets}" ]]; then
-      echo "${presets}" | sed 's/^/  /' >&2
-    else
-      echo "  (нет файлов в каталоге пресетов)" >&2
-    fi
-    set +a
-    return 1
-  fi
-  echo "Загружен пресет модели: ${preset}  (${f#${root}/})"
-  # shellcheck disable=SC1090
-  source "${f}"
-  set +a
-
-  : "${MODEL_ID:?MODEL_ID не задан в пресете ${preset}.env}"
-}
-
-# Для docker compose: main.env → пресет (обязателен).
-# $1 — слаг пресета, $2 — vllm | sglang.
-slgpu_load_compose_env() {
-  local preset="${1:-}"
-  local engine="${2:?укажите vllm или sglang}"
-  local root pdir
-  root="$(slgpu_root)"
-  pdir="$(slgpu_presets_dir)"
-
-  if [[ -z "${preset}" ]]; then
-    echo "Укажите пресет: -m <slug>" >&2
-    return 1
-  fi
-
-  case "${engine}" in
-    vllm|sglang) ;;
-    *) echo "slgpu_load_compose_env: ожидается vllm|sglang, получено: ${engine}" >&2; return 1 ;;
-  esac
-
-  set -a
-  slgpu_source_main_env
-
-  local f="${pdir}/${preset}.env"
-  if [[ ! -f "${f}" ]]; then
-    echo "Пресет не найден: ${f}" >&2
-    set +a
-    return 1
-  fi
-  echo "Загружен пресет модели: ${preset}  (${f#${root}/})"
-  # shellcheck disable=SC1090
-  source "${f}"
-  set +a
-
-  : "${MODEL_ID:?MODEL_ID не задан в пресете ${preset}.env}"
-}
-
 # Hugging Face repo id → slug для имени пресета (basename, lower, _ → -).
 slgpu_hf_id_to_slug() {
   local id="$1"
   local base="${id##*/}"
   echo "${base,,}" | tr '_' '-'
-}
-
-# Определить, запущен ли vllm или sglang (stdout: vllm|sglang или пусто).
-slgpu_detect_running_engine() {
-  local root
-  root="$(slgpu_root)"
-  cd "${root}" || return 1
-  if slgpu_docker_compose -f docker/docker-compose.llm.yml ps --status running --services 2>/dev/null | grep -qx 'vllm'; then
-    echo vllm
-    return 0
-  fi
-  if slgpu_docker_compose -f docker/docker-compose.llm.yml ps --status running --services 2>/dev/null | grep -qx 'sglang'; then
-    echo sglang
-    return 0
-  fi
-  return 1
 }
 
 # Список «0,1,…,N-1» для NVIDIA_VISIBLE_DEVICES (согласовано с tensor parallel).
@@ -326,121 +190,15 @@ slgpu_nvidia_visible_from_tp() {
   echo "$s"
 }
 
-# База OpenAI API: http://127.0.0.1:<порт>/v1 для запущенного движка (порт с хоста из docker compose).
-# $1: vllm|sglang. Внутри контейнера: vLLM 8111, SGLang 8222.
-slgpu_openai_base_url() {
-  local e="${1:?укажите vllm или sglang}"
-  local root in_p mapped host_port
-  root="$(slgpu_root)"
-  cd "${root}" || return 1
-  case "${e}" in
-    vllm) in_p=8111 ;;
-    sglang) in_p=8222 ;;
-    *) echo "slgpu_openai_base_url: ожидается vllm|sglang" >&2; return 1 ;;
-  esac
-  mapped="$(slgpu_docker_compose -f docker/docker-compose.llm.yml port "${e}" "${in_p}" 2>/dev/null | head -1 || true)"
-  host_port=""
-  if [[ -n "${mapped}" ]] && [[ "${mapped}" =~ :([0-9]+)$ ]]; then
-    host_port="${BASH_REMATCH[1]}"
-  fi
-  if [[ -z "${host_port}" ]]; then
-    if [[ "${e}" == sglang ]]; then
-      host_port=8222
-    else
-      host_port=8111
-    fi
-  fi
-  echo "http://127.0.0.1:${host_port}/v1"
-}
-
-# Проверить соответствие запущенного движка.
-# $1 = engine (vllm|sglang)
-slgpu_validate_running_config() {
-  local engine="${1:-}"
-
-  local running_engine
-  running_engine="$(slgpu_detect_running_engine)" || true
-
-  if [[ -z "${running_engine}" ]]; then
-    echo "[VALIDATE] ОШИБКА: ни vllm, ни sglang не запущены. Сначала поднимите слот (${engine}) в UI или через native.slot.* / docker compose." >&2
-    return 1
-  fi
-
-  if [[ "${running_engine}" != "${engine}" ]]; then
-    echo "[VALIDATE] ОШИБКА: запущен ${running_engine}, а бенч для ${engine}. Остановите слот и поднимите нужный движок в UI / native.slot.*." >&2
-    return 1
-  fi
-
-  echo "[VALIDATE] OK: engine=${running_engine}"
-  return 0
-}
-
-# Снимок переменных для подстановки ${VAR} в docker/docker-compose.llm.yml после `source main.env` + пресет.
-# Файл используют с `docker compose --env-file` под «чистым» env (см. cmd_up.sh:compose_llm_env), иначе
-# родительский процесс (slgpu-web, CI, shell с export из main.env) может перебить пресет: у Compose shell
-# выше приоритет, чем у отдельных пар в обёртке `env A=1 B=2 docker compose`.
-# $1 — путь к выходному файлу (обычно mktemp).
-slgpu_write_llm_compose_interp_env() {
-  local out="${1:?}"
-  # Канон.: MAX_NUM_BATCHED_TOKENS; legacy: SLGPU_*, VLLM_MAX_NUM_BATCHED_TOKENS
-  local batch="${MAX_NUM_BATCHED_TOKENS:-${SLGPU_MAX_NUM_BATCHED_TOKENS:-${VLLM_MAX_NUM_BATCHED_TOKENS:-8192}}}"
-  umask 077
-  {
-    echo "VLLM_DOCKER_IMAGE=${VLLM_DOCKER_IMAGE:-}"
-    echo "LLM_API_BIND=${LLM_API_BIND:-0.0.0.0}"
-    echo "LLM_API_PORT=${LLM_API_PORT:-8111}"
-    echo "SLGPU_MODEL_ROOT=${SLGPU_MODEL_ROOT:-/models}"
-    echo "SERVED_MODEL_NAME=${SERVED_MODEL_NAME:-${SLGPU_SERVED_MODEL_NAME:-devllm}}"
-    echo "VLLM_HOST=${VLLM_HOST:-${SLGPU_VLLM_HOST:-0.0.0.0}}"
-    echo "VLLM_PORT=${VLLM_PORT:-${SLGPU_VLLM_PORT:-${LLM_API_PORT:-8111}}}"
-    echo "TRUST_REMOTE_CODE=${TRUST_REMOTE_CODE:-${SLGPU_VLLM_TRUST_REMOTE_CODE:-1}}"
-    echo "ENABLE_CHUNKED_PREFILL=${ENABLE_CHUNKED_PREFILL:-${SLGPU_VLLM_ENABLE_CHUNKED_PREFILL:-1}}"
-    echo "ENABLE_AUTO_TOOL_CHOICE=${ENABLE_AUTO_TOOL_CHOICE:-${SLGPU_VLLM_ENABLE_AUTO_TOOL_CHOICE:-1}}"
-    echo "MODEL_ID=${MODEL_ID:-}"
-    echo "MODEL_REVISION=${MODEL_REVISION:-}"
-    echo "MAX_MODEL_LEN=${MAX_MODEL_LEN:-32768}"
-    echo "BLOCK_SIZE=${BLOCK_SIZE:-${SLGPU_VLLM_BLOCK_SIZE:-}}"
-    echo "TP=${TP:-8}"
-    echo "GPU_MEM_UTIL=${GPU_MEM_UTIL:-0.92}"
-    echo "KV_CACHE_DTYPE=${KV_CACHE_DTYPE:-fp8_e4m3}"
-    echo "MAX_NUM_BATCHED_TOKENS=${batch}"
-    echo "MAX_NUM_SEQS=${MAX_NUM_SEQS:-${SLGPU_VLLM_MAX_NUM_SEQS:-}}"
-    echo "DISABLE_CUSTOM_ALL_REDUCE=${DISABLE_CUSTOM_ALL_REDUCE:-${SLGPU_DISABLE_CUSTOM_ALL_REDUCE:-1}}"
-    echo "ENABLE_PREFIX_CACHING=${ENABLE_PREFIX_CACHING:-${SLGPU_ENABLE_PREFIX_CACHING:-1}}"
-    echo "TOOL_CALL_PARSER=${TOOL_CALL_PARSER:-hermes}"
-    echo "REASONING_PARSER=${REASONING_PARSER:-qwen3}"
-    echo "CHAT_TEMPLATE_CONTENT_FORMAT=${CHAT_TEMPLATE_CONTENT_FORMAT:-}"
-    echo "COMPILATION_CONFIG=${COMPILATION_CONFIG:-${SLGPU_VLLM_COMPILATION_CONFIG:-}}"
-    echo "ENFORCE_EAGER=${ENFORCE_EAGER:-${SLGPU_VLLM_ENFORCE_EAGER:-0}}"
-    echo "SPECULATIVE_CONFIG=${SPECULATIVE_CONFIG:-${SLGPU_VLLM_SPECULATIVE_CONFIG:-}}"
-    echo "ENABLE_EXPERT_PARALLEL=${ENABLE_EXPERT_PARALLEL:-${SLGPU_ENABLE_EXPERT_PARALLEL:-0}}"
-    echo "DATA_PARALLEL_SIZE=${DATA_PARALLEL_SIZE:-${SLGPU_VLLM_DATA_PARALLEL_SIZE:-}}"
-    echo "MM_ENCODER_TP_MODE=${MM_ENCODER_TP_MODE:-}"
-    echo "ATTENTION_BACKEND=${ATTENTION_BACKEND:-${SLGPU_VLLM_ATTENTION_BACKEND:-}}"
-    echo "TOKENIZER_MODE=${TOKENIZER_MODE:-${SLGPU_VLLM_TOKENIZER_MODE:-}}"
-    echo "VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=${VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS:-1}"
-    echo "NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-0,1,2,3,4,5,6,7}"
-    echo "MODELS_DIR=${MODELS_DIR:-./data/models}"
-    echo "SGLANG_TRUST_REMOTE_CODE=${SGLANG_TRUST_REMOTE_CODE:-1}"
-    echo "SGLANG_MEM_FRACTION_STATIC=${SGLANG_MEM_FRACTION_STATIC:-0.90}"
-    echo "SGLANG_CUDA_GRAPH_MAX_BS=${SGLANG_CUDA_GRAPH_MAX_BS:-}"
-    echo "SGLANG_ENABLE_TORCH_COMPILE=${SGLANG_ENABLE_TORCH_COMPILE:-1}"
-    echo "SGLANG_DISABLE_CUDA_GRAPH=${SGLANG_DISABLE_CUDA_GRAPH:-0}"
-    echo "SGLANG_DISABLE_CUSTOM_ALL_REDUCE=${SGLANG_DISABLE_CUSTOM_ALL_REDUCE:-0}"
-    echo "SGLANG_ENABLE_METRICS=${SGLANG_ENABLE_METRICS:-1}"
-    echo "SGLANG_ENABLE_MFU_METRICS=${SGLANG_ENABLE_MFU_METRICS:-0}"
-  } > "${out}"
-}
-
 # Проверка CLI перед любыми вызовами `docker compose` (диагностика на «голой» VM).
 slgpu_require_docker() {
   if ! command -v docker >/dev/null 2>&1; then
-    echo "slgpu: не найдена команда «docker». Установите Docker Engine и Compose v2 (документация Docker / NVIDIA Container Toolkit)." >&2
+    echo "slgpu: не найдена команда «docker». Установите Docker Engine и Compose v2." >&2
     exit 1
   fi
 }
 
-# Унифицированный `docker compose`: project directory = корень репо (тома и `main.env` с путями `./data/...`).
+# Унифицированный `docker compose`: project directory = корень репо (тома и `bootstrap.env` с путями `./data/...`).
 slgpu_docker_compose() {
   local _here _root
   _here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -448,34 +206,26 @@ slgpu_docker_compose() {
   (cd "${_root}" && docker compose --project-directory "${_root}" "$@")
 }
 
-# Создать каталоги для относительных путей из `configs/main.env` (./data/…). Без файла — минимальные ./data/* для web.
+# Создать ./data/* каталоги для bind mount slgpu-web (MODELS_DIR, PRESETS_DIR, WEB_DATA_DIR).
+# Источник путей — `configs/bootstrap.env`. Без файла — минимальные `./data/{web,models,presets,bench/results}`.
 slgpu_ensure_data_dirs() {
   local root _p
-  root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-  if [[ ! -f "${root}/configs/main.env" ]]; then
-    mkdir -p "${root}/data/web" "${root}/data/models" "${root}/data/presets" "${root}/data/bench/results"
-    return 0
+  root="$(slgpu_root)"
+  if [[ -f "${root}/configs/bootstrap.env" ]]; then
+    set -a
+    # shellcheck disable=SC1091
+    source "${root}/configs/bootstrap.env"
+    set +a
   fi
-  set -a
-  # shellcheck disable=SC1091
-  source "${root}/configs/main.env"
-  set +a
   for _p in \
-    "${MODELS_DIR:-}" \
-    "${PRESETS_DIR:-}" \
-    "${WEB_DATA_DIR:-}" \
-    "${PROMETHEUS_DATA_DIR:-}" \
-    "${GRAFANA_DATA_DIR:-}" \
-    "${LOKI_DATA_DIR:-}" \
-    "${PROMTAIL_DATA_DIR:-}" \
-    "${LANGFUSE_POSTGRES_DATA_DIR:-}" \
-    "${LANGFUSE_CLICKHOUSE_DATA_DIR:-}" \
-    "${LANGFUSE_CLICKHOUSE_LOGS_DIR:-}" \
-    "${LANGFUSE_MINIO_DATA_DIR:-}" \
-    "${LANGFUSE_REDIS_DATA_DIR:-}"; do
-    if [[ -n "${_p}" && "${_p}" == ./* ]]; then
-      mkdir -p "${root}/${_p#./}"
-    fi
+    "${MODELS_DIR:-./data/models}" \
+    "${PRESETS_DIR:-./data/presets}" \
+    "${WEB_DATA_DIR:-./data/web}"; do
+    case "${_p}" in
+      /*) mkdir -p "${_p}" ;;
+      ./*) mkdir -p "${root}/${_p#./}" ;;
+      *) mkdir -p "${root}/${_p}" ;;
+    esac
   done
   mkdir -p "${root}/data/bench/results"
 }

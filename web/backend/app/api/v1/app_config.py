@@ -22,7 +22,11 @@ from app.services.stack_config import (
 from app.services import stack_config as sc
 from app.services import presets as preset_service
 from app.services.env_key_aliases import presentation_stack
-from app.services.stack_registry import registry_to_public
+from app.services.stack_registry import (
+    StackScope,
+    registry_to_public,
+    validate_required,
+)
 
 router = APIRouter()
 
@@ -92,6 +96,37 @@ async def install_from_files(
         stack_keys=len(stack),
         secret_keys=len(secrets),
     )
+
+
+_ALLOWED_SCOPES: tuple[StackScope, ...] = (
+    "web_up",
+    "monitoring_up",
+    "proxy_up",
+    "llm_slot",
+    "fix_perms",
+    "pull",
+    "bench",
+    "port_allocation",
+)
+
+
+@router.get("/missing")
+async def get_missing(
+    scope: str | None = None,
+    session: AsyncSession = Depends(db_session),
+) -> dict[str, Any]:
+    """Return registry keys missing in DB for the given scope (or all scopes)."""
+    await sc.migrate_stack_params_to_canonical_if_needed(session)
+    stack, secrets, _meta = await sc.load_sections(session)
+    merged: dict[str, str] = {**dict(stack), **dict(secrets)}
+    if scope is not None:
+        if scope not in _ALLOWED_SCOPES:
+            raise HTTPException(status_code=400, detail=f"unknown scope: {scope}")
+        return {"scope": scope, "missing": validate_required(merged, scope)}
+    by_scope: dict[str, list[dict[str, Any]]] = {}
+    for s in _ALLOWED_SCOPES:
+        by_scope[s] = list(validate_required(merged, s))
+    return {"scopes": by_scope}
 
 
 @router.get("/stack")

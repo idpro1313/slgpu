@@ -366,6 +366,45 @@ async def test_app_logs_events_shape(client: httpx.AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_app_config_missing_returns_keys_for_empty_db(
+    client: httpx.AsyncClient,
+) -> None:
+    """No install yet → /missing must list registry keys for at least monitoring_up."""
+    async with client:
+        r = await client.get("/api/v1/app-config/missing?scope=monitoring_up")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["scope"] == "monitoring_up"
+    assert isinstance(body["missing"], list)
+    assert len(body["missing"]) > 0
+    keys = {row["key"] for row in body["missing"]}
+    assert "SLGPU_NETWORK_NAME" in keys
+
+
+@pytest.mark.asyncio
+async def test_app_config_missing_rejects_unknown_scope(
+    client: httpx.AsyncClient,
+) -> None:
+    async with client:
+        r = await client.get("/api/v1/app-config/missing?scope=nope")
+    assert r.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_app_config_missing_all_scopes_when_no_query(
+    client: httpx.AsyncClient,
+) -> None:
+    async with client:
+        r = await client.get("/api/v1/app-config/missing")
+    assert r.status_code == 200
+    body = r.json()
+    assert "scopes" in body
+    assert "monitoring_up" in body["scopes"]
+    assert "proxy_up" in body["scopes"]
+    assert "llm_slot" in body["scopes"]
+
+
+@pytest.mark.asyncio
 async def test_app_logs_event_kind_filter(client: httpx.AsyncClient) -> None:
     async with client:
         await client.get("/api/v1/jobs")

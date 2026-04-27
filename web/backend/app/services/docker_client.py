@@ -148,17 +148,6 @@ class DockerInspector:
                 return self._summary(c)
             if name.startswith(f"{und}_") or name == und:
                 return self._summary(c)
-            # Стабильные имена из репозитория (container_name: slgpu-*, slgpu-monitoring-*),
-            # независимы от `COMPOSE_PROJECT_NAME` (лейблы остаётся primary).
-            st_llm = f"slgpu-{service}"
-            if name == st_llm or name.startswith(f"{st_llm}-"):
-                return self._summary(c)
-            st_mon = f"slgpu-monitoring-{service}"
-            if name == st_mon or name.startswith(f"{st_mon}-"):
-                return self._summary(c)
-            st_pxy = f"slgpu-proxy-{service}"
-            if name == st_pxy or name.startswith(f"{st_pxy}-"):
-                return self._summary(c)
         return None
 
     def get_by_name(self, name: str) -> ContainerSummary | None:

@@ -1,4 +1,4 @@
-<DevelopmentPlan VERSION="5.1.0">
+<DevelopmentPlan VERSION="5.2.0">
   <!--
     GRACE development plan — methodology: https://github.com/osovv/grace-marketplace
     Upstream ships Agent Skills + optional CLI (@osovv/grace-cli): grace lint | module find | module show | file show.
@@ -14,6 +14,7 @@
     <non-goal>Нет оркестрации Kubernetes, нет хранилища истории бенчей.</non-goal>
     <risk-1>Образы latest — невоспроизводимость между запусками.</risk-1>
     <risk-2>Парсеры и `MAX_MODEL_LEN` только в пресетах: ошибка в пресете или смена образа vLLM/SGLang без правки пресета даёт сбои при старте или в tool/reasoning.</risk-2>
+    <stack-config-5-2-0>5.2.0: `configs/main.env` — только шаблон импорта в UI (`POST /app-config/install`); удалён авто-сид при пустой БД; `configs/bootstrap.env` — минимум для `./slgpu web up --env-file`; реестр расширен группой `network` (`SLGPU_NETWORK_NAME`, `*_INTERNAL_PORT`, `*_SERVICE_NAME`, `*_CONTAINER_NAME`, `WEB_DOCKER_IMAGE`); `docker-compose.{web,monitoring,proxy}.yml` полностью параметризованы (image/container_name/hostname/internal+external ports/network.name); `docker-compose.llm.yml` удалён; `prometheus.yml`/`loki-config.yaml`/`promtail-config.yml`/`datasource.yml` → `*.tmpl` + `render_monitoring_configs()` в `${WEB_DATA_DIR}/.slgpu/monitoring/`; backend (compose_exec/slot_runtime/docker_client) больше не использует литералы `slgpu-*` — берёт из БД; добавлен `GET /api/v1/app-config/missing[?scope=...]`; smoke-тесты `tests/test_main_env.py` и `test_app_config_missing_*`.</stack-config-5-2-0>
   </ArchitectureNotes>
 
   <Modules>

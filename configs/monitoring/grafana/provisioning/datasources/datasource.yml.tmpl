@@ -1,0 +1,22 @@
+# Шаблон Grafana datasources. Рендер backend'ом в
+# `${WEB_DATA_DIR}/.slgpu/monitoring/datasource.yml`. Compose монтирует отрендеренный файл точечно
+# (см. docker/docker-compose.monitoring.yml).
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://${PROMETHEUS_SERVICE_NAME}:${PROMETHEUS_INTERNAL_PORT}
+    isDefault: true
+    editable: false
+  - name: Loki
+    uid: loki
+    type: loki
+    access: proxy
+    url: http://${LOKI_SERVICE_NAME}:${LOKI_INTERNAL_PORT}
+    isDefault: false
+    editable: false
+    jsonData:
+      maxLines: 1000

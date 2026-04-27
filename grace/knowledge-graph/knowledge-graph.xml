@@ -1,5 +1,5 @@
 <KnowledgeGraph>
-  <Project NAME="slgpu" VERSION="5.1.0">
+  <Project NAME="slgpu" VERSION="5.2.0">
     <keywords>slgpu, vllm, sglang, llm-inference, benchmark, docker-compose, gpu, prometheus, grafana, sglang-dashboard-slgpu, sglangdash2-slgpu</keywords>
     <annotation>Стенд для сравнения движков LLM-инференса vLLM и SGLang на Linux-сервере с NVIDIA GPU.</annotation>
 
@@ -11,12 +11,12 @@
       <annotations>
         <fn-main PURPOSE="Точка входа, только `web` и help" />
         <export-slgpu PURPOSE="Исполняемый диспетчер" />
-        <fn-cmd_web PURPOSE="scripts/cmd_web.sh: web up|down|restart|logs|build|install; compose --env-file configs/main.env" />
+        <fn-cmd_web PURPOSE="scripts/cmd_web.sh: web up|down|restart|logs|build|install; compose --env-file configs/bootstrap.env (5.2.0)" />
       </annotations>
     </M-CLI>
 
     <M-LIB NAME="Library" TYPE="UTILITY" STATUS="implemented">
-      <purpose>Загрузка env: `main.env` в корне (если есть, дефолты) → пресет; пресеты — `data/presets/*.env` (PRESETS_DIR), вручную или из web.</purpose>
+      <purpose>5.2.0: bootstrap для cmd_web из `configs/bootstrap.env`; импорт стека и пресетов — только через UI (POST /app-config/install).</purpose>
       <path>scripts/_lib.sh</path>
       <depends>none</depends>
       <verification-ref>V-M-LIB</verification-ref>
@@ -24,11 +24,10 @@
         <fn-slgpu_root PURPOSE="Определение корня проекта" />
         <fn-slgpu_presets_dir PURPOSE="Каталог PRESETS_DIR (data/presets)" />
         <fn-slgpu_list_presets PURPOSE="Список пресетов" />
-        <fn-slgpu_source_main_env PURPOSE="Подмешать main.env в корне (дефолты)" />
-        <fn-slgpu_web_compose_env_file PURPOSE="Путь для docker compose web: configs/main.env (хост v5)" />
-        <fn-slgpu_ensure_compose_service_env PURPOSE="Перед monitoring/proxy на хосте: ${WEB_DATA_DIR}/.slgpu/compose-service.env (по умолч. data/web) из main.env или configs/main.env" />
+        <fn-slgpu_source_bootstrap_env PURPOSE="Подмешать configs/bootstrap.env (минимум для cmd_web)" />
+        <fn-slgpu_web_compose_env_file PURPOSE="Путь для docker compose web: configs/bootstrap.env (5.2.0)" />
+        <fn-slgpu_ensure_compose_service_env PURPOSE="Перед monitoring/proxy: ${WEB_DATA_DIR}/.slgpu/compose-service.env генерируется backend'ом из stack_params" />
         <fn-slgpu_fail_if_missing_preset_arg PURPOSE="Если -m без имени — подсказка и список пресетов" />
-        <fn-slgpu_load_env PURPOSE="Загрузка окружения (SLGPU_ROOT + main.env + preset)" />
         <fn-slgpu_load_compose_env PURPOSE="Загрузка env для compose" />
         <fn-slgpu_hf_id_to_slug PURPOSE="Конвертация HF ID в slug" />
         <fn-slgpu_detect_running_engine PURPOSE="Определение running движка (docker compose ps)" />
@@ -81,24 +80,27 @@
     </M-BENCH>
 
     <M-DOCKER NAME="DockerCompose" TYPE="INTEGRATION" STATUS="implemented">
-      <purpose>Конфигурация Docker Compose и serve.sh для vLLM/SGLang.</purpose>
-      <path>docker/docker-compose.llm.yml, scripts/serve.sh</path>
+      <purpose>5.2.0: docker/docker-compose.{web,monitoring,proxy}.yml — все image/container_name/hostname/internal+external ports/network.name параметризованы из stack_params; docker-compose.llm.yml удалён, слоты — через docker-py в slot_runtime.</purpose>
+      <path>docker/docker-compose.web.yml, docker/docker-compose.monitoring.yml, docker/docker-compose.proxy.yml, scripts/serve.sh</path>
       <depends>none</depends>
       <verification-ref>V-M-DOCKER</verification-ref>
       <annotations>
-        <export-docker-compose PURPOSE="vllm/sglang + опц. мониторинг: жёсткие имена `container_name` slgpu-vllm, slgpu-sglang" />
-        <export-serve_slgpu PURPOSE="scripts/serve.sh: vllm|sglang по SLGPU_ENGINE; vLLM: опц. SLGPU_VLLM_TOKENIZER_MODE, SLGPU_VLLM_MAX_NUM_SEQS, SLGPU_VLLM_BLOCK_SIZE" />
+        <export-docker-compose PURPOSE="полностью параметризованные compose-файлы; имена/порты/DNS через ${VAR} из ${WEB_DATA_DIR}/.slgpu/compose-service.env" />
+        <export-serve_slgpu PURPOSE="scripts/serve.sh: vllm|sglang по SLGPU_ENGINE" />
       </annotations>
     </M-DOCKER>
 
     <M-MONITOR NAME="Monitoring" TYPE="INTEGRATION" STATUS="implemented">
-      <purpose>Prometheus, Grafana, Loki, Promtail, DCGM Exporter, Node Exporter; JSON-дашборды. Langfuse + LiteLLM + Postgres/MinIO/… — в docker-compose.proxy.yml (slgpu-proxy-*). Bootstrap MinIO buckets / БД litellm — profile bootstrap в proxy compose.</purpose>
-      <path>docker/docker-compose.monitoring.yml, docker/docker-compose.proxy.yml, configs/monitoring/prometheus/**, configs/monitoring/grafana/provisioning/**, configs/monitoring/grafana/templates/**, configs/monitoring/README.md</path>
-      <depends>M-DOCKER</depends>
+      <purpose>5.2.0: prometheus.yml / loki-config.yaml / promtail-config.yml / datasource.yml — *.tmpl, рендерятся `render_monitoring_configs()` в `${WEB_DATA_DIR}/.slgpu/monitoring/`; Langfuse + LiteLLM + Postgres/MinIO/Redis/ClickHouse в proxy compose; имена сервисов и порты — из stack_params.</purpose>
+      <path>docker/docker-compose.monitoring.yml, docker/docker-compose.proxy.yml, configs/monitoring/prometheus/prometheus.yml.tmpl, configs/monitoring/loki/loki-config.yaml.tmpl, configs/monitoring/promtail/promtail-config.yml.tmpl, configs/monitoring/grafana/provisioning/**, configs/monitoring/grafana/templates/**, configs/monitoring/README.md</path>
+      <depends>M-DOCKER, M-CONFIG</depends>
       <verification-ref>V-M-MONITOR</verification-ref>
       <annotations>
-        <export-monitoring_compose PURPOSE="docker/docker-compose.monitoring.yml: slgpu-monitoring-* (метрики/логи). docker/docker-compose.proxy.yml: slgpu-proxy-* (Langfuse, LiteLLM, bootstrap minio-bucket-init/litellm-pg-init); ports/project-name без YAML fallback, через stack_params snapshot" />
-        <export-prometheus_yml PURPOSE="Scrape config для всех targets" />
+        <export-monitoring_compose PURPOSE="полностью параметризованный compose: container_name/hostname/image/internal+external ports/network.name из stack_params snapshot" />
+        <export-prometheus_tmpl PURPOSE="prometheus.yml.tmpl: scrape targets через ${SERVICE_NAME}:${INTERNAL_PORT}" />
+        <export-loki_tmpl PURPOSE="loki-config.yaml.tmpl: http_listen_port=${LOKI_INTERNAL_PORT}" />
+        <export-promtail_tmpl PURPOSE="promtail-config.yml.tmpl: clients[].url=http://${LOKI_SERVICE_NAME}:${LOKI_INTERNAL_PORT}" />
+        <export-grafana_datasource_tmpl PURPOSE="datasource.yml.tmpl: prometheus/loki URLs из stack_params" />
         <export-grafana-slgpu-overview PURPOSE="slgpu-overview.json" />
         <export-grafana-sglang-dashboard-slgpu PURPOSE="sglang-dashboard-slgpu.json (оф. SGLang, slgpu-адаптация)" />
         <export-grafana-sglangdash2-slgpu PURPOSE="sglangdash2-slgpu.json — расширенный; генератор _build_sglangdash2.py от vllmdash2" />
@@ -119,14 +121,32 @@
     </M-MODELS>
 
     <M-ENV NAME="Environment" TYPE="DATA_LAYER" STATUS="implemented">
-      <purpose>Конфигурация окружения: `main.env` (в т.ч. PRESETS_DIR), секреты HF.</purpose>
-      <path>main.env, configs/secrets/hf.env.example</path>
+      <purpose>5.2.0: конфигурация — `configs/main.env` (только шаблон импорта в UI) + `configs/bootstrap.env` (минимум для cmd_web). Backend больше не сидит БД при старте.</purpose>
+      <path>configs/main.env, configs/bootstrap.env</path>
       <depends>none</depends>
       <verification-ref>V-M-ENV</verification-ref>
       <annotations>
-        <export-main-env PURPOSE="Дефолты в корне: сервер, мониторинг, vLLM/SGLang (listen, кэши Triton, NCCL), PRESETS_DIR" />
+        <export-main-env PURPOSE="Шаблон для POST /app-config/install: все ключи STACK_KEY_REGISTRY с комментариями" />
+        <export-bootstrap-env PURPOSE="Минимум для ./slgpu web up --env-file: SLGPU_HOST_REPO, WEB_DATA_DIR, MODELS_DIR, WEB_BIND/PORT, имена сервисов/сети/контейнеров для compose web" />
       </annotations>
     </M-ENV>
+
+    <M-CONFIG NAME="StackConfig" TYPE="CORE_LOGIC" STATUS="implemented">
+      <purpose>Источник правды стека в SQLite (`stack_params`); реестр ключей; рендер env-файлов и monitoring-конфигов.</purpose>
+      <path>web/backend/app/services/stack_config.py, web/backend/app/services/stack_registry.py, web/backend/app/api/v1/app_config.py</path>
+      <depends>M-WEB</depends>
+      <verification-ref>V-M-CONFIG</verification-ref>
+      <annotations>
+        <fn-sync_merged_flat PURPOSE="Read-only SQLite snapshot всех ключей стека" />
+        <fn-write_compose_service_env_file PURPOSE="Снимок env для docker compose monitoring/proxy в ${WEB_DATA_DIR}/.slgpu/compose-service.env" />
+        <fn-render_monitoring_configs PURPOSE="string.Template подстановка из БД в *.tmpl → ${WEB_DATA_DIR}/.slgpu/monitoring/{prometheus.yml,loki-config.yaml,promtail-config.yml,datasource.yml}" />
+        <fn-STACK_KEY_REGISTRY PURPOSE="Каноничный реестр всех ключей стека (group/required_for/allow_empty/is_secret); dynamic группа `network` (5.2.0)" />
+        <fn-validate_required PURPOSE="Возвращает missing keys для scope (web_up/monitoring_up/proxy_up/llm_slot/...)" />
+        <fn-raise_if_missing PURPOSE="HTTP 409 missing_stack_params в API при недостающих ключах" />
+        <export-app_config_install PURPOSE="POST /api/v1/app-config/install: импорт configs/main.env + пресетов с диска в БД" />
+        <export-app_config_missing PURPOSE="GET /api/v1/app-config/missing[?scope=...] (5.2.0)" />
+      </annotations>
+    </M-CONFIG>
 
     <M-PREPARE NAME="HostPrepare" TYPE="UTILITY" STATUS="implemented">
       <purpose>Подготовка хоста: драйвер, Docker, NVIDIA Toolkit, sysctl, limits.</purpose>
@@ -187,7 +207,7 @@
         <fn-job_log PURPOSE="append_job_log: thread-safe строки лога native job; обновление UI по GET /jobs/{id}" />
         <fn-services_slgpu_cli PURPOSE="CliCommand kind=native.* с пустым argv; resource slot:default|slot:{key} (4.0.0: без lock runtime); валидация slot_key/slug/engine/port/tp" />
         <fn-services_jobs PURPOSE="Job runner: native.* → native_jobs; lock по ключу (set discard); task registry; force_engine_slot_halt + POST /runtime/slots/{k}/down?force=1; CancelledError → mark job cancelled" />
-        <fn-services_docker_client PURPOSE="get_docker_inspector(): get_by_service — label filter, fallback: нормализованные лейблы, имена Compose v1/v2, жёсткие имена slgpu-* и slgpu-monitoring-*" />
+        <fn-services_docker_client PURPOSE="get_docker_inspector(): get_by_service — label filter, fallback: нормализованные лейблы и имена Compose v1/v2 из стека (5.2.0: убраны хардкод-имена slgpu-*)" />
         <fn-services_env_files PURPOSE="Парсер и рендер data/presets/<slug>.env, совместимые с serve.sh" />
         <fn-services_presets PURPOSE="Preset DB ↔ data/presets/*.env: presentation_preset_parameters, migrate_preset_parameters_to_canonical_if_needed; CRUD, POST /presets/{id}/export; POST /presets/sync и /import-templates; GET/PATCH/DELETE как в CONTRACT" />
         <fn-services_hf_models PURPOSE="Реестр HF моделей и статусы скачивания: GET /models синхронизирует DB с фактическими папками MODELS_DIR/&lt;org&gt;/&lt;repo&gt;; в ответе HFModelOut.pull_progress (активная Job native.model.pull по resource=hf_id); active_pull_jobs_by_resource; PATCH меняет revision/notes, DELETE удаляет запись и опционально локальные веса внутри MODELS_DIR" />
@@ -216,6 +236,7 @@
     </M-STACK-REGISTRY>
 
     <!-- v5.0.0: удалены с хоста cmd_up/down/pull/bench/monitoring/load/prepare/restart, docker/web-compose.defaults.env, configs/secrets/* examples; LLM/мониторинг — только web UI / native.* -->
+    <!-- v5.2.0: добавлен M-CONFIG (StackConfig); удалён docker/docker-compose.llm.yml; configs/main.env — только шаблон импорта; добавлен configs/bootstrap.env (минимум для cmd_web); реестр расширен группой network (SLGPU_NETWORK_NAME, *_INTERNAL_PORT, *_SERVICE_NAME, *_CONTAINER_NAME, WEB_DOCKER_IMAGE); compose YAMLs полностью параметризованы; configs/monitoring/{prometheus.yml,loki-config.yaml,promtail-config.yml,datasource.yml} → *.tmpl + render_monitoring_configs(); удалён seed_stack_params_from_main_env_if_empty; добавлен GET /api/v1/app-config/missing -->
 
     <!-- CrossLinks -->
     <CrossLink from="M-CLI" to="M-LIB" relation="delegates all commands" />
@@ -240,5 +261,9 @@
     <CrossLink from="M-WEB" to="M-UP" relation="v5: только native.slot.* (docker-py); хост — без up" />
     <CrossLink from="M-WEB" to="M-DOWN" relation="v5: native.slot.down; хост — без down" />
     <CrossLink from="M-WEB" to="M-BENCH" relation="native.bench.* + data/bench/results" />
+    <CrossLink from="M-CONFIG" to="M-WEB" relation="источник правды стека для backend" />
+    <CrossLink from="M-CONFIG" to="M-MONITOR" relation="render_monitoring_configs *.tmpl → ${WEB_DATA_DIR}/.slgpu/monitoring/" />
+    <CrossLink from="M-MONITOR" to="M-CONFIG" relation="bind рендереных конфигов из ${WEB_DATA_DIR}/.slgpu/monitoring/" />
+    <CrossLink from="M-LIB" to="M-ENV" relation="cmd_web --env-file configs/bootstrap.env" />
   </Project>
 </KnowledgeGraph>

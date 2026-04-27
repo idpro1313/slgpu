@@ -1,4 +1,4 @@
-<VerificationPlan VERSION="2.5.0">
+<VerificationPlan VERSION="2.6.0">
   <GlobalPolicy>
     <log-format>[Module][function][BLOCK_NAME] message</log-format>
     <deterministic-first>true</deterministic-first>
@@ -209,6 +209,7 @@
         <file>web/backend/tests/test_slots_runtime.py</file>
         <file>web/backend/tests/test_preset_clone.py</file>
         <file>web/backend/tests/test_4_0_concurrency.py</file>
+        <file>web/backend/tests/test_main_env.py</file>
       </test-files>
       <module-checks>
         <check-1>python -c "import compileall, sys; sys.exit(0 if compileall.compile_dir('web/backend/app', quiet=1) else 1)"</check-1>
@@ -244,6 +245,9 @@
         <scenario-24 kind="failure">4.0.0 race: `POST /runtime/slots` с `gpu_indices`, пересекающимися с busy слотом или внешним `slot_key: external` в `GET /gpu/availability`, — HTTP 400/409; пересечение с другим `requested` в БД — отклонение.</scenario-24>
         <scenario-25 kind="success">4.0.0: `stop_containers_for_slot_key_sync` / `native.slot.down` останавливают контейнеры по label `com.develonica.slgpu.slot={key}`; тест `test_4_0_concurrency` (mock) и unit `_enrich_processes_with_slot_keys` (mock docker top) закрепляют путь без опоры только на `engine` в БД.</scenario-25>
         <scenario-26 kind="success">`PATCH /api/v1/settings/public-access` с новым `litellm_api_key` пишет в `audit_events` запись с `note`, содержащим `[BLOCK_KEY_ROTATED]`; в ответе — `litellm_api_key_updated`/`key_updated`; `GET` по-прежнему отдаёт только `litellm_api_key_set`, не сам ключ.</scenario-26>
+        <scenario-27 kind="success">5.2.0: `tests/test_main_env.py::test_main_env_covers_registry_keys` и `test_main_env_required_keys_have_values` — `configs/main.env` содержит все ключи `STACK_KEY_REGISTRY`, обязательные имеют непустые значения.</scenario-27>
+        <scenario-28 kind="success">5.2.0: `GET /api/v1/app-config/missing?scope=monitoring_up` на пустой БД возвращает 200 с непустым `missing[]`, содержащим `SLGPU_NETWORK_NAME`; `?scope=nope` → 400; без `scope` — `scopes{web_up,monitoring_up,proxy_up,llm_slot,...}`.</scenario-28>
+        <scenario-29 kind="success">5.2.0: `render_monitoring_configs` рендерит `prometheus.yml`/`loki-config.yaml`/`promtail-config.yml`/`datasource.yml` в `${WEB_DATA_DIR}/.slgpu/monitoring/` из `*.tmpl` с подстановкой `${VAR}` из БД; `compose_exec.ensure_slgpu_network` принимает `network_name=${SLGPU_NETWORK_NAME}` и `project_label=${WEB_COMPOSE_PROJECT_*}`; в `slot_runtime` сетевой алиас подключается к сети с именем из БД.</scenario-29>
       </scenarios>
       <required-log-markers>
         <marker-1>[WEB][jobs][BLOCK_RUN_JOB]</marker-1>

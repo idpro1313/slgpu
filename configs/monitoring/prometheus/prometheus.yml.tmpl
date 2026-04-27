@@ -1,0 +1,54 @@
+# Шаблон Prometheus. Рендерится backend'ом (render_monitoring_configs) из БД (stack_params)
+# в `${WEB_DATA_DIR}/.slgpu/monitoring/prometheus.yml`. Compose монтирует именно отрендеренную копию.
+# Жёстких имён сервисов / портов / IP здесь быть НЕ должно — все значения через ${VAR}.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/prometheus-alerts.yml
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:${PROMETHEUS_INTERNAL_PORT}"]
+
+  # vLLM/SGLang скрейпятся через хост-шлюз: short DNS внутри `${SLGPU_NETWORK_NAME}` для слотов
+  # инференса не гарантирован (LLM-слоты — отдельный compose-проект). Используем
+  # host.docker.internal:<host port>, поэтому prometheus имеет extra_hosts host-gateway.
+  - job_name: vllm
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:${LLM_API_PORT}"]
+        labels:
+          engine: vllm
+    relabel_configs:
+      - action: replace
+        source_labels: [__address__]
+        regex: .*
+        target_label: instance
+        replacement: vllm:${LLM_API_PORT}
+
+  - job_name: sglang
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:${LLM_API_PORT_SGLANG}"]
+        labels:
+          engine: sglang
+    relabel_configs:
+      - action: replace
+        source_labels: [__address__]
+        regex: .*
+        target_label: instance
+        replacement: sglang:${LLM_API_PORT_SGLANG}
+
+  - job_name: dcgm
+    static_configs:
+      - targets: ["${DCGM_EXPORTER_SERVICE_NAME}:${DCGM_EXPORTER_INTERNAL_PORT}"]
+
+  # job=node-exporter — типичный фильтр Grafana «Node Exporter Full» (ID 1860).
+  - job_name: node-exporter
+    static_configs:
+      - targets: ["${NODE_EXPORTER_SERVICE_NAME}:${NODE_EXPORTER_INTERNAL_PORT}"]
+        labels:
+          instance: host

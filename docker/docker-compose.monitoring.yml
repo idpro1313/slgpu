@@ -1,13 +1,13 @@
-# DCGM, node-exporter, Prometheus, Grafana, Loki, Promtail — `./slgpu monitoring up`.
-# Langfuse + LiteLLM + Postgres/MinIO/… — `docker/docker-compose.proxy.yml` (проект `slgpu-proxy`), тот же `./slgpu monitoring up` после metrics.
-# Внешняя сеть `slgpu`. env: `${WEB_DATA_DIR}/.slgpu/compose-service.env` (по умолч. data/web; из БД / main.env).
+# DCGM, node-exporter, Prometheus, Grafana, Loki, Promtail — поднимаются из `slgpu-web` через `native.monitoring.up`.
+# Langfuse + LiteLLM + Postgres/MinIO/… — `docker/docker-compose.proxy.yml` (проект `${WEB_COMPOSE_PROJECT_PROXY}`).
+# Внешняя сеть: `${SLGPU_NETWORK_NAME}`. env: `${WEB_DATA_DIR}/.slgpu/compose-service.env` (генерируется backend из БД).
 
 name: ${WEB_COMPOSE_PROJECT_MONITORING}
 
 services:
   dcgm-exporter:
-    # Жёсткие имена без …-1; внутри сети `slgpu` обращайтесь по имени сервиса (dcgm-exporter, postgres, …)
-    container_name: slgpu-monitoring-dcgm-exporter
+    container_name: ${DCGM_EXPORTER_CONTAINER_NAME}
+    hostname: ${DCGM_EXPORTER_SERVICE_NAME}
     image: ${DCGM_EXPORTER_IMAGE}
     env_file:
       - ${WEB_DATA_DIR}/.slgpu/compose-service.env
@@ -16,9 +16,11 @@ services:
     cap_add:
       - SYS_ADMIN
     ports:
-      - "${DCGM_BIND}:9400:9400"
+      - "${DCGM_BIND}:${DCGM_EXPORTER_INTERNAL_PORT}:${DCGM_EXPORTER_INTERNAL_PORT}"
     networks:
-      - slgpu
+      slgpu:
+        aliases:
+          - ${DCGM_EXPORTER_SERVICE_NAME}
     logging:
       driver: json-file
       options:
@@ -26,7 +28,8 @@ services:
         max-file: "5"
 
   node-exporter:
-    container_name: slgpu-monitoring-node-exporter
+    container_name: ${NODE_EXPORTER_CONTAINER_NAME}
+    hostname: ${NODE_EXPORTER_SERVICE_NAME}
     image: ${NODE_EXPORTER_IMAGE}
     env_file:
       - ${WEB_DATA_DIR}/.slgpu/compose-service.env
@@ -42,9 +45,11 @@ services:
       - /sys:/host/sys:ro
       - /:/host:ro,rslave
     ports:
-      - "${NODE_EXPORTER_BIND}:9100:9100"
+      - "${NODE_EXPORTER_BIND}:${NODE_EXPORTER_INTERNAL_PORT}:${NODE_EXPORTER_INTERNAL_PORT}"
     networks:
-      - slgpu
+      slgpu:
+        aliases:
+          - ${NODE_EXPORTER_SERVICE_NAME}
     logging:
       driver: json-file
       options:
@@ -52,7 +57,8 @@ services:
         max-file: "5"
 
   loki:
-    container_name: slgpu-monitoring-loki
+    container_name: ${LOKI_CONTAINER_NAME}
+    hostname: ${LOKI_SERVICE_NAME}
     image: ${LOKI_IMAGE}
     # Данные Loki: chunks, index, wal — на хосте; права: ./slgpu monitoring fix-perms
     env_file:
@@ -62,12 +68,15 @@ services:
     # может создать каталог `loki-config.yaml` → «is a directory».
     command: -config.file=/etc/loki/loki-config.yaml
     networks:
-      - slgpu
+      slgpu:
+        aliases:
+          - ${LOKI_SERVICE_NAME}
     ports:
-      - "${LOKI_BIND}:${LOKI_PORT}:3100"
+      - "${LOKI_BIND}:${LOKI_PORT}:${LOKI_INTERNAL_PORT}"
     volumes:
       - ${LOKI_DATA_DIR}:/loki
-      - ./configs/monitoring/loki:/etc/loki:ro
+      # Сгенерированный из БД конфиг (см. render_monitoring_configs в backend).
+      - ${WEB_DATA_DIR}/.slgpu/monitoring:/etc/loki:ro
     logging:
       driver: json-file
       options:
@@ -75,25 +84,27 @@ services:
         max-file: "5"
 
   promtail:
-    container_name: slgpu-monitoring-promtail
+    container_name: ${PROMTAIL_CONTAINER_NAME}
+    hostname: ${PROMTAIL_SERVICE_NAME}
     image: ${PROMTAIL_IMAGE}
     # Сбор json-логов Docker: socket + /var/lib/docker/containers; позиции — PROMTAIL_DATA_DIR
     env_file:
       - ${WEB_DATA_DIR}/.slgpu/compose-service.env
     restart: unless-stopped
     user: root
-    # Аналогично Loki: монтирование каталога, чтобы путь к конфигу оставался файлом.
     command: -config.file=/etc/promtail/promtail-config.yml
     depends_on:
       loki:
         condition: service_started
     networks:
-      - slgpu
+      slgpu:
+        aliases:
+          - ${PROMTAIL_SERVICE_NAME}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - ${PROMTAIL_DATA_DIR}:/data
-      - ./configs/monitoring/promtail:/etc/promtail:ro
+      - ${WEB_DATA_DIR}/.slgpu/monitoring:/etc/promtail:ro
     logging:
       driver: json-file
       options:
@@ -101,24 +112,26 @@ services:
         max-file: "5"
 
   prometheus:
-    container_name: slgpu-monitoring-prometheus
+    container_name: ${PROMETHEUS_CONTAINER_NAME}
+    hostname: ${PROMETHEUS_SERVICE_NAME}
     image: ${PROMETHEUS_IMAGE}
     # Права на PROMETHEUS_DATA_DIR: ./scripts/monitoring_fix_permissions.sh или ./slgpu monitoring fix-perms
-    # Скрейп vLLM/SGLang идёт на host.docker.internal:порт (см. prometheus.yml) — шлюз в хост, где
-    # слушают опубликованные 8111/8222. Нужен для Linux (compose: host-gateway).
+    # Скрейп vLLM/SGLang идёт на host.docker.internal:порт (см. отрендеренный prometheus.yml) — мост в хост.
     env_file:
       - ${WEB_DATA_DIR}/.slgpu/compose-service.env
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - "${PROMETHEUS_BIND}:${PROMETHEUS_PORT}:9090"
+      - "${PROMETHEUS_BIND}:${PROMETHEUS_PORT}:${PROMETHEUS_INTERNAL_PORT}"
     networks:
-      - slgpu
+      slgpu:
+        aliases:
+          - ${PROMETHEUS_SERVICE_NAME}
     volumes:
       - ${PROMETHEUS_DATA_DIR}:/prometheus
-      # Каталог целиком (как Loki): иначе при «пустом» пути Docker создаёт каталог вместо .yml.
-      - ./configs/monitoring/prometheus:/etc/prometheus:ro
+      # Сгенерированный из БД prometheus.yml + статичные alerts (см. render_monitoring_configs).
+      - ${WEB_DATA_DIR}/.slgpu/monitoring:/etc/prometheus:ro
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
@@ -132,7 +145,8 @@ services:
         max-file: "5"
 
   grafana:
-    container_name: slgpu-monitoring-grafana
+    container_name: ${GRAFANA_CONTAINER_NAME}
+    hostname: ${GRAFANA_SERVICE_NAME}
     image: ${GRAFANA_IMAGE}
     # Права на GRAFANA_DATA_DIR: ./slgpu monitoring fix-perms (uid/gid из образа, без угадывания)
     env_file:
@@ -144,9 +158,11 @@ services:
       loki:
         condition: service_started
     ports:
-      - "${GRAFANA_BIND}:${GRAFANA_PORT}:3000"
+      - "${GRAFANA_BIND}:${GRAFANA_PORT}:${GRAFANA_INTERNAL_PORT}"
     networks:
-      - slgpu
+      slgpu:
+        aliases:
+          - ${GRAFANA_SERVICE_NAME}
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
@@ -154,7 +170,9 @@ services:
       GF_SERVER_ROOT_URL: ${GF_SERVER_ROOT_URL}
     volumes:
       - ${GRAFANA_DATA_DIR}:/var/lib/grafana
+      # provisioning: dashboards/ + сгенерированный datasource.yml (рендер из БД).
       - ./configs/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ${WEB_DATA_DIR}/.slgpu/monitoring/datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml:ro
     logging:
       driver: json-file
       options:
@@ -163,5 +181,5 @@ services:
 
 networks:
   slgpu:
-    name: slgpu
+    name: ${SLGPU_NETWORK_NAME}
     external: true

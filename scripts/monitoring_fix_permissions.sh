@@ -7,16 +7,16 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT" || exit 1
 
+# Источник переменных: `configs/bootstrap.env` (PRESETS_DIR/MODELS_DIR/WEB_DATA_DIR);
+# каталоги мониторинга задаются как аргументы или берутся из переменных окружения,
+# которые backend (`native.monitoring.fix-perms`) подставляет из БД через
+# `${WEB_DATA_DIR}/.slgpu/compose-service.env` перед запуском скрипта.
+# Корневой `main.env` ИГНОРИРУЕТСЯ — это шаблон импорта, не runtime-файл.
 # shellcheck disable=SC1091
-if [[ -f "${ROOT}/configs/main.env" ]]; then
+if [[ -f "${ROOT}/configs/bootstrap.env" ]]; then
   set -a
   # shellcheck disable=SC1090
-  source "${ROOT}/configs/main.env"
-  set +a
-elif [[ -f "${ROOT}/main.env" ]]; then
-  set -a
-  # shellcheck disable=SC1090
-  source "${ROOT}/main.env"
+  source "${ROOT}/configs/bootstrap.env"
   set +a
 fi
 

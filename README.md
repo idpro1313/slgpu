@@ -2,7 +2,7 @@
 
 Репозиторий **стенда для сравнения LLM-инференса** на Linux-сервере с GPU: два движка (**vLLM** и **SGLang**) в Docker, общий локальный кэш моделей, OpenAI-совместимый HTTP API, нагрузочный бенчмарк, **Prometheus + Grafana Loki (логи) + Promtail + Langfuse (трейсинг) + LiteLLM Proxy (шлюз) + NVIDIA DCGM Exporter** (см. [§3](#3-сервисы-и-порты), [`configs/monitoring/README.md`](configs/monitoring/README.md)).
 
-> **Версия 5.1.0:** на хосте — только bootstrap web: **`./slgpu help`** и **`./slgpu web up|down|restart|logs|build|install`**. Стек в рантайме — **SQLite** (`stack_params`); стартовый импорт — **`POST /api/v1/app-config/install`** читает **`main.env` в корне** (копия из [`configs/main.env`](configs/main.env)). Старые host-команды **`./slgpu` `up|pull|monitoring|bench|load|prepare`** **удалены** — вместо них jobs **`native.*`** в **slgpu-web** (см. [`web/CONTRACT.md`](web/CONTRACT.md), [`docs/HISTORY.md`](docs/HISTORY.md)).
+> **Версия 5.2.0:** на хосте — только bootstrap web: **`./slgpu help`** и **`./slgpu web up|down|restart|logs|build|install`**. Стек в рантайме — **SQLite** (`stack_params`); стартовый импорт — **`POST /api/v1/app-config/install`** читает **`configs/main.env`** (теперь это **только** шаблон импорта, backend больше не сидит БД автоматически — нажмите «Импорт настроек» в UI). Минимальный bootstrap для `./slgpu web up` — **`configs/bootstrap.env`**. Старые host-команды **`./slgpu` `up|pull|monitoring|bench|load|prepare`** **удалены** — вместо них jobs **`native.*`** в **slgpu-web** (см. [`web/CONTRACT.md`](web/CONTRACT.md), [`docs/HISTORY.md`](docs/HISTORY.md)).
 
 Целевая конфигурация при разработке: **8× NVIDIA H200**. **Tensor parallel по умолчанию `TP=8`**: в пресетах в БД и в [`serve.sh`](scripts/serve.sh). GPU-маска — **`NVIDIA_VISIBLE_DEVICES`** в импортированном стеке. Проект рассчитан на один хост без Kubernetes.
 
@@ -96,7 +96,7 @@
 | Подкоманда | Назначение |
 |------------|------------|
 | **`help`** | Справка. |
-| **`web` `up` / `down` / `restart` / `logs` / `build` / `install`** | Контейнер **slgpu-web** ([`docker/docker-compose.web.yml`](docker/docker-compose.web.yml)). Для compose на хосте: env-файл — **`configs/main.env`** (`scripts/_lib.sh`). **`install`**: `POST /api/v1/app-config/install` читает **`main.env` в корне репо** и сидит SQLite. |
+| **`web` `up` / `down` / `restart` / `logs` / `build` / `install`** | Контейнер **slgpu-web** ([`docker/docker-compose.web.yml`](docker/docker-compose.web.yml)). Для compose на хосте: env-файл — **`configs/bootstrap.env`** (`scripts/_lib.sh`). **`install`**: `POST /api/v1/app-config/install` читает **`configs/main.env`** и сидит SQLite. |
 
 Остальное (модели, слоты, мониторинг, proxy, бенч) — **Develonica.LLM**, jobs **`native.*** ([`web/CONTRACT.md`](web/CONTRACT.md)). Бенч и долгий load-прогон — **из UI** (`/bench` и API), на хосте при необходимости — `python scripts/bench_openai.py` / `bench_load.py` вручную. Артефакты: **`data/bench/results/<engine>/<timestamp>/summary.json`**.
 
@@ -104,9 +104,10 @@
 
 ## 5. Конфигурация
 
-- **Хост, `./slgpu web`:** для `docker compose` на VM используется **[`configs/main.env`](configs/main.env)** (см. `scripts/_lib.sh`); **источник правды в рантайме slgpu-web** — **SQLite** (`stack_params`, `stack_key_registry` / `DEFAULT_STACK` в `web/backend/.../stack_config.py`). Для **`POST /api/v1/app-config/install`** по-прежнему читается **`main.env` в корне репо** (скопируйте из `configs/main.env` или задайте вручную).
+- **Хост, `./slgpu web`:** для `docker compose` на VM используется **минимальный** [`configs/bootstrap.env`](configs/bootstrap.env) (см. `scripts/_lib.sh`). Сам **`configs/main.env`** теперь **только** шаблон для кнопки «Импорт настроек» в UI — backend читает его **только** в обработчике `POST /api/v1/app-config/install`, **не** при старте. Источник правды в рантайме slgpu-web — **SQLite** (`stack_params`, реестр `STACK_KEY_REGISTRY` в `web/backend/.../stack_registry.py`).
 - **`data/presets/<preset>.env`** (каталог **`PRESETS_DIR`**, обычно **`./data/presets`**) — модель, образ vLLM, `MAX_MODEL_LEN`, `TP`, парсеры, KV. Импорт в БД — через UI или `install` (см. [web/README.md](web/README.md)).
-- **Контейнеры vLLM/SGLang, мониторинг, proxy** поднимаются **из Develonica.LLM** (jobs `native.*`), не через удалённые host-команды. Снимок env для compose: **`${WEB_DATA_DIR}/.slgpu/compose-service.env`**, ключи — по **`STACK_KEY_REGISTRY`**. **Ручной** запуск `docker compose -f docker/docker-compose.llm.yml` с **`env_file: configs/main.env`** — см. [docker/README.md](docker/README.md) (помечено как legacy). Внутри слотов: [`scripts/serve.sh`](scripts/serve.sh) → `/etc/slgpu/serve.sh`.
+- **Конфиги мониторинга** (`prometheus.yml`, `loki-config.yaml`, `promtail-config.yml`, `datasource.yml`) хранятся как **`*.tmpl`** и **рендерятся** из БД (`render_monitoring_configs()`) в **`${WEB_DATA_DIR}/.slgpu/monitoring/`** перед `monitoring up/restart` — никаких хардкод-DNS внутри YAML.
+- **Контейнеры vLLM/SGLang, мониторинг, proxy** поднимаются **из Develonica.LLM** (jobs `native.*`), не через host-команды. Снимок env для compose: **`${WEB_DATA_DIR}/.slgpu/compose-service.env`** (генерируется из БД, ключи — по **`STACK_KEY_REGISTRY`**, включая имена сервисов / контейнеров / сети — `*_SERVICE_NAME`, `*_CONTAINER_NAME`, `*_INTERNAL_PORT`, `SLGPU_NETWORK_NAME`, `WEB_DOCKER_IMAGE`). Внутри слотов: [`scripts/serve.sh`](scripts/serve.sh) → `/etc/slgpu/serve.sh`.
 
 Справка по формату пресетов: [`configs/models/README.md`](configs/models/README.md).
 
@@ -289,20 +290,19 @@ slgpu/
 ├── AGENTS.md
 ├── docker/
 │   ├── README.md
-│   ├── docker-compose.llm.yml
 │   ├── docker-compose.monitoring.yml
 │   ├── docker-compose.proxy.yml
 │   ├── Dockerfile.web
 │   └── docker-compose.web.yml
-├── main.env                    # не в git; шаблон — configs/main.env
 ├── README.md
 ├── docs/
 │   ├── AGENTS.md
 │   └── HISTORY.md
 ├── configs/
-│   ├── main.env
+│   ├── bootstrap.env           # минимум для ./slgpu web up (--env-file)
+│   ├── main.env                # шаблон импорта в UI (POST /app-config/install)
 │   ├── models/README.md
-│   └── monitoring/
+│   └── monitoring/             # *.tmpl → рендер в WEB_DATA_DIR/.slgpu/monitoring/
 ├── data/                       # см. data/README.md
 ├── scripts/
 │   ├── serve.sh
