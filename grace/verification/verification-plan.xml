@@ -1,4 +1,4 @@
-<VerificationPlan VERSION="2.6.0">
+<VerificationPlan VERSION="2.6.1">
   <GlobalPolicy>
     <log-format>[Module][function][BLOCK_NAME] message</log-format>
     <deterministic-first>true</deterministic-first>
@@ -248,6 +248,8 @@
         <scenario-27 kind="success">5.2.0: `tests/test_main_env.py::test_main_env_covers_registry_keys` и `test_main_env_required_keys_have_values` — `configs/main.env` содержит все ключи `STACK_KEY_REGISTRY`, обязательные имеют непустые значения.</scenario-27>
         <scenario-28 kind="success">5.2.0: `GET /api/v1/app-config/missing?scope=monitoring_up` на пустой БД возвращает 200 с непустым `missing[]`, содержащим `SLGPU_NETWORK_NAME`; `?scope=nope` → 400; без `scope` — `scopes{web_up,monitoring_up,proxy_up,llm_slot,...}`.</scenario-28>
         <scenario-29 kind="success">5.2.0: `render_monitoring_configs` рендерит `prometheus.yml`/`loki-config.yaml`/`promtail-config.yml`/`datasource.yml` в `${WEB_DATA_DIR}/.slgpu/monitoring/` из `*.tmpl` с подстановкой `${VAR}` из БД; `compose_exec.ensure_slgpu_network` принимает `network_name=${SLGPU_NETWORK_NAME}` и `project_label=${WEB_COMPOSE_PROJECT_*}`; в `slot_runtime` сетевой алиас подключается к сети с именем из БД.</scenario-29>
+        <scenario-30 kind="failure">5.2.1 (regression): в `*.tmpl` (`prometheus.yml.tmpl`, `loki-config.yaml.tmpl`, `promtail-config.yml.tmpl`, `datasource.yml.tmpl`) НЕ должно встречаться буквальное `${VAR}` или иные плейсхолдеры с именами, отсутствующими в `STACK_KEY_REGISTRY` — `string.Template.substitute` падает с `KeyError` в т.ч. на комментариях, и `render_monitoring_configs()` отдаёт `MissingStackParams(["VAR"], "monitoring_up")`. Проверять `rg "\\$\\{VAR\\}" configs/monitoring/` → пусто.</scenario-30>
+        <scenario-31 kind="success">5.2.1 UI Settings: `GET /api/v1/app-config/stack` возвращает поле `registry[]`; форма «Параметры окружения» рисует строки **всех** ключей реестра (даже отсутствующих в БД), группирует их по `meta.group` (paths/web/llm_api/network/compose/monitoring/proxy/inference/images/secrets/other), помечает `tr.settings-stack-row--missing-required` и `input.input--missing` те, у которых `!allow_empty && required_for≠∅ && value.trim()===''`; в третьей колонке показано `meta.description` и список scope «обязателен для: …»; ключи реестра нельзя переименовать/удалить/менять флаг `Секрет`.</scenario-31>
       </scenarios>
       <required-log-markers>
         <marker-1>[WEB][jobs][BLOCK_RUN_JOB]</marker-1>

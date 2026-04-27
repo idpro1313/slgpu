@@ -1,6 +1,6 @@
 # Шаблон Promtail. Рендер backend'ом (render_monitoring_configs) в
-# `${WEB_DATA_DIR}/.slgpu/monitoring/promtail-config.yml`. Образ: ${PROMTAIL_IMAGE}.
-# Без хардкодов — только ${VAR}.
+# WEB_DATA_DIR/.slgpu/monitoring/promtail-config.yml. Образ берётся из stack_params (PROMTAIL_IMAGE).
+# Без хардкодов — все значения через плейсхолдеры string.Template ниже.
 server:
   http_listen_port: 9080
   grpc_listen_port: 0

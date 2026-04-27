@@ -13,178 +13,188 @@ import type {
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
 
-type StackRow = { id: string; key: string; value: string; isSecret: boolean };
+type RegistryEntry = NonNullable<AppConfigStack["registry"]>[number];
+
+type StackRow = {
+  id: string;
+  key: string;
+  value: string;
+  isSecret: boolean;
+  /** true: ключ существует в реестре stack_registry — флаг секрета и группа фиксированы. */
+  fromRegistry: boolean;
+};
 
 function newRowId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `r-${Math.random().toString(36).slice(2)}`;
 }
 
-/** Явные пути и * _DATA_DIR (кроме ключей инференса — их нет с таким суффиксом в типичном стеке). */
-const PATH_KEYS = new Set<string>([
-  "MODELS_DIR",
-  "PRESETS_DIR",
-  "WEB_DATA_DIR",
-  "SLGPU_MODEL_ROOT",
-  "PROMETHEUS_DATA_DIR",
-  "GRAFANA_DATA_DIR",
-  "LOKI_DATA_DIR",
-  "PROMTAIL_DATA_DIR",
-]);
-
-function isPathKey(key: string): boolean {
-  return PATH_KEYS.has(key) || key.endsWith("_DATA_DIR");
-}
-
-const MONITORING_COMPOSE_KEYS = new Set<string>([
-  "PROMETHEUS_PORT",
-  "PROMETHEUS_BIND",
-  "GRAFANA_PORT",
-  "GRAFANA_BIND",
-  "LANGFUSE_PORT",
-  "LITELLM_PORT",
-  "LOKI_PORT",
-  "LOKI_BIND",
-  "WEB_COMPOSE_PROJECT_INFER",
-  "WEB_COMPOSE_PROJECT_MONITORING",
-  "WEB_COMPOSE_PROJECT_PROXY",
-]);
-
-const WEB_UI_KEYS = new Set<string>(["WEB_PORT", "WEB_BIND", "WEB_LOG_LEVEL"]);
-
-const LLM_API_KEYS = new Set<string>(["LLM_API_BIND", "LLM_API_PORT", "LLM_API_PORT_SGLANG"]);
-
-const INFERENCE_EXACT = new Set<string>([
-  "TP",
-  "GPU_MEM_UTIL",
-  "MAX_MODEL_LEN",
-  "KV_CACHE_DTYPE",
-  "NVIDIA_VISIBLE_DEVICES",
-  "TOOL_CALL_PARSER",
-  "REASONING_PARSER",
-  "SERVED_MODEL_NAME",
-  "SLGPU_SERVED_MODEL_NAME",
-  "MODEL_ID",
-  "MODEL_REVISION",
-  "MAX_NUM_BATCHED_TOKENS",
-  "MAX_NUM_SEQS",
-  "BLOCK_SIZE",
-  "DISABLE_CUSTOM_ALL_REDUCE",
-  "ENABLE_PREFIX_CACHING",
-  "ENABLE_EXPERT_PARALLEL",
-  "DATA_PARALLEL_SIZE",
-  "VLLM_HOST",
-  "VLLM_PORT",
-  "TRUST_REMOTE_CODE",
-  "ENABLE_CHUNKED_PREFILL",
-  "ENABLE_AUTO_TOOL_CHOICE",
-  "ATTENTION_BACKEND",
-  "TOKENIZER_MODE",
-  "COMPILATION_CONFIG",
-  "ENFORCE_EAGER",
-  "SPECULATIVE_CONFIG",
-  "CHAT_TEMPLATE_CONTENT_FORMAT",
-  "VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS",
-  "MM_ENCODER_TP_MODE",
-]);
-
-function isInferenceKey(key: string): boolean {
-  if (INFERENCE_EXACT.has(key)) return true;
-  if (key.startsWith("SLGPU_") && key !== "SLGPU_MODEL_ROOT") return true;
-  if (key.startsWith("VLLM_")) return true;
-  if (key.startsWith("SGLANG_")) return true;
-  if (key.startsWith("MM_ENCODER_")) return true;
-  if (key.startsWith("CHAT_TEMPLATE_")) return true;
-  return false;
-}
-
-type StackParamGroupId =
+/** ID групп берём из stack_registry (services/stack_registry.py KeyMeta.group). */
+type StackGroupId =
   | "paths"
   | "web"
   | "llm_api"
+  | "network"
+  | "compose"
+  | "images"
   | "monitoring"
+  | "proxy"
   | "inference"
-  | "other"
-  | "secrets";
+  | "secrets"
+  | "other";
 
-const STACK_GROUP_ORDER: StackParamGroupId[] = [
+const STACK_GROUP_ORDER: StackGroupId[] = [
   "paths",
   "web",
   "llm_api",
+  "network",
+  "compose",
   "monitoring",
+  "proxy",
   "inference",
-  "other",
+  "images",
   "secrets",
+  "other",
 ];
 
-const STACK_GROUP_META: Record<
-  StackParamGroupId,
-  { title: string; subtitle: string }
-> = {
+const STACK_GROUP_META: Record<StackGroupId, { title: string; subtitle: string }> = {
   paths: {
     title: "Пути и каталоги",
-    subtitle: "Модели, пресеты, данные web и каталоги мониторинга на хосте.",
+    subtitle: "Хост-пути для моделей, пресетов, web-данных и каталогов мониторинга (bind mount).",
   },
   web: {
     title: "Web UI приложения",
-    subtitle: "Порт и bind Develonica.LLM, уровень лога.",
+    subtitle: "Публикация slgpu-web (порт/bind), уровень логов, host для проб мониторинга и LLM.",
   },
   llm_api: {
     title: "Сеть API движка",
-    subtitle: "Адрес и порты OpenAI-совместимого API vLLM / SGLang.",
+    subtitle: "Хостовой bind и порты OpenAI-совместимого API vLLM / SGLang.",
+  },
+  network: {
+    title: "Контейнеры и DNS",
+    subtitle:
+      "Имя slgpu-сети, контейнеры/service DNS и внутренние порты сервисов мониторинга и прокси (используются compose и Prometheus / Grafana datasource).",
+  },
+  compose: {
+    title: "Compose-проекты",
+    subtitle: "Имена docker-compose проектов для LLM, мониторинга и прокси.",
   },
   monitoring: {
-    title: "Мониторинг и compose",
+    title: "Мониторинг",
     subtitle:
-      "Порты в БД; ./slgpu monitoring на сервере использует main.env — выровняйте вручную или перезапускайте мониторинг из UI (Задачи). Подробнее: configs/monitoring/README.md.",
+      "Порты, bind, ретенция и параметры стека мониторинга. Конфиги Prometheus/Loki/Promtail/Grafana рендерятся backend'ом из этих значений (см. configs/monitoring/README.md).",
+  },
+  proxy: {
+    title: "LiteLLM, Langfuse и зависимости",
+    subtitle: "Порты, bind и креды Langfuse/LiteLLM, Postgres, ClickHouse, Redis, MinIO.",
   },
   inference: {
     title: "GPU и инференс",
-    subtitle: "TP, память, KV, видимые GPU, парсеры; vLLM — без префикса SLGPU (SERVED_MODEL_NAME, MAX_NUM_BATCHED_TOKENS, …), служебные — SLGPU_MODEL_ROOT, SLGPU_NVIDIA_VISIBLE_DEVICES.",
+    subtitle:
+      "TP, память, KV, видимые GPU, парсеры; диапазоны портов для авто-распределения слотов; служебные SLGPU_* / VLLM_* / SGLANG_*.",
   },
-  other: {
-    title: "Прочие параметры",
-    subtitle: "Ключи вне типовых групп и новые переменные.",
+  images: {
+    title: "Docker-образы",
+    subtitle: "Теги контейнеров для slgpu-web и сервисов мониторинга/прокси.",
   },
   secrets: {
     title: "Секреты и ключи",
     subtitle:
-      "Значения не отдаются в API; пустое поле — не менять. Список имён с маской см. ниже формы.",
+      "Значения не отдаются в API; пустое поле — оставить как есть. Сброс — стереть значение в строке и сохранить.",
+  },
+  other: {
+    title: "Прочие параметры",
+    subtitle: "Ключи вне реестра — добавленные пользователем переменные.",
   },
 };
 
-function stackParamGroupId(row: StackRow): StackParamGroupId {
-  if (row.isSecret) return "secrets";
-  const k = row.key.trim();
-  if (!k) return "other";
-  if (isPathKey(k)) return "paths";
-  if (MONITORING_COMPOSE_KEYS.has(k)) return "monitoring";
-  if (WEB_UI_KEYS.has(k)) return "web";
-  if (LLM_API_KEYS.has(k)) return "llm_api";
-  if (isInferenceKey(k)) return "inference";
-  return "other";
+const SCOPE_LABELS: Record<string, string> = {
+  web_up: "запуск web",
+  monitoring_up: "монитори&shy;нг",
+  proxy_up: "LiteLLM/Langfuse",
+  llm_slot: "LLM-слот",
+  fix_perms: "fix-perms",
+  pull: "загрузка моделей",
+  bench: "бенчмарк",
+  port_allocation: "распределение портов",
+  probes: "пробы",
+};
+
+function formatScopeLabel(scope: string): string {
+  return SCOPE_LABELS[scope] ?? scope;
+}
+
+function isMissingRequired(meta: RegistryEntry | undefined, value: string): boolean {
+  if (!meta) return false;
+  if (meta.allow_empty) return false;
+  if (meta.required_for.length === 0) return false;
+  return value.trim() === "";
 }
 
 function rowsFromServer(data: AppConfigStack): StackRow[] {
   const stack = data.stack ?? {};
   const sec = data.secrets ?? {};
-  return [
-    ...Object.keys(stack)
-      .sort()
-      .map((k) => ({
-        id: newRowId(),
-        key: k,
-        value: stack[k] ?? "",
-        isSecret: false as const,
-      })),
-    ...Object.keys(sec)
-      .sort()
-      .map((k) => ({
-        id: newRowId(),
-        key: k,
-        value: "",
-        isSecret: true as const,
-      })),
-  ];
+  const registry = data.registry ?? [];
+  const regByKey = new Map<string, RegistryEntry>();
+  for (const r of registry) regByKey.set(r.key, r);
+
+  const rows: StackRow[] = [];
+  const seen = new Set<string>();
+
+  // Сначала идут ключи из реестра в порядке groups → имени, чтобы группы были полными даже
+  // когда в БД часть ключей ещё не заполнена (видно «чего не хватает»).
+  const orderedRegKeys = [...registry].sort((a, b) => {
+    const gi = STACK_GROUP_ORDER.indexOf(a.group as StackGroupId);
+    const gj = STACK_GROUP_ORDER.indexOf(b.group as StackGroupId);
+    const gia = gi === -1 ? STACK_GROUP_ORDER.length : gi;
+    const gjb = gj === -1 ? STACK_GROUP_ORDER.length : gj;
+    if (gia !== gjb) return gia - gjb;
+    return a.key.localeCompare(b.key);
+  });
+
+  for (const meta of orderedRegKeys) {
+    const k = meta.key;
+    const isSecret = meta.is_secret;
+    const value = isSecret ? "" : (stack[k] ?? "");
+    rows.push({ id: newRowId(), key: k, value, isSecret, fromRegistry: true });
+    seen.add(k);
+  }
+
+  // Дополнительно — пользовательские ключи из БД, которых нет в реестре.
+  for (const k of Object.keys(stack).sort()) {
+    if (seen.has(k)) continue;
+    rows.push({
+      id: newRowId(),
+      key: k,
+      value: stack[k] ?? "",
+      isSecret: false,
+      fromRegistry: false,
+    });
+    seen.add(k);
+  }
+  for (const k of Object.keys(sec).sort()) {
+    if (seen.has(k)) continue;
+    rows.push({
+      id: newRowId(),
+      key: k,
+      value: "",
+      isSecret: true,
+      fromRegistry: false,
+    });
+    seen.add(k);
+  }
+  return rows;
+}
+
+function stackGroupId(row: StackRow, regByKey: Map<string, RegistryEntry>): StackGroupId {
+  const meta = regByKey.get(row.key.trim());
+  if (meta) {
+    if (meta.is_secret) return "secrets";
+    const g = meta.group as StackGroupId;
+    if ((STACK_GROUP_ORDER as string[]).includes(g)) return g;
+    return "other";
+  }
+  if (row.isSecret) return "secrets";
+  return "other";
 }
 
 function buildStackPatch(
@@ -206,21 +216,32 @@ function buildStackPatch(
   const stack: Record<string, string | null> = {};
   const secrets: Record<string, string | null> = {};
 
-  const editedStackKeys = new Set(stackRows.map((r) => r.k));
-  for (const k of Object.keys(data.stack ?? {})) {
-    if (!editedStackKeys.has(k)) stack[k] = null;
-  }
+  // stack: апсёртим только реальные значения; пустые в форме считаем «не задано» —
+  // если ключ был в БД, удаляем (null), иначе ничего не делаем (не плодим пустые записи).
+  const existingStackKeys = new Set(Object.keys(data.stack ?? {}));
   for (const r of stackRows) {
-    stack[r.k] = r.value;
+    const v = r.value;
+    if (v === "") {
+      if (existingStackKeys.has(r.k)) stack[r.k] = null;
+    } else {
+      stack[r.k] = v;
+    }
+  }
+  // Удалённые в форме ключи (отсутствуют в норме, но были в БД) — null.
+  const formStackKeys = new Set(stackRows.map((r) => r.k));
+  for (const k of existingStackKeys) {
+    if (!formStackKeys.has(k)) stack[k] = null;
   }
 
-  const editedSecretKeys = new Set(secretRows.map((r) => r.k));
-  for (const k of Object.keys(data.secrets ?? {})) {
-    if (!editedSecretKeys.has(k)) secrets[k] = null;
-  }
+  // secrets: пустое значение = «не менять»; ввод нового — апсёрт; удаление строки = null.
+  const existingSecretKeys = new Set(Object.keys(data.secrets ?? {}));
   for (const r of secretRows) {
     const v = r.value.trim();
     if (v) secrets[r.k] = v;
+  }
+  const formSecretKeys = new Set(secretRows.map((r) => r.k));
+  for (const k of existingSecretKeys) {
+    if (!formSecretKeys.has(k)) secrets[k] = null;
   }
 
   const out: { stack?: Record<string, string | null>; secrets?: Record<string, string | null> } =
@@ -276,6 +297,12 @@ export function SettingsPage() {
     queryKey: ["app-config", "stack"],
     queryFn: () => api.get<AppConfigStack>("/app-config/stack"),
   });
+
+  const regByKey = useMemo(() => {
+    const m = new Map<string, RegistryEntry>();
+    for (const r of appStack.data?.registry ?? []) m.set(r.key, r);
+    return m;
+  }, [appStack.data?.registry]);
 
   const installCfg = useMutation({
     mutationFn: (force: boolean) =>
@@ -498,7 +525,10 @@ export function SettingsPage() {
           Первичный импорт из <span className="mono">configs/main.env</span> (секреты — вручную в
           таблице ниже); правка переменных — по группам (<span className="mono">stack_params</span>).
           Для смены секрета введите новое значение в строке, не вставляйте{" "}
-          <span className="mono">***</span>.
+          <span className="mono">***</span>. Незаполненные обязательные параметры подсвечены{" "}
+          <span style={{ color: "var(--color-danger)", fontWeight: 600 }}>красным</span> — без них
+          соответствующие задачи (запуск мониторинга, прокси, LLM-слотов) завершатся ошибкой
+          «missing keys for &lt;scope&gt;».
         </p>
 
         <Section
@@ -538,21 +568,35 @@ export function SettingsPage() {
 
         <Section
           title="Параметры окружения"
-          subtitle="Группы по назначению. Галочка «секрет» переносит ключ в последнюю группу; удаление строки удаляет ключ из БД."
+          subtitle="Группы по назначению. Колонка «Описание» — назначение и сценарии (где параметр обязателен). Удаление строки — удаление ключа из БД."
         >
           {appStack.isLoading ? (
             <div className="empty-state">Загружаем…</div>
           ) : (
             <form className="flex flex--col flex--gap-md" onSubmit={onSaveStack}>
               {STACK_GROUP_ORDER.map((gid) => {
-                const rowsInGroup = stackRows.filter((r) => stackParamGroupId(r) === gid);
+                const rowsInGroup = stackRows.filter((r) => stackGroupId(r, regByKey) === gid);
                 const meta = STACK_GROUP_META[gid];
                 const showEmptyOther = gid === "other";
                 if (rowsInGroup.length === 0 && !showEmptyOther) return null;
 
+                const missingInGroup = rowsInGroup.filter((r) =>
+                  isMissingRequired(regByKey.get(r.key.trim()), r.value),
+                ).length;
+
                 return (
                   <div key={gid} className="settings-stack-subgroup">
-                    <h3 className="settings-stack-subgroup__title">{meta.title}</h3>
+                    <h3 className="settings-stack-subgroup__title">
+                      {meta.title}
+                      {missingInGroup > 0 ? (
+                        <span
+                          className="settings-stack-subgroup__missing-badge"
+                          title="Сколько обязательных параметров в этой группе не заполнено"
+                        >
+                          незаполнено: {missingInGroup}
+                        </span>
+                      ) : null}
+                    </h3>
                     <p className="settings-stack-subgroup__lead">{meta.subtitle}</p>
                     {gid === "other" ? (
                       <div className="flex flex--gap-sm flex--wrap" style={{ marginBottom: 12 }}>
@@ -562,7 +606,13 @@ export function SettingsPage() {
                           onClick={() =>
                             setStackRows((prev) => [
                               ...prev,
-                              { id: newRowId(), key: "", value: "", isSecret: false },
+                              {
+                                id: newRowId(),
+                                key: "",
+                                value: "",
+                                isSecret: false,
+                                fromRegistry: false,
+                              },
                             ])
                           }
                           disabled={patchStack.isPending}
@@ -573,92 +623,157 @@ export function SettingsPage() {
                     ) : null}
                     <div style={{ overflowX: "auto" }}>
                       <table
-                        className="table table--compact"
-                        style={{ width: "100%", minWidth: "520px" }}
+                        className="table table--compact settings-stack-table"
+                        style={{ width: "100%", minWidth: "720px" }}
                       >
+                        <colgroup>
+                          <col style={{ width: "22%" }} />
+                          <col style={{ width: "26%" }} />
+                          <col style={{ width: "44%" }} />
+                          <col style={{ width: "4%" }} />
+                          <col style={{ width: "4%" }} />
+                        </colgroup>
                         <thead>
                           <tr>
                             <th>Ключ</th>
                             <th>Значение</th>
+                            <th>Описание / для чего</th>
                             <th>Секрет</th>
                             <th />
                           </tr>
                         </thead>
                         <tbody>
-                          {rowsInGroup.map((row) => (
-                            <tr
-                              key={row.id}
-                              className={
-                                row.key && missingHighlight.has(row.key)
-                                  ? "settings-stack-row--missing"
-                                  : undefined
-                              }
-                            >
-                              <td>
-                                <input
-                                  className="input"
-                                  value={row.key}
-                                  onChange={(e) =>
-                                    setStackRows((prev) =>
-                                      prev.map((r) =>
-                                        r.id === row.id ? { ...r, key: e.target.value } : r,
-                                      ),
-                                    )
-                                  }
-                                  spellCheck={false}
-                                  placeholder="VAR_NAME"
-                                  disabled={patchStack.isPending}
-                                />
-                              </td>
-                              <td>
-                                <input
-                                  className="input"
-                                  value={row.value}
-                                  onChange={(e) =>
-                                    setStackRows((prev) =>
-                                      prev.map((r) =>
-                                        r.id === row.id ? { ...r, value: e.target.value } : r,
-                                      ),
-                                    )
-                                  }
-                                  spellCheck={false}
-                                  placeholder={
-                                    row.isSecret ? "новое значение (пусто = не менять)" : ""
-                                  }
-                                  disabled={patchStack.isPending}
-                                  type={row.isSecret ? "password" : "text"}
-                                  autoComplete="off"
-                                />
-                              </td>
-                              <td style={{ width: "1%" }}>
-                                <input
-                                  type="checkbox"
-                                  checked={row.isSecret}
-                                  onChange={(e) =>
-                                    setStackRows((prev) =>
-                                      prev.map((r) =>
-                                        r.id === row.id ? { ...r, isSecret: e.target.checked } : r,
-                                      ),
-                                    )
-                                  }
-                                  disabled={patchStack.isPending}
-                                  title="Секрет: не показывается в API после сохранения"
-                                />
-                              </td>
-                              <td style={{ width: "1%" }}>
-                                <button
-                                  type="button"
-                                  className="btn btn--ghost"
-                                  disabled={patchStack.isPending}
-                                  onClick={() =>
-                                    setStackRows((prev) => prev.filter((r) => r.id !== row.id))
-                                  }
-                                >
-                                  Удалить
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
+                          {rowsInGroup.map((row) => {
+                            const km = regByKey.get(row.key.trim());
+                            const missingRequired = isMissingRequired(km, row.value);
+                            const queryHighlight =
+                              row.key && missingHighlight.has(row.key);
+                            const rowClass = [
+                              missingRequired ? "settings-stack-row--missing-required" : "",
+                              queryHighlight ? "settings-stack-row--missing" : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" ");
+                            return (
+                              <tr key={row.id} className={rowClass || undefined}>
+                                <td>
+                                  <input
+                                    className={`input ${
+                                      missingRequired ? "input--missing" : ""
+                                    }`}
+                                    value={row.key}
+                                    onChange={(e) =>
+                                      setStackRows((prev) =>
+                                        prev.map((r) =>
+                                          r.id === row.id ? { ...r, key: e.target.value } : r,
+                                        ),
+                                      )
+                                    }
+                                    spellCheck={false}
+                                    placeholder="VAR_NAME"
+                                    disabled={patchStack.isPending || row.fromRegistry}
+                                    title={
+                                      row.fromRegistry
+                                        ? "Ключ из реестра — переименование запрещено."
+                                        : undefined
+                                    }
+                                  />
+                                </td>
+                                <td>
+                                  <input
+                                    className={`input ${
+                                      missingRequired ? "input--missing" : ""
+                                    }`}
+                                    value={row.value}
+                                    onChange={(e) =>
+                                      setStackRows((prev) =>
+                                        prev.map((r) =>
+                                          r.id === row.id ? { ...r, value: e.target.value } : r,
+                                        ),
+                                      )
+                                    }
+                                    spellCheck={false}
+                                    placeholder={
+                                      row.isSecret
+                                        ? "новое значение (пусто = не менять)"
+                                        : missingRequired
+                                          ? "обязательный — заполните"
+                                          : ""
+                                    }
+                                    disabled={patchStack.isPending}
+                                    type={row.isSecret ? "password" : "text"}
+                                    autoComplete="off"
+                                  />
+                                </td>
+                                <td className="settings-stack-desc">
+                                  {km ? (
+                                    <>
+                                      <div>{km.description}</div>
+                                      {km.required_for.length > 0 ? (
+                                        <div className="settings-stack-desc__scopes">
+                                          обязателен для:{" "}
+                                          {km.required_for
+                                            .map(formatScopeLabel)
+                                            .map((s, i, arr) => (
+                                              <span key={s}>
+                                                {s}
+                                                {i < arr.length - 1 ? ", " : ""}
+                                              </span>
+                                            ))}
+                                        </div>
+                                      ) : km.allow_empty ? (
+                                        <div className="settings-stack-desc__scopes">
+                                          опциональный (allow_empty)
+                                        </div>
+                                      ) : null}
+                                    </>
+                                  ) : (
+                                    <div className="settings-stack-desc__scopes">
+                                      пользовательский ключ — описание не задано
+                                    </div>
+                                  )}
+                                </td>
+                                <td style={{ width: "1%" }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={row.isSecret}
+                                    onChange={(e) =>
+                                      setStackRows((prev) =>
+                                        prev.map((r) =>
+                                          r.id === row.id
+                                            ? { ...r, isSecret: e.target.checked }
+                                            : r,
+                                        ),
+                                      )
+                                    }
+                                    disabled={patchStack.isPending || row.fromRegistry}
+                                    title={
+                                      row.fromRegistry
+                                        ? "Тип ключа определён реестром."
+                                        : "Секрет: значение не возвращается из API"
+                                    }
+                                  />
+                                </td>
+                                <td style={{ width: "1%" }}>
+                                  <button
+                                    type="button"
+                                    className="btn btn--ghost"
+                                    disabled={patchStack.isPending || row.fromRegistry}
+                                    onClick={() =>
+                                      setStackRows((prev) => prev.filter((r) => r.id !== row.id))
+                                    }
+                                    title={
+                                      row.fromRegistry
+                                        ? "Ключ из реестра нельзя удалить — оставьте пустым."
+                                        : "Удалить ключ из БД"
+                                    }
+                                  >
+                                    Удалить
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>

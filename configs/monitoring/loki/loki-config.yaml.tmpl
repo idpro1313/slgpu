@@ -1,5 +1,6 @@
-# Шаблон Loki. Рендер backend'ом (render_monitoring_configs) в `${WEB_DATA_DIR}/.slgpu/monitoring/loki-config.yaml`.
-# Образ: ${LOKI_IMAGE}. Жёстких портов в шаблоне быть не должно — только ${VAR}.
+# Шаблон Loki. Рендер backend'ом (render_monitoring_configs) в
+# WEB_DATA_DIR/.slgpu/monitoring/loki-config.yaml. Образ берётся из stack_params (LOKI_IMAGE);
+# жёстких портов в шаблоне быть не должно — все значения через плейсхолдеры string.Template ниже.
 auth_enabled: false
 
 server:

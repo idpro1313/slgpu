@@ -1,6 +1,7 @@
 # Шаблон Prometheus. Рендерится backend'ом (render_monitoring_configs) из БД (stack_params)
-# в `${WEB_DATA_DIR}/.slgpu/monitoring/prometheus.yml`. Compose монтирует именно отрендеренную копию.
-# Жёстких имён сервисов / портов / IP здесь быть НЕ должно — все значения через ${VAR}.
+# в WEB_DATA_DIR/.slgpu/monitoring/prometheus.yml. Compose монтирует именно отрендеренную копию.
+# Жёстких имён сервисов / портов / IP здесь быть НЕ должно — все значения берутся из stack_params
+# по именам ключей через стандартные плейсхолдеры string.Template (см. ниже по файлу).
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
