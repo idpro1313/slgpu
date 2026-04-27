@@ -1,6 +1,7 @@
-# Шаблон Loki. Рендер backend'ом (render_monitoring_configs) в
-# WEB_DATA_DIR/.slgpu/monitoring/loki-config.yaml. Образ берётся из stack_params (LOKI_IMAGE);
-# жёстких портов в шаблоне быть не должно — все значения через плейсхолдеры string.Template ниже.
+# Шаблон Loki 3.x (TSDB + schema v13, блок common.storage). Рендер backend'ом
+# (render_monitoring_configs) в WEB_DATA_DIR/.slgpu/monitoring/loki-config.yaml.
+# Апгрейд с Loki 2.x + существующий boltdb-shipper в LOKI_DATA_DIR: см. [Upgrade Loki](https://grafana.com/docs/loki/latest/setup/upgrade/);
+# при сбоях — бэкап и очистка каталога или миграция по доке Grafana.
 auth_enabled: false
 
 server:
@@ -8,50 +9,38 @@ server:
   grpc_listen_port: 0
   log_level: info
 
+# Loki 3: единая точка хранения (см. upstream cmd/loki/loki-local-config.yaml).
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
 analytics:
   reporting_enabled: false
-
-ingester:
-  lifecycler:
-    address: 127.0.0.1
-    ring:
-      kvstore:
-        store: inmemory
-      replication_factor: 1
-    final_sleep: 0s
-  chunk_idle_period: 1h
-  max_chunk_age: 1h
-  chunk_target_size: 1048576
-  chunk_retain_period: 30s
-  max_transfer_retries: 0
-  wal:
-    enabled: true
-    dir: /loki/wal
 
 schema_config:
   configs:
     - from: 2020-10-24
-      store: boltdb-shipper
+      store: tsdb
       object_store: filesystem
-      schema: v11
+      schema: v13
       index:
         prefix: index_
         period: 24h
 
-storage_config:
-  boltdb_shipper:
-    active_index_directory: /loki/boltdb-shipper-active
-    cache_location: /loki/boltdb-shipper-cache
-    shared_store: filesystem
-  filesystem:
-    directory: /loki/chunks
-
-compactor:
-  working_directory: /loki/compactor
-  shared_store: filesystem
-  retention_enabled: true
-  retention_delete_delay: 2h
-  compaction_interval: 10m
+query_range:
+  results_cache:
+    cache:
+      embedded_cache:
+        enabled: true
+        max_size_mb: 100
 
 limits_config:
   allow_structured_metadata: false
@@ -61,9 +50,20 @@ limits_config:
   ingestion_burst_size_mb: 24
   retention_period: 720h
   max_query_lookback: 720h
+  metric_aggregation_enabled: true
+  enable_multi_variant_queries: true
+
+ruler:
+  alertmanager_url: http://127.0.0.1:9093
+
+compactor:
+  working_directory: /loki/compactor
+  compaction_interval: 10m
+  retention_enabled: true
+  retention_delete_delay: 2h
 
 chunk_store_config:
   max_look_back_period: 720h
 
-ruler:
-  alertmanager_url: http://127.0.0.1:9093
+frontend:
+  encoding: protobuf

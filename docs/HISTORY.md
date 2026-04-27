@@ -1979,3 +1979,12 @@
 - **Файлы:** `configs/main.env`, `configs/monitoring/README.md`, `README.md`, `docs/AGENTS.md`, `docs/HISTORY.md`, `web/backend/app/services/stack_registry.py`, `VERSION`, `web/backend/app/__init__.py`, `web/backend/pyproject.toml`, `web/frontend/package.json`, `web/frontend/package-lock.json`.
 - **Решение:** PATCH 5.2.10 — обновление дефолтных тегов и документация. Пользователю на VM: **`docker compose pull`** и пересоздание сервисов monitoring после **импорта** в БД; при сбоях DCGM — сверка версии **nv-hostengine** на хосте с тегом образа (см. NVIDIA DCGM docs).
 
+## Фаза 6.0.0 (MAJOR: Loki 3, Prometheus 3, Grafana 13)
+
+### Что: подъём Loki / Prometheus / Grafana и шаблон Loki 3
+
+- **Что сделано:** В [`configs/main.env`](configs/main.env): **`LOKI_IMAGE=grafana/loki:3.7.1`**, **`PROMTAIL_IMAGE=grafana/promtail:3.6.10`** (тег `promtail:3.7.1` на Docker Hub отсутствует), **`PROMETHEUS_IMAGE=prom/prometheus:v3.11.3`**, **`GRAFANA_IMAGE=grafana/grafana:13.0.1`**. [`configs/monitoring/loki/loki-config.yaml.tmpl`](configs/monitoring/loki/loki-config.yaml.tmpl) переписан под **Loki 3**: `common.storage`, **TSDB** + **schema v13**, без boltdb-shipper; сохранены лимиты/retention/compactor/ruler. Обновлены [`README.md`](README.md), [`configs/monitoring/README.md`](configs/monitoring/README.md), [`docs/AGENTS.md`](docs/AGENTS.md), версия проекта **6.0.0** (`VERSION`, web `package*`, `pyproject.toml`, `__init__.py`).
+- **Почему:** Запрос поднять версии Loki, Grafana, Prometheus. **MAJOR** по правилу репозитория — **смена дефолтных образов**; плюс **ломающая** смена формата данных Loki (2 → 3) без официальной миграции boltdb на существующем volume.
+- **Файлы:** `configs/main.env`, `configs/monitoring/loki/loki-config.yaml.tmpl`, `configs/monitoring/README.md`, `README.md`, `docs/AGENTS.md`, `docs/HISTORY.md`, `VERSION`, `web/backend/app/__init__.py`, `web/backend/pyproject.toml`, `web/frontend/package.json`, `web/frontend/package-lock.json`.
+- **Решение:** На VM: импорт ключей из `main.env`, **`native.monitoring.up`** (рендер конфигов), **`docker compose pull`**, пересоздать **loki**, **promtail**, **prometheus**, **grafana**. При старте Loki с **старым** `LOKI_DATA_DIR` от 2.x — [Upgrade Loki](https://grafana.com/docs/loki/latest/setup/upgrade/) или бэкап + очистка каталога.
+
