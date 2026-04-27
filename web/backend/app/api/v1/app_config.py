@@ -5,8 +5,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import actor_from_header, db_session
@@ -129,13 +129,41 @@ async def get_missing(
     return {"scopes": by_scope}
 
 
+def _presentation_secrets(
+    secrets: dict[str, Any], *, reveal: bool
+) -> tuple[dict[str, str], bool]:
+    if reveal:
+        return {k: "" if v in (None, "") else str(v) for k, v in secrets.items()}, True
+    return mask_secrets(secrets), False
+
+
 @router.get("/stack")
-async def get_stack(session: AsyncSession = Depends(db_session)) -> dict[str, Any]:
+async def get_stack(
+    session: AsyncSession = Depends(db_session),
+    reveal_secrets: bool = Query(
+        False,
+        description="Если true — вернуть реальные значения секретов (осторожно: тот же доступ, что к API)",
+    ),
+    actor: str | None = Depends(actor_from_header),
+) -> dict[str, Any]:
     await sc.migrate_stack_params_to_canonical_if_needed(session)
     stack, secrets, meta = await sc.load_sections(session)
+    secrets_out, revealed = _presentation_secrets(secrets, reveal=reveal_secrets)
+    if revealed:
+        session.add(
+            AuditEvent(
+                actor=actor,
+                action="app_config.stack_secrets_read_plain",
+                target="stack",
+                correlation_id=None,
+                payload={},
+                note="GET /app-config/stack?reveal_secrets=true",
+            )
+        )
     return {
         "stack": presentation_stack(stack),
-        "secrets": mask_secrets(secrets),
+        "secrets": secrets_out,
+        "secrets_revealed": revealed,
         "meta": meta,
         "registry": registry_to_public(),
     }
@@ -178,4 +206,5 @@ async def patch_stack(
         "ok": True,
         "stack": presentation_stack(stack),
         "secrets": mask_secrets(secrets),
+        "secrets_revealed": False,
     }

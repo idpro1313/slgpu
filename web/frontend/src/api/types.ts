@@ -309,6 +309,8 @@ export interface AppConfigStatus {
 export interface AppConfigStack {
   stack: Record<string, string>;
   secrets: Record<string, string>;
+  /** true если GET был с reveal_secrets=true — поле secrets содержит plaintext. */
+  secrets_revealed?: boolean;
   meta: Record<string, unknown>;
   /** Метаданные ключей из реестра (группа, обязательность по сценариям). */
   registry?: Array<{

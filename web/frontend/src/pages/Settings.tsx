@@ -194,9 +194,12 @@ function isMissingRequired(
   return value.trim() === "";
 }
 
+const REVEAL_STACK_SECRETS_KEY = "slgpu-settings-reveal-stack-secrets";
+
 function rowsFromServer(data: AppConfigStack): StackRow[] {
   const stack = data.stack ?? {};
   const sec = data.secrets ?? {};
+  const revealed = data.secrets_revealed === true;
   const registry = data.registry ?? [];
 
   const rows: StackRow[] = [];
@@ -209,12 +212,15 @@ function rowsFromServer(data: AppConfigStack): StackRow[] {
     if (meta.ui_hidden) continue;
     const k = meta.key;
     const isSecret = meta.is_secret;
-    const value = isSecret ? "" : (stack[k] ?? "");
-    // Для секретов backend возвращает в `data.secrets` маску ("***" если значение
-    // в БД задано, "" если ключ есть, но без значения). Признак «значение в БД
-    // задано» нужен фронту, чтобы не подсвечивать строку красным как «не
-    // заполнено».
-    const secretSet = isSecret && Boolean(sec[k] && sec[k] !== "");
+    const value = isSecret
+      ? revealed
+        ? sec[k] ?? ""
+        : ""
+      : (stack[k] ?? "");
+    // Маска: "***" если в БД непустое значение. Режим reveal: plaintext в sec[k].
+    const secretSet =
+      isSecret &&
+      (revealed ? (sec[k] ?? "").trim() !== "" : sec[k] === "***");
     rows.push({ id: newRowId(), key: k, value, isSecret, fromRegistry: true, secretSet });
     seen.add(k);
   }
@@ -238,10 +244,10 @@ function rowsFromServer(data: AppConfigStack): StackRow[] {
     rows.push({
       id: newRowId(),
       key: k,
-      value: "",
+      value: revealed ? sec[k] ?? "" : "",
       isSecret: true,
       fromRegistry: false,
-      secretSet: Boolean(sec[k] && sec[k] !== ""),
+      secretSet: revealed ? (sec[k] ?? "").trim() !== "" : sec[k] === "***",
     });
     seen.add(k);
   }
@@ -353,6 +359,15 @@ export function SettingsPage() {
   const [cfgMessage, setCfgMessage] = useState<string | null>(null);
   const [cfgError, setCfgError] = useState<string | null>(null);
 
+  /** Если true — запрос `GET /app-config/stack?reveal_secrets=true`; признак сохраняется в localStorage (ключ REVEAL_STACK_SECRETS_KEY). */
+  const [revealStackSecrets, setRevealStackSecrets] = useState(() => {
+    try {
+      return globalThis.localStorage?.getItem(REVEAL_STACK_SECRETS_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+
   const publicAccess = useQuery({
     queryKey: ["settings", "public-access"],
     queryFn: () => api.get<PublicAccessSettings>("/settings/public-access"),
@@ -370,8 +385,11 @@ export function SettingsPage() {
   });
 
   const appStack = useQuery({
-    queryKey: ["app-config", "stack"],
-    queryFn: () => api.get<AppConfigStack>("/app-config/stack"),
+    queryKey: ["app-config", "stack", revealStackSecrets],
+    queryFn: () =>
+      api.get<AppConfigStack>(
+        revealStackSecrets ? "/app-config/stack?reveal_secrets=true" : "/app-config/stack",
+      ),
   });
 
   const regByKey = useMemo(() => {
@@ -651,6 +669,29 @@ export function SettingsPage() {
           title="Параметры окружения"
           subtitle="Группы по назначению. Колонка «Описание» — назначение и сценарии (где параметр обязателен). Удаление строки — удаление ключа из БД."
         >
+          <label className="flex flex--gap-sm" style={{ alignItems: "flex-start", marginBottom: 12 }}>
+            <input
+              type="checkbox"
+              checked={revealStackSecrets}
+              onChange={(e) => {
+                const next = e.target.checked;
+                setRevealStackSecrets(next);
+                try {
+                  globalThis.localStorage?.setItem(REVEAL_STACK_SECRETS_KEY, next ? "1" : "0");
+                } catch {
+                  /* ignore quota / privacy mode */
+                }
+              }}
+              disabled={appStack.isFetching}
+            />
+            <span>
+              <strong>Показывать секреты в явном виде</strong>
+              <span className="section__subtitle" style={{ display: "block", marginTop: 4 }}>
+                Включает выдачу значений секретных ключей из БД в этом запросе. Используйте только если
+                доверяете браузеру и сети так же, как при вводе нового секрета в форму.
+              </span>
+            </span>
+          </label>
           {appStack.isLoading ? (
             <div className="empty-state">Загружаем…</div>
           ) : (
@@ -762,11 +803,12 @@ export function SettingsPage() {
                               ]
                                 .filter(Boolean)
                                 .join(" ");
-                              const secretValuePlaceholder = row.secretSet
-                                ? "•••••••• (значение задано в БД — введите новое, чтобы заменить; пусто = не менять)"
-                                : missingRequired
-                                  ? "обязательный — заполните секрет"
-                                  : "новое значение (пусто = не менять)";
+                              const secretValuePlaceholder =
+                                row.secretSet && !(revealStackSecrets && row.isSecret)
+                                  ? "•••••••• (значение задано в БД — введите новое, чтобы заменить; пусто = не менять)"
+                                  : missingRequired
+                                    ? "обязательный — заполните секрет"
+                                    : "новое значение (пусто = не менять)";
                               chunks.push(
                               <tr key={row.id} className={rowClass || undefined}>
                                 <td>
@@ -814,11 +856,15 @@ export function SettingsPage() {
                                           : ""
                                     }
                                     disabled={patchStack.isPending}
-                                    type={row.isSecret ? "password" : "text"}
+                                    type={
+                                      row.isSecret && !revealStackSecrets ? "password" : "text"
+                                    }
                                     autoComplete="off"
                                     title={
                                       row.isSecret && row.secretSet
-                                        ? "Секрет уже сохранён в БД (значение скрыто). Оставьте поле пустым, чтобы не менять."
+                                        ? revealStackSecrets
+                                          ? "Значение загружено из БД. Пустое поле при сохранении — оставить как есть."
+                                          : "Секрет уже сохранён в БД (значение скрыто). Оставьте поле пустым, чтобы не менять."
                                         : undefined
                                     }
                                   />
@@ -855,7 +901,9 @@ export function SettingsPage() {
                                           }`}
                                         >
                                           {row.secretSet
-                                            ? "секрет: значение задано в БД (скрыто)"
+                                            ? revealStackSecrets
+                                              ? "секрет: значение из БД (показано)"
+                                              : "секрет: значение задано в БД (скрыто)"
                                             : "секрет: значение в БД не задано"}
                                         </div>
                                       ) : null}
@@ -874,7 +922,9 @@ export function SettingsPage() {
                                           }`}
                                         >
                                           {row.secretSet
-                                            ? "секрет: значение задано в БД (скрыто)"
+                                            ? revealStackSecrets
+                                              ? "секрет: значение из БД (показано)"
+                                              : "секрет: значение задано в БД (скрыто)"
                                             : "секрет: значение в БД не задано"}
                                         </div>
                                       ) : null}

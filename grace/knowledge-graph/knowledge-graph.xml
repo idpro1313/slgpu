@@ -145,6 +145,7 @@
         <fn-raise_if_missing PURPOSE="HTTP 409 missing_stack_params в API при недостающих ключах" />
         <export-app_config_install PURPOSE="POST /api/v1/app-config/install: импорт configs/main.env + пресетов с диска в БД" />
         <export-app_config_missing PURPOSE="GET /api/v1/app-config/missing[?scope=...] (5.2.0)" />
+        <export-get_stack PURPOSE="GET /api/v1/app-config/stack — по умолчанию mask_secrets и secrets_revealed:false; reveal_secrets=true — plaintext и audit app_config.stack_secrets_read_plain (6.0.7)" />
         <fn-presentation_stack PURPOSE="6.0.2: фильтрует ключи LISTEN-копий из ответа API; merge — apply_llm_listen_derived_defaults" />
       </annotations>
     </M-CONFIG>
@@ -194,7 +195,7 @@
         <fn-services_stack_config PURPOSE="stack_params (param_key, param_value, is_secret) + cfg.meta; миграция JSON cfg.stack/cfg.secrets → строки; sync_merged_flat (DSN SQLite через sqlalchemy.engine.url.make_url, не regex — иначе //data/… ломает _connect_ro); public_access.litellm_api_key → LITELLM_MASTER_KEY + apply_vllm_aliases_to_merged; write_compose_service_env_file → ${WEB_DATA_DIR}/.slgpu/compose-service.env для monitoring/proxy compose; migrate_stack_params_to_canonical_if_needed; presentation_stack; write_llm_interp_env; write_langfuse_litellm_env → data/web/secrets/langfuse-litellm.env; init_db: migrate_legacy_json_to_rows, ensure_default_settings, ensure_default_stack_params; ORM app.models.stack_param.StackParam" />
         <fn-services_env_key_aliases PURPOSE="VLLM_STACK_ALIASES: канонические имена (SERVED_MODEL_NAME, MAX_NUM_BATCHED_TOKENS, …) и legacy SLGPU_*; coalesce_str; monitoring_image (GRAFANA_IMAGE + SLGPU_*); normalize preset parameters при импорте" />
         <fn-services_llm_env PURPOSE="merge_llm_stack_env: пресет + stack, SLGPU_NVIDIA_VISIBLE_DEVICES override, apply_vllm_aliases; container_env_for_engine" />
-        <fn-api_app_config PURPOSE="GET/POST /app-config/status|install, GET/PATCH /app-config/stack" />
+        <fn-api_app_config PURPOSE="GET/POST /app-config/status|install, GET (?reveal_secrets для plaintext секретов) /PATCH /app-config/stack" />
         <fn-api_bench PURPOSE="GET /bench/runs, /runs/{engine}/{ts}/summary; POST scenario|load → native.bench.* jobs" />
         <fn-api_dashboard PURPOSE="GET /dashboard: metrics, runtime (в т.ч. runtime.slots[]), services, host" />
         <fn-api_gpu PURPOSE="GET /gpu/state (nvidia-smi CSV + TTL-кэш), GET /gpu/availability (свободные GPU vs engine_slots, suggested блочно)" />

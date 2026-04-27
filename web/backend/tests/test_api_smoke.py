@@ -306,7 +306,19 @@ async def test_app_config_stack_returns_seeded_params(client: httpx.AsyncClient)
     assert r.status_code == 200
     body = r.json()
     assert "stack" in body and "secrets" in body
+    assert body.get("secrets_revealed") is False
     assert body["stack"].get("MODELS_DIR") == "./data/models"
+    assert isinstance(body["secrets"], dict)
+
+
+@pytest.mark.asyncio
+async def test_app_config_stack_reveal_secrets(client: httpx.AsyncClient) -> None:
+    """GET ?reveal_secrets=true включает plaintext в secrets и ставит audit (см. activity)."""
+    async with client:
+        r = await client.get("/api/v1/app-config/stack?reveal_secrets=true")
+    assert r.status_code == 200
+    body = r.json()
+    assert body.get("secrets_revealed") is True
     assert isinstance(body["secrets"], dict)
 
 
