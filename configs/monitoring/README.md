@@ -15,6 +15,8 @@
 
 В [`docker/docker-compose.monitoring.yml`](../../docker/docker-compose.monitoring.yml) публикация на хост: **Grafana** — `${GRAFANA_PORT}`; **Prometheus** — `${PROMETHEUS_PORT}`; **Loki** — `${LOKI_PORT}` (и `${LOKI_BIND}`, по умолч. `127.0.0.1`).
 
+**Grafana: provisioning.** Сервис `grafana` монтирует **отдельно** каталоги `configs/monitoring/grafana/provisioning/{dashboards,alerting,plugins}` и **файл** `${WEB_DATA_DIR}/.slgpu/monitoring/datasource.yml` → `…/datasources/datasource.yml`. Раньше весь `provisioning` с `:ro` и второй bind файла внутри дерева давал у runc «read-only file system» (нельзя создать mountpoint внутри read-only parent).
+
 ### LiteLLM: подробные логи (отладка)
 
 В [`main.env`](../../main.env) задайте **`LITELLM_LOG=DEBUG`**, пересоздайте контейнер `slgpu-proxy-litellm` (эквивалент CLI **`--detailed_debug`**: больше деталей по запросам к vLLM и по ошибкам). По умолчанию **`LITELLM_LOG=INFO`**. См. [Debugging | LiteLLM](https://docs.litellm.ai/docs/proxy/debugging). Для диагностики OTEL-экспорта (Langfuse) можно временно **`OTEL_LOG_LEVEL=debug`** в `main.env`.

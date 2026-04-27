@@ -170,8 +170,12 @@ services:
       GF_SERVER_ROOT_URL: ${GF_SERVER_ROOT_URL}
     volumes:
       - ${GRAFANA_DATA_DIR}:/var/lib/grafana
-      # provisioning: dashboards/ + сгенерированный datasource.yml (рендер из БД).
-      - ./configs/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      # Provisioning: НЕ весь ./provisioning:ro + файл datasource — у Docker/parent :ro
+      # вложенный file-bind на путь внутри дерева даёт «read-only file system» (make mountpoint).
+      # Статика: dashboards/alerting/plugins; datasource.yml — только из render_monitoring_configs (БД).
+      - ./configs/monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./configs/monitoring/grafana/provisioning/alerting:/etc/grafana/provisioning/alerting:ro
+      - ./configs/monitoring/grafana/provisioning/plugins:/etc/grafana/provisioning/plugins:ro
       - ${WEB_DATA_DIR}/.slgpu/monitoring/datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml:ro
     logging:
       driver: json-file
