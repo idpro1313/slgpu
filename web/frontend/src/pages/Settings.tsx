@@ -36,10 +36,13 @@ function isPathKey(key: string): boolean {
 
 const MONITORING_COMPOSE_KEYS = new Set<string>([
   "PROMETHEUS_PORT",
+  "PROMETHEUS_BIND",
   "GRAFANA_PORT",
+  "GRAFANA_BIND",
   "LANGFUSE_PORT",
   "LITELLM_PORT",
   "LOKI_PORT",
+  "LOKI_BIND",
   "WEB_COMPOSE_PROJECT_INFER",
   "WEB_COMPOSE_PROJECT_MONITORING",
   "WEB_COMPOSE_PROJECT_PROXY",
@@ -131,7 +134,7 @@ const STACK_GROUP_META: Record<
   monitoring: {
     title: "Мониторинг и compose",
     subtitle:
-      "Порты Prometheus, Grafana, Langfuse, LiteLLM, Loki; проекты: slgpu, slgpu-monitoring, slgpu-proxy (LiteLLM).",
+      "Порты в БД; ./slgpu monitoring на сервере использует main.env — выровняйте вручную или перезапускайте мониторинг из UI (Задачи). Подробнее: configs/monitoring/README.md.",
   },
   inference: {
     title: "GPU и инференс",

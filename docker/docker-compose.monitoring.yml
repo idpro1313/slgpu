@@ -63,6 +63,8 @@ services:
     command: -config.file=/etc/loki/loki-config.yaml
     networks:
       - slgpu
+    ports:
+      - "${LOKI_BIND:-127.0.0.1}:${LOKI_PORT:-3100}:3100"
     volumes:
       - ${LOKI_DATA_DIR:-./data/monitoring/loki}:/loki
       - ./configs/monitoring/loki:/etc/loki:ro
@@ -109,7 +111,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - "${PROMETHEUS_BIND:-0.0.0.0}:9090:9090"
+      - "${PROMETHEUS_BIND:-0.0.0.0}:${PROMETHEUS_PORT:-9090}:9090"
     networks:
       - slgpu
     volumes:

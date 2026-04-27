@@ -1674,6 +1674,13 @@
 - **Файлы:** `web/backend/app/services/env_key_aliases.py`, `stack_config.py`, `llm_env.py`, `presets.py`, `env_files.py`, `native_jobs.py`; `scripts/serve.sh`, `_lib.sh`, `monitoring_fix_permissions.sh`, `cmd_monitoring.sh`; `docker/docker-compose.llm.yml`, `docker/docker-compose.monitoring.yml`; `main.env`, `main.env.example`, `examples/presets/*.env`; `web/frontend` `Presets.tsx`, `Settings.tsx`; `README.md`, `configs/models/README.md`; `VERSION`, версии web/backend, `grace/knowledge-graph/knowledge-graph.xml`, `docs/HISTORY.md`.
 - **Решение:** **MINOR 4.2.0** — обратная совместимость через fallback в скриптах, compose и Python.
 
+### 4.3.2: Порты monitoring: main.env vs web; PROMETHEUS_PORT / LOKI в compose
+
+- **Что:** В **docker-compose.monitoring.yml** публикация Prometheus — `${PROMETHEUS_PORT}`; Loki — `ports` с `${LOKI_BIND}` / `${LOKI_PORT}`; **DEFAULT_STACK** + **main.env\*** — `LOKI_BIND`. Раздел в **configs/monitoring/README.md**, **docs/AGENTS.md**, подсказка в **Settings**; в форме мониторинга — **PROMETHEUS_BIND**, **GRAFANA_BIND**, **LOKI_BIND**.
+- **Почему:** Запрос — несовпадение портов UI и контейнеров: bash **`./slgpu monitoring`** передаёт только **main.env**, а настройки web — в **SQLite**; ранее Prometheus маппился на фиксированный 9090 на хосте, Loki не публиковался.
+- **Файлы:** `docker/docker-compose.monitoring.yml`, `stack_config.py`, `main.env`, `main.env.example`, `Settings.tsx`, `docs/AGENTS.md`, `configs/monitoring/README.md`, `VERSION`, версии web, `docs/HISTORY.md`.
+- **Решение:** **PATCH**.
+
 ### 4.3.1: MinIO / mc по умолчанию `latest`
 
 - **Что:** Дефолт **`MINIO_IMAGE`** → `minio/minio:latest`, **`MINIO_MC_IMAGE`** → `minio/mc:latest` (compose, `env_key_aliases`, `monitoring_fix_permissions.sh`, комменты `main.env*`).

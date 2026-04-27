@@ -88,6 +88,7 @@ DEFAULT_STACK: dict[str, str] = {
     "LANGFUSE_PORT": "3001",
     "LITELLM_PORT": "4000",
     "LOKI_PORT": "3100",
+    "LOKI_BIND": "127.0.0.1",
     "TOOL_CALL_PARSER": "hermes",
     "REASONING_PARSER": "qwen3",
     "NVIDIA_VISIBLE_DEVICES": "0,1,2,3,4,5,6,7",
