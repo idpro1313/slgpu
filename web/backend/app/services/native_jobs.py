@@ -472,18 +472,18 @@ async def _monitoring_bootstrap(
         if marker.is_file():
             append_job_log(log, log_lock, f"[bootstrap] skip {svc} (done)")
             return
-        c, o, e = await compose_exec.compose_monitoring(
-            root, env_file, "-f", _MON_YML, "--profile", "bootstrap", "rm", "-f", "-s", "-v", svc
+        c, o, e = await compose_exec.compose_with_env_file(
+            root, env_file, "-f", _PROXY_YML, "--profile", "bootstrap", "rm", "-f", "-s", "-v", svc
         )
         if o.strip():
             append_job_log(log, log_lock, o.strip())
         if e.strip():
             append_job_log(log, log_lock, e.strip())
-        c, o, e = await compose_exec.compose_monitoring(
+        c, o, e = await compose_exec.compose_with_env_file(
             root,
             env_file,
             "-f",
-            _MON_YML,
+            _PROXY_YML,
             "--profile",
             "bootstrap",
             "up",
@@ -497,8 +497,8 @@ async def _monitoring_bootstrap(
             append_job_log(log, log_lock, e.strip())
         if c != 0:
             raise RuntimeError(f"bootstrap {svc} failed exit={c}")
-        c2, o2, e2 = await compose_exec.compose_monitoring(
-            root, env_file, "-f", _MON_YML, "--profile", "bootstrap", "rm", "-f", "-s", "-v", svc
+        c2, o2, e2 = await compose_exec.compose_with_env_file(
+            root, env_file, "-f", _PROXY_YML, "--profile", "bootstrap", "rm", "-f", "-s", "-v", svc
         )
         if o2.strip():
             append_job_log(log, log_lock, o2.strip())
@@ -593,7 +593,7 @@ async def _native_monitoring_restart(log: list[str], log_lock: threading.Lock) -
 
 
 async def _native_proxy_up(log: list[str], log_lock: threading.Lock) -> int:
-    """Только compose proxy (LiteLLM), без monitoring-стека."""
+    """Compose proxy: Langfuse + LiteLLM (без Prometheus/Grafana/Loki)."""
     settings = get_settings()
     root = settings.slgpu_root
     merged = sync_merged_flat()

@@ -95,8 +95,8 @@ def _settings_probes() -> list[ServiceProbe]:
         ServiceProbe(
             key="langfuse",
             display_name="Langfuse",
-            category="monitoring",
-            project=mon,
+            category="proxy",
+            project=pxy,
             service="langfuse-web",
             health_url=f"http://{h}:{lf}/api/public/health",
             web_url=f"http://{h}:{lf}",

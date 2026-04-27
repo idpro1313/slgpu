@@ -337,7 +337,7 @@
         </errors>
       </contract>
       <interface>
-        <export-monitoring_compose PURPOSE="docker/docker-compose.monitoring.yml + configs/monitoring/*: стабильные container_name slgpu-monitoring-*" />
+        <export-monitoring_compose PURPOSE="docker/docker-compose.monitoring.yml (slgpu-monitoring-*) + docker/docker-compose.proxy.yml (slgpu-proxy-*: Langfuse, LiteLLM) + configs/monitoring/*" />
         <export-prometheus_yml PURPOSE="Конфиг скрейпинга" />
         <export-grafana-slgpu-overview PURPOSE="slgpu-overview (provisioning)" />
         <export-grafana-sglang-dashboard-slgpu PURPOSE="sglang-dashboard-slgpu.json" />
@@ -347,7 +347,7 @@
       </interface>
       <depends>M-DOCKER</depends>
       <target>
-        <source>docker/docker-compose.monitoring.yml, configs/monitoring/prometheus/**, configs/monitoring/grafana/provisioning/**, configs/monitoring/grafana/templates/**, configs/monitoring/README.md</source>
+        <source>docker/docker-compose.monitoring.yml, docker/docker-compose.proxy.yml, configs/monitoring/prometheus/**, configs/monitoring/grafana/provisioning/**, configs/monitoring/grafana/templates/**, configs/monitoring/README.md</source>
         <tests>tests/test_monitor.sh</tests>
       </target>
       <observability>

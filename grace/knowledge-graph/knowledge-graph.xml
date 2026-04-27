@@ -1,5 +1,5 @@
 <KnowledgeGraph>
-  <Project NAME="slgpu" VERSION="4.1.6">
+  <Project NAME="slgpu" VERSION="4.4.0">
     <keywords>slgpu, vllm, sglang, llm-inference, benchmark, docker-compose, gpu, prometheus, grafana, sglang-dashboard-slgpu, sglangdash2-slgpu</keywords>
     <annotation>Стенд для сравнения движков LLM-инференса vLLM и SGLang на Linux-сервере с NVIDIA GPU.</annotation>
 
@@ -92,12 +92,12 @@
     </M-DOCKER>
 
     <M-MONITOR NAME="Monitoring" TYPE="INTEGRATION" STATUS="implemented">
-      <purpose>Prometheus, Grafana, DCGM Exporter, Node Exporter, Langfuse, LiteLLM; JSON-дашборды. Init-сервисы MinIO buckets / LiteLLM DB вынесены в одноразовый bootstrap.</purpose>
+      <purpose>Prometheus, Grafana, Loki, Promtail, DCGM Exporter, Node Exporter; JSON-дашборды. Langfuse + LiteLLM + Postgres/MinIO/… — в docker-compose.proxy.yml (slgpu-proxy-*). Bootstrap MinIO buckets / БД litellm — profile bootstrap в proxy compose.</purpose>
       <path>docker/docker-compose.monitoring.yml, docker/docker-compose.proxy.yml, configs/monitoring/prometheus/**, configs/monitoring/grafana/provisioning/**, configs/monitoring/grafana/templates/**, configs/monitoring/README.md</path>
       <depends>M-DOCKER</depends>
       <verification-ref>V-M-MONITOR</verification-ref>
       <annotations>
-        <export-monitoring_compose PURPOSE="docker/docker-compose.monitoring.yml: slgpu-monitoring-*; bootstrap minio-bucket-init/litellm-pg-init; LiteLLM — docker/docker-compose.proxy.yml (slgpu-proxy-*, WEB_COMPOSE_PROJECT_PROXY)" />
+        <export-monitoring_compose PURPOSE="docker/docker-compose.monitoring.yml: slgpu-monitoring-* (метрики/логи). docker/docker-compose.proxy.yml: slgpu-proxy-* (Langfuse, LiteLLM, bootstrap minio-bucket-init/litellm-pg-init; WEB_COMPOSE_PROJECT_PROXY)" />
         <export-prometheus_yml PURPOSE="Scrape config для всех targets" />
         <export-grafana-slgpu-overview PURPOSE="slgpu-overview.json" />
         <export-grafana-sglang-dashboard-slgpu PURPOSE="sglang-dashboard-slgpu.json (оф. SGLang, slgpu-адаптация)" />
@@ -183,7 +183,7 @@
         <fn-services_slot_runtime PURPOSE="app.services.slot_runtime: run_slot_docker, stream docker pull (decode) перед run, контейнер slgpu-{engine} или slgpu-{engine}-{slot_key}, сеть slgpu" />
         <fn-services_host_info PURPOSE="Снимок ОС/CPU/RAM/диска/NVIDIA для дашборда: docker run с bind /proc,/etc хоста (busybox) и nvidia-smi в GPU-контейнере; fallback — локальный /proc и nvidia-smi в namespace web" />
         <fn-services_compose_exec PURPOSE="async docker compose для LLM и monitoring стеков, subprocess logged" />
-        <fn-services_native_jobs PURPOSE="handle_native_job: native.slot.up|down|restart (docker-py, мультислот); lock resource slot:{key}; native.model.pull, monitoring, native.proxy.up|down|restart (только compose proxy), bench; периодический flush stdout_tail/message во время RUNNING; stream docker pull перед containers.run. Удалено в 4.0.0: native.llm.*" />
+        <fn-services_native_jobs PURPOSE="handle_native_job: native.slot.up|down|restart (docker-py, мультислот); lock resource slot:{key}; native.model.pull, monitoring, native.proxy.up|down|restart (compose proxy: Langfuse+LiteLLM), bench; периодический flush stdout_tail/message во время RUNNING; stream docker pull перед containers.run. Удалено в 4.0.0: native.llm.*" />
         <fn-job_log PURPOSE="append_job_log: thread-safe строки лога native job; обновление UI по GET /jobs/{id}" />
         <fn-services_slgpu_cli PURPOSE="CliCommand kind=native.* с пустым argv; resource slot:default|slot:{key} (4.0.0: без lock runtime); валидация slot_key/slug/engine/port/tp" />
         <fn-services_jobs PURPOSE="Job runner: native.* → native_jobs; lock по ключу (set discard); task registry; force_engine_slot_halt + POST /runtime/slots/{k}/down?force=1; CancelledError → mark job cancelled" />

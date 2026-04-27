@@ -132,7 +132,7 @@
         <file>tests/test_compose.sh</file>
       </test-files>
       <module-checks>
-        <check-1>docker compose -f docker/docker-compose.llm.yml config; docker compose -f docker/docker-compose.monitoring.yml config</check-1>
+        <check-1>docker compose -f docker/docker-compose.llm.yml config; docker compose -f docker/docker-compose.monitoring.yml config; docker compose -f docker/docker-compose.proxy.yml config</check-1>
         <check-2>shellcheck scripts/serve.sh</check-2>
       </module-checks>
       <scenarios>

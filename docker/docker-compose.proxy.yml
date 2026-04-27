@@ -1,12 +1,292 @@
-# LiteLLM Proxy — отдельный compose-проект (имя: WEB_COMPOSE_PROJECT_PROXY, по умолч. slgpu-proxy).
-# Postgres, Langfuse и остальное — в slgpu-monitoring; DNS по container_name: slgpu-monitoring-postgres, slgpu-monitoring-langfuse-web.
-# Порядок: сначала `docker compose -f monitoring.yml up -d`, затем `… -f proxy.yml up -d` (см. ./slgpu monitoring up, native_jobs).
+# Langfuse v3 (Postgres, ClickHouse, Redis, MinIO) + worker + UI; LiteLLM; bootstrap (MinIO buckets, БД litellm).
+# Проект `slgpu-proxy` — **не** зависит от стека метрик (Prometheus/Grafana/Loki) в `docker-compose.monitoring.yml`.
+# Порядок: `./slgpu monitoring up` (bootstrap → monitoring metrics → **этот** compose) или `native.proxy.up` / UI LiteLLM.
+# Сеть `slgpu` общая с `docker-compose.llm.yml`. env: `.slgpu/compose-service.env`.
 
 name: ${WEB_COMPOSE_PROJECT_PROXY:-slgpu-proxy}
 
 services:
+  # -------------------------------------------------------------------------
+  # Langfuse v3 (Postgres, ClickHouse, Redis, MinIO) + воркер; UI на LANGFUSE_PORT
+  # -------------------------------------------------------------------------
+  clickhouse:
+    container_name: slgpu-proxy-clickhouse
+    image: ${LANGFUSE_CLICKHOUSE_IMAGE:-${SLGPU_LANGFUSE_CLICKHOUSE_IMAGE:-clickhouse/clickhouse-server:24.3}}
+    restart: unless-stopped
+    user: "101:101"
+    networks:
+      - slgpu
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: ${LANGFUSE_CLICKHOUSE_USER:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-clickhouse}
+    volumes:
+      - ${LANGFUSE_CLICKHOUSE_DATA_DIR:-./data/monitoring/langfuse/clickhouse}:/var/lib/clickhouse
+      - ${LANGFUSE_CLICKHOUSE_LOGS_DIR:-./data/monitoring/langfuse/clickhouse-logs}:/var/log/clickhouse-server
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8123/ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+  minio:
+    container_name: slgpu-proxy-minio
+    image: ${MINIO_IMAGE:-${SLGPU_MINIO_IMAGE:-minio/minio:latest}}
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    networks:
+      - slgpu
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-miniosecret}
+    ports:
+      - "${MINIO_API_BIND:-127.0.0.1}:${MINIO_API_HOST_PORT:-9010}:9000"
+      - "${MINIO_CONSOLE_BIND:-127.0.0.1}:${MINIO_CONSOLE_HOST_PORT:-9011}:9001"
+    volumes:
+      - ${LANGFUSE_MINIO_DATA_DIR:-./data/monitoring/langfuse/minio}:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+  # Бакеты Langfuse в MinIO. Идемпотентно; profile bootstrap.
+  minio-bucket-init:
+    container_name: slgpu-proxy-minio-bucket-init
+    image: ${MINIO_MC_IMAGE:-${SLGPU_MINIO_MC_IMAGE:-minio/mc:latest}}
+    profiles: ["bootstrap"]
+    restart: "no"
+    networks:
+      - slgpu
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      BUCKET_EVENT: ${LANGFUSE_S3_EVENT_UPLOAD_BUCKET:-langfuse}
+      BUCKET_MEDIA: ${LANGFUSE_S3_MEDIA_BUCKET:-langfuse}
+    volumes:
+      - ./configs/monitoring/langfuse/minio-bucket-init.sh:/init/minio-bucket-init.sh:ro
+    entrypoint: ["/bin/sh", "/init/minio-bucket-init.sh"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "2"
+
+  redis:
+    container_name: slgpu-proxy-redis
+    image: ${LANGFUSE_REDIS_IMAGE:-${SLGPU_LANGFUSE_REDIS_IMAGE:-redis:7}}
+    restart: unless-stopped
+    networks:
+      - slgpu
+    command:
+      - redis-server
+      - --requirepass
+      - ${LANGFUSE_REDIS_AUTH:-slgpu-redis}
+      - --maxmemory-policy
+      - noeviction
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASS\" ping | grep -q PONG"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+    environment:
+      REDIS_PASS: ${LANGFUSE_REDIS_AUTH:-slgpu-redis}
+    volumes:
+      - ${LANGFUSE_REDIS_DATA_DIR:-./data/monitoring/langfuse/redis}:/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+  postgres:
+    container_name: slgpu-proxy-postgres
+    image: ${LANGFUSE_POSTGRES_IMAGE:-${SLGPU_LANGFUSE_POSTGRES_IMAGE:-postgres:17.4}}
+    restart: unless-stopped
+    networks:
+      - slgpu
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${LANGFUSE_POSTGRES_USER:-postgres}"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+    environment:
+      POSTGRES_USER: ${LANGFUSE_POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${LANGFUSE_POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${LANGFUSE_POSTGRES_DB:-postgres}
+      TZ: UTC
+      PGTZ: UTC
+    volumes:
+      - ${LANGFUSE_POSTGRES_DATA_DIR:-./data/monitoring/langfuse/postgres}:/var/lib/postgresql/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+  langfuse-worker:
+    container_name: slgpu-proxy-langfuse-worker
+    image: ${LANGFUSE_WORKER_IMAGE:-${SLGPU_LANGFUSE_WORKER_IMAGE:-langfuse/langfuse-worker:3}}
+    restart: unless-stopped
+    networks:
+      - slgpu
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    ports:
+      - "${LANGFUSE_WORKER_BIND:-127.0.0.1}:${LANGFUSE_WORKER_PORT:-3030}:3030"
+    env_file:
+      - .slgpu/compose-service.env
+    environment:
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://127.0.0.1:3001}
+      SALT: ${LANGFUSE_SALT:-slgpu-salt}
+      ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
+      TELEMETRY_ENABLED: ${LANGFUSE_TELEMETRY:-false}
+      LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: "false"
+      LANGFUSE_USE_AZURE_BLOB: "false"
+      LANGFUSE_USE_OCI_NATIVE_OBJECT_STORAGE: "false"
+      DATABASE_URL: postgresql://${LANGFUSE_POSTGRES_USER:-postgres}:${LANGFUSE_POSTGRES_PASSWORD:-postgres}@postgres:5432/${LANGFUSE_POSTGRES_DB:-postgres}
+      CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_USER: ${LANGFUSE_CLICKHOUSE_USER:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-clickhouse}
+      CLICKHOUSE_CLUSTER_ENABLED: "false"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_AUTH: ${LANGFUSE_REDIS_AUTH:-slgpu-redis}
+      REDIS_TLS_ENABLED: "false"
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: ${LANGFUSE_S3_EVENT_UPLOAD_BUCKET:-langfuse}
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minio}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+      LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: ${LANGFUSE_S3_MEDIA_BUCKET:-langfuse}
+      LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
+      LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minio}
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://minio:9000
+      LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
+      LANGFUSE_S3_BATCH_EXPORT_ENABLED: "false"
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "5"
+
+  langfuse-web:
+    container_name: slgpu-proxy-langfuse-web
+    image: ${LANGFUSE_IMAGE:-${SLGPU_LANGFUSE_IMAGE:-langfuse/langfuse:3}}
+    restart: unless-stopped
+    networks:
+      - slgpu
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    ports:
+      - "${LANGFUSE_BIND:-0.0.0.0}:${LANGFUSE_PORT:-3001}:3000"
+    env_file:
+      - .slgpu/compose-service.env
+    environment:
+      HOSTNAME: "0.0.0.0"
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://127.0.0.1:3001}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-slgpu-nextauth}
+      SALT: ${LANGFUSE_SALT:-slgpu-salt}
+      ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
+      TELEMETRY_ENABLED: ${LANGFUSE_TELEMETRY:-false}
+      LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: "false"
+      LANGFUSE_USE_AZURE_BLOB: "false"
+      LANGFUSE_USE_OCI_NATIVE_OBJECT_STORAGE: "false"
+      DATABASE_URL: postgresql://${LANGFUSE_POSTGRES_USER:-postgres}:${LANGFUSE_POSTGRES_PASSWORD:-postgres}@postgres:5432/${LANGFUSE_POSTGRES_DB:-postgres}
+      CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_USER: ${LANGFUSE_CLICKHOUSE_USER:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-clickhouse}
+      CLICKHOUSE_CLUSTER_ENABLED: "false"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_AUTH: ${LANGFUSE_REDIS_AUTH:-slgpu-redis}
+      REDIS_TLS_ENABLED: "false"
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: ${LANGFUSE_S3_EVENT_UPLOAD_BUCKET:-langfuse}
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minio}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+      LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: ${LANGFUSE_S3_MEDIA_BUCKET:-langfuse}
+      LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
+      LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minio}
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://minio:9000
+      LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
+      LANGFUSE_S3_BATCH_EXPORT_ENABLED: "false"
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "5"
+
+  # БД `litellm` в postgres (Prisma, Admin UI). Идемпотентно, profile bootstrap.
+  litellm-pg-init:
+    container_name: slgpu-proxy-litellm-pg-init
+    image: ${LANGFUSE_POSTGRES_IMAGE:-${SLGPU_LANGFUSE_POSTGRES_IMAGE:-postgres:17.4}}
+    profiles: ["bootstrap"]
+    restart: "no"
+    networks:
+      - slgpu
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_USER: ${LANGFUSE_POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${LANGFUSE_POSTGRES_PASSWORD:-postgres}
+      LITELLM_DB_NAME: ${LITELLM_POSTGRES_DB:-litellm}
+    volumes:
+      - ./configs/monitoring/litellm/init-litellm-db.sh:/init/init-litellm-db.sh:ro
+    entrypoint: ["/bin/sh", "/init/init-litellm-db.sh"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "2"
+
+  # LiteLLM: OpenAI → vLLM; та же сеть, что и Langfuse (OTEL)
   litellm:
-    # OpenAI-совместимый шлюз → vLLM (host.docker.internal). БД `litellm` создаётся litellm-pg-init (monitoring, bootstrap).
     container_name: slgpu-proxy-litellm
     image: ${LITELLM_IMAGE:-${SLGPU_LITELLM_IMAGE:-ghcr.io/berriai/litellm:main-latest}}
     restart: unless-stopped
@@ -16,11 +296,15 @@ services:
     env_file:
       - .slgpu/compose-service.env
       - data/web/secrets/langfuse-litellm.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      langfuse-web:
+        condition: service_started
     environment:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
-      # Имя хоста — container_name сервиса postgres в docker-compose.monitoring.yml
-      DATABASE_URL: postgresql://${LANGFUSE_POSTGRES_USER:-postgres}:${LANGFUSE_POSTGRES_PASSWORD:-postgres}@slgpu-monitoring-postgres:5432/${LITELLM_POSTGRES_DB:-litellm}
-      LANGFUSE_OTEL_HOST: http://slgpu-monitoring-langfuse-web:3000
+      DATABASE_URL: postgresql://${LANGFUSE_POSTGRES_USER:-postgres}:${LANGFUSE_POSTGRES_PASSWORD:-postgres}@postgres:5432/${LITELLM_POSTGRES_DB:-litellm}
+      LANGFUSE_OTEL_HOST: http://langfuse-web:3000
       STORE_MODEL_IN_DB: ${STORE_MODEL_IN_DB:-True}
     extra_hosts:
       - "host.docker.internal:host-gateway"
