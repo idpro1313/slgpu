@@ -2044,3 +2044,9 @@
 - **Почему:** Запрос пользователя на опциональный показ сохранённых секретов в явном виде в форме стека.
 - **Решение:** Режим включается явно чекбоксом и отдельным GET; авторизация на уровне доступа к тому же API, что и остальной UI (**без доп. пароля на бэкенде** при текущей модели).
 
+### Что: Loki 3 — убран `chunk_store_config.max_look_back_period` из шаблона
+
+- **Что сделано:** В [`configs/monitoring/loki/loki-config.yaml.tmpl`](configs/monitoring/loki/loki-config.yaml.tmpl) удалён блок **`chunk_store_config` / `max_look_back_period`** (в Loki 3.x поля нет в **`ChunkStoreConfig`** — ошибка `yaml: unmarshal errors … field max_look_back_period not found`). Ограничение lookback остаётся в **`limits_config.max_query_lookback`**. Пояснение в [`configs/monitoring/README.md`](configs/monitoring/README.md); **VERSION 6.0.8** и синхронизация версий web.
+- **Почему:** Запрос / контейнер Loki падал при старте после рендера конфигов из текущего шаблона.
+- **Решение:** PATCH 6.0.8 — только шаблон и док мониторинга; на VM: **`native.monitoring.up`** (или пересоздать только **loki** после попадания нового **`loki-config.yaml`** на диск).
+
