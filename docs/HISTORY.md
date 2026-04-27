@@ -2044,6 +2044,12 @@
 - **Почему:** Запрос пользователя на опциональный показ сохранённых секретов в явном виде в форме стека.
 - **Решение:** Режим включается явно чекбоксом и отдельным GET; авторизация на уровне доступа к тому же API, что и остальной UI (**без доп. пароля на бэкенде** при текущей модели).
 
+### Что: Loki 3 — `compactor.delete_request_store` при включённом retention
+
+- **Что сделано:** В [`configs/monitoring/loki/loki-config.yaml.tmpl`](configs/monitoring/loki/loki-config.yaml.tmpl) в блок **`compactor`** добавлено **`delete_request_store: filesystem`** (при **`retention_enabled: true`** Loki 3 иначе падает при валидации: *delete-request-store should be configured when retention is enabled*). **VERSION 6.0.9**, синхронизация версий web.
+- **Почему:** Ошибка старта контейнера Loki после обновления конфига / образа.
+- **Решение:** PATCH 6.0.9 — шаблон; на VM перерендер конфига (**`native.monitoring.up`** или аналог) и перезапуск **loki**.
+
 ### Что: Loki 3 — убран `chunk_store_config.max_look_back_period` из шаблона
 
 - **Что сделано:** В [`configs/monitoring/loki/loki-config.yaml.tmpl`](configs/monitoring/loki/loki-config.yaml.tmpl) удалён блок **`chunk_store_config` / `max_look_back_period`** (в Loki 3.x поля нет в **`ChunkStoreConfig`** — ошибка `yaml: unmarshal errors … field max_look_back_period not found`). Ограничение lookback остаётся в **`limits_config.max_query_lookback`**. Пояснение в [`configs/monitoring/README.md`](configs/monitoring/README.md); **VERSION 6.0.8** и синхронизация версий web.
