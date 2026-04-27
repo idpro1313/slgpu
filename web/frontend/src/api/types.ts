@@ -263,22 +263,6 @@ export type ActivityEntry =
       payload: Record<string, unknown>;
     };
 
-export interface PresetSyncResult {
-  imported: number;
-  updated: number;
-  skipped: number;
-  errors: string[];
-}
-
-export interface PresetImportTemplatesResult {
-  files_copied: number;
-  files_skipped_existing: number;
-  imported: number;
-  updated: number;
-  skipped: number;
-  errors: string[];
-}
-
 /** POST /api/v1/presets/{id}/clone */
 export interface PresetCloneRequest {
   name: string;

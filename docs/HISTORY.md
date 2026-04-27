@@ -1611,6 +1611,13 @@
 - **Файлы:** `grace/**/*.xml`, `docs/AGENTS.md`, `web/CONTRACT.md`, `web/README.md`, `VERSION`, `web/backend/pyproject.toml`, `web/backend/app/__init__.py`, `web/frontend/package.json`, `docs/HISTORY.md`.
 - **Решение:** **PATCH 4.0.8** для документации и метаданных версии; функциональные правки предыдущих волон — в тех же коммитах/истории.
 
+### 4.1.6: Пресеты в SPA — без sync/шаблонов в UI, только «Выгрузить в .env» в карточке
+
+- **Что:** Убраны кнопки **«Синхронизировать с диском»**, **«Загрузить шаблоны»**, колонка **Sync**, иконка экспорта в строке таблицы; в карточке редактирования — **«Выгрузить в .env»** (`POST /presets/{id}/export`). Типы **`PresetSyncResult`**, **`PresetImportTemplatesResult`** удалены из `types.ts`. Обновлены **`web/CONTRACT.md`**, **`web/README.md`**, **`docs/AGENTS.md`**, **`grace/knowledge-graph/knowledge-graph.xml`**.
+- **Почему:** Импорт с диска и шаблоны — для хоста/CLI; в web достаточно выгрузки в `.env` из карточки.
+- **Файлы:** `web/frontend/src/pages/Presets.tsx`, `api/types.ts`, `web/CONTRACT.md`, `web/README.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `VERSION`, версии web/backend, `docs/HISTORY.md`.
+- **Решение:** **PATCH**; **`POST /presets/sync`** и **`/import-templates`** в API сохранены.
+
 ### 4.1.5: Компактный макет web UI (все страницы)
 
 - **Что:** Глобальная **плотность** в **`web/frontend/src/styles/globals.css`**: меньше `padding` у header/main/footer, **`page-header`**, **`.section`**, модалок, таблиц, **`btn`** / inputs, мельче **H1** страницы и **H2** секции, **metric-card**, **badges**, **code-block**; сетки `metric-grid` / `cards-grid` / `form-grid` с меньшими gap; `BenchSummaryView` — числа 1.65rem; **Runtime** / **DockerLogs** — ниже `maxHeight` у pre. Переменные `--space-page-*`, `--space-section-pad`. **`docs/AGENTS.md`** — пометка о плотном макете.

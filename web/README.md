@@ -154,8 +154,9 @@ daemon не нашёл бы файлы по `/slgpu/...` и создал бы п
 | POST | `/api/v1/models/{id}/pull` | `slgpu pull` через job runner |
 | GET/POST | `/api/v1/presets` | список и создание пресетов |
 | GET/PATCH/DELETE | `/api/v1/presets/{id}` | просмотр, параметрическое редактирование и удаление пресета |
-| POST | `/api/v1/presets/sync` | импорт `data/presets/*.env` (или `PRESETS_DIR`) в БД |
-| POST | `/api/v1/presets/{id}/export` | экспорт пресета в файл |
+| POST | `/api/v1/presets/sync` | импорт `PRESETS_DIR/*.env` в БД (не вызывается из SPA) |
+| POST | `/api/v1/presets/import-templates` | шаблоны из `examples/presets` (не вызывается из SPA) |
+| POST | `/api/v1/presets/{id}/export` | выгрузка пресета в `.env` (кнопка в карточке пресета в UI) |
 | GET/POST | `/api/v1/runtime/slots`, `POST …/slots/{key}/down`, `POST …/restart`, `GET …/slots/{key}/logs` | мультислотный инференс (4.0.0) |
 | GET | `/api/v1/gpu/state`, `GET /api/v1/gpu/availability` | live GPU и свободные индексы |
 | GET | `/api/v1/runtime/snapshot` | состояние движка(ов), пресеты, `slots[]` |

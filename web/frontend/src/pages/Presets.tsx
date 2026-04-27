@@ -1,20 +1,14 @@
-import { Fragment, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
-import type {
-  Preset,
-  PresetCloneRequest,
-  PresetImportTemplatesResult,
-  PresetSyncResult,
-} from "@/api/types";
+import type { Preset, PresetCloneRequest } from "@/api/types";
 import { Modal } from "@/components/Modal";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
 import { StatusBadge } from "@/components/StatusBadge";
 import {
   IconActionButton,
-  IconArrowUpTray,
   IconCopy,
   IconEdit,
   IconFileX,
@@ -135,8 +129,6 @@ export function PresetsPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [editor, setEditor] = useState<PresetEditorForm | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [syncResult, setSyncResult] = useState<PresetSyncResult | null>(null);
-  const [templatesResult, setTemplatesResult] = useState<PresetImportTemplatesResult | null>(null);
   const [cloneSource, setCloneSource] = useState<Preset | null>(null);
   const [cloneName, setCloneName] = useState("");
   const [cloneTp, setCloneTp] = useState<string>("");
@@ -146,31 +138,6 @@ export function PresetsPage() {
     queryKey: ["presets"],
     queryFn: () => api.get<Preset[]>("/presets"),
     refetchInterval: 15_000,
-  });
-
-  const sync = useMutation({
-    mutationFn: () => api.post<PresetSyncResult>("/presets/sync"),
-    onSuccess: (data) => {
-      setSyncResult(data);
-      setTemplatesResult(null);
-      queryClient.invalidateQueries({ queryKey: ["presets"] });
-      queryClient.invalidateQueries({ queryKey: ["models"] });
-      queryClient.invalidateQueries({ queryKey: ["activity"] });
-    },
-    onError: (err: Error) => setError(err.message),
-  });
-
-  const importTemplates = useMutation({
-    mutationFn: () => api.post<PresetImportTemplatesResult>("/presets/import-templates"),
-    onSuccess: (data) => {
-      setTemplatesResult(data);
-      setSyncResult(null);
-      setError(null);
-      queryClient.invalidateQueries({ queryKey: ["presets"] });
-      queryClient.invalidateQueries({ queryKey: ["models"] });
-      queryClient.invalidateQueries({ queryKey: ["activity"] });
-    },
-    onError: (err: Error) => setError(err.message),
   });
 
   const selectedPreset = presets.data?.find((preset) => preset.id === selectedId) ?? null;
@@ -275,56 +242,8 @@ export function PresetsPage() {
     <>
       <PageHeader
         title="Пресеты запуска"
-        subtitle="CRUD пресетов и двусторонняя синхронизация с data/presets/<slug>.env (PRESETS_DIR). Шаблоны — из examples/presets в репозитории."
-        actions={
-          <Fragment>
-            <button
-              type="button"
-              className="btn btn--ghost"
-              onClick={() => importTemplates.mutate()}
-              disabled={importTemplates.isPending || sync.isPending}
-            >
-              {importTemplates.isPending ? "Копируем шаблоны…" : "Загрузить шаблоны"}
-            </button>
-            <button
-              type="button"
-              className="btn btn--ghost"
-              onClick={() => sync.mutate()}
-              disabled={sync.isPending || importTemplates.isPending}
-            >
-              {sync.isPending ? "Синхронизация…" : "Синхронизировать с диском"}
-            </button>
-          </Fragment>
-        }
+        subtitle="Реестр в БД для UI и Inference. Для `./slgpu` и файлов в PRESETS_DIR используйте «Выгрузить в .env» в карточке пресета. Импорт с диска и шаблоны — с хоста (CLI / `examples/presets`)."
       />
-
-      {templatesResult ? (
-        <div className="section" style={{ marginTop: 0 }}>
-          <p className="section__subtitle">
-            Шаблоны из <span className="mono">examples/presets</span>: скопировано файлов{" "}
-            <strong>{templatesResult.files_copied}</strong>, уже были на диске{" "}
-            <strong>{templatesResult.files_skipped_existing}</strong>. В БД: импортировано{" "}
-            <strong>{templatesResult.imported}</strong>, обновлено <strong>{templatesResult.updated}</strong>
-            , пропущено <strong>{templatesResult.skipped}</strong>.
-          </p>
-          {templatesResult.errors.length > 0 ? (
-            <pre className="code-block">{templatesResult.errors.join("\n")}</pre>
-          ) : null}
-        </div>
-      ) : null}
-
-      {syncResult ? (
-        <div className="section" style={{ marginTop: 0 }}>
-          <p className="section__subtitle">
-            Импортировано <strong>{syncResult.imported}</strong>, обновлено{" "}
-            <strong>{syncResult.updated}</strong>, пропущено{" "}
-            <strong>{syncResult.skipped}</strong>.
-          </p>
-          {syncResult.errors.length > 0 ? (
-            <pre className="code-block">{syncResult.errors.join("\n")}</pre>
-          ) : null}
-        </div>
-      ) : null}
 
       <Section
         title="Создать пресет"
@@ -419,7 +338,7 @@ export function PresetsPage() {
 
       <Section
         title="Просмотр и редактирование"
-        subtitle="Изменения сохраняются в БД; чтобы записать их в data/presets/*.env, нажмите экспорт."
+        subtitle="Сохранение в БД; для файла data/presets/(slug).env нажмите «Выгрузить в .env»."
       >
         {!selectedPreset || !editor ? (
           <div className="empty-state">Выберите пресет в таблице ниже.</div>
@@ -519,7 +438,7 @@ export function PresetsPage() {
                 onClick={() => exportPreset.mutate(selectedPreset.id)}
                 disabled={exportPreset.isPending}
               >
-                Экспорт в .env
+                {exportPreset.isPending ? "Выгружаем…" : "Выгрузить в .env"}
               </button>
               <button
                 type="button"
@@ -555,8 +474,8 @@ export function PresetsPage() {
             </div>
 
             <p className="section__subtitle" style={{ marginTop: 12 }}>
-              Файл: <span className="mono">{selectedPreset.file_path ?? "ещё не экспортирован"}</span>.
-              Sync: {selectedPreset.is_synced ? "synced" : "drift"}.
+              Путь к .env после выгрузки:{" "}
+              <span className="mono">{selectedPreset.file_path ?? "— (ещё не выгружали)"}</span>
             </p>
           </>
         )}
@@ -564,12 +483,12 @@ export function PresetsPage() {
 
       <Section
         title="Все пресеты"
-        subtitle="Колонка Sync показывает, совпадает ли запись в БД с .env-файлом."
+        subtitle="Выгрузка в .env — только в карточке выше (редактирование выбранного пресета)."
       >
         {presets.isLoading ? (
           <div className="empty-state">Загружаем…</div>
         ) : !presets.data || presets.data.length === 0 ? (
-          <div className="empty-state">Пресетов нет. Создайте новый или синхронизируйте с диска.</div>
+          <div className="empty-state">Пресетов нет. Создайте новый выше.</div>
         ) : (
           <div style={{ overflowX: "auto", width: "100%" }}>
             <table className="table table--registry">
@@ -579,7 +498,6 @@ export function PresetsPage() {
                   <th>HF ID</th>
                   <th>TP</th>
                   <th>Served name</th>
-                  <th>Sync</th>
                   <th>Active</th>
                   <th>Действия</th>
                 </tr>
@@ -591,12 +509,6 @@ export function PresetsPage() {
                     <td className="mono">{preset.hf_id}</td>
                     <td>{preset.tp ?? "—"}</td>
                     <td className="mono">{preset.served_model_name ?? "—"}</td>
-                    <td>
-                      <StatusBadge
-                        status={preset.is_synced ? "healthy" : "degraded"}
-                        label={preset.is_synced ? "synced" : "drift"}
-                      />
-                    </td>
                     <td>
                       <StatusBadge
                         status={preset.is_active ? "healthy" : "unknown"}
@@ -628,14 +540,6 @@ export function PresetsPage() {
                           }}
                         >
                           <IconCopy />
-                        </IconActionButton>
-                        <IconActionButton
-                          label="Экспортировать в .env на диске"
-                          variant="default"
-                          onClick={() => exportPreset.mutate(preset.id)}
-                          disabled={exportPreset.isPending}
-                        >
-                          <IconArrowUpTray />
                         </IconActionButton>
                         <IconActionButton
                           label="Удалить пресет из БД (запись в web-реестре)"
@@ -747,8 +651,8 @@ export function PresetsPage() {
               </div>
             </details>
             <p className="section__subtitle" style={{ gridColumn: "1 / -1" }}>
-              Остальные поля копируются с исходного пресета; запись будет{" "}
-              <span className="mono">is_synced=false</span> до экспорта.
+              Остальные поля копируются с исходного пресета. При необходимости для CLI выгрузите новый
+              пресет в .env в карточке редактирования.
             </p>
           </div>
         ) : null}
