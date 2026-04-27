@@ -1880,3 +1880,23 @@
 - **Файлы:** `web/backend/app/services/stack_registry.py`, `web/frontend/src/pages/Settings.tsx`, `VERSION` (5.2.2), `web/backend/pyproject.toml`, `web/backend/app/__init__.py`, `web/frontend/package.json`, `docs/HISTORY.md`, `README.md`, `web/CONTRACT.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/plan/development-plan.xml`, `grace/verification/verification-plan.xml`.
 - **Решение:** PATCH 5.2.2 — backward-совместимое изменение (контракт API не меняется: `registry` так же возвращает `[{key, group, description, is_secret, allow_empty, required_for}]`, поменялся только порядок и значения `group` для части ключей; на фронте обновлена таблица групп). Новых обязательных полей нет, миграции не требуется.
 
+## Фаза 5.2.3 (UI «Настройки»: маска для уже заданных секретов вместо красной подсветки)
+
+### Что: фронт «Настройки» учитывает маску `data.secrets[k] === "***"`
+
+- **Что сделано:**
+  - `web/frontend/src/pages/Settings.tsx`:
+    - В тип `StackRow` добавлен флаг `secretSet: boolean` — true если backend в `data.secrets[key]` вернул непустую строку (фактически `"***"`, см. `mask_secrets()` в `web/backend/app/services/stack_config.py`).
+    - `rowsFromServer()` для **секретов из реестра** проставляет `secretSet = !!data.secrets[key] && data.secrets[key] !== ""`. То же — для пользовательских секретов из `data.secrets`.
+    - `isMissingRequired(meta, value, secretSet)`: для `meta.is_secret && secretSet === true` всегда возвращает `false` — строка не подсвечивается как «не заполнено», даже если поле value пустое (для секрета пустое value = «не менять», и значение в БД уже есть).
+    - Для секретов с `secretSet === true`:
+      - Placeholder в поле «Значение» показывает `"•••••••• (значение задано в БД — введите новое, чтобы заменить; пусто = не менять)"` (тип `password` маскирует ввод).
+      - Под описанием параметра в третьем столбце добавлена строка-подпись: «секрет: значение задано в БД (скрыто)» (зелёная) либо «секрет: значение в БД не задано» (серая) — пользователь видит точный статус.
+      - Title input'а: «Секрет уже сохранён в БД (значение скрыто). Оставьте поле пустым, чтобы не менять.».
+    - При ручном переключении чекбокса «Секрет» (для пользовательских ключей в группе `other`) `secretSet` сбрасывается в `false` — после сохранения backend пришлёт корректную маску.
+  - `web/frontend/src/styles/globals.css`: добавлены стили `.settings-stack-desc__secret`, `.settings-stack-desc__secret--set` (зелёный, `var(--color-success)`), `.settings-stack-desc__secret--unset` (серый, italic).
+- **Почему:** Пользовательский bug-report (скрин в чате): «С секретами проблема — вношу — сохраняю — всё равно пишет пусто и красное. Если секрет есть в БД — нужно отображать звёздочки вместо «Значение», и только если нет в БД — то ошибку».
+  - Корень проблемы: `mask_secrets()` корректно отдавал `"***"` для заданных секретов, но фронт игнорировал `data.secrets[k]` целиком (`value` для секретов всегда инициализировался пустой строкой), и `isMissingRequired()` смотрел только на `value.trim() === ""` → подсвечивал красным даже корректно заполненные секреты после сохранения.
+- **Файлы:** `web/frontend/src/pages/Settings.tsx`, `web/frontend/src/styles/globals.css`, `VERSION` (5.2.3), `web/backend/pyproject.toml`, `web/backend/app/__init__.py`, `web/frontend/package.json`, `docs/HISTORY.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/plan/development-plan.xml`, `grace/verification/verification-plan.xml`.
+- **Решение:** PATCH 5.2.3 — фронт-only фикс UX, без изменения API и БД. Backend `mask_secrets()` уже отдавал нужную информацию через `data.secrets[k]`; фронт просто стал её использовать.
+

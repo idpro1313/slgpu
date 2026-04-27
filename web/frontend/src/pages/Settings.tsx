@@ -22,6 +22,14 @@ type StackRow = {
   isSecret: boolean;
   /** true: ключ существует в реестре stack_registry — флаг секрета и группа фиксированы. */
   fromRegistry: boolean;
+  /**
+   * Только для `isSecret=true`. true → значение секрета уже задано в БД
+   * (backend вернул `data.secrets[key] === "***"`). UI:
+   *  · показывает «••••••••» как placeholder и подпись «значение задано»;
+   *  · НЕ подсвечивает красным даже для required-ключей;
+   *  · пустой ввод при сохранении трактуется как «не менять» (см. buildStackPatch).
+   */
+  secretSet: boolean;
 };
 
 function newRowId(): string {
@@ -120,10 +128,19 @@ function formatScopeLabel(scope: string): string {
   return SCOPE_LABELS[scope] ?? scope;
 }
 
-function isMissingRequired(meta: RegistryEntry | undefined, value: string): boolean {
+function isMissingRequired(
+  meta: RegistryEntry | undefined,
+  value: string,
+  secretSet: boolean,
+): boolean {
   if (!meta) return false;
   if (meta.allow_empty) return false;
   if (meta.required_for.length === 0) return false;
+  // Для секретов backend никогда не возвращает значение, но через `secretSet`
+  // (`data.secrets[key] === "***"`) мы знаем, что в БД оно уже есть. Тогда строка
+  // не считается «missing» — даже при пустом поле value (которое для секрета
+  // означает «не менять»).
+  if (meta.is_secret && secretSet) return false;
   return value.trim() === "";
 }
 
@@ -142,7 +159,12 @@ function rowsFromServer(data: AppConfigStack): StackRow[] {
     const k = meta.key;
     const isSecret = meta.is_secret;
     const value = isSecret ? "" : (stack[k] ?? "");
-    rows.push({ id: newRowId(), key: k, value, isSecret, fromRegistry: true });
+    // Для секретов backend возвращает в `data.secrets` маску ("***" если значение
+    // в БД задано, "" если ключ есть, но без значения). Признак «значение в БД
+    // задано» нужен фронту, чтобы не подсвечивать строку красным как «не
+    // заполнено».
+    const secretSet = isSecret && Boolean(sec[k] && sec[k] !== "");
+    rows.push({ id: newRowId(), key: k, value, isSecret, fromRegistry: true, secretSet });
     seen.add(k);
   }
 
@@ -156,6 +178,7 @@ function rowsFromServer(data: AppConfigStack): StackRow[] {
       value: stack[k] ?? "",
       isSecret: false,
       fromRegistry: false,
+      secretSet: false,
     });
     seen.add(k);
   }
@@ -167,6 +190,7 @@ function rowsFromServer(data: AppConfigStack): StackRow[] {
       value: "",
       isSecret: true,
       fromRegistry: false,
+      secretSet: Boolean(sec[k] && sec[k] !== ""),
     });
     seen.add(k);
   }
@@ -574,7 +598,7 @@ export function SettingsPage() {
                 if (rowsInGroup.length === 0 && !showEmptyOther) return null;
 
                 const missingInGroup = rowsInGroup.filter((r) =>
-                  isMissingRequired(regByKey.get(r.key.trim()), r.value),
+                  isMissingRequired(regByKey.get(r.key.trim()), r.value, r.secretSet),
                 ).length;
 
                 return (
@@ -605,6 +629,7 @@ export function SettingsPage() {
                                 value: "",
                                 isSecret: false,
                                 fromRegistry: false,
+                                secretSet: false,
                               },
                             ])
                           }
@@ -638,7 +663,7 @@ export function SettingsPage() {
                         <tbody>
                           {rowsInGroup.map((row) => {
                             const km = regByKey.get(row.key.trim());
-                            const missingRequired = isMissingRequired(km, row.value);
+                            const missingRequired = isMissingRequired(km, row.value, row.secretSet);
                             const queryHighlight =
                               row.key && missingHighlight.has(row.key);
                             const rowClass = [
@@ -647,6 +672,11 @@ export function SettingsPage() {
                             ]
                               .filter(Boolean)
                               .join(" ");
+                            const secretValuePlaceholder = row.secretSet
+                              ? "•••••••• (значение задано в БД — введите новое, чтобы заменить; пусто = не менять)"
+                              : missingRequired
+                                ? "обязательный — заполните секрет"
+                                : "новое значение (пусто = не менять)";
                             return (
                               <tr key={row.id} className={rowClass || undefined}>
                                 <td>
@@ -688,7 +718,7 @@ export function SettingsPage() {
                                     spellCheck={false}
                                     placeholder={
                                       row.isSecret
-                                        ? "новое значение (пусто = не менять)"
+                                        ? secretValuePlaceholder
                                         : missingRequired
                                           ? "обязательный — заполните"
                                           : ""
@@ -696,6 +726,11 @@ export function SettingsPage() {
                                     disabled={patchStack.isPending}
                                     type={row.isSecret ? "password" : "text"}
                                     autoComplete="off"
+                                    title={
+                                      row.isSecret && row.secretSet
+                                        ? "Секрет уже сохранён в БД (значение скрыто). Оставьте поле пустым, чтобы не менять."
+                                        : undefined
+                                    }
                                   />
                                 </td>
                                 <td className="settings-stack-desc">
@@ -719,11 +754,39 @@ export function SettingsPage() {
                                           опциональный (allow_empty)
                                         </div>
                                       ) : null}
+                                      {row.isSecret ? (
+                                        <div
+                                          className={`settings-stack-desc__secret ${
+                                            row.secretSet
+                                              ? "settings-stack-desc__secret--set"
+                                              : "settings-stack-desc__secret--unset"
+                                          }`}
+                                        >
+                                          {row.secretSet
+                                            ? "секрет: значение задано в БД (скрыто)"
+                                            : "секрет: значение в БД не задано"}
+                                        </div>
+                                      ) : null}
                                     </>
                                   ) : (
-                                    <div className="settings-stack-desc__scopes">
-                                      пользовательский ключ — описание не задано
-                                    </div>
+                                    <>
+                                      <div className="settings-stack-desc__scopes">
+                                        пользовательский ключ — описание не задано
+                                      </div>
+                                      {row.isSecret ? (
+                                        <div
+                                          className={`settings-stack-desc__secret ${
+                                            row.secretSet
+                                              ? "settings-stack-desc__secret--set"
+                                              : "settings-stack-desc__secret--unset"
+                                          }`}
+                                        >
+                                          {row.secretSet
+                                            ? "секрет: значение задано в БД (скрыто)"
+                                            : "секрет: значение в БД не задано"}
+                                        </div>
+                                      ) : null}
+                                    </>
                                   )}
                                 </td>
                                 <td style={{ width: "1%" }}>
@@ -734,7 +797,14 @@ export function SettingsPage() {
                                       setStackRows((prev) =>
                                         prev.map((r) =>
                                           r.id === row.id
-                                            ? { ...r, isSecret: e.target.checked }
+                                            ? {
+                                                ...r,
+                                                isSecret: e.target.checked,
+                                                // Ручная смена флага сбрасывает признак «уже задан в БД»:
+                                                // пользователь должен сохранить, чтобы серверная маска
+                                                // обновилась.
+                                                secretSet: false,
+                                              }
                                             : r,
                                         ),
                                       )

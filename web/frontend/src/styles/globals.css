@@ -148,6 +148,22 @@ tr.settings-stack-row--missing-required td:first-child {
   font-style: italic;
 }
 
+.settings-stack-desc__secret {
+  margin-top: 4px;
+  font-size: 11.5px;
+  font-weight: 500;
+  font-style: normal;
+}
+
+.settings-stack-desc__secret--set {
+  color: var(--color-success);
+}
+
+.settings-stack-desc__secret--unset {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
 .settings-stack-subgroup__missing-badge {
   margin-left: 10px;
   display: inline-block;
