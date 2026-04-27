@@ -1961,3 +1961,12 @@
 - **Файлы:** `docker/docker-compose.monitoring.yml`, `configs/monitoring/README.md`, `VERSION` (5.2.8), `web/backend/app/__init__.py`, `web/backend/pyproject.toml`, `web/frontend/package.json`, `web/frontend/package-lock.json`, `README.md`, `docs/HISTORY.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/plan/development-plan.xml`, `grace/verification/verification-plan.xml` (scenario-40).
 - **Решение:** PATCH 5.2.8 — правка compose и доки; образы/БД/код бэкенда (кроме версии) не менялись. Предупреждение compose про **`GF_SERVER_ROOT_URL` is not set** остаётся отдельно (пустой ключ в env); при необходимости задайте в **Настройки** `GF_SERVER_ROOT_URL` или оставьте пустым для dev.
 
+## Фаза 5.2.9 (Langfuse Redis: RDB v12 + дока `vm.overcommit_memory`)
+
+### Что: дефолтный образ Redis для Langfuse — 8.x
+
+- **Что сделано:** В [`configs/main.env`](configs/main.env) значение **`LANGFUSE_REDIS_IMAGE`** изменено с **`redis:7.2-alpine`** на **`redis:8-alpine`**, чтобы контейнер мог **читать RDB формата v12** (типичная ошибка при старте: `Can't handle RDB format version 12`, цикл перезапусков). В [`configs/monitoring/README.md`](configs/monitoring/README.md) добавлен раздел **«Redis (Langfuse): RDB / overcommit»**: несовместимость дампа и образа, варианты (обновить образ vs очистить данные), рекомендация по **`vm.overcommit_memory=1`** на Linux-хосте. Обновлены **`VERSION`** (5.2.9), **`README.md`**, **`docs/AGENTS.md`**, синхронизированы версии web (`package.json` / `package-lock.json`, `pyproject.toml`, `app/__init__.py`).
+- **Почему:** Логи пользователя: Redis 7.2.13 падает на загрузке БД с RDB v12; отдельно — предупреждение о memory overcommit. Дефолт 7.2 несовместим с уже записанным на диск дампом от более нового Redis; bump до 8.x устраняет рассинхрон «данные с диска ↔ образ» для типичного сценария.
+- **Файлы:** `configs/main.env`, `configs/monitoring/README.md`, `VERSION`, `README.md`, `docs/AGENTS.md`, `web/backend/app/__init__.py`, `web/backend/pyproject.toml`, `web/frontend/package.json`, `web/frontend/package-lock.json`, `docs/HISTORY.md`.
+- **Решение:** PATCH 5.2.9 — смена дефолтного тега образа и документация. Пользователи с зафиксированным в БД старым **`LANGFUSE_REDIS_IMAGE`** меняют значение в **Настройки** вручную или переимпортируют шаблон. Альтернатива «оставить 7.2 и чистить `LANGFUSE_REDIS_DATA_DIR`» остаётся в README как вариант с **потерей данных Redis**.
+

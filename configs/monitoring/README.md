@@ -167,6 +167,17 @@ sudo chown -R 472:0 ./data/monitoring/grafana
 
 **Порты (GRAFANA_PORT, MinIO_*, …) с настройками web не конфликтуют** — ошибка идёт от **несоответствия бинарник ↔ формат диска**, а не от смены портов.
 
+### Redis (Langfuse): `Can't handle RDB format version` / «Fatal error loading the DB» (цикл restart)
+
+**Смысл:** в **`LANGFUSE_REDIS_DATA_DIR`** лежит **`dump.rdb`** (и/или AOF), записанный **более новым** Redis, чем тот, что сейчас в контейнере. Сообщение вроде **`Can't handle RDB format version 12`** означает, что формат дампа **новее**, чем у бинарника **7.2.x** — такой файл пишет, как правило, **Redis 8+**; образ **`redis:7.2-*`** его **не** открывает.
+
+**Что сделать:**
+
+1. **Совместимость (сохранить данные):** в [`main.env`](../../main.env) и в **Настройки** web задайте **`LANGFUSE_REDIS_IMAGE`** не ниже версии, на которой создавался дамп (в репозитории по умолчанию с **5.2.9** — **`redis:8-alpine`**). Выполните **`docker pull`** нужного тега, затем пересоздайте контейнер **`redis`** (рестарт стека прокси из UI или `docker compose … up -d --force-recreate redis`). После этого Redis прочитает существующий RDB, если мажор/minor образа **не старее** того, кто писал файл.
+2. **Пустой Redis допустим (потеря кэша/очередей в Redis):** остановите стек, сделайте **бэкап** каталога **`LANGFUSE_REDIS_DATA_DIR`**, удалите **`dump.rdb`** (и при включённом AOF — файлы **`appendonly.aof`***), снова поднимите стек. Langfuse заново наполнит Redis.
+
+**Предупреждение в логах про `Memory overcommit must be enabled` / `vm.overcommit_memory`:** на **Linux-хосте** (не внутри контейнера) включите overcommit, иначе Redis предупреждает о рисках при RDB/replication. Пример: **`sudo sysctl -w vm.overcommit_memory=1`** и постоянная запись в **`/etc/sysctl.d/*.conf`** с **`vm.overcommit_memory = 1`**, затем перезагрузка или повторное применение sysctl.
+
 **Перенос Langfuse с named volumes** (старые версии compose: `slgpu_lf_postgres_data`, `slgpu_lf_clickhouse_data`, …):
 
 1. **остановка стека из UI**
