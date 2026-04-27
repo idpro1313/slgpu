@@ -1,6 +1,8 @@
 # Шаблон Promtail. Рендер backend'ом (render_monitoring_configs) в
 # WEB_DATA_DIR/.slgpu/monitoring/promtail-config.yml. Образ берётся из stack_params (PROMTAIL_IMAGE).
 # Без хардкодов — все значения через плейсхолдеры string.Template ниже.
+# В relabel «replacement» для пути к json-логу нужны backreference-группы Promtail: в .tmpl
+# записывайте их как удвоенный доллар и цифра (см. Python string.Template, не путать с ключами stack_params).
 server:
   http_listen_port: 9080
   grpc_listen_port: 0
@@ -20,7 +22,7 @@ scrape_configs:
       - source_labels: [__meta_docker_container_id]
         regex: (.+)
         target_label: __path__
-        replacement: /var/lib/docker/containers/$1/$1-json.log
+        replacement: /var/lib/docker/containers/$$1/$$1-json.log
       - source_labels: [__meta_docker_container_name]
         regex: /(.*)
         target_label: container
