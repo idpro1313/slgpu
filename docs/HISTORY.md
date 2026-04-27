@@ -1900,3 +1900,20 @@
 - **Файлы:** `web/frontend/src/pages/Settings.tsx`, `web/frontend/src/styles/globals.css`, `VERSION` (5.2.3), `web/backend/pyproject.toml`, `web/backend/app/__init__.py`, `web/frontend/package.json`, `docs/HISTORY.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/plan/development-plan.xml`, `grace/verification/verification-plan.xml`.
 - **Решение:** PATCH 5.2.3 — фронт-only фикс UX, без изменения API и БД. Backend `mask_secrets()` уже отдавал нужную информацию через `data.secrets[k]`; фронт просто стал её использовать.
 
+## Фаза 5.2.4 (Карточки Langfuse / LiteLLM Proxy уехали со страницы «Стек мониторинга» на страницу «LiteLLM Proxy»)
+
+### Что: «Стек мониторинга» теперь показывает только сервисы category=monitoring; proxy-карточки — на странице LiteLLM
+
+- **Что сделано:**
+  - `web/frontend/src/pages/Monitoring.tsx`:
+    - В рендере списка карточек добавлен фильтр `service.category === "monitoring"`. Empty-state «Нет данных от Docker daemon» использует тот же фильтр (чтобы не считать наличие proxy-карточек).
+    - Подзаголовок страницы скорректирован: «Prometheus, Grafana, Loki, Promtail, DCGM, Node Exporter. Langfuse и LiteLLM Proxy относятся к стеку «Прокси» и управляются на странице «LiteLLM Proxy».»
+    - Подзаголовок секции «Сервисы»: «Показываются только сервисы стека мониторинга (category=monitoring); прокси (Langfuse, LiteLLM) — на странице «LiteLLM Proxy».»
+  - `web/frontend/src/pages/LiteLLM.tsx`:
+    - Добавлен `useQuery(["monitoring", "services"], …)` (тот же endpoint, без дублирования логики на бэке).
+    - Над секцией «Health» добавлена секция **«Сервисы прокси-стека»** с карточками `service.category === "proxy" || service.category === "gateway"` (Langfuse, LiteLLM Proxy). Те же поля, что и в Monitoring: `display_name`, `StatusBadge(status)`, `detail ?? "ok"`, ссылка «Открыть UI →» при наличии `service.url`.
+    - Импорт `ServiceCard` из `@/api/types` рядом с существующими типами LiteLLM.
+- **Почему:** Скриншот в чате — на странице «Стек мониторинга» карточки **Langfuse** и **LiteLLM Proxy** показывались среди Prometheus/Grafana/Loki/Promtail/DCGM/Node Exporter. Сообщение пользователя: «это тут лишнее!». Эти сервисы поднимаются compose-стеком `slgpu-proxy` (`docker-compose.proxy.yml`, переменная `WEB_COMPOSE_PROJECT_PROXY`), а не `slgpu-monitoring` (`docker-compose.monitoring.yml`, `WEB_COMPOSE_PROJECT_MONITORING`); смешение в одном списке вводило в заблуждение по поводу того, какой стек поднимать кнопками `monitoring up/down`.
+- **Файлы:** `web/frontend/src/pages/Monitoring.tsx`, `web/frontend/src/pages/LiteLLM.tsx`, `VERSION` (5.2.4), `web/backend/app/__init__.py`, `web/backend/pyproject.toml`, `web/frontend/package.json`, `docs/HISTORY.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/plan/development-plan.xml`, `grace/verification/verification-plan.xml`.
+- **Решение:** PATCH 5.2.4 — фронт-only фильтр (без изменения API). Backend `_settings_probes()` всё так же возвращает 8 проб (6 monitoring + langfuse/proxy + litellm/gateway) — клиенты разделяют их по `category`. Альтернатива «делать query-параметр `?category=`» отвергнута: только два потребителя (Monitoring/LiteLLM), оба должны видеть свои подмножества; клиентский фильтр проще и не плодит дополнительный round-trip к API.
+

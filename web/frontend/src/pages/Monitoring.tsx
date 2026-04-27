@@ -42,7 +42,7 @@ export function MonitoringPage() {
     <>
       <PageHeader
         title="Стек мониторинга"
-        subtitle="Prometheus, Grafana, Loki, Promtail, DCGM, Node Exporter, Langfuse и LiteLLM-проба."
+        subtitle="Prometheus, Grafana, Loki, Promtail, DCGM, Node Exporter. Langfuse и LiteLLM Proxy относятся к стеку «Прокси» и управляются на странице «LiteLLM Proxy»."
         actions={
           <>
             <button
@@ -100,34 +100,39 @@ export function MonitoringPage() {
       ) : null}
       {error ? <p style={{ color: "var(--color-danger)" }}>{error}</p> : null}
 
-      <Section title="Сервисы" subtitle="Опрос Docker + HTTP-проба, обновление каждые 8 секунд.">
+      <Section
+        title="Сервисы"
+        subtitle="Опрос Docker + HTTP-проба, обновление каждые 8 секунд. Показываются только сервисы стека мониторинга (category=monitoring); прокси (Langfuse, LiteLLM) — на странице «LiteLLM Proxy»."
+      >
         {services.isLoading ? (
           <div className="empty-state">Загружаем…</div>
-        ) : !services.data || services.data.length === 0 ? (
+        ) : !services.data || services.data.filter((s) => s.category === "monitoring").length === 0 ? (
           <div className="empty-state">Нет данных от Docker daemon.</div>
         ) : (
           <div className="cards-grid">
-            {services.data.map((service) => (
-              <div className="status-card" key={service.key}>
-                <div className="status-card__head">
-                  <span className="status-card__name">{service.display_name}</span>
-                  <StatusBadge status={service.status} />
+            {services.data
+              .filter((service) => service.category === "monitoring")
+              .map((service) => (
+                <div className="status-card" key={service.key}>
+                  <div className="status-card__head">
+                    <span className="status-card__name">{service.display_name}</span>
+                    <StatusBadge status={service.status} />
+                  </div>
+                  <div className="status-card__detail">
+                    {service.detail ?? "ok"}
+                  </div>
+                  {service.url ? (
+                    <a
+                      className="status-card__link"
+                      href={service.url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Открыть UI →
+                    </a>
+                  ) : null}
                 </div>
-                <div className="status-card__detail">
-                  {service.detail ?? "ok"}
-                </div>
-                {service.url ? (
-                  <a
-                    className="status-card__link"
-                    href={service.url}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Открыть UI →
-                  </a>
-                ) : null}
-              </div>
-            ))}
+              ))}
           </div>
         )}
       </Section>

@@ -2,7 +2,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { api } from "@/api/client";
-import type { Job, JobAccepted, LiteLLMHealth, LiteLLMInfo } from "@/api/types";
+import type {
+  Job,
+  JobAccepted,
+  LiteLLMHealth,
+  LiteLLMInfo,
+  ServiceCard,
+} from "@/api/types";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -31,6 +37,18 @@ export function LiteLLMPage() {
     queryKey: ["jobs"],
     queryFn: ({ signal }) => api.get<Job[]>("/jobs", { signal }),
     refetchInterval: 2_000,
+  });
+
+  // Карточки Langfuse и LiteLLM Proxy относятся к compose-стеку proxy и
+  // приходят из общего `/monitoring/services` (см. _settings_probes() в backend
+  // app/services/monitoring.py с category in {"proxy", "gateway"}). Раньше они
+  // показывались на странице «Стек мониторинга» вместе с Prometheus/Grafana,
+  // что путало: с 5.2.4 страница мониторинга фильтрует category="monitoring",
+  // а сюда переехала отдельная секция «Сервисы прокси-стека».
+  const proxyServices = useQuery({
+    queryKey: ["monitoring", "services"],
+    queryFn: ({ signal }) => api.get<ServiceCard[]>("/monitoring/services", { signal }),
+    refetchInterval: 8_000,
   });
 
   const proxyAction = useMutation({
@@ -120,6 +138,46 @@ export function LiteLLMPage() {
         </Section>
       ) : null}
       {actionError ? <p style={{ color: "var(--color-danger)" }}>{actionError}</p> : null}
+
+      <Section
+        title="Сервисы прокси-стека"
+        subtitle="Опрос Docker + HTTP-проба, обновление каждые 8 секунд. Сюда переехали карточки, ранее показывавшиеся в «Стеке мониторинга» (category=proxy и category=gateway)."
+      >
+        {proxyServices.isLoading ? (
+          <div className="empty-state">Загружаем…</div>
+        ) : !proxyServices.data ||
+          proxyServices.data.filter(
+            (s) => s.category === "proxy" || s.category === "gateway",
+          ).length === 0 ? (
+          <div className="empty-state">Нет данных от Docker daemon.</div>
+        ) : (
+          <div className="cards-grid">
+            {proxyServices.data
+              .filter((service) => service.category === "proxy" || service.category === "gateway")
+              .map((service) => (
+                <div className="status-card" key={service.key}>
+                  <div className="status-card__head">
+                    <span className="status-card__name">{service.display_name}</span>
+                    <StatusBadge status={service.status} />
+                  </div>
+                  <div className="status-card__detail">
+                    {service.detail ?? "ok"}
+                  </div>
+                  {service.url ? (
+                    <a
+                      className="status-card__link"
+                      href={service.url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Открыть UI →
+                    </a>
+                  ) : null}
+                </div>
+              ))}
+          </div>
+        )}
+      </Section>
 
       <Section title="Health" subtitle="Liveliness / Readiness / UI">
         <div className="cards-grid">
