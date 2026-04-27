@@ -1611,6 +1611,13 @@
 - **Файлы:** `grace/**/*.xml`, `docs/AGENTS.md`, `web/CONTRACT.md`, `web/README.md`, `VERSION`, `web/backend/pyproject.toml`, `web/backend/app/__init__.py`, `web/frontend/package.json`, `docs/HISTORY.md`.
 - **Решение:** **PATCH 4.0.8** для документации и метаданных версии; функциональные правки предыдущих волон — в тех же коммитах/истории.
 
+### 4.1.4: Лог слота на Inference — ограничение по числу строк (tail)
+
+- **Что:** Секция **«Лог слота»** в **`/runtime`**: селектор **tail** (200…2000, как на бэке **`Query(..., le=2000)`**), `queryKey` учитывает tail; отображение через **`limitLogLinesToMax(..., data.tail)`**. Подзаголовок и **CONTRACT**/`AGENTS` — явный предел 2000 строк.
+- **Почему:** Окно лога не должно быть без лимита по строкам; раньше запрос был с фиксированным `tail=400` без выбора и без клиентского потолка.
+- **Файлы:** `web/frontend/src/pages/Runtime.tsx`, `web/CONTRACT.md`, `docs/AGENTS.md`, `VERSION`, версии web/backend, `grace/knowledge-graph/knowledge-graph.xml`, `docs/HISTORY.md`.
+- **Решение:** **PATCH**; серверный потолок не менялся (`runtime.py` уже `min(tail, 2000)`).
+
 ### 4.1.3: Сборка frontend — импорт `DockerDaemonLog` в `DockerLogs.tsx`
 
 - **Что:** Восстановлен **`import type { … DockerDaemonLog }`** — тип используется в **`api.get<DockerDaemonLog>`**, без импорта **`tsc`** падает (**TS2304**).

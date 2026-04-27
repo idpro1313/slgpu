@@ -27,6 +27,18 @@ function jobBusyOnResource(jobs: Job[] | undefined, resource: string | null | un
   return jobs.some((j) => isEngineJobActive(j) && j.resource === resource);
 }
 
+/** Совпадает с `Query(..., le=2000)` на `GET /runtime/slots/{key}/logs`. */
+const SLOT_LOG_MAX_LINES = 2000;
+const SLOT_LOG_TAIL_CHOICES = [200, 400, 800, 1200, 2000] as const;
+
+function limitLogLinesToMax(text: string, maxLines: number): string {
+  const cap = Math.max(1, Math.min(maxLines, SLOT_LOG_MAX_LINES));
+  if (!text) return text;
+  const parts = text.split("\n");
+  if (parts.length <= cap) return text;
+  return parts.slice(-cap).join("\n");
+}
+
 function num(v: number | string): number {
   return typeof v === "number" ? v : parseInt(String(v), 10) || 0;
 }
@@ -175,6 +187,7 @@ function SlotCard(props: {
 export function RuntimePage() {
   const queryClient = useQueryClient();
   const [logSlotKey, setLogSlotKey] = useState<string | null>(null);
+  const [slotLogTail, setSlotLogTail] = useState<number>(400);
   const [launchOpen, setLaunchOpen] = useState(false);
   const [launchEngine, setLaunchEngine] = useState<"vllm" | "sglang">("vllm");
   const [launchPreset, setLaunchPreset] = useState<string>("");
@@ -194,10 +207,10 @@ export function RuntimePage() {
     refetchInterval: 8_000,
   });
   const slotLogs = useQuery({
-    queryKey: ["runtime-logs", logSlotKey],
+    queryKey: ["runtime-logs", logSlotKey, slotLogTail],
     queryFn: ({ signal }) =>
       api.get<RuntimeLogs>(
-        `/runtime/slots/${encodeURIComponent(logSlotKey!)}/logs?tail=400`,
+        `/runtime/slots/${encodeURIComponent(logSlotKey!)}/logs?tail=${slotLogTail}`,
         { signal },
       ),
     enabled: logSlotKey != null,
@@ -398,9 +411,12 @@ export function RuntimePage() {
 
       <Section
         title="Лог слота"
-        subtitle="Кнопка Logs у слота или выбор `default` для логов слота по умолчанию."
+        subtitle="Кнопка Logs у слота или «default»; максимум 2000 строк (сервер + отображение)."
         actions={
-          <div className="flex flex--gap-sm flex--wrap">
+          <div
+            className="flex flex--gap-sm flex--wrap"
+            style={{ alignItems: "center" }}
+          >
             <button
               type="button"
               className="btn"
@@ -408,6 +424,21 @@ export function RuntimePage() {
             >
               default
             </button>
+            <label className="label" style={{ margin: 0 }}>
+              tail, строк
+            </label>
+            <select
+              className="select"
+              value={slotLogTail}
+              onChange={(e) => setSlotLogTail(parseInt(e.target.value, 10))}
+              disabled={!logSlotKey}
+            >
+              {SLOT_LOG_TAIL_CHOICES.map((n) => (
+                <option value={n} key={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
             <button
               type="button"
               className="btn"
@@ -439,7 +470,10 @@ export function RuntimePage() {
             ? slotLogs.isLoading
               ? "Загружаем…"
               : slotLogs.data?.logs?.trim()
-                ? slotLogs.data.logs
+                ? limitLogLinesToMax(
+                    slotLogs.data.logs,
+                    slotLogs.data?.tail ?? slotLogTail,
+                  )
                 : "Лог пуст или контейнер не найден."
             : "Нажмите Logs у слота или «default»."}
         </pre>
