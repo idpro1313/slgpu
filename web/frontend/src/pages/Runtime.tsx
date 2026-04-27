@@ -16,6 +16,7 @@ import { Modal } from "@/components/Modal";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
 import { StatusBadge } from "@/components/StatusBadge";
+import { coerceIntMetric } from "@/components/formatters";
 import { VramBar } from "@/components/VramBar";
 
 function isEngineJobActive(j: Job): boolean {
@@ -39,10 +40,6 @@ function limitLogLinesToMax(text: string, maxLines: number): string {
   return parts.slice(-cap).join("\n");
 }
 
-function num(v: number | string): number {
-  return typeof v === "number" ? v : parseInt(String(v), 10) || 0;
-}
-
 function parseGpuCsv(csv: string | null | undefined): number[] {
   if (!csv?.trim()) return [];
   return csv
@@ -59,8 +56,8 @@ function vramForIndices(gpu: GpuStateResponse | undefined, indices: number[]): {
   for (const i of indices) {
     const g = byIdx.get(i);
     if (g) {
-      u += num(g.memory_used_mib);
-      t += num(g.memory_total_mib);
+      u += coerceIntMetric(g.memory_used_mib);
+      t += coerceIntMetric(g.memory_total_mib);
     }
   }
   return t > 0 ? { u, t } : null;
@@ -93,8 +90,8 @@ function GpuMatrixTable({ data }: { data: GpuStateResponse | undefined }) {
         </thead>
         <tbody>
           {data.gpus.map((g) => {
-            const u = num(g.memory_used_mib);
-            const to = num(g.memory_total_mib);
+            const u = coerceIntMetric(g.memory_used_mib);
+            const to = coerceIntMetric(g.memory_total_mib);
             const pct = to > 0 ? Math.min(100, Math.round((u / to) * 100)) : 0;
             return (
               <tr key={g.index}>
@@ -159,6 +156,7 @@ function SlotCard(props: {
           type="button"
           className="btn btn--danger"
           disabled={props.downPending}
+          aria-label={`Остановить слот ${slot.slot_key}`}
           title={
             busy
               ? "Принудительная остановка: отмена задачи в БД, docker stop, снятие lock (при pull это может занять мгновение после ответа)."
@@ -172,11 +170,17 @@ function SlotCard(props: {
           type="button"
           className="btn"
           disabled={busy || !slot.preset_name || props.restartPending}
+          aria-label={`Перезапустить слот ${slot.slot_key}`}
           onClick={() => slot.preset_name && props.onRestart(slot.slot_key)}
         >
           Restart
         </button>
-        <button type="button" className="btn" onClick={() => props.onLogs(slot.slot_key)}>
+        <button
+          type="button"
+          className="btn"
+          aria-label={`Логи слота ${slot.slot_key}`}
+          onClick={() => props.onLogs(slot.slot_key)}
+        >
           Logs
         </button>
       </div>

@@ -1,8 +1,10 @@
 #!/bin/sh
 # Идемпотентно создаёт бакеты S3 в MinIO для Langfuse (events/media). См. docker-compose: minio-bucket-init.
 set -e
-: "${MINIO_ROOT_USER:=minio}"
-: "${MINIO_ROOT_PASSWORD:=miniosecret}"
+if [ -z "${MINIO_ROOT_USER:-}" ] || [ -z "${MINIO_ROOT_PASSWORD:-}" ]; then
+  echo "minio-bucket-init: MINIO_ROOT_USER and MINIO_ROOT_PASSWORD must be set (см. compose / main.env)" >&2
+  exit 1
+fi
 : "${BUCKET_EVENT:=langfuse}"
 : "${BUCKET_MEDIA:=langfuse}"
 mc alias set s3 "http://minio:9000" "${MINIO_ROOT_USER}" "${MINIO_ROOT_PASSWORD}"

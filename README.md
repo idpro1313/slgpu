@@ -2,7 +2,7 @@
 
 Репозиторий **стенда для сравнения LLM-инференса** на Linux-сервере с GPU: два движка (**vLLM** и **SGLang**) в Docker, общий локальный кэш моделей, OpenAI-совместимый HTTP API, нагрузочный бенчмарк, **Prometheus + Grafana Loki (логи) + Promtail + Langfuse (трейсинг) + LiteLLM Proxy (шлюз) + NVIDIA DCGM Exporter** (см. [§3](#3-сервисы-и-порты), [`configs/monitoring/README.md`](configs/monitoring/README.md)).
 
-> **Версия 5.0.0:** на хосте остаётся только bootstrap web: **`./slgpu web up|down|restart|logs`**. Полный стек и секреты задаются в **SQLite** через **Web UI** после импорта из единственного seed-файла **`configs/main.env`**. Каталог **`configs/secrets/`** удалён; старые команды `./slgpu up`, `pull`, `monitoring`, `bench`, `load`, `prepare` с хоста сняты — те же сценарии доступны из **slgpu-web**. Подробности — `docs/HISTORY.md`, `web/CONTRACT.md`.
+> **Версия 5.0.1:** на хосте — только bootstrap web: **`./slgpu help`** и **`./slgpu web up|down|restart|logs|build|install`**. Стек в рантайме — **SQLite** (`stack_params`); стартовый импорт — **`POST /api/v1/app-config/install`** читает **`main.env` в корне** (копия из [`configs/main.env`](configs/main.env)). Старые host-команды **`./slgpu` `up|pull|monitoring|bench|load|prepare`** **удалены** — вместо них jobs **`native.*`** в **slgpu-web** (см. [`web/CONTRACT.md`](web/CONTRACT.md), [`docs/HISTORY.md`](docs/HISTORY.md)).
 
 Целевая конфигурация при разработке: **8× NVIDIA H200**. **Tensor parallel по умолчанию `TP=8`**: в пресетах в БД и в [`serve.sh`](scripts/serve.sh). GPU-маска — **`NVIDIA_VISIBLE_DEVICES`** в импортированном стеке. Проект рассчитан на один хост без Kubernetes.
 
@@ -15,9 +15,9 @@
 1. [Назначение](#1-назначение)
 2. [Архитектура](#2-архитектура)
 3. [Сервисы и порты](#3-сервисы-и-порты)
-4. [CLI `./slgpu`](#4-cli-slgpu)
-5. [Конфигурация: `main.env` и пресеты](#5-конфигурация)
-6. [Переменные окружения (справочник)](#6-переменные-окружения)
+4. [CLI на хосте (только web)](#4-cli-на-хосте-только-web)
+5. [Конфигурация](#5-конфигурация)
+6. [Переменные окружения (справочник)](#6-переменные-окружения-справочник)
 7. [Подготовка хоста](#7-подготовка-хоста)
 8. [Быстрый старт](#8-быстрый-старт)
 9. [Бенчмарк и отчёт](#9-бенчмарк-и-отчёт)
@@ -36,7 +36,7 @@
 - Сравнение **vLLM** и **SGLang** на одной модели и одинаковых сценариях нагрузки.
 - Локальные веса на хосте (`MODELS_DIR`, по умолчанию **`./data/models`** в корне репо; см. [`data/README.md`](data/README.md)).
 - Один движок за раз; **vLLM: порт 8111**, **SGLang: 8222** (по умолчанию на хосте и в контейнере, см. `docker/docker-compose.llm.yml`).
-- Пресеты моделей в `data/presets/<slug>.env` — **локально на стенде** (не в git); эталоны — **`examples/presets/`** (`cp examples/presets/*.env data/presets/` после клона). **`./slgpu pull`** только скачивает веса.
+- Пресеты моделей в `data/presets/<slug>.env` — **локально на стенде** (не в git); эталоны — **`examples/presets/`** (`cp examples/presets/*.env data/presets/` после клона). Скачивание весов — задача **`native.model.pull`** в **Web UI** (страница «Модели»), не отдельная host-команда.
 
 ---
 
@@ -55,14 +55,14 @@
    └────┬─────┘         └────┬─────┘
         └────────┬───────────┘
                  ▼
-  `./slgpu monitoring up`: `docker-compose.monitoring.yml` (Prometheus :9090 → Grafana :3000,
-         Loki ← Promtail, dcgm :9400, node-exporter :9100)
-         + `docker-compose.proxy.yml` (Langfuse :3001, LiteLLM :4000, Postgres/MinIO/…)
+  **Мониторинг + proxy** поднимаются из **Develonica.LLM** (`native.monitoring.*` / `native.proxy.*`):
+  `docker-compose.monitoring.yml` (Prometheus → Grafana, Loki ← Promtail, …) и
+  `docker-compose.proxy.yml` (Langfuse, LiteLLM, Postgres/MinIO/…).
 ```
 
 Логи контейнеров: **Grafana → Explore → Loki**; данные Loki на диске: `LOKI_DATA_DIR` (см. [configs/monitoring/LOGS.md](configs/monitoring/LOGS.md)).
 
-Переменные модели попадают в контейнер через блок **`environment`** в `docker/docker-compose.llm.yml`; подстановка `${VAR}` в YAML делается **`./slgpu up`** после слияния [`main.env`](main.env) + пресет: снимок пишется во временный файл и передаётся как **`docker compose --env-file`** под **`env -i`**, чтобы родительский процесс (в т.ч. **slgpu-web**) не перебивал пресет своим shell environment. Корневой **`.env`** по-прежнему может влиять на интерполяцию — не дублируйте там **`MAX_MODEL_LEN`** / **`GPU_MEM_UTIL`** / парсеры, если они задаются пресетом (см. [`docker/README.md`](docker/README.md)).
+Переменные для **слотов** передаёт **docker-py** + [`scripts/serve.sh`](scripts/serve.sh) в рантайме. Для **ручного** запуска LLM через `docker/docker-compose.llm.yml` (legacy) снимок env — с **`configs/main.env`** и пресетом. Корневой **`.env`** не дублируйте с пресетом по **`MAX_MODEL_LEN`**, **`GPU_MEM_UTIL`**, парсерам (см. [`docker/README.md`](docker/README.md)).
 
 ---
 
@@ -79,57 +79,36 @@
 | **dcgm-exporter** | `nvidia/dcgm-exporter:latest` | **9400** (`DCGM_BIND`) |
 | **node-exporter** | `prom/node-exporter:latest` | **9100** (`NODE_EXPORTER_BIND`) |
 | **Langfuse** | `langfuse/langfuse:3` и `langfuse/langfuse-worker:3` ([`docker/docker-compose.proxy.yml`](docker/docker-compose.proxy.yml): Postgres, ClickHouse, Redis, MinIO) | **3001** на хосте (`LANGFUSE_PORT`, **не** 3000 — Grafana) |
-| **LiteLLM** | `ghcr.io/berriai/litellm:main-latest` ([`docker/docker-compose.proxy.yml`](docker/docker-compose.proxy.yml); или `SLGPU_LITELLM_IMAGE`) | **4000** (`LITELLM_PORT`); vLLM — `host.docker.internal:${LLM_API_PORT}`; **Admin UI** — `http://<хост>:4000/ui`, **`UI_USERNAME` / `UI_PASSWORD`** в `main.env`; **`x-api-key`** — если задан **`LITELLM_MASTER_KEY`** (пусто = без ключа, только в закрытой сети) |
+| **LiteLLM** | `ghcr.io/berriai/litellm:main-latest` ([`docker/docker-compose.proxy.yml`](docker/docker-compose.proxy.yml)) | Порт: **`LITELLM_PORT`** (хост и внутри контейнера совпадают); vLLM — `host.docker.internal:${LLM_API_PORT}`; **Admin UI** — `http://<хост>:<LITELLM_PORT>/ui`; креды / master key в стеке БД. |
 
 Образ **vLLM** задаётся **в пресете** (семейные теги `*-cu130` и т.д.); остальные сервисы в compose в основном на **`latest`**, **Loki/Promtail** зафиксированы **2.9.8** — при `docker compose pull` меняется состав `latest`. Для продакшена задайте **тег** или **digest** в compose / `main.env` (`GRAFANA_IMAGE` и т.д.; старые `SLGPU_*_IMAGE` читаются как fallback, см. [`main.env`](main.env)).
 
-Базовый URL API: vLLM `http://<host>:8111/v1`, SGLang `http://<host>:8222/v1` (по умолчанию; `-p` в `./slgpu up` меняет порт на хосте).
+Базовый URL: порты и хосты **vLLM/SGLang** — из стека и слотов (**Inference** в UI; типичные дефолты в seed — 8111 / 8222).
 
 ---
 
-## 4. CLI `./slgpu`
+## 4. CLI на хосте (только web)
 
-Точка входа для жизненного цикла стенда: подготовка ОС, загрузка весов, запуск движка в Docker, бенчмарки. Логи и проверка API — через **`docker compose`** и **`curl`** (см. [§9](#9-бенчмарк-и-отчёт), [§12](#12-мониторинг-и-безопасность)). Команды реализованы в [`scripts/cmd_*.sh`](scripts/) и вызываются через корневой скрипт [`slgpu`](slgpu). В репозитории для `slgpu` и `cmd_*.sh` уже выставлен исполняемый бит; при необходимости на VM: `chmod +x slgpu scripts/cmd_*.sh`.
+На Linux VM: **[`./slgpu help`](scripts/cmd_help.sh)** и **[`./slgpu web …`](scripts/cmd_web.sh)** ([`slgpu`](slgpu)). Исполняемый бит: `chmod +x slgpu scripts/cmd_web.sh scripts/cmd_help.sh`.
 
-### Шпаргалка синтаксиса
+### Кратко
 
-```text
-./slgpu help
-./slgpu prepare [1–6]
-./slgpu pull <HF_ID|preset> [опции]
-./slgpu up [<vllm|sglang>] [-m <preset>] [-p <порт>] [--tp <N>]   # без арг. — интерактив (TTY)
-./slgpu down [--all]
-./slgpu restart -m <preset> [--tp <N>]
-./slgpu bench [vllm|sglang] [-m <preset>]
-./slgpu load [vllm|sglang] [-m <preset>] [опции]
-```
+| Подкоманда | Назначение |
+|------------|------------|
+| **`help`** | Справка. |
+| **`web` `up` / `down` / `restart` / `logs` / `build` / `install`** | Контейнер **slgpu-web** ([`docker/docker-compose.web.yml`](docker/docker-compose.web.yml)). Для compose на хосте: env-файл — **`configs/main.env`** (`scripts/_lib.sh`). **`install`**: `POST /api/v1/app-config/install` читает **`main.env` в корне репо** и сидит SQLite. |
 
-### Назначение команд
-
-| Команда | Назначение |
-|---------|------------|
-| **`help`** | Краткая справка по всем подкомандам и примерам вызова (то же, что и `./slgpu` без аргументов с подсказкой). |
-| **`prepare`** | **Один раз при создании ВМ** (или после переустановки ОС): проверка драйвера NVIDIA, установка Docker и Compose v2, NVIDIA Container Toolkit, при желании persistence mode GPU, создание каталога `MODELS_DIR`, sysctl (`vm.swappiness`), лимиты `nofile`, напоминание про firewall. Запуск от root: `sudo ./slgpu prepare` или шаг `sudo ./slgpu prepare 1` … `6`; выборочно: `STEPS=2,4 sudo -E ./slgpu prepare`. |
-| **`pull`** | **Скачивание весов** в `${MODELS_DIR}/<MODEL_ID>` через `hf download`. **Файл пресета не создаётся.** Аргумент **с `/`** — HF id: если есть `data/presets/<slug>.env` (slug из имени репо), подхватывается `MODEL_ID` и т.д.; если пресета **нет** — скачивание только по HF id, для `./slgpu up` заведите `data/presets/<slug>.env`. Аргумент **без `/`** — имя существующего пресета. Опция **`--revision`**: пин ревизии (переопределяет `MODEL_REVISION` при загрузке с пресетом). Токен: [`configs/secrets/hf.env`](configs/secrets/hf.env) (`HF_TOKEN`). |
-| **`up`** | **Запуск движка**: останавливает и удаляет контейнеры другого движка (vllm/sglang), поднимает **один** выбранный профиль — `vllm` или `sglang` (см. `./slgpu up -h`) с **`-m <preset>`** (в неинтерактивном вызове). **`./slgpu up` без аргументов** при **TTY** сначала предлагает выбрать движок, затем пресет из `data/presets/*.env`; **без TTY** укажите `vllm`/`sglang` и **`-m`** явно. Мониторинг (Prometheus, Grafana) **отдельно**: **`./slgpu monitoring up`** (один раз на хост). **Не ждёт** `GET /v1/models` — `curl` вручную. |
-| **`monitoring`** | **`up` / `down` / `restart` / `bootstrap` / `fix-perms`**: стек **метрик и логов** в [`docker/docker-compose.monitoring.yml`](docker/docker-compose.monitoring.yml), **Langfuse + LiteLLM** в [`docker/docker-compose.proxy.yml`](docker/docker-compose.proxy.yml) (проект `slgpu-proxy`); тот же **`./slgpu monitoring up|down|restart`**. Первый **`up`** на новом сервере один раз запускает bootstrap `minio-bucket-init` и `litellm-pg-init` (в **proxy** compose; markers в `data/monitoring/.bootstrap`), затем поднимается **monitoring** и **proxy**. **`fix-perms`** — chown каталогов `PROMETHEUS_DATA_DIR`, `GRAFANA_DATA_DIR`, `LOKI_DATA_DIR`, `PROMTAIL_DATA_DIR`, `LANGFUSE_*_DATA_DIR` по uid:gid из образов; работает через короткоживущий root-контейнер (`SLGPU_FIXPERMS_HELPER_IMAGE`, по умолчанию `alpine:latest`), `sudo` не нужен (см. [configs/monitoring/README](configs/monitoring/README.md)). |
-| **`web`** | **`up` / `down` / `restart` / `logs` / `build` / `install`**: приложение **Develonica.LLM**, образ **slgpu-web** ([`docker/docker-compose.web.yml`](docker/docker-compose.web.yml)), сеть `slgpu`; `up` **без** [`main.env`](main.env) в корне использует [`docker/web-compose.defaults.env`](docker/web-compose.defaults.env) (дефолты в YAML). Тома `data/web`, `data/models` — по умолч. `./data/…` или из `main.env`. Репо bind-монтируется по **тому же абсолютному пути на хосте** (`SLGPU_HOST_REPO` из `scripts/cmd_web.sh`). **`install`**: `POST /api/v1/app-config/install` **читает** `main.env` в корне (нужен файл для импорта); порядок: **`./slgpu web up`**, положить/скопировать `main.env`, затем **`./slgpu web install`**. Отдельно **proxy** (Langfuse + LiteLLM, [`docker-compose.proxy.yml`](docker/docker-compose.proxy.yml)): **`POST /api/v1/litellm/proxy/action`** (`up` / `down` / `restart`), UI **«LiteLLM»**. |
-| **`down`** | **Остановка инференса**: по умолчанию — **только** `vllm` и `sglang`. С флагом **`--all`** — ещё и стек мониторинга. Тома метрик/дашбордов не удаляются. |
-| **`restart`** | **Перезапуск с новым пресетом без смены движка**: определяет, какой сервис сейчас в статусе *running* (`vllm` или `sglang`), и выполняет для него ту же последовательность, что и `up`, с новым **`-m <preset>`**; опционально **`--tp`**, как у `up`. Если ни один LLM-контейнер не запущен — сообщение об ошибке; тогда используйте `up`. |
-| **`bench`** | **Нагрузочный тест** против уже поднятого API (порт vLLM 8111 / SGLang 8222 по умолчанию, см. `docker compose -f docker/docker-compose.llm.yml port`): запускает [`scripts/bench_openai.py`](scripts/bench_openai.py). Модель и engine **автоматически определяются** из запущенного API (`/v1/models`) и docker compose. Пресет **`-m`** опционален — используется только для `MAX_MODEL_LEN` и `BENCH_MODEL_NAME`, если указан. Пишет артефакты в **`data/bench/results/<engine>/<timestamp>/`**. |
-| **`load`** | **Длительный нагрузочный тест** (15–20 мин, 200–300 виртуальных пользователей): запускает [`scripts/bench_load.py`](scripts/bench_load.py). Модель и engine **автоматически определяются** из запущенного API. Эмулирует фазы ramp-up → steady → ramp-down, собирает time-series метрики (throughput, TTFT, latency, error rate) в CSV каждые 5 сек. Артефакты: `summary.json`, `time_series.csv`, `users.jsonl`. Опции: `--users`, `--duration`, `--ramp-up`, `--ramp-down`, `--think-time`, `--max-prompt`, `--max-output`, `--report-interval`, `--burst` (макс throughput без пауз). |
-Подробности по флагам **`pull`**: см. `./slgpu pull -h` и [`configs/models/README.md`](configs/models/README.md). Результаты бенчей: **`data/bench/results/<engine>/<timestamp>/summary.json`** (просмотр в web — модалка по строке прогона). Старые прогоны при необходимости перенесите из `bench/results/` в `data/bench/results/`. Логи: **`docker compose -f docker/docker-compose.llm.yml logs -f vllm`**; мониторинг: **`./slgpu monitoring up`**, логи — `docker/docker-compose.monitoring.yml` и при необходимости `docker/docker-compose.proxy.yml`. Диагностика: **`docker compose ps`**, **`curl`**, **`nvidia-smi`**.
+Остальное (модели, слоты, мониторинг, proxy, бенч) — **Develonica.LLM**, jobs **`native.*** ([`web/CONTRACT.md`](web/CONTRACT.md)). Бенч и долгий load-прогон — **из UI** (`/bench` и API), на хосте при необходимости — `python scripts/bench_openai.py` / `bench_load.py` вручную. Артефакты: **`data/bench/results/<engine>/<timestamp>/summary.json`**.
 
 ---
 
 ## 5. Конфигурация
 
-- **[`main.env`](main.env)** в **корне репо** (не в git) — **дефолты хоста и движка** для `./slgpu` и для **`POST /api/v1/app-config/install`**; в web **источник правды** — **SQLite** (`stack_params`) и **дефолты в коде** (`DEFAULT_STACK` в `web/backend/.../stack_config.py`). Развёрнутый шаблон с комментариями — **[`configs/main.env`](configs/main.env)** (при необходимости скопируйте в корень как `main.env`).
-- **`data/presets/<preset>.env`** (каталог задаётся **`PRESETS_DIR`**, по умолчанию **`./data/presets`**) — модель: `MODEL_ID`, **`VLLM_DOCKER_IMAGE`**, `MAX_MODEL_LEN`, **`TP`** (в шаблонах репозитория **8**; на 4 GPU — **4**), парсеры, KV и т.д. Для **`bench` / `restart`** — флаг **`-m`** обязателен. Для **`up`** пресет задаётся через **`-m`** **или** интерактивным выбором при **`./slgpu up`** без аргументов (TTY).
-- Все **дефолты движка** (listen vLLM/SGLang, `VLLM_LOGGING_LEVEL`, **Triton/TorchInductor** для SGLang, NCCL, и т.д.) — в [`main.env`](main.env); в контейнер движка — **`env_file: main.env`** в [`docker/docker-compose.llm.yml`](docker/docker-compose.llm.yml). **Мониторинг** и **proxy (Langfuse + LiteLLM)** — в [`docker/docker-compose.monitoring.yml`](docker/docker-compose.monitoring.yml) / [`proxy`](docker/docker-compose.proxy.yml) **`env_file: ${WEB_DATA_DIR}/.slgpu/compose-service.env`** (по умолч. `data/web/…`). В web-сценарии этот снимок пишется **только из SQLite `stack_params`**, compose запускается с очищенным окружением, а published-порты / compose project-name в YAML не имеют `${VAR:-...}` fallback. См. [`./slgpu monitoring -h`](scripts/cmd_monitoring.sh).
-- **CLI движка**: единый [`scripts/serve.sh`](scripts/serve.sh) (`SLGPU_ENGINE=vllm|sglang` задаёт `docker-compose`; в контейнере — `/etc/slgpu/serve.sh`).
+- **Хост, `./slgpu web`:** для `docker compose` на VM используется **[`configs/main.env`](configs/main.env)** (см. `scripts/_lib.sh`); **источник правды в рантайме slgpu-web** — **SQLite** (`stack_params`, `stack_key_registry` / `DEFAULT_STACK` в `web/backend/.../stack_config.py`). Для **`POST /api/v1/app-config/install`** по-прежнему читается **`main.env` в корне репо** (скопируйте из `configs/main.env` или задайте вручную).
+- **`data/presets/<preset>.env`** (каталог **`PRESETS_DIR`**, обычно **`./data/presets`**) — модель, образ vLLM, `MAX_MODEL_LEN`, `TP`, парсеры, KV. Импорт в БД — через UI или `install` (см. [web/README.md](web/README.md)).
+- **Контейнеры vLLM/SGLang, мониторинг, proxy** поднимаются **из Develonica.LLM** (jobs `native.*`), не через удалённые host-команды. Снимок env для compose: **`${WEB_DATA_DIR}/.slgpu/compose-service.env`**, ключи — по **`STACK_KEY_REGISTRY`**. **Ручной** запуск `docker compose -f docker/docker-compose.llm.yml` с **`env_file: configs/main.env`** — см. [docker/README.md](docker/README.md) (помечено как legacy). Внутри слотов: [`scripts/serve.sh`](scripts/serve.sh) → `/etc/slgpu/serve.sh`.
 
-Справка по парсерам: [`configs/models/README.md`](configs/models/README.md).
+Справка по формату пресетов: [`configs/models/README.md`](configs/models/README.md).
 
 ---
 
@@ -137,9 +116,9 @@
 
 | Переменная | Где задаётся | Назначение |
 |------------|--------------|------------|
-| `HF_TOKEN` | [`configs/secrets/hf.env`](configs/secrets/hf.env) | Только для `./slgpu pull` |
+| `HF_TOKEN` | `main.env` (локально) или `export`; для gated HF — **не** в git | `huggingface-cli` / загрузка весов; UI (`native.model.pull`) передаёт токен из стека/настроек |
 | `MODELS_DIR`, `LLM_API_BIND`, `PROMETHEUS_DATA_DIR`, `GRAFANA_DATA_DIR`, `LOKI_DATA_DIR`, `PROMTAIL_DATA_DIR`, `LANGFUSE_*_DATA_DIR`, `GRAFANA_BIND`, `GRAFANA_PORT`, `PROMETHEUS_*`, `DCGM_BIND`, `NODE_EXPORTER_BIND` и пр. | **web:** SQLite `stack_params`; **CLI:** [`main.env`](main.env) | Данные на хосте — bind mount, см. [configs/monitoring/README](configs/monitoring/README.md) |
-| `LANGFUSE_PORT`, `NEXTAUTH_URL`, `LANGFUSE_BIND`, `NEXTAUTH_SECRET`, `LITELLM_MASTER_KEY`, `LANGFUSE_POSTGRES_*`, `LANGFUSE_REDIS_AUTH`, `MINIO_ROOT_*`, `WEB_COMPOSE_PROJECT_PROXY` и т.д. | **web:** SQLite `stack_params`; **CLI:** [`main.env`](main.env) | Langfuse + Postgres/MinIO + **LiteLLM** — [proxy compose](docker/docker-compose.proxy.yml); стек **Prometheus/Grafana/Loki** — [monitoring compose](docker/docker-compose.monitoring.yml). **трейсинг LiteLLM → Langfuse:** `data/web/secrets/langfuse-litellm.env` (из БД web или копия из [`configs/secrets/langfuse-litellm.env.example`](configs/secrets/langfuse-litellm.env.example); не в git); **доступ к UI извне:** `NEXTAUTH_URL` (см. [configs/monitoring/README](configs/monitoring/README.md)); LiteLLM — глоб. настройки в [`configs/monitoring/litellm/config.yaml`](configs/monitoring/litellm/config.yaml), модели в **/ui** |
+| `LANGFUSE_PORT`, `NEXTAUTH_URL`, `LANGFUSE_BIND`, `NEXTAUTH_SECRET`, `LITELLM_MASTER_KEY`, `LANGFUSE_POSTGRES_*`, `LANGFUSE_REDIS_AUTH`, `MINIO_ROOT_*`, `WEB_COMPOSE_PROJECT_PROXY` и т.д. | **web:** SQLite `stack_params` | Langfuse + Postgres/MinIO + **LiteLLM** — [proxy compose](docker/docker-compose.proxy.yml); **Prometheus/Grafana/Loki** — [monitoring compose](docker/docker-compose.monitoring.yml). **Трейсинг LiteLLM → Langfuse:** `${WEB_DATA_DIR}/secrets/langfuse-litellm.env` (генерируется из БД; см. [configs/monitoring/README](configs/monitoring/README.md), [data/README.md](data/README.md)); **доступ к UI:** `NEXTAUTH_URL`. LiteLLM — [`configs/monitoring/litellm/config.yaml`](configs/monitoring/litellm/config.yaml), модели в **/ui** |
 | `VLLM_DOCKER_IMAGE` | пресет [`data/presets/<slug>.env`](examples/presets/) | Семейные теги vLLM (`*-cu130` и т.д.); fallback в [`docker/docker-compose.llm.yml`](docker/docker-compose.llm.yml) |
 | `GRAFANA_ADMIN_PASSWORD` | `main.env` (локально) или `export` | Секрет; см. шаблон внизу [`main.env`](main.env) |
 | `GF_SERVER_ROOT_URL`, `LLM_API_PORT`, `SLGPU_NVIDIA_VISIBLE_DEVICES` (опц.) | `main.env` или `export` | В [`main.env`](main.env) — закомментированные заготовки |
@@ -150,58 +129,39 @@
 
 ## 7. Подготовка хоста
 
-Ubuntu/Debian, драйвер NVIDIA (рекомендуется ≥ 560 для H200/FP8).
-
-```bash
-sudo ./slgpu prepare              # шаги 1–6
-sudo ./slgpu prepare 1            # только проверка драйвера
-sudo STEPS=2,4 ./slgpu prepare
-```
-
-Docker, Compose v2, NVIDIA Container Toolkit, каталог `MODELS_DIR`, sysctl, limits — см. реализацию [`scripts/cmd_prepare.sh`](scripts/cmd_prepare.sh).
+Ubuntu/Debian, драйвер **NVIDIA** (рекомендуется ≥ 560 для H200/FP8), **Docker** + **Compose v2**, **NVIDIA Container Toolkit**, достаточный `vm.swappiness` / `ulimit` — по стандартной доке NVIDIA и Docker. Каталог весов: **`MODELS_DIR`** (по умолчанию `data/models`). В v5 **нет** `sudo ./slgpu prepare`; при миграции со старого репо ориентируйтесь на требования к GPU/Docker вручную.
 
 ---
 
-## 8. Быстрый старт
+## 8. Быстрый старт (v5)
 
 ```bash
 git clone <repo-url> /opt/slgpu && cd /opt/slgpu
+chmod +x slgpu scripts/cmd_web.sh scripts/cmd_help.sh
 
-# Опционально: при необходимости — пароль Grafana и т.д. (см. шапку main.env)
-# Опционально для gated моделей:
-# cp configs/secrets/hf.env.example configs/secrets/hf.env
+# Шаблон стека: скопируйте в корень как main.env (для install) и при необходимости отредактируйте
+# cp configs/main.env ./main.env
 
-pip install -U "huggingface_hub[cli]"
-
-./slgpu pull Qwen/Qwen3.6-35B-A3B   # пресет qwen3.6-35b-a3b.env есть в репо — pull подхватит MODEL_ID
-./slgpu up vllm -m qwen3.6-35b-a3b
-
-curl -s http://127.0.0.1:8111/v1/models
+./slgpu web up
+./slgpu web install   # POST /api/v1/app-config/install: импорт main.env + пресетов в SQLite
+# Откройте UI (WEB_BIND:WEB_PORT, по умолчанию 0.0.0.0:8000) — Модели, Слоты, Мониторинг, LiteLLM
 ```
 
-Полный стек мониторинга и логов (Prometheus, Grafana, Loki, Promtail): сначала **`./slgpu monitoring fix-perms`**, чтобы каталоги `LOKI_DATA_DIR` / `PROMTAIL_DATA_DIR` и т.д. существовали с правами для контейнеров, затем **`./slgpu monitoring up`**. Первый `up` один раз выполнит bootstrap для MinIO buckets и БД LiteLLM; дальше init-контейнеры не пересоздаются. Подробности — [configs/monitoring/README.md](configs/monitoring/README.md), логи — [configs/monitoring/LOGS.md](configs/monitoring/LOGS.md). `fix-perms` использует короткоживущий root-контейнер `docker run --rm -u 0:0` (образ из переменной `SLGPU_FIXPERMS_HELPER_IMAGE`, по умолчанию `alpine:latest`), поэтому **`sudo` не нужен** ни на хосте, ни внутри web-контейнера.
-
-Примеры пресетов в репозитории (`examples/presets/`): `qwen3.6-35b-a3b`, `qwen3-30b-a3b` и др. Для новой модели: добавьте `data/presets/<slug>.env` (ориентир — файлы в `examples/presets/`), затем **`./slgpu pull <slug>`** или **`./slgpu pull <HF id>`** при совпадении slug.
+- Загрузка весов, слоты, мониторинг, proxy, бенч — **только из UI** (или API `native.*` / `POST /api/v1/...`, см. [web/CONTRACT.md](web/CONTRACT.md)). Для gated HF задайте **`HF_TOKEN`** в стеке/настройках. Первый подъём **monitoring + proxy** из UI инициализирует MinIO/БД при необходимости — см. [configs/monitoring/README.md](configs/monitoring/README.md).
+- Примеры пресетов: **`examples/presets/`**; рабочие копии — **`data/presets/`** (см. [data/README.md](data/README.md)).
 
 ---
 
 ## 9. Бенчмарк и отчёт
 
-```bash
-M=qwen3.6-35b-a3b
-./slgpu up vllm   -m $M && ./slgpu bench vllm   -m $M
-./slgpu down
-./slgpu up sglang -m $M && ./slgpu bench sglang -m $M
-# Артефакты: data/bench/results/vllm|sglang/<timestamp>/summary.json
-```
-
-Артефакты: `data/bench/results/<engine>/<timestamp>/summary.json`.
+- В **UI** — раздел **«Бенч»** / API **`/api/v1/bench/...`**: движок и модель подтягиваются из запущенного слота; отчёты в **`data/bench/results/<engine>/<timestamp>/summary.json`**, просмотр в модалке.
+- Локально на хосте (без UI): `python3 scripts/bench_openai.py` / `scripts/bench_load.py` — смотрите `--help` и активный порт в **`GET /v1/models`** (слот).
 
 ---
 
 ## 10. Длительный нагрузочный тест (`load`)
 
-Команда `./slgpu load` эмулирует реальную нагрузку от **200–300 виртуальных пользователей** на протяжении **15–20 минут** (настраивается). В отличие от быстрого `./slgpu bench`, этот режим строит фазы **ramp-up → steady → ramp-down** и пишет time-series метрики, что позволяет увидеть деградацию производительности во времени.
+Скрипт **[`scripts/bench_load.py`](scripts/bench_load.py)** (не host-`./slgpu load`) эмулирует **200–300 виртуальных пользователей** и **15–20 мин** steady (см. опции ниже). Строит **ramp-up → steady → ramp-down** и time-series (CSV/JSONL).
 
 ### Архитектура нагрузки
 
@@ -224,68 +184,38 @@ M=qwen3.6-35b-a3b
 2. **`time_series.csv`** — time-series каждые 5 сек: timestamp, phase, active_users, throughput_rps, ttft_p50_ms, ttft_p95_ms, latency_p50_ms, latency_p95_ms, tokens_per_sec, error_rate.
 3. **`users.jsonl`** — по одному JSON на каждого виртуального пользователя: uid, total_requests, ok_requests, err_requests, список всех вызовов с ttft/total_ms.
 
-### Примеры запуска
+### Примеры запуска (хост, при поднятом API слота)
 
 ```bash
-# Стандартный режим: 250 пользователей, 15 мин steady
-./slgpu load vllm -m qwen3.6-35b-a3b
-
-# Максимальная нагрузка: 300 пользователей, 20 мин steady
-./slgpu load vllm -m qwen3.6-35b-a3b --users 300 --duration 1200
-
-# Быстрый тест для отладки: 50 пользователей, 2 мин steady
-./slgpu load vllm -m qwen3.6-35b-a3b --users 50 --duration 120 --ramp-up 30 --ramp-down 30
-
-# Burst-режим: максимальная нагрузка, запросы без пауз (для 192 vCPU)
-./slgpu load vllm -m qwen3.6-35b-a3b --users 384 --burst --duration 900
-
-# Разные сценарии prompt/output
-./slgpu load sglang -m qwen3.6-35b-a3b --max-prompt 2048 --max-output 512
+# URL API — из слота / curl к /v1/models; пример:
+export OPENAI_BASE_URL=http://127.0.0.1:8111/v1
+python3 scripts/bench_load.py --users 250 --duration 900
 ```
 
 ### Советы
 
-- Запускайте `load` **после** `bench`, чтобы сначала убедиться в базовой работоспособности.
-- Если `error_rate` растёт в steady фазе — снижайте `--users` или `--max-output`.
-- `time_series.csv` удобно визуализировать в Grafana: импортируйте через datasource CSV или `grafana-csv-datasource`.
+- Сначала короткий **`bench_openai`**, затем `bench_load` при устойчивой работе.
+- При росте `error_rate` — снижайте `--users` или `--max-output`.
+- `time_series.csv` — в Grafana (CSV datasource) или вручную.
 
 ---
 
 ## 11. Рецепты 8× H200
 
-Ориентир: **8× H200** (~141 GiB × 8). **`TP=8` по умолчанию** в шаблонных пресетах (или **`--tp`** в `./slgpu up` — см. [§4](#4-cli-slgpu)). **`gpu-mem`**, **`batch`**, контекст и парсеры задаются **только в** `data/presets/<preset>.env` — не в `pull`. Ниже: `pull` (скачивание) + `up`; эталонные пресеты — в `examples/presets/`, рабочие — в `data/presets/`.
+Ориентир: **8× H200** (~141 GiB × 8). В шаблонах репо **`TP=8`**; при меньшем числе GPU — правьте пресет. **`gpu-mem`**, батч, контекст и парсеры — **в** `data/presets/<preset>.env` (см. [`examples/presets/`](examples/presets/)). В v5: **загрузите веса и поднимите слот** в **UI** (модель/пресет, `native.model.pull` / `native.slot.*`).
 
-```bash
-# Qwen3.6-35B-A3B (пресет: MAX_MODEL_LEN=262144, qwen3/hermes; см. qwen3.6-35b-a3b.env)
-./slgpu pull Qwen/Qwen3.6-35B-A3B
-./slgpu up vllm -m qwen3.6-35b-a3b
+- **Qwen3.6-35B-A3B** — `qwen3.6-35b-a3b` (см. `examples/presets/qwen3.6-35b-a3b.env`).
+- **Kimi K2.6** — `kimi-k2.6` и др. по **examples/presets/**.
+- **MiniMax-M2.7**, **GLM-5.1** — соседние `.env` и [рецепты vLLM](https://github.com/vllm-project/recipes).
+- **gpt-oss-120b** — пресет по образцу соседей, полный HF id в `model`.
 
-# moonshotai/Kimi-K2.6 (kimi_k2, MM_ENCODER_TP_MODE=data, см. kimi-k2.6.env)
-./slgpu pull moonshotai/Kimi-K2.6
-./slgpu up vllm -m kimi-k2.6
-# ./slgpu up sglang -m kimi-k2.6
-
-# MiniMax-M2.7 (рецепт vLLM: TP4+EP; образ minimax27 — в пресете minimax-m2.7.env)
-./slgpu pull MiniMaxAI/MiniMax-M2.7
-./slgpu up vllm -m minimax-m2.7
-
-# GLM-5.1 / GLM-5.1-FP8 (см. glm-5.1.env, glm-5.1-fp8.env; образ glm51 — в пресете)
-./slgpu pull zai-org/GLM-5.1
-./slgpu up vllm -m glm-5.1
-./slgpu pull zai-org/GLM-5.1-FP8
-./slgpu up vllm -m glm-5.1-fp8
-
-# openai/gpt-oss-120b (добавьте пресет gpt-oss-120b.env по образцу README/соседей, затем:)
-# ./slgpu pull openai/gpt-oss-120b && ./slgpu up vllm -m gpt-oss-120b
-```
-
-**Замечания:** у **Qwen3.6** не используйте `fp8_e5m2` для KV — см. troubleshooting. **Kimi / большие MoE:** OOM на `create_weights` — упор в размер весей на шард; не всегда помогает снижение контекста — нужен **TP=8**, другой чекпоинт или квант. **MiniMax-M2.7** — не «чистый» **TP8**; см. пресет **`minimax-m2.7`** и [рецепт vLLM](https://github.com/vllm-project/recipes/blob/main/MiniMax/MiniMax-M2.md) (образ `minimax27`, **TP4**, на 8×GPU **TP+EP** / опционально **DP+EP**). **GLM-5.1** bf16 на грани VRAM — пресет **`glm-5.1-fp8`**, [GLM/GLM5.md](https://github.com/vllm-project/recipes/blob/main/GLM/GLM5.md). **gpt-oss:** полный id в поле `model`. **GLM** и иные: парсеры зависят от образа vLLM.
+**Замечания:** **Qwen3.6** — KV, см. [§14](#14-устранение-неполадок). **MoE** — часто **TP=8** или другой чекпоинт. **MiniMax** — [рецепт](https://github.com/vllm-project/recipes/blob/main/MiniMax/MiniMax-M2.md) (**TP4** + EP). **GLM-5.1** — при OOM смотрите **glm-5.1-fp8**.
 
 ---
 
 ## 12. Мониторинг и безопасность
 
-- **Поднять стек** (если ещё не поднимали): по желанию сначала **`./slgpu monitoring fix-perms`**, затем **`./slgpu monitoring up`**. Движок и мониторинг — разные `docker compose` (сеть `slgpu`, скрейп из [`configs/monitoring/prometheus/prometheus.yml`](configs/monitoring/prometheus/prometheus.yml)). Неактивный движок (vllm/sglang) в targets — норма. **Langfuse** (трейсинг) и **LiteLLM** (шлюз к vLLM) — в [`configs/monitoring/README.md`](configs/monitoring/README.md) и `main.env` (`LANGFUSE_PORT` по умолч. 3001, `LITELLM_PORT` 4000); vLLM при этом должен быть поднят; **имя модели** в запросах — как в **LiteLLM /ui** (часто **`devllm`**, как **`SERVED_MODEL_NAME`**); маршрут — в БД, глобальные настройки — [`configs/monitoring/litellm/config.yaml`](configs/monitoring/litellm/config.yaml).
+- **Стек** Prometheus / Grafana / Loki / proxy (Langfuse + LiteLLM) — из **Develonica.LLM** (страницы **Мониторинг** / **LiteLLM**, jobs `native.monitoring.*`, `native.litellm.*`). На хосте — те же [`docker/docker-compose.monitoring.yml`](docker/docker-compose.monitoring.yml) / [`proxy`](docker/docker-compose.proxy.yml) по согласованной конфигурации. Скрейп: [`configs/monitoring/prometheus/prometheus.yml`](configs/monitoring/prometheus/prometheus.yml); **динамические порты слотов** — учитывайте при ручной настройке targets. **Langfuse** + **LiteLLM** — [`configs/monitoring/README.md`](configs/monitoring/README.md) (`LANGFUSE_PORT` по умолч. 3001, `LITELLM_PORT`); **имя модели** в LiteLLM — как в **/ui** / **`SERVED_MODEL_NAME`**. Секреты — в `stack_params`, не в git.
 - **Grafana** (`127.0.0.1:3000`), дашборды: в [`configs/monitoring/grafana/provisioning/dashboards/json/`](configs/monitoring/grafana/provisioning/dashboards/json/) лежат JSON с provisioning (Prometheus, uid `prometheus`): краткий **SGLang** (`sglang-dashboard-slgpu.json`), расширенный **SGLang по мотивам vLLM V2** (`sglangdash2-slgpu.json`, сборка из [`templates/vllmdash2.json`](configs/monitoring/grafana/templates/vllmdash2.json) скриптом `_build_sglangdash2.py`), плюс эталон **vLLM** для ручного импорта — тот же [`vllmdash2.json`](configs/monitoring/grafana/templates/vllmdash2.json) (вне provisioning, см. [`templates/README.md`](configs/monitoring/grafana/templates/README.md)). Подробности, переменные `instance` / `model_name` и типичные сбои — в [`configs/monitoring/README.md`](configs/monitoring/README.md). **Логи контейнеров:** datasource **Loki** (uid `loki`) — **Explore → Loki**; хранение на диске, см. `LOKI_DATA_DIR` / [configs/monitoring/LOGS.md](configs/monitoring/LOGS.md).
 - Сырые логи: **`docker compose -f docker/docker-compose.llm.yml logs -f vllm`**; **`docker compose -f docker/docker-compose.monitoring.yml logs -f prometheus`**; при необходимости — **`docker compose -f docker/docker-compose.proxy.yml logs`**. Ротация **json-file** (100 MiB × 5) в compose-файлах.
 
@@ -321,7 +251,7 @@ curl -s http://127.0.0.1:8111/v1/chat/completions \
 | **DeepSeek V4 (Pro/Flash, vLLM):** `DeepseekV4 only supports fp8 kv-cache… got auto` | `KV_CACHE_DTYPE=fp8` или `fp8_e4m3` (пресеты [`deepseek-v4-pro.env`](examples/presets/deepseek-v4-pro.env) / [`deepseek-v4-flash.env`](examples/presets/deepseek-v4-flash.env)), не `auto` |
 | **DeepSeek V4 (vLLM):** INFO `Using DeepSeek's fp8_ds_mla KV cache` | Нормально: так задумано по умолчанию. «Стандартный» fp8 KV — при необходимости задать `ATTENTION_BACKEND=FLASHINFER_MLA_SPARSE` в пресете/[`main.env`](main.env), пересоздать контейнер; иначе не трогать |
 | **DeepSeek V4 (vLLM):** пустой ответ / «тишина», 200 OK | Пресет: `REASONING_PARSER=deepseek_v4`, `TOOL_CALL_PARSER=deepseek_v4`, `TOKENIZER_MODE=deepseek_v4` (см. [блог vLLM](https://vllm.ai/blog/deepseek-v4)); **`deepseek_r1`** — для R1, не для V4. Проверьте `max_tokens` и поля `reasoning_content` в JSON |
-| **vLLM V1:** `ValueError: … KV cache is needed, which is larger than the available KV cache memory` (при большом `max_model_len`) | **Поднять `GPU_MEM_UTIL`** (пресеты [DeepSeek-V4-Pro/Flash](examples/presets/deepseek-v4-pro.env) — **0.94** при 256K; в логе при `VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1` — **~0.9033** как эквивалент «старого» бюджета). В логе всё ещё **0.88** по `gpu_memory_utilization` — проверьте корневой **`.env`** и поднимайте через **`./slgpu up`**, не «голый» `docker compose`. Либо **снизить `MAX_MODEL_LEN`**. [Док. vLLM: память](https://docs.vllm.ai/en/latest/configuration/conserving_memory/) |
+| **vLLM V1:** `ValueError: … KV cache is needed, which is larger than the available KV cache memory` (при большом `max_model_len`) | **Поднять `GPU_MEM_UTIL`** (пресеты [DeepSeek-V4-Pro/Flash](examples/presets/deepseek-v4-pro.env) — **0.94** при 256K; в логе при `VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1` — **~0.9033**). В логе всё ещё **0.88** — проверьте импорт стека/пресета в SQLite и **пересоздайте слот** из UI, не «голый» `docker compose` в обход. Либо **снизить `MAX_MODEL_LEN`**. [Док. vLLM: память](https://docs.vllm.ai/en/latest/configuration/conserving_memory/) |
 | **vLLM (DeepSeek V4 Flash):** стек `flashinfer` / `torch.cuda` / `KeyboardInterrupt: terminated` при старте API | Не убивать контейнер на первом долгом шаге (импорт FlashInfer, `_set_compile_ranges`). **Снизить `MAX_MODEL_LEN`** (пресет [deepseek-v4-flash.env](examples/presets/deepseek-v4-flash.env) — **262144** вместо 384K+). С Pro: `GPU_MEM_UTIL=0.94`, `--block-size` / `compilation_config` в пресете |
 | **vLLM / torch.compile:** `Compiling model again… mhc_pre` / `'_OpNamespace' 'vllm' object has no attribute 'mhc_pre'` | Смена/обновление образа vLLM при старом **AOT** в `~/.cache/vllm/torch_compile_cache`: в контейнере **удалить кэш** (например `rm -rf /root/.cache/vllm/torch_compile_cache`) и перезапустить; либо одноразовый пустой volume вместо сохранения кэша между образами |
 | **vLLM (DeepSeek V4+):** `torch._inductor... InductorError` / `replace_by_example` / `profile_run` / `determine_available_memory` | В [deepseek-v4-flash.env](examples/presets/deepseek-v4-flash.env) по умолчанию **`ENFORCE_EAGER=1`** → `--enforce-eager` (без custom `compilation_config` Inductor всё равно может падать). Иначе: **убрать** жёсткий `COMPILATION_CONFIG` / задать **`ENFORCE_EAGER=1`** в [`main.env`](main.env) |
@@ -342,58 +272,49 @@ curl -s http://127.0.0.1:8111/v1/chat/completions \
 ## 15. Ограничения
 
 - В пресетах vLLM задайте тег/дижест через **`VLLM_DOCKER_IMAGE`** (в compose — fallback, по умолчанию `v0.19.1-cu130`); **Loki** и **Promtail** в [`docker/docker-compose.monitoring.yml`](docker/docker-compose.monitoring.yml) зафиксированы **2.9.8** (переопределяемые через **`LOKI_IMAGE`** / **`PROMTAIL_IMAGE`** в `main.env`, либо старые `SLGPU_*`); **Langfuse 3** и **LiteLLM** — в основном **`:3` / `main-*`**; для SGLang, Prometheus, Grafana, node-exporter, MinIO, Postgres, dcgm-exporter в compose в основом **`latest`** — при необходимости зафиксируйте **digest** или явный **тег** (префикс канонического имени образа без `SLGPU_`, см. `main.env`).
-- **Langfuse** (Postgres, MinIO, секреты `NEXTAUTH_*` / `LANGFUSE_ENCRYPTION_KEY`) — для **прод** смените пароли и `NEXTAUTH_URL`; данные в **`LANGFUSE_*_DATA_DIR`** на диске (см. [configs/monitoring/README](configs/monitoring/README.md), `fix-perms`). **LiteLLM** — при запущенном vLLM; в **/ui** задайте тот же **`model`**, что отдаёт vLLM (**`SERVED_MODEL_NAME`**, `GET /v1/models`).
+- **Langfuse** (Postgres, MinIO, секреты `NEXTAUTH_*` / `LANGFUSE_ENCRYPTION_KEY`) — для **прод** смените пароли и `NEXTAUTH_URL`; данные в **`LANGFUSE_*_DATA_DIR`**. Права на тома: **`scripts/monitoring_fix_permissions.sh`** (см. [configs/monitoring/README](configs/monitoring/README.md)). **LiteLLM** — при поднятом инференсе; в **/ui** задайте тот же **`model`**, что отдаёт API (**`SERVED_MODEL_NAME`**, `GET /v1/models`).
 - SGLang может не знать те же `--reasoning-parser`, что vLLM.
-- Сервисы LLM используют **`gpus: all`**, а реальная маска GPU — **`NVIDIA_VISIBLE_DEVICES`**: по умолчанию **первые `TP` карт** (`0`…`TP-1` через [`./slgpu up`](scripts/cmd_up.sh)). На хосте с **4** GPU задайте **`TP=4`** (или `--tp 4`); маппинг вручную — **`SLGPU_NVIDIA_VISIBLE_DEVICES`** в `main.env` или `export`.
+- Сервисы LLM используют **`gpus: all`**, а реальная маска GPU — **`NVIDIA_VISIBLE_DEVICES`**: **первые `TP` карт** (`0`…`TP-1`) задаёт **слот/пресет** в UI. На хосте с **4** GPU — **`TP=4`** в пресете; маппинг вручную — **`SLGPU_NVIDIA_VISIBLE_DEVICES`** в стеке / `export`.
 
 ---
 
 ## 16. Структура репозитория
 
-Каталоги **`docs/`**, **`grace/`**, **`.cursor/`**, **`.kilo/`** в **git** не входят (см. [`.gitignore`](.gitignore)); после **`git clone`** их в дереве не будет — перенесите с рабочей машины или создайте заново. Корневые **[`AGENTS.md`](AGENTS.md)** и **[`HISTORY.md`](HISTORY.md)** в репозитории есть: краткие указатели; полная история и семантическая карта — в локальном **`docs/`** (если вы его ведёте).
+**`docs/`** и **`grace/`** в репозитории есть (см. [`.gitignore`](.gitignore) за исключениями). **`.cursor/`** / **`.kilo/`** — локальные; в **remote** часто нет. Корневые [`AGENTS.md`](AGENTS.md) и [`HISTORY.md`](HISTORY.md) — краткие указатели; полная карта — **`docs/AGENTS.md`**, журнал — **`docs/HISTORY.md`**.
 
 ```
 slgpu/
-├── slgpu                       # CLI-диспетчер
+├── slgpu                       # диспетчер: help + web
 ├── VERSION                     # SemVer
-├── AGENTS.md                   # Короткий указатель: docs/grace/.cursor/.kilo — только локально
+├── AGENTS.md
 ├── docker/
-│   ├── README.md                       # список compose-файлов и примечание по --project-directory
-│   ├── docker-compose.llm.yml         # vLLM / SGLang
-│   ├── docker-compose.monitoring.yml   # Prometheus, Grafana, Loki, …
-│   ├── Dockerfile.web                 # slgpu-web (сборка, context: web/)
+│   ├── README.md
+│   ├── docker-compose.llm.yml
+│   ├── docker-compose.monitoring.yml
+│   ├── docker-compose.proxy.yml
+│   ├── Dockerfile.web
 │   └── docker-compose.web.yml
-├── main.env                    # дефолты (в т.ч. vLLM/SGLang); затем пресет
+├── main.env                    # не в git; шаблон — configs/main.env
 ├── README.md
 ├── docs/
-│   ├── AGENTS.md               # Семантическая карта (GRACE)
-│   └── HISTORY.md              # Хронология репо и журнал сессий
+│   ├── AGENTS.md
+│   └── HISTORY.md
 ├── configs/
-│   ├── secrets/hf.env.example
-│   ├── models/README.md        # справка по формату; эталонные *.env — examples/presets/, рабочие — data/presets/
-│   └── monitoring/             # Prometheus, Grafana, Loki (Langfuse/LiteLLM — в docker/proxy)
-├── data/                       # веса, web, TSDB, пресеты `presets/*.env` (см. data/README.md, PRESETS_DIR)
+│   ├── main.env
+│   ├── models/README.md
+│   └── monitoring/
+├── data/                       # см. data/README.md
 ├── scripts/
-│   ├── serve.sh                # vLLM + SGLang (SLGPU_ENGINE) → /etc/slgpu/serve.sh в контейнере
+│   ├── serve.sh
 │   ├── _lib.sh
-│   ├── cmd_*.sh
-│   ├── bench_openai.py
-│   └── bench_load.py           # Длительный нагрузочный тест
-├── data/bench/
-│   ├── .gitkeep                # каталог под results (артефакты не в git)
-│   └── results/{vllm,sglang}/  # summary.json и др. (локально)
-├── grace/                      # GRACE-артефакты
-│   ├── requirements/requirements.xml
-│   ├── technology/technology.xml
-│   ├── plan/development-plan.xml
-│   ├── verification/verification-plan.xml
-│   └── knowledge-graph/knowledge-graph.xml
-├── web/                        # Web Control Plane (FastAPI + React/Vite, см. web/README.md)
-├── .cursor/rules/*.mdc         # Правила Cursor (GRACE)
-└── .kilo/agent/rules.md        # Правила Kilo
+│   ├── cmd_web.sh, cmd_help.sh
+│   ├── bench_openai.py, bench_load.py
+│   └── monitoring_fix_permissions.sh
+├── grace/                      # GRACE (требования, план, верификация, граф)
+└── web/                        # Develonica.LLM: FastAPI + Vite
 ```
 
-> **Web Control Plane**: отдельное приложение в каталоге [`web/`](web/) на FastAPI + React/Vite, запускается одним контейнером и хранит состояние в SQLite. Управляет загрузкой моделей с Hugging Face, пресетами, инференсом vLLM/SGLang, мониторингом и LiteLLM поверх существующего `./slgpu` CLI и Docker API. Контракт — [`web/CONTRACT.md`](web/CONTRACT.md), документация — [`web/README.md`](web/README.md).
+> **Develonica.LLM** — управление стеком, слотами, `native.*` jobs, SQLite; хост: только **`./slgpu web`**. Контракт — [`web/CONTRACT.md`](web/CONTRACT.md), подробности — [`web/README.md`](web/README.md).
 
 ---
 

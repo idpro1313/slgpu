@@ -1,7 +1,8 @@
 """Фоновый runner заданий стека (только ``native.*`` → docker compose / docker-py).
 
 `CliCommand` из `app.services.slgpu_cli` — дескриптор вида; web ставит `native.monitoring.*` и др.
-Задача пишет `Job`, advisory lock, asyncio task, лог.
+Задача пишет `Job`, in-process lock на (scope, resource), asyncio task, лог
+(один процесс Uvicorn; не PostgreSQL advisory lock).
 """
 
 from __future__ import annotations

@@ -12,12 +12,12 @@ export function MonitoringPage() {
   const [error, setError] = useState<string | null>(null);
   const jobs = useQuery({
     queryKey: ["jobs"],
-    queryFn: () => api.get<Job[]>("/jobs"),
+    queryFn: ({ signal }) => api.get<Job[]>("/jobs", { signal }),
     refetchInterval: 2_000,
   });
   const services = useQuery({
     queryKey: ["monitoring", "services"],
-    queryFn: () => api.get<ServiceCard[]>("/monitoring/services"),
+    queryFn: ({ signal }) => api.get<ServiceCard[]>("/monitoring/services", { signal }),
     refetchInterval: 8_000,
   });
 

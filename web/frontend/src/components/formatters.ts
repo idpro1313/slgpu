@@ -1,3 +1,8 @@
+/** GPU / util поля в API: number | string. */
+export function coerceIntMetric(v: number | string): number {
+  return typeof v === "number" ? v : parseInt(String(v), 10) || 0;
+}
+
 export function formatBytes(bytes: number | null | undefined): string {
   if (bytes == null) return "—";
   if (bytes === 0) return "0 B";

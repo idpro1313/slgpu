@@ -1,16 +1,17 @@
-"""Job runner uses argv only and respects advisory locks."""
+"""Job runner: only native.* jobs; in-process lock per (scope, resource)."""
 
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
-from app.db.session import init_db
+from app.db.session import init_db, session_scope
+from app.models.job import Job, JobStatus
 from app.services import jobs as jobs_service
-from app.services.jobs import _exec_argv_for_cli
-from app.services.slgpu_cli import CliCommand, cmd_slot_up
+from app.services.jobs import JobConflictError, submit
+from app.services.slgpu_cli import cmd_monitoring, cmd_slot_up
 
 
 @pytest.fixture
@@ -18,91 +19,69 @@ async def initialized_db() -> None:
     await init_db()
 
 
-@pytest.mark.asyncio
-async def test_submit_runs_argv_and_records_exit(initialized_db, tmp_path: Path) -> None:
-    script = tmp_path / "echo.sh"
-    script.write_text("#!/bin/sh\necho hi-from-runner\nexit 0\n", encoding="utf-8")
-    script.chmod(0o755)
-
-    command = CliCommand(
-        kind="test.echo",
-        argv=["/bin/sh", str(script)],
-        scope="test",
-        resource="echo",
-        summary="echo runner",
-    )
-    job = await jobs_service.submit(command, actor="pytest")
-    for _ in range(50):
-        await asyncio.sleep(0.1)
-        async with jobs_service.session_scope() as session:
-            from app.models.job import Job, JobStatus
-
-            refreshed = await session.get(Job, job.id)
-            assert refreshed is not None
-            if refreshed.status in (JobStatus.SUCCEEDED, JobStatus.FAILED):
-                assert refreshed.exit_code == 0
-                assert refreshed.stdout_tail and "hi-from-runner" in refreshed.stdout_tail
-                return
-    pytest.fail("job did not finish in time")
+def test_session_scope_helper_exists() -> None:
+    assert callable(session_scope)
 
 
 @pytest.mark.asyncio
-async def test_advisory_lock_blocks_concurrent_jobs(initialized_db, tmp_path: Path) -> None:
-    sleeper = tmp_path / "sleep.sh"
-    sleeper.write_text("#!/bin/sh\nsleep 0.5\n", encoding="utf-8")
-    sleeper.chmod(0o755)
-
-    command = CliCommand(
-        kind="test.sleep",
-        argv=["/bin/sh", str(sleeper)],
-        scope="engine",
-        resource="vllm",
-        summary="sleep",
-    )
-    await jobs_service.submit(command)
-    with pytest.raises(jobs_service.JobConflictError):
-        await jobs_service.submit(command)
-
-
-def test_session_scope_helper_exists():
-    assert callable(jobs_service.session_scope)
-
-
-def test_exec_argv_empty_for_native_commands(tmp_path: Path) -> None:
-    root = tmp_path / "repo"
-    root.mkdir()
-    cmd = cmd_slot_up(
-        slot_key="s1",
+async def test_second_submit_same_slot_resource_raises_conflict(
+    initialized_db: None,
+) -> None:
+    """While first native.slot.up is in-flight, second submit for same slot must fail."""
+    cmd1 = cmd_slot_up(
+        slot_key="lock-test",
         engine="vllm",
-        preset="deepseek-v4-flash",
+        preset="qwen3.6-35b-a3b",
         host_api_port=8111,
         gpu_indices=[0, 1, 2, 3, 4, 5, 6, 7],
     )
-    assert _exec_argv_for_cli(cmd, root) == []
-
-
-def test_exec_argv_wraps_repo_slgpu_with_bash(tmp_path: Path) -> None:
-    root = tmp_path / "repo"
-    root.mkdir()
-    (root / "slgpu").write_text("#!/usr/bin/env bash\necho ok\n", encoding="utf-8")
-    entry = str(root / "slgpu")
-    cmd = CliCommand(
-        kind="legacy.cli.up",
-        argv=[entry, "up", "vllm", "-m", "deepseek-v4-flash"],
-        scope="engine",
-        resource="runtime",
+    cmd2 = cmd_slot_up(
+        slot_key="lock-test",
+        engine="vllm",
+        preset="qwen3.6-35b-a3b",
+        host_api_port=8111,
+        gpu_indices=[0, 1, 2, 3, 4, 5, 6, 7],
     )
-    out = _exec_argv_for_cli(cmd, root)
-    assert out == ["/bin/bash", entry, "up", "vllm", "-m", "deepseek-v4-flash"]
+
+    async def _slow_then_succeed(job_id: int, command, args: dict) -> None:
+        await asyncio.sleep(0.35)
+        from app.services.native_jobs import _finalize_native_job
+
+        await _finalize_native_job(job_id, command, 0, [])
+
+    with patch("app.services.jobs.handle_native_job", new=_slow_then_succeed):
+        j1 = await submit(cmd1, actor="pytest")
+        assert j1.kind == "native.slot.up"
+        with pytest.raises(JobConflictError):
+            await submit(cmd2, actor="pytest")
+        await asyncio.sleep(0.45)
+
+    async with session_scope() as session:
+        done = await session.get(Job, j1.id)
+        assert done is not None
+        assert done.status == JobStatus.SUCCEEDED
 
 
-def test_exec_argv_passes_through_other_commands(tmp_path: Path) -> None:
-    script = tmp_path / "tool.sh"
-    script.write_text("#!/bin/sh\necho\n", encoding="utf-8")
+@pytest.mark.asyncio
+async def test_non_native_job_fails_with_message(initialized_db: None) -> None:
+    """Jobs that are not native.* are marked failed (v5 contract)."""
+    from app.services.slgpu_cli import CliCommand
+
     cmd = CliCommand(
-        kind="test.other",
-        argv=[str(script), "a"],
+        kind="legacy.test",
+        argv=["/bin/true"],
         scope="test",
         resource="x",
+        summary="should not run",
     )
-    assert _exec_argv_for_cli(cmd, tmp_path) == [str(script), "a"]
+    job = await submit(cmd, actor="pytest")
+    for _ in range(50):
+        await asyncio.sleep(0.05)
+        async with session_scope() as session:
+            row = await session.get(Job, job.id)
+            assert row is not None
+            if row.status in (JobStatus.SUCCEEDED, JobStatus.FAILED, JobStatus.CANCELLED):
+                assert row.status == JobStatus.FAILED
+                assert "native.*" in (row.message or "")
+                return
+    pytest.fail("job did not finish in time")

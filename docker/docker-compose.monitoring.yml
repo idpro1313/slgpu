@@ -85,7 +85,8 @@ services:
     # Аналогично Loki: монтирование каталога, чтобы путь к конфигу оставался файлом.
     command: -config.file=/etc/promtail/promtail-config.yml
     depends_on:
-      - loki
+      loki:
+        condition: service_started
     networks:
       - slgpu
     volumes:
@@ -138,8 +139,10 @@ services:
       - ${WEB_DATA_DIR}/.slgpu/compose-service.env
     restart: unless-stopped
     depends_on:
-      - prometheus
-      - loki
+      prometheus:
+        condition: service_started
+      loki:
+        condition: service_started
     ports:
       - "${GRAFANA_BIND}:${GRAFANA_PORT}:3000"
     networks:

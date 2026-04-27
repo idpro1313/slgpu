@@ -1,8 +1,6 @@
 # Develonica.LLM
 
-Web control plane поверх существующего CLI [`./slgpu`](../slgpu) и Docker-стека
-проекта [`slgpu`](../README.md). **Инференс в UI — только мультислотная модель 4.0.x:**
-jobs **`native.slot.up|down|restart`** (docker-py), без обёрток **`native.llm.*`** и без глобального runtime-lock; bash **`./slgpu up|down|restart`** на хосте остаётся отдельным путём для тех, кто не пользуется web.
+**Develonica.LLM** — control plane Docker-стека [`slgpu`](../README.md). На хосте v5: только **`./slgpu help`** и **`./slgpu web …`**. **Инференс в UI** — **слоты** (jobs **`native.slot.*`**, docker-py), без **`native.llm.*`** и без глобального runtime-lock.
 
 Содержит:
 
@@ -17,13 +15,13 @@ jobs **`native.slot.up|down|restart`** (docker-py), без обёрток **`nat
   Dashboard/Runtime показывают **`runtime.slots[]`**, engine, пресет, HF ID и TP;
   Runtime также показывает автообновляемый хвост логов контейнера модели и активную job
   запуска/рестарта/остановки, пока кнопки заблокированы.
-- Управление и наблюдение мониторинг-стека (`./slgpu monitoring …`).
+- Управление и наблюдение мониторинг-стека (страница **«Мониторинг»**, `native.monitoring.*`).
 - **Dashboard:** сводка по стенду и блок **«Сервер»** (CPU, RAM, диск репозитория, ОС и GPU с **хоста** через `docker run` и bind-mount `/proc`/`/etc`, плюс `nvidia-smi` в эфемерном GPU-контейнере; переменные `WEB_DOCKER_HOST_PROBE_IMAGE`, `WEB_NVIDIA_SMI_DOCKER_IMAGE`; нужен NVIDIA Container Toolkit для списка GPU).
 - Состояние и базовые маршруты LiteLLM Proxy.
 - Настройки публичного адреса сервера для корректных ссылок на Grafana,
   Prometheus, Langfuse и LiteLLM Admin UI из браузера пользователя; на той же
   странице — запуск `monitoring fix-perms` (права на bind-mount каталогов стека).
-- Журнал всех CLI-операций с stdout/stderr tail.
+- Журнал jobs **`native.*`** с stdout/stderr tail.
 
 Контракт и границы ответственности зафиксированы в
 [`CONTRACT.md`](CONTRACT.md). Без согласования с этим документом ничего не
@@ -47,7 +45,7 @@ jobs **`native.slot.up|down|restart`** (docker-py), без обёрток **`nat
   [`VERSION`](../VERSION), единственного источника версии проекта.
 - **Веса моделей**: `MODELS_DIR` с хоста (см. `../main.env`, по умолчанию **`../data/models`**)
   → `${SLGPU_HOST_REPO}/data/models` в контейнере (тот же абсолютный путь, что разрешает CLI на хосте), `rw`
-  (скан, `./slgpu pull` из job runner). Страница **Модели** синхронизируется с реальными каталогами
+  (скан, **`native.model.pull`**). Страница **Модели** синхронизируется с реальными каталогами
   `${MODELS_DIR}/<org>/<repo>`; пресеты используются для запуска, но не являются источником списка
   скачанных моделей. Остальные данные стека (рост контейнеров, мониторинг) —
   отдельные bind в корневых compose, в web-образ они не дублируются.
@@ -109,25 +107,18 @@ cd /path/to/slgpu
 Entrypoint web-контейнера стартует от root, создаёт и chown’ит `/data`,
 `${WEB_SLGPU_ROOT}/data/models`, `${WEB_SLGPU_ROOT}/data/presets` и
 `${WEB_SLGPU_ROOT}/data/bench` (артефакты **`native.bench.*`**, `data/bench/results/...`), затем
-переходит на пользователя `slgpuweb` (uid 10001). Это нужно, чтобы `./slgpu pull`
-из UI мог создавать `${MODELS_DIR}/<org>/<repo>` и бенчмарки из UI писали каталоги с timestamp.
+переходит на пользователя `slgpuweb` (uid 10001). Это нужно, чтобы **`native.model.pull`**
+создавал `${MODELS_DIR}/<org>/<repo>` и бенчмарки писали каталоги с timestamp.
 
-**Зачем совпадение путей:** когда web запускает `./slgpu monitoring up`, `docker compose` внутри
+**Зачем совпадение путей:** когда web поднимает мониторинг (`native.monitoring.*`), `docker compose` внутри
 контейнера разрешает относительные bind-маунты от `cwd` и отдаёт docker daemon **строки путей**, которые
 daemon трактует как **хостовые**. Если бы внутри web репо лежало в `/slgpu`, а на хосте — в `/srv/slgpu`,
 daemon не нашёл бы файлы по `/slgpu/...` и создал бы пустые каталоги (типичные ошибки: Prometheus mount
 «not a directory», `minio-bucket-init` exit 126, Loki «is a directory»).
 
 **Зависимости в образе для CLI-задач:**
-- `huggingface_hub[cli]` (команда `hf`) и `hf_transfer` ставятся в [`../docker/Dockerfile.web`](../docker/Dockerfile.web);
-  без них `slgpu pull` из web падает с `Не найдена команда «hf»`. В образе также есть
-  writable `/home/slgpuweb`, а `HF_HOME=/data/huggingface`; [`../scripts/cmd_pull.sh`](../scripts/cmd_pull.sh)
-  переводит `MODELS_DIR=./data/models` в абсолютный путь и при отсутствующем/wrong `$HOME`
-  использует writable `WEB_DATA_DIR`, чтобы `hf download` не писал в недоступный `/home/slgpuweb`;
-  перед `hf download --local-dir` создаётся каталог модели.
-- `monitoring fix-perms` использует короткоживущий root-контейнер (`docker run --rm -u 0:0`,
-  образ из переменной **`SLGPU_FIXPERMS_HELPER_IMAGE`**, по умолчанию `alpine:latest`)
-  для `mkdir`/`chown`. `sudo` **не нужен** ни на хосте, ни внутри web.
+- `huggingface_hub[cli]` и `hf_transfer` — в [`../docker/Dockerfile.web`](../docker/Dockerfile.web); без `hf` падает **`native.model.pull`**. `HF_HOME=/data/huggingface`; загрузка использует `MODELS_DIR` с хоста.
+- `monitoring fix-perms` / **`scripts/monitoring_fix_permissions.sh`**: root helper-контейнер (`SLGPU_BENCH_CHOWN_IMAGE` / fallback), `sudo` на хосте **не** нужен.
 
 **Вариант вручную (из корня репо):** `SLGPU_HOST_REPO="$(pwd)" docker compose -f docker/docker-compose.web.yml --project-directory . --env-file main.env up --build -d`. Без `SLGPU_HOST_REPO` compose уйдёт в fallback `.:/slgpu` (старая схема — с известной проблемой mount-маунтов из web).
 
@@ -151,7 +142,7 @@ daemon не нашёл бы файлы по `/slgpu/...` и создал бы п
 | GET/POST | `/api/v1/models` | список HF моделей по `MODELS_DIR/<org>/<repo>` и регистрация HF моделей |
 | POST | `/api/v1/models/sync` | явное сканирование `MODELS_DIR` и обновление реестра (сколько папок затронуто, всего записей) |
 | PATCH/DELETE | `/api/v1/models/{id}` | изменение revision/notes, удаление записи или локальных весов |
-| POST | `/api/v1/models/{id}/pull` | `slgpu pull` через job runner |
+| POST | `/api/v1/models/{id}/pull` | **`native.model.pull`** (hf download) |
 | GET/POST | `/api/v1/presets` | список и создание пресетов |
 | GET/PATCH/DELETE | `/api/v1/presets/{id}` | просмотр, параметрическое редактирование и удаление пресета |
 | POST | `/api/v1/presets/{id}/export` | выгрузка пресета в `.env` (кнопка в карточке пресета в UI) |
@@ -159,7 +150,7 @@ daemon не нашёл бы файлы по `/slgpu/...` и создал бы п
 | GET | `/api/v1/gpu/state`, `GET /api/v1/gpu/availability` | live GPU и свободные индексы |
 | GET | `/api/v1/runtime/snapshot` | состояние движка(ов), пресеты, `slots[]` |
 | GET | `/api/v1/monitoring/services` | состояние сервисов |
-| POST | `/api/v1/monitoring/action` | `slgpu monitoring up\|down\|restart\|fix-perms` |
+| POST | `/api/v1/monitoring/action` | `docker compose` monitoring stack (up/down/restart/fix-perms) |
 | GET | `/api/v1/litellm/health\|info\|models` | LiteLLM proxy |
 | GET | `/api/v1/jobs` | только CLI-задачи (лог, exit) |
 | GET | `/api/v1/activity` | **объединённая** лента: `jobs` + UI-действия (`audit_events` с `correlation_id IS NULL`); страница «Задачи» — по клику строки детали в модальном окне |
@@ -175,7 +166,7 @@ daemon не нашёл бы файлы по `/slgpu/...` и создал бы п
   [`app.core.security`](backend/app/core/security.py) с whitelist-регулярками.
 - Команды формируются ТОЛЬКО в [`app.services.slgpu_cli`](backend/app/services/slgpu_cli.py)
   и для стека поддерживается только **`native.*`** (docker compose / docker-py), **без** вызова host `./slgpu`.
-- На каждый mutating job ставится in-memory advisory lock на
+- На каждый mutating job ставится **in-process lock** (asyncio) на
   `(scope, resource)` — слоты `("engine", "slot:{slot_key}")`,
   monitoring — `("monitoring", "stack")`; повторный конфликтующий клик
   в UI блокируется, а прямой повторный запрос вернёт `409`.

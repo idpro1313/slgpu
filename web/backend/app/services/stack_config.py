@@ -22,6 +22,7 @@ from sqlalchemy import delete, func, select
 from app.services.env_key_aliases import apply_vllm_aliases_to_merged
 from app.services.stack_errors import MissingStackParams
 from app.services.stack_registry import (
+    CANONICAL_STACK_KEYS,
     STACK_KEY_REGISTRY,
     is_secret_key,
     missing_keys_in_db,
@@ -178,7 +179,14 @@ def write_compose_service_env_file(root: Path, merged: dict[str, str]) -> Path:
     """Записать плоский стек в ``<WEB_DATA_DIR>/.slgpu/compose-service.env`` (права 0600)."""
     p = compose_service_env_path(root, merged)
     p.parent.mkdir(parents=True, exist_ok=True)
-    body = "\n".join(f"{k}={v}" for k, v in sorted(merged.items()) if v is not None) + "\n"
+    body = (
+        "\n".join(
+            f"{k}={v}"
+            for k, v in sorted(merged.items())
+            if v is not None and k in CANONICAL_STACK_KEYS
+        )
+        + "\n"
+    )
     p.write_text(body, encoding="utf-8")
     p.chmod(0o600)
     return p

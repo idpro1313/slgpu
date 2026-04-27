@@ -1,6 +1,7 @@
 name: slgpu
 
-# vLLM/SGLang: scripts/serve.sh (SLGPU_ENGINE). Подстановки только ${VAR} — значения в compose-service.env / configs/main.env + БД.
+# Legacy / ручной сценарий: `env_file: configs/main.env`. В v5 инференс в основном из Develonica.LLM (`native.slot.*`).
+# vLLM/SGLang: scripts/serve.sh (SLGPU_ENGINE). Подстановки только ${VAR} — значения в compose-service.env / БД.
 
 services:
   vllm:

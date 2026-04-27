@@ -29,6 +29,22 @@ export function Modal({
   children,
 }: PropsWithChildren<ModalProps>) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const previousActiveRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      previousActiveRef.current = document.activeElement as HTMLElement | null;
+    } else {
+      const el = previousActiveRef.current;
+      if (el && typeof el.focus === "function") {
+        try {
+          el.focus();
+        } catch {
+          /* ignore e.g. detached node */
+        }
+      }
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;

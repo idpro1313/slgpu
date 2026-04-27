@@ -26,7 +26,7 @@ class Job(Base):
     correlation_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     kind: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     scope: Mapped[str] = mapped_column(String(64), nullable=False, default="global")
-    resource: Mapped[str | None] = mapped_column(String(128))
+    resource: Mapped[str | None] = mapped_column(String(128), index=True)
     status: Mapped[JobStatus] = mapped_column(
         Enum(JobStatus), default=JobStatus.QUEUED, nullable=False
     )

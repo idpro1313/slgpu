@@ -86,9 +86,13 @@ pre {
   align-items: center;
   gap: 10px;
   padding: 10px var(--space-page-x);
-  background: #fff3cd;
-  border-bottom: 1px solid #ffc107;
-  color: #664d03;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--color-brand, #59afff) 18%, #fff 82%),
+    color-mix(in srgb, var(--color-brand-dark, #0a5aa4) 10%, #fff 90%)
+  );
+  border-bottom: 1px solid var(--color-brand, #59afff);
+  color: var(--color-brand-dark, #0a5aa4);
   font-size: 14px;
 }
 

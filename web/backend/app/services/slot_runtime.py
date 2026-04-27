@@ -177,84 +177,89 @@ def _run_slot_sync(
         }
     image = resolve_image(engine, merged)
     env = container_env_for_engine(merged, engine)
-    client = docker.from_env()
-    try:
-        client.ping()
-    except docker.errors.DockerException as exc:
-        return {"ok": False, "error": f"docker: {exc}", "container_id": None, "container_name": cname}
+    with docker.from_env() as client:
+        try:
+            client.ping()
+        except docker.errors.DockerException as exc:
+            return {"ok": False, "error": f"docker: {exc}", "container_id": None, "container_name": cname}
 
-    _stop_container_by_name(client, cname, log, log_lock)
-
-    models = _resolve_path(root, str(merged["MODELS_DIR"]))
-    serve = (root / "scripts" / "serve.sh").resolve()
-    if not serve.is_file():
-        return {"ok": False, "error": f"missing {serve}", "container_id": None, "container_name": cname}
-
-    vols: dict[str, dict[str, str]] = {
-        str(models): {"bind": "/models", "mode": "ro"},
-        str(serve): {"bind": "/etc/slgpu/serve.sh", "mode": "ro"},
-    }
-    if engine == "sglang":
-        _ensure_named_volume(client, SGLANG_KERNEL_VOLUME)
-        vols[SGLANG_KERNEL_VOLUME] = {"bind": "/var/cache/slgpu-kernels", "mode": "rw"}
-
-    internal = internal_api_port_for(engine, merged)
-    port_key = f"{internal}/tcp"
-    dr = [DeviceRequest(device_ids=[str(i) for i in gpu_indices], capabilities=[["gpu"]])]
-    labels = {
-        _LABEL_SLOT: slot_key,
-        _LABEL_ENGINE: engine,
-        _LABEL_PRESET: preset,
-    }
-    if slot_key == "default":
-        aliases = [engine]
-    else:
-        aliases = [f"{engine}-{slot_key}"]
-
-    _docker_pull_with_log(client, image, log, log_lock)
-
-    log_config = LogConfig(type="json-file", config={"max-size": "100m", "max-file": "5"})
-    try:
-        container = client.containers.run(
-            image,
-            name=cname,
-            detach=True,
-            environment=env,
-            ports={port_key: host_api_port},
-            volumes=vols,
-            shm_size="32g",
-            ipc_mode="host",
-            device_requests=dr,
-            entrypoint=["/bin/bash"],
-            command=["/etc/slgpu/serve.sh"],
-            labels=labels,
-            log_config=log_config,
-            restart_policy={"Name": "unless-stopped"},
-        )
-    except docker.errors.DockerException as exc:
-        logger.exception(
-            "[slot_runtime][_run_slot_sync][BLOCK_FAIL] cname=%s err=%s",
-            cname,
-            str(exc)[:300],
-        )
-        return {"ok": False, "error": str(exc)[:800], "container_id": None, "container_name": cname}
-
-    cid = container.id or ""
-    # Connect to slgpu with DNS aliases
-    try:
-        net = client.networks.get("slgpu")
-        net.connect(container, aliases=aliases)
-    except NotFound as exc:
         _stop_container_by_name(client, cname, log, log_lock)
-        return {"ok": False, "error": f"network slgpu: {exc}", "container_id": None, "container_name": cname}
-    except docker.errors.DockerException as exc:
-        append_job_log(log, log_lock, f"[slot] network connect warning: {exc}")
-    short = f"{cid[:12]}…" if cid else "?"
-    append_job_log(
-        log,
-        log_lock,
-        f"[slot] up {cname} id={short} image={image!r} port={host_api_port} gpus={gpu_indices}",
-    )
+
+        models = _resolve_path(root, str(merged["MODELS_DIR"]))
+        serve = (root / "scripts" / "serve.sh").resolve()
+        if not serve.is_file():
+            return {"ok": False, "error": f"missing {serve}", "container_id": None, "container_name": cname}
+
+        vols: dict[str, dict[str, str]] = {
+            str(models): {"bind": "/models", "mode": "ro"},
+            str(serve): {"bind": "/etc/slgpu/serve.sh", "mode": "ro"},
+        }
+        if engine == "sglang":
+            _ensure_named_volume(client, SGLANG_KERNEL_VOLUME)
+            vols[SGLANG_KERNEL_VOLUME] = {"bind": "/var/cache/slgpu-kernels", "mode": "rw"}
+
+        internal = internal_api_port_for(engine, merged)
+        port_key = f"{internal}/tcp"
+        dr = [DeviceRequest(device_ids=[str(i) for i in gpu_indices], capabilities=[["gpu"]])]
+        labels = {
+            _LABEL_SLOT: slot_key,
+            _LABEL_ENGINE: engine,
+            _LABEL_PRESET: preset,
+        }
+        if slot_key == "default":
+            aliases = [engine]
+        else:
+            aliases = [f"{engine}-{slot_key}"]
+
+        _docker_pull_with_log(client, image, log, log_lock)
+
+        log_config = LogConfig(type="json-file", config={"max-size": "100m", "max-file": "5"})
+        try:
+            container = client.containers.run(
+                image,
+                name=cname,
+                detach=True,
+                environment=env,
+                ports={port_key: host_api_port},
+                volumes=vols,
+                shm_size="32g",
+                ipc_mode="host",
+                device_requests=dr,
+                entrypoint=["/bin/bash"],
+                command=["/etc/slgpu/serve.sh"],
+                labels=labels,
+                log_config=log_config,
+                restart_policy={"Name": "unless-stopped"},
+            )
+        except docker.errors.DockerException as exc:
+            logger.exception(
+                "[slot_runtime][_run_slot_sync][BLOCK_FAIL] cname=%s err=%s",
+                cname,
+                str(exc)[:300],
+            )
+            return {"ok": False, "error": str(exc)[:800], "container_id": None, "container_name": cname}
+
+        cid = container.id or ""
+        # Connect to slgpu with DNS aliases
+        try:
+            net = client.networks.get("slgpu")
+            net.connect(container, aliases=aliases)
+        except NotFound as exc:
+            _stop_container_by_name(client, cname, log, log_lock)
+            return {
+                "ok": False,
+                "error": f"network slgpu: {exc}",
+                "container_id": None,
+                "container_name": cname,
+            }
+        except docker.errors.DockerException as exc:
+            append_job_log(log, log_lock, f"[slot] network connect warning: {exc}")
+        short = f"{cid[:12]}…" if cid else "?"
+        append_job_log(
+            log,
+            log_lock,
+            f"[slot] up {cname} id={short} image={image!r} port={host_api_port} gpus={gpu_indices}",
+        )
     invalidate_gpu_state_cache()
     from app.services.gpu_availability import invalidate_host_gpu_cache
 
@@ -268,8 +273,8 @@ def _run_slot_sync(
 
 
 def stop_slot_sync(cname: str, log: list[str], log_lock: threading.Lock | None = None) -> int:
-    client = docker.from_env()
-    _stop_container_by_name(client, cname, log, log_lock)
+    with docker.from_env() as client:
+        _stop_container_by_name(client, cname, log, log_lock)
     invalidate_gpu_state_cache()
     from app.services.gpu_availability import invalidate_host_gpu_cache
 
@@ -281,29 +286,29 @@ def stop_containers_for_slot_key_sync(
     slot_key: str, log: list[str], log_lock: threading.Lock | None = None
 ) -> int:
     """Stop all containers with ``com.develonica.slgpu.slot`` label; fallback to name patterns."""
-    client = docker.from_env()
-    if not _ping(client, log, log_lock):
-        return 1
-    label = f"{_LABEL_SLOT}={slot_key}"
-    try:
-        for c in client.containers.list(all=True, filters={"label": [label]}):
-            try:
-                c.stop(timeout=20)
-                c.remove()
-                logger.info(
-                    "[slot_runtime][stop_containers_for_slot_key_sync][BLOCK_REMOVED] name=%s",
-                    c.name,
-                )
-                append_job_log(
-                    log, log_lock, f"[slot] removed labeled {c.name or c.id[:12]}"
-                )
-            except docker.errors.DockerException as exc:
-                append_job_log(log, log_lock, f"[slot] remove {c.name}: {exc}")
-    except docker.errors.DockerException as exc:
-        append_job_log(log, log_lock, f"[slot] list: {exc}")
-    for eng in ("vllm", "sglang"):
-        cname = slot_container_name(eng, slot_key)
-        _stop_container_by_name(client, cname, log, log_lock)
+    with docker.from_env() as client:
+        if not _ping(client, log, log_lock):
+            return 1
+        label = f"{_LABEL_SLOT}={slot_key}"
+        try:
+            for c in client.containers.list(all=True, filters={"label": [label]}):
+                try:
+                    c.stop(timeout=20)
+                    c.remove()
+                    logger.info(
+                        "[slot_runtime][stop_containers_for_slot_key_sync][BLOCK_REMOVED] name=%s",
+                        c.name,
+                    )
+                    append_job_log(
+                        log, log_lock, f"[slot] removed labeled {c.name or c.id[:12]}"
+                    )
+                except docker.errors.DockerException as exc:
+                    append_job_log(log, log_lock, f"[slot] remove {c.name}: {exc}")
+        except docker.errors.DockerException as exc:
+            append_job_log(log, log_lock, f"[slot] list: {exc}")
+        for eng in ("vllm", "sglang"):
+            cname = slot_container_name(eng, slot_key)
+            _stop_container_by_name(client, cname, log, log_lock)
     invalidate_gpu_state_cache()
     from app.services.gpu_availability import invalidate_host_gpu_cache
 

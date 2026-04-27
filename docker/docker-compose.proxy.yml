@@ -295,7 +295,7 @@ services:
     entrypoint: ["/bin/sh", "/etc/slgpu/litellm-entrypoint.sh"]
     env_file:
       - ${WEB_DATA_DIR}/.slgpu/compose-service.env
-      - data/web/secrets/langfuse-litellm.env
+      - ${WEB_DATA_DIR}/secrets/langfuse-litellm.env
     depends_on:
       postgres:
         condition: service_healthy
@@ -309,7 +309,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - "${LITELLM_BIND}:${LITELLM_PORT}:4000"
+      - "${LITELLM_BIND}:${LITELLM_PORT}:${LITELLM_PORT}"
     volumes:
       - ./configs/monitoring/litellm/litellm-entrypoint.sh:/etc/slgpu/litellm-entrypoint.sh:ro
       - ./configs/monitoring/litellm/config.yaml:/etc/slgpu/config.yaml:ro

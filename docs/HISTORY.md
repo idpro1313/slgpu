@@ -1798,3 +1798,12 @@
 - **Почему:** План db-only-config-rework (v5.0.0), единая правда в БД.
 - **Файлы:** `web/backend/app/services/stack_registry.py`, `stack_errors.py`, `stack_config.py`, `preset_db_sync.py`, `llm_env.py`, `app_config.py`, `db/session.py`, `compose_exec.py`, `jobs.py`, `app_settings.py`, `docker/docker-compose.*.yml`, `configs/main.env`, `slgpu`, `scripts/cmd_web.sh`, `scripts/_lib.sh`, `scripts/check-stack-guards.sh`, `web/frontend/src/api/client.ts`, `stackErrorBus.ts`, `MissingStackParamsToast.tsx`, `grace/knowledge-graph/knowledge-graph.xml`, `VERSION`, `README.md`, `web/CONTRACT.md`, `web/README.md`, `docs/AGENTS.md` (при обновлении), удалённые `scripts/cmd_*.sh` и `configs/secrets/*`.
 - **Решение:** MAJOR 5.0.0; guard-скрипт `scripts/check-stack-guards.sh` для репо.
+
+## Фаза 5.0.1 (ревизия v5)
+
+### Полная ревизия slgpu 5.0.0 → PATCH 5.0.1
+- Что: Документация README и вспомогательные README под v5 (только `./slgpu web`); `scripts/_lib.sh` без ссылок на удалённые host-команды; monitoring README — UI вместо `./slgpu monitoring`; compose: `depends_on` + conditions, json-file 100m для web; legacy-комментарий к `docker-compose.llm.yml`; `init-litellm-db.sh` валидация имени БД; `minio-bucket-init.sh` без слабых дефолтов; `cmd_help.sh` `set -euo pipefail`; тесты 409 `missing_stack_params` и `POST /app-config/install`; фронт: типы pull/GPU, aria-label Runtime, возврат фокуса Modal, signal в react-query, баннер 409, `coerceIntMetric`; бэкенд: индекс `Job.resource`, узкие `except` + HF/Docker/SQLAlchemy в `native_jobs`, дубль импорта в `llm_env`; CONTRACT/Dashboard wording in-process lock; GRACE `knowledge-graph.xml` + `development-plan.xml` 5.0.1.
+- Почему: План полной ревизии v5 и правило grace-artifact-sync.
+- Файлы: README.md, docker/README.md, data/README.md, examples/presets/README.md, configs/monitoring/README.md, web/README.md, scripts/_lib.sh, scripts/cmd_help.sh, docker/docker-compose.*.yml, configs/monitoring/litellm/init-litellm-db.sh, configs/monitoring/langfuse/minio-bucket-init.sh, web/** (types, Modal, Runtime, Dashboard, Models, Monitoring, LiteLLM, globals.css, formatters), web/backend/** (job model, llm_env, native_jobs), web/backend/tests/test_api_smoke.py, docs/AGENTS.md, web/CONTRACT.md, grace/knowledge-graph/knowledge-graph.xml, grace/plan/development-plan.xml, VERSION, pyproject, package.json, __init__.py.
+- Решение: SemVer PATCH; host CLI сокращён до help+web; устаревшие M-PULL/M-UP/M-DOWN помечены deprecated в графе.
+

@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
 import type { DashboardData, GpuProcessState, GpuStateResponse, RuntimeSlotView } from "@/api/types";
-import { formatBytesIEC } from "@/components/formatters";
+import { coerceIntMetric, formatBytesIEC } from "@/components/formatters";
 import { MetricCard } from "@/components/MetricCard";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
@@ -22,10 +22,6 @@ function presetForGpuIndex(index: number, slots: RuntimeSlotView[] | undefined):
     }
   }
   return null;
-}
-
-function numGpu(v: number | string): number {
-  return typeof v === "number" ? v : parseInt(String(v), 10) || 0;
 }
 
 export function DashboardPage() {
@@ -67,7 +63,7 @@ export function DashboardPage() {
         <MetricCard
           label="Активные задачи"
           value={data?.metrics.active_jobs ?? 0}
-          hint="job runner, advisory locks"
+          hint="job runner, in-process locks"
         />
         <MetricCard
           label="Сервисы мониторинга"
@@ -210,9 +206,9 @@ export function DashboardPage() {
         ) : (
           <div className="cards-grid">
             {gpuLive.data.gpus.map((g) => {
-              const u = numGpu(g.memory_used_mib);
-              const t = numGpu(g.memory_total_mib);
-              const util = numGpu(g.utilization_gpu);
+              const u = coerceIntMetric(g.memory_used_mib);
+              const t = coerceIntMetric(g.memory_total_mib);
+              const util = coerceIntMetric(g.utilization_gpu);
               const vramPct = t > 0 ? Math.min(100, Math.round((u / t) * 100)) : 0;
               const preset = presetForGpuIndex(g.index, data?.runtime.slots);
               const gid = g.uuid != null && g.uuid !== "" ? String(g.uuid) : null;

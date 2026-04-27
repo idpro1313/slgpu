@@ -16,5 +16,6 @@ _extra=""
 if [ "${LITELLM_LOG:-}" = "DEBUG" ] || [ "${LITELLM_LOG:-}" = "debug" ]; then
   _extra="--detailed_debug"
 fi
+PORT="${LITELLM_PORT:-4000}"
 # shellcheck disable=SC2086
-exec litellm --config /tmp/litellm.config.yaml --host 0.0.0.0 --port 4000 ${_extra} "$@"
+exec litellm --config /tmp/litellm.config.yaml --host 0.0.0.0 --port "${PORT}" ${_extra} "$@"

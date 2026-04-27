@@ -2,16 +2,16 @@
 
 **Логи всех контейнеров в одно место (journald, Loki, syslog):** см. [LOGS.md](LOGS.md). В стеке мониторинга уже подняты **Grafana Loki** + **Promtail** (данные на диске: `LOKI_DATA_DIR`, `PROMTAIL_DATA_DIR` в `main.env`); просмотр в **Grafana → Explore → Loki**.
 
-**Postgres, ClickHouse, Redis, MinIO, Langfuse, LiteLLM** — в [`docker/docker-compose.proxy.yml`](../../docker/docker-compose.proxy.yml) (проект **`slgpu-proxy`**; тот же **`./slgpu monitoring up`**, сеть `slgpu` с [`docker/docker-compose.llm.yml`](../../docker/docker-compose.llm.yml)). Стек **метрик и логов** (Prometheus, Grafana, Loki, Promtail, DCGM, node-exporter) — в [`docker/docker-compose.monitoring.yml`](../../docker/docker-compose.monitoring.yml). UI Langfuse по умолчанию **`:3001`** (`LANGFUSE_PORT`), чтобы не конфликтовать с Grafana **:3000**. MinIO наружу: **`:9010`** / **`:9011`** (`MINIO_*_HOST_PORT`), не **:9090** (Prometheus). Секреты (`NEXTAUTH_SECRET`, `LANGFUSE_ENCRYPTION_KEY`, пароли БД) — в [`main.env`](../../main.env); для продакшена смените дефолты. **LiteLLM:** в репо — [`litellm/config.yaml`](litellm/config.yaml) только **`litellm_settings`** (callbacks, `drop_params`); **модели и `api_base` к vLLM** — в **БД** / [**Admin UI** `/ui`](https://docs.litellm.ai/docs/proxy/ui) при **`STORE_MODEL_IN_DB`**. Клиент: `http://<хост>:LITELLM_PORT/v1/…`, **`"model": "<как в UI>"`** (часто совпадает с `SERVED_MODEL_NAME` / **`devllm`** (старое: `SLGPU_SERVED_MODEL_NAME`) на стороне vLLM). В [`main.env`](../../main.env) **`UI_USERNAME`**, **`UI_PASSWORD`**; **`x-api-key`** — если задан ненулевой **`LITELLM_MASTER_KEY`** (пусто = без ключа, только в закрытой сети). Роуты и цены — в `/ui`, не в `config.yaml`. Трейсинг в Langfuse: в UI — проект → API keys; ключи для LiteLLM — в **[`configs/secrets/langfuse-litellm.env`](../secrets/langfuse-litellm.env.example)** (копия из `*.example`, файл в `.gitignore`), не в `main.env`. При первом `./slgpu monitoring up` пустой файл создаётся из примера, а одноразовые init-контейнеры bootstrap создают MinIO buckets и БД LiteLLM. В [`litellm/config.yaml`](litellm/config.yaml) для **Langfuse 3** задано **`callbacks: ["langfuse_otel"]`**. В **proxy** у **litellm**: **`LANGFUSE_OTEL_HOST`** → `http://langfuse-web:3000`, **`STORE_MODEL_IN_DB`**, **`DATABASE_URL`** — хост **`postgres`** (тот же compose, сервис Postgres для Langfuse/LiteLLM).
+**Postgres, ClickHouse, Redis, MinIO, Langfuse, LiteLLM** — в [`docker/docker-compose.proxy.yml`](../../docker/docker-compose.proxy.yml) (проект **`slgpu-proxy`**; подъём из **Develonica.LLM** / `native.*`, сеть `slgpu` с [`docker/docker-compose.llm.yml`](../../docker/docker-compose.llm.yml)). Стек **метрик и логов** (Prometheus, Grafana, Loki, Promtail, DCGM, node-exporter) — в [`docker/docker-compose.monitoring.yml`](../../docker/docker-compose.monitoring.yml). UI Langfuse по умолчанию **`:3001`** (`LANGFUSE_PORT`), чтобы не конфликтовать с Grafana **:3000**. MinIO наружу: **`:9010`** / **`:9011`** (`MINIO_*_HOST_PORT`), не **:9090** (Prometheus). Секреты (`NEXTAUTH_SECRET`, `LANGFUSE_ENCRYPTION_KEY`, пароли БД) — в [`main.env`](../../main.env); для продакшена смените дефолты. **LiteLLM:** в репо — [`litellm/config.yaml`](litellm/config.yaml) только **`litellm_settings`** (callbacks, `drop_params`); **модели и `api_base` к vLLM** — в **БД** / [**Admin UI** `/ui`](https://docs.litellm.ai/docs/proxy/ui) при **`STORE_MODEL_IN_DB`**. Клиент: `http://<хост>:LITELLM_PORT/v1/…`, **`"model": "<как в UI>"`** (часто совпадает с `SERVED_MODEL_NAME` / **`devllm`** (старое: `SLGPU_SERVED_MODEL_NAME`) на стороне vLLM). В [`main.env`](../../main.env) **`UI_USERNAME`**, **`UI_PASSWORD`**; **`x-api-key`** — если задан ненулевой **`LITELLM_MASTER_KEY`** (пусто = без ключа, только в закрытой сети). Роуты и цены — в `/ui`, не в `config.yaml`. Трейсинг в Langfuse: в UI — проект → API keys; ключи для LiteLLM — в **[`configs/secrets/langfuse-litellm.env`](../secrets/langfuse-litellm.env.example)** (копия из `*.example`, файл в `.gitignore`), не в `main.env`. При первом `подъём стека из UI («Мониторинг»)` пустой файл создаётся из примера, а одноразовые init-контейнеры bootstrap создают MinIO buckets и БД LiteLLM. В [`litellm/config.yaml`](litellm/config.yaml) для **Langfuse 3** задано **`callbacks: ["langfuse_otel"]`**. В **proxy** у **litellm**: **`LANGFUSE_OTEL_HOST`** → `http://langfuse-web:3000`, **`STORE_MODEL_IN_DB`**, **`DATABASE_URL`** — хост **`postgres`** (тот же compose, сервис Postgres для Langfuse/LiteLLM).
 
 ## Порты: настройки web и `docker compose`
 
 - **Панель «Настройки»** (web) сохраняет значения в **SQLite** (`stack_params`), а не в файл `main.env` автоматически.
-- **`./slgpu monitoring`** и **native-задания** используют один файл **`${WEB_DATA_DIR}/.slgpu/compose-service.env`** (по умолч. **`data/web/.slgpu/…`**, под `data/`): в web он **заполняется строго из БД** (`stack_params` / `sync_merged_flat(require_db=True)`) перед `docker compose`; в bash — **копия `main.env`**, если он есть, иначе `configs/main.env`. Сервисы в compose ссылаются на этот путь в **`env_file:`**, а опубликованные порты/имена проектов в `docker-compose.monitoring.yml` и `docker-compose.proxy.yml` **без YAML fallback** — если БД-снимок не подставился, compose падает, а не молча берёт `3000/9090/3001`.
+- **Запуск мониторинга из Develonica.LLM** и **native-задания** используют один файл **`${WEB_DATA_DIR}/.slgpu/compose-service.env`** (по умолч. **`data/web/.slgpu/…`**, под `data/`): в web он **заполняется строго из БД** (`stack_params` / `sync_merged_flat(require_db=True)`) перед `docker compose`; в bash — **копия `main.env`**, если он есть, иначе `configs/main.env`. Сервисы в compose ссылаются на этот путь в **`env_file:`**, а опубликованные порты/имена проектов в `docker-compose.monitoring.yml` и `docker-compose.proxy.yml` **без YAML fallback** — если БД-снимок не подставился, compose падает, а не молча берёт `3000/9090/3001`.
 - **Задачи из web** (`native.monitoring.*`, `native.proxy.*`) **всегда** пишут стек из БД в этот путь (доступен **slgpuweb** под `data/web`, без записи в `<repo>/.slgpu` в корне) и запускают Docker Compose с очищенным окружением, чтобы env контейнера web / хоста не перебивал значения из БД.
-- **LiteLLM `LITELLM_MASTER_KEY`:** ключ из **Настройки → API-ключ LiteLLM** (в БД: `public_access.litellm_api_key`) **подмешивается** в `sync_merged_flat` как `LITELLM_MASTER_KEY` при native-заданиях — иначе после перезапуска прокси из UI прокси поднимался бы без master key (ошибка Admin UI: *Master Key not set*). Команда **`./slgpu monitoring …`** с **`main.env` на диске** эту настройку **не** читает: задайте **`LITELLM_MASTER_KEY` в `main.env`** **или** перезапускайте мониторинг **только из web**.
+- **LiteLLM `LITELLM_MASTER_KEY`:** ключ из **Настройки → API-ключ LiteLLM** (в БД: `public_access.litellm_api_key`) **подмешивается** в `sync_merged_flat` как `LITELLM_MASTER_KEY` при native-заданиях — иначе после перезапуска прокси из UI прокси поднимался бы без master key (ошибка Admin UI: *Master Key not set*). Ручной `docker compose` с **`main.env` на диске** (без UI) эту настройку **не** читает: задайте **`LITELLM_MASTER_KEY` в `main.env`** **или** перезапускайте мониторинг **только из web**.
 
-**Что делать:** после смены портов в web перезапускайте мониторинг **из UI (Задачи)**. `main.env` нужен только для ручного `./slgpu` на хосте или одноразового импорта; для web-операций источником является SQLite.
+**Что делать:** после смены портов в web перезапускайте мониторинг **из UI (Задачи)**. `main.env` нужен для **`./slgpu web`**, одноразового **install** и ручного `docker compose` на хосте; для операций из UI источником остаётся **SQLite**.
 
 В [`docker/docker-compose.monitoring.yml`](../../docker/docker-compose.monitoring.yml) публикация на хост: **Grafana** — `${GRAFANA_PORT}`; **Prometheus** — `${PROMETHEUS_PORT}`; **Loki** — `${LOKI_PORT}` (и `${LOKI_BIND}`, по умолч. `127.0.0.1`).
 
@@ -26,23 +26,23 @@
 1. **LiteLLM** шлёт спаны в Langfuse по OTLP — в логах **контейнера `slgpu-proxy-litellm`** бывает `Transient error … exporting span` (см. раздел «подробные логи» выше, заголовок `x-langfuse-ingestion-version`, сеть до `langfuse-web`).
 2. **Langfuse** не может залить события/медиа в настроенное **blob-хранилище** (S3, MinIO, Azure…) — приём может отвечать **500**; в логах **`langfuse-web`** или **`langfuse-worker`** чаще видно ошибку **credentials / endpoint / bucket**, а не OTLP.
 
-**В этом репо** объектное хранилище — **MinIO** в compose (`minio:9000` в сети `slgpu`); в [`docker/docker-compose.proxy.yml`](../../docker/docker-compose.proxy.yml) у web/worker заданы **`LANGFUSE_S3_*`** (бакет по умолч. **`langfuse`**, `FORCE_PATH_STYLE`, endpoint `http://minio:9000`) и **`MINIO_ROOT_USER`** / **`MINIO_ROOT_PASSWORD`** из [`main.env`](../../main.env). Сервис **`minio-bucket-init`** (образ `mc`) вынесен в профиль **`bootstrap`** и создаёт бакеты `LANGFUSE_S3_EVENT_UPLOAD_BUCKET` / `LANGFUSE_S3_MEDIA_BUCKET` один раз при первом `./slgpu monitoring up`; marker: `data/monitoring/.bootstrap/minio-bucket-init.done`. Без бакетов в логах web: **`NoSuchBucket`**, **`Failed to upload JSON to S3`**, **`events/otel/…`**. Повторить вручную: **`./slgpu monitoring bootstrap`** или **`SLGPU_MONITORING_BOOTSTRAP_FORCE=1 ./slgpu monitoring bootstrap`**. Проверьте: контейнер **`minio` healthy**; **ключи** совпадают; **диск** `LANGFUSE_MINIO_DATA_DIR` с корректными правами. Для деталей по причине — временно **`LANGFUSE_LOG_LEVEL=debug`** в `main.env` и пересоздание **`langfuse-web`** и **`langfuse-worker`**. Оф. переменные: [Configuration (self-hosted)](https://langfuse.com/self-hosting/configuration), общий troubleshooting: [Troubleshooting & FAQ](https://langfuse.com/self-hosting/troubleshooting-and-faq).
+**В этом репо** объектное хранилище — **MinIO** в compose (`minio:9000` в сети `slgpu`); в [`docker/docker-compose.proxy.yml`](../../docker/docker-compose.proxy.yml) у web/worker заданы **`LANGFUSE_S3_*`** (бакет по умолч. **`langfuse`**, `FORCE_PATH_STYLE`, endpoint `http://minio:9000`) и **`MINIO_ROOT_USER`** / **`MINIO_ROOT_PASSWORD`** из [`main.env`](../../main.env). Сервис **`minio-bucket-init`** (образ `mc`) вынесен в профиль **`bootstrap`** и создаёт бакеты `LANGFUSE_S3_EVENT_UPLOAD_BUCKET` / `LANGFUSE_S3_MEDIA_BUCKET` один раз при первом `подъём стека из UI («Мониторинг»)`; marker: `data/monitoring/.bootstrap/minio-bucket-init.done`. Без бакетов в логах web: **`NoSuchBucket`**, **`Failed to upload JSON to S3`**, **`events/otel/…`**. Повторить вручную: **bootstrap из UI** или `SLGPU_MONITORING_BOOTSTRAP_FORCE=1` + тот же bootstrap. Проверьте: контейнер **`minio` healthy**; **ключи** совпадают; **диск** `LANGFUSE_MINIO_DATA_DIR` с корректными правами. Для деталей по причине — временно **`LANGFUSE_LOG_LEVEL=debug`** в `main.env` и пересоздание **`langfuse-web`** и **`langfuse-worker`**. Оф. переменные: [Configuration (self-hosted)](https://langfuse.com/self-hosting/configuration), общий troubleshooting: [Troubleshooting & FAQ](https://langfuse.com/self-hosting/troubleshooting-and-faq).
 
 ### LiteLLM: «Authentication Error, Not connected to DB!»
 
-Нужен **PostgreSQL** для Prisma (Admin UI `/ui`, виртуальные ключи). Сервис **`litellm-pg-init`** (в **proxy**, profile **`bootstrap`**) создаёт БД **`litellm`**; marker: `data/monitoring/.bootstrap/litellm-pg-init.done`. У контейнера **LiteLLM** в [`docker-compose.proxy.yml`](../../docker/docker-compose.proxy.yml) в **`DATABASE_URL`** указан хост **`postgres`** (имя сервиса в том же compose). Повторить bootstrap: **`./slgpu monitoring bootstrap`**.
+Нужен **PostgreSQL** для Prisma (Admin UI `/ui`, виртуальные ключи). Сервис **`litellm-pg-init`** (в **proxy**, profile **`bootstrap`**) создаёт БД **`litellm`**; marker: `data/monitoring/.bootstrap/litellm-pg-init.done`. У контейнера **LiteLLM** в [`docker-compose.proxy.yml`](../../docker/docker-compose.proxy.yml) в **`DATABASE_URL`** указан хост **`postgres`** (имя сервиса в том же compose). Повторить bootstrap: **из UI** (задача bootstrap / эквивалент).
 
 ## Доступ к Langfuse извне (интернет / другая сеть)
 
-1. **`NEXTAUTH_URL`** в [`main.env`](../../main.env) — **обязан** совпадать с тем URL, по которому вы открываете UI: схема + хост + порт. Для `127.0.0.1` вход с другой машины **не** заработает. Примеры: `https://langfuse.yourdomain.com` (лучше за reverse proxy), `http://203.0.113.7:3001` (тест по IP), после смены — **`./slgpu monitoring restart`**.
+1. **`NEXTAUTH_URL`** в [`main.env`](../../main.env) — **обязан** совпадать с тем URL, по которому вы открываете UI: схема + хост + порт. Для `127.0.0.1` вход с другой машины **не** заработает. Примеры: `https://langfuse.yourdomain.com` (лучше за reverse proxy), `http://203.0.113.7:3001` (тест по IP), после смены — **перезапуск стека из UI**.
 2. **Прослушивание:** в репо задано **`LANGFUSE_BIND=0.0.0.0`** — порт `LANGFUSE_PORT` (по умолч. 3001) слушается на всех интерфейсах. Чтобы **не** светить наружу, поставьте `LANGFUSE_BIND=127.0.0.1` и публикуйте Langfuse **только** через Nginx/Traefik на 443. **`curl` / браузер: connection reset** к `:3001` с хоста: для сервиса `langfuse-web` в [`docker/docker-compose.proxy.yml`](../../docker/docker-compose.proxy.yml) задано **`HOSTNAME=0.0.0.0`**, иначе Next.js может слушать не все интерфейсы в контейнере (см. [FAQ Langfuse](https://langfuse.com/faq/all/debug-docker-deployment)); после обновления репо пересоздайте контейнер: `docker compose -f docker/docker-compose.proxy.yml --env-file main.env up -d --force-recreate langfuse-web`.
 3. **Фаервол / security group** — откройте только нужный порт (или 80/443 у прокси), остальные сервисы мониторинга (Prometheus, MinIO) по возможности **не** публикуйте в интернет.
 4. **Секреты** — смените `NEXTAUTH_SECRET`, `LANGFUSE_ENCRYPTION_KEY`, пароли БД/Redis/MinIO/Postgres в проде.
 5. **SDK** (приложения на других хостах): base URL = тот же публичный хост, что в `NEXTAUTH_URL` (часто `https://...` без пути, см. [док. Langfuse](https://langfuse.com/docs) по клиенту).
 
-**После регистрации редирект на `http://127.0.0.1:3001`:** в [`main.env`](../../main.env) задан непубличный `NEXTAUTH_URL`. Исправьте на тот URL, с которого открываете UI (например `http://<ваш-IP>:3001`), **без** слэша в конце, затем `docker compose -f docker/docker-compose.proxy.yml --env-file main.env up -d` или `./slgpu monitoring restart`, очистите cookies для сайта и снова зайдите.
+**После регистрации редирект на `http://127.0.0.1:3001`:** в [`main.env`](../../main.env) задан непубличный `NEXTAUTH_URL`. Исправьте на тот URL, с которого открываете UI (например `http://<ваш-IP>:3001`), **без** слэша в конце, затем `docker compose -f docker/docker-compose.proxy.yml --env-file main.env up -d` или **рестарт из UI**, очистите cookies для сайта и снова зайдите.
 
-Метрики и логи: [`docker/docker-compose.monitoring.yml`](../../docker/docker-compose.monitoring.yml); **Langfuse, MinIO, Postgres (Langfuse/LiteLLM), LiteLLM** — [`docker/docker-compose.proxy.yml`](../../docker/docker-compose.proxy.yml) (подъём обоих: **`./slgpu monitoring up`**, **не** в `./slgpu up`). Сеть **`slgpu`** общая с [`docker/docker-compose.llm.yml`](../../docker/docker-compose.llm.yml) (отдельной bridge-сети `langfuse` больше нет). **vLLM и SGLang** в [`prometheus/prometheus.yml`](prometheus/prometheus.yml) скрейпятся **не** по имени `vllm:8111` (между разными compose-проектами краткое имя `vllm` часто не резолвится), а через **`host.docker.internal:<порт_на_хосте>`** (мост в хост, где опубликованы `LLM_API_PORT` → 8111 / 8222). У сервиса `prometheus` в compose задано `extra_hosts: host.docker.internal:host-gateway` (Linux). Метка **`instance`** для рядов — **`vllm:8111`** / **`sglang:8222`** (Grafana, переменные).
+Метрики и логи: [`docker/docker-compose.monitoring.yml`](../../docker/docker-compose.monitoring.yml); **Langfuse, MinIO, Postgres (Langfuse/LiteLLM), LiteLLM** — [`docker/docker-compose.proxy.yml`](../../docker/docker-compose.proxy.yml) (подъём обоих: **`подъём стека из UI («Мониторинг»)`**, **не** через устаревший host-CLI). Сеть **`slgpu`** общая с [`docker/docker-compose.llm.yml`](../../docker/docker-compose.llm.yml) (отдельной bridge-сети `langfuse` больше нет). **vLLM и SGLang** в [`prometheus/prometheus.yml`](prometheus/prometheus.yml) скрейпятся **не** по имени `vllm:8111` (между разными compose-проектами краткое имя `vllm` часто не резолвится), а через **`host.docker.internal:<порт_на_хосте>`** (мост в хост, где опубликованы `LLM_API_PORT` → 8111 / 8222). У сервиса `prometheus` в compose задано `extra_hosts: host.docker.internal:host-gateway` (Linux). Метка **`instance`** для рядов — **`vllm:8111`** / **`sglang:8222`** (Grafana, переменные).
 
 - **Prometheus** (по умолч. **`0.0.0.0:9090`** на хосте, см. `PROMETHEUS_BIND` в [`main.env`](../../main.env)): UI и HTTP API **без аутентификации** — в проде закройте фаерволом или поставьте `PROMETHEUS_BIND=127.0.0.1` и ходите по SSH tunnel. Скрейп vLLM/SGLang: **см. выше**; плюс `dcgm-exporter:9400`, **`node-exporter:9100`**. **Нестандартный `LLM_API_PORT`:** поправьте **хостовый** порт в `targets` в [`prometheus/prometheus.yml`](prometheus/prometheus.yml) (должен совпадать с левой частью `ports` в `docker/docker-compose.llm.yml` для выбранного движка).
   - **SGLang:** для наполнения оф. Grafana «SGLang Dashboard» сервер должен запускаться с **`--enable-metrics`** (в slgpu: по умолчанию через `SGLANG_ENABLE_METRICS=1` в `serve.sh`). Иначе панели по `sglang:*` часто пустые.
@@ -56,7 +56,7 @@
 2. **Node Exporter Full** (хост: CPU, RAM, диск, сеть) — dashboard ID [**1860**](https://grafana.com/grafana/dashboards/1860).  
    - **Dashboards → Import →** вставьте `1860` → Load.  
    - Datasource: **Prometheus** (как в provisioning, uid `prometheus`).  
-   - Убедитесь, что контейнер **`node-exporter`** запущен: **`./slgpu monitoring up`** (или `docker compose -f docker/docker-compose.monitoring.yml up -d node-exporter`).  
+   - Убедитесь, что контейнер **`node-exporter`** запущен: **`подъём стека из UI («Мониторинг»)`** (или `docker compose -f docker/docker-compose.monitoring.yml up -d node-exporter`).  
    - В выпадающих списках вверху дашборда выберите **Datasource: Prometheus**, **job = `node-exporter`**, **instance** — обычно **`host`** (так задан label в [`prometheus/prometheus.yml`](prometheus/prometheus.yml)); в других ревизиях дашборда может быть `node-exporter:9100`.
 3. **vLLM** — поиск на grafana.com по `vllm` (ID зависят от версии; импорт через **Dashboards → Import**). В репозитории: [`vllmdash2.json`](grafana/templates/vllmdash2.json) — **V2**; datasource **`prometheus`**, переменные **`instance`** / **`Model`** (с **All**), в запросах `job="vllm"`, `model_name=~"$model_name"`. **Данные только при запущенном контейнере vLLM** — если поднят только SGLang, метрик `vllm:*` в Prometheus нет, дашборд будет пустым (смотрите SGLang-дашборды). Если vLLM запущен, а **Model** пуст — сделайте запросы к API или выберите **All** / нужную модель и обновите переменные.
 
@@ -66,15 +66,15 @@
 
 | Проверка | Что должно быть |
 |----------|-----------------|
-| **1. Поднят движок vLLM** | `./slgpu up vllm -m <пресет>` (профиль **vllm**). Только SGLang → на **8111** ничего не слушает, скрейп **host.docker.internal:8111** → **DOWN** → **0** рядов `vllm:*`. Откройте SGLang-дашборды, не vLLM V2. |
-| **2. Target vLLM в UP** | **Prometheus** → **Status → Targets** → job **`vllm`**, URL вроде **`http://host.docker.internal:8111/metrics`** → **State: UP** (после `git pull` и **`./slgpu monitoring restart`**). Старый экран **lookup vllm** — смена в [`prometheus/prometheus.yml`](prometheus/prometheus.yml). Если **DOWN** — vLLM не слушает на хосте (не тот `LLM_API_PORT`, контейнер остановлен) или `host.docker.internal` не резолвится (проверьте `extra_hosts` у `prometheus` в compose). |
+| **1. Поднят движок vLLM** | Слот vLLM в **Develonica.LLM** (порт **8111** по умолчанию). Только SGLang → на **8111** ничего не слушает, скрейп **host.docker.internal:8111** → **DOWN** → **0** рядов `vllm:*`. Откройте SGLang-дашборды, не vLLM V2. |
+| **2. Target vLLM в UP** | **Prometheus** → **Status → Targets** → job **`vllm`**, URL вроде **`http://host.docker.internal:8111/metrics`** → **State: UP** (после `git pull` и **рестарт из UI**). Старый экран **lookup vllm** — смена в [`prometheus/prometheus.yml`](prometheus/prometheus.yml). Если **DOWN** — vLLM не слушает на хосте (не тот `LLM_API_PORT`, контейнер остановлен) или `host.docker.internal` не резолвится (проверьте `extra_hosts` у `prometheus` в compose). |
 | **3. Эндпоинт /metrics** | С хоста: `curl -sS "http://127.0.0.1:${LLM_API_PORT:-8111}/metrics" \| head -n 40` (для vLLM наружу по умолчанию **8111**). Должны быть строки вида **`vllm:request_success_total`**, **`vllm:num_requests_running`**. Если **HTTP 200, но `vllm:` почти нет** (или другие имена) — возможна **движок v1** / смена имён в вашей версии образа. **Explore** в Prometheus: `{__name__=~"vllm:.*"}` — пусто при «живом» API значит, дашборд V2 **не** совпадает с версией vLLM. |
-| **4. Обход: `VLLM_USE_V1=0`**| В [main.env](../../main.env) раскомментируйте **`VLLM_USE_V1=0`**, пересоздайте vLLM (`./slgpu down` / `up` или `restart`) и снова проверьте `/metrics` (см. п.3). Подбор под **Grafana V2** и старые имена; на новых vLLM движок v0 могут **убрать** — тогда смотрите **Explore** и подстраивайте PromQL/импорт другого дашборда под ваш `/metrics`. Ссылка: [vLLM #16348](https://github.com/vllm-project/vllm/issues/16348) (обсуждение метрик v1). |
+| **4. Обход: `VLLM_USE_V1=0`**| В стеке / [main.env](../../main.env) задайте **`VLLM_USE_V1=0`**, **пересоздайте слот** vLLM из UI и снова проверьте `/metrics` (см. п.3). Подбор под **Grafana V2** и старые имена; на новых vLLM движок v0 могут **убрать** — тогда смотрите **Explore** и подстраивайте PromQL/импорт другого дашборда под ваш `/metrics`. Ссылка: [vLLM #16348](https://github.com/vllm-project/vllm/issues/16348) (обсуждение метрик v1). |
 | **5. Диапазон времени** | **Last 3h** пуст, если **не было трафика** — часть **stat** всё равно может показать 0, но **rate(...[5m])** остаётся пустой до первых запросов. Минимум: один `chat/completions`, подождать 1–2 окна скрейпа (15s). |
 
 **Переменные дашборда:** **Instance** в рядах — **`vllm:8111`** (relabel в Prometheus), не `host.docker.internal:8111`. Если **Targets** **UP**, но **instance** в Grafana пуст — обновите страницу, **All** (в JSON `includeAll` + `allValue: ".*"`).
 
-4. **SGLang (два варианта в provisioning)** — JSON в [`grafana/provisioning/dashboards/json/`](grafana/provisioning/dashboards/json/); подхватываются при **`./slgpu monitoring up`** / `docker compose -f docker/docker-compose.monitoring.yml up -d grafana` (из **корня** репозитория) (datasource **uid `prometheus`**, метрики **`sglang:…`**, **`instance`** / **`model_name`**, `job="sglang"`):
+4. **SGLang (два варианта в provisioning)** — JSON в [`grafana/provisioning/dashboards/json/`](grafana/provisioning/dashboards/json/); подхватываются при **`подъём стека из UI («Мониторинг»)`** / `docker compose -f docker/docker-compose.monitoring.yml up -d grafana` (из **корня** репозитория) (datasource **uid `prometheus`**, метрики **`sglang:…`**, **`instance`** / **`model_name`**, `job="sglang"`):
    - [**`sglang-dashboard-slgpu.json`**](grafana/provisioning/dashboards/json/sglang-dashboard-slgpu.json) — сокращённая адаптация [официального SGLang Dashboard](https://github.com/sgl-project/sglang/blob/main/examples/monitoring/grafana/dashboards/json/sglang-dashboard.json) (лагенси, p50/p90/p99, очереди, throughput, cache hit).
    - [**`sglangdash2-slgpu.json`**](grafana/provisioning/dashboards/json/sglangdash2-slgpu.json) — **расширенный** обзор в духе vLLM «V2» (верхние stat/gauge, E2E/TTFT, токены, очередь, KV/token usage, pie aborted/non-aborted). Собран из `vllmdash2` скриптом [`_build_sglangdash2.py`](grafana/provisioning/dashboards/json/_build_sglangdash2.py) при смене исходника vLLM. Прямого соответствия метрик vLLM нет (например `finished_reason` в Prometheus SGLang нет — срезы через aborted/requests). Гистограмма длины промпта — `sglang:prompt_tokens_histogram_bucket` (нужны включённые у сервера гистограммы длин; иначе панель пустая).
 
@@ -101,7 +101,7 @@
 
 ### Node Exporter Full «не работает» / пустые графики
 
-1. **Цель Prometheus в состоянии UP.** Откройте `http://<хост>:9090/targets` (локально часто `127.0.0.1`, снаружи — IP сервера при `PROMETHEUS_BIND=0.0.0.0`). Строка **`node-exporter`** должна быть **UP**. Если **DOWN** — не поднят стек (`./slgpu monitoring up`), сеть `slgpu` не общая, или порт `9100` недоступен.
+1. **Цель Prometheus в состоянии UP.** Откройте `http://<хост>:9090/targets` (локально часто `127.0.0.1`, снаружи — IP сервера при `PROMETHEUS_BIND=0.0.0.0`). Строка **`node-exporter`** должна быть **UP**. Если **DOWN** — не поднят стек (`подъём стека из UI («Мониторинг»)`), сеть `slgpu` не общая, или порт `9100` недоступен.
 2. **Метрики реально есть.** В Prometheus → **Graph**: запрос `up{job="node-exporter"}` должен вернуть **1**. Если пусто — скрейп не доходит до дашборда Grafana.
 3. **Переменные дашборда.** У импортированного **1860** вверху страницы выберите **job = `node-exporter`** и подходящий **instance** (в этом репозитории по умолчанию **`host`**). Если оставить другой job (например случайно `prometheus`), почти все панели будут пустыми.
 4. **Datasource при импорте.** При импорте укажите **Prometheus** (в provisioning он уже есть, uid **`prometheus`**). Если выбрать «не тот» источник или отключённый — данных не будет.
@@ -128,9 +128,8 @@ curl -X POST "http://127.0.0.1:9090/-/reload"
 
 ### Рекомендуется: автоматически по образам
 
-```bash
-./slgpu monitoring fix-perms
-./slgpu monitoring up
+```text
+# Сначала fix-perms (UI «Мониторинг» или scripts/monitoring_fix_permissions.sh), затем подъём стека из UI
 ```
 
 Скрипт [`scripts/monitoring_fix_permissions.sh`](../../scripts/monitoring_fix_permissions.sh) читает uid/gid из образов Grafana, Prometheus, Loki, Postgres, MinIO, Redis и фиксированные **101:101** для ClickHouse; делает **`mkdir -p`** и **`chown -R`** на все перечисленные каталоги. В [`main.env`](../../main.env) при необходимости задайте **`GRAFANA_IMAGE`**, **`PROMETHEUS_IMAGE`**, … (или старые **`SLGPU_*_IMAGE`**) для совпадения с compose. Нужен только **docker** (CLI и доступ к daemon): `mkdir`/`chown` выполняются через короткоживущий root-контейнер `docker run --rm -u 0:0` с образом из переменной **`SLGPU_FIXPERMS_HELPER_IMAGE`** (по умолчанию `alpine:latest`); это работает и от обычного пользователя на хосте, и из web-контейнера через `docker.sock`. **`sudo` не требуется.**
@@ -142,18 +141,18 @@ curl -X POST "http://127.0.0.1:9090/-/reload"
 sudo mkdir -p ./data/monitoring/prometheus ./data/monitoring/grafana
 sudo chown -R 65534:65534 ./data/monitoring/prometheus
 sudo chown -R 472:0 ./data/monitoring/grafana
-./slgpu monitoring up
+# далее — подъём стека из UI («Мониторинг»)
 ```
 
 ### `GF_PATHS_DATA` not writable / `mkdir .../plugins: Permission denied`
 
-1. **`./slgpu monitoring fix-perms`**
-2. **`./slgpu monitoring restart`**
+1. **`действие fix-perms из UI («Мониторинг»)`**
+2. **рестарт из UI**
 
 ### `queries.active` / `permission denied` / panic `Unable to create mmap-ed active query log`
 
-1. **`./slgpu monitoring fix-perms`**
-2. **`./slgpu monitoring restart`**
+1. **`действие fix-perms из UI («Мониторинг»)`**
+2. **рестарт из UI**
 
 ### MinIO: `FATAL ... decodeXLHeaders: Unknown xl meta version 3` (цикл restart)
 
@@ -161,35 +160,35 @@ sudo chown -R 472:0 ./data/monitoring/grafana
 
 **Что сделать:**
 
-1. **Обновить образ** до версии **не ниже** той, на которой создавались данные, или до актуального дефолта в репо (`MINIO_IMAGE` / `SLGPU_MINIO_IMAGE` в `main.env` и в stack web). Затем: **`docker pull`** нужного тега, **`./slgpu monitoring up`** (или рестарт из UI).
-2. **Если S3 в MinIO — только вспомогательное хранилище для Langfuse** и потеря объектов не критична: **`./slgpu monitoring down`**, очистить **`LANGFUSE_MINIO_DATA_DIR`** на диске (содержимое каталога), при необходимости удалить маркер **`data/monitoring/.bootstrap/minio-bucket-init.done`**, снова **`./slgpu monitoring up`** (bootstrap пересоздаст бакеты). Langfuse/Postgres/ClickHouse при этом **не** трогаем, если не переустанавливаете весь стек.
+1. **Обновить образ** до версии **не ниже** той, на которой создавались данные, или до актуального дефолта в репо (`MINIO_IMAGE` / `SLGPU_MINIO_IMAGE` в `main.env` и в stack web). Затем: **`docker pull`** нужного тега, **`подъём стека из UI («Мониторинг»)`** (или рестарт из UI).
+2. **Если S3 в MinIO — только вспомогательное хранилище для Langfuse** и потеря объектов не критична: **остановка стека из UI**, очистить **`LANGFUSE_MINIO_DATA_DIR`** на диске (содержимое каталога), при необходимости удалить маркер **`data/monitoring/.bootstrap/minio-bucket-init.done`**, снова **`подъём стека из UI («Мониторинг»)`** (bootstrap пересоздаст бакеты). Langfuse/Postgres/ClickHouse при этом **не** трогаем, если не переустанавливаете весь стек.
 
 **Порты (GRAFANA_PORT, MinIO_*, …) с настройками web не конфликтуют** — ошибка идёт от **несоответствия бинарник ↔ формат диска**, а не от смены портов.
 
 **Перенос Langfuse с named volumes** (старые версии compose: `slgpu_lf_postgres_data`, `slgpu_lf_clickhouse_data`, …):
 
-1. **`./slgpu monitoring down`**
+1. **остановка стека из UI**
 2. Для каждого тома: `docker volume inspect <имя>` → поле **`Mountpoint`**, внутри **`_data/`** (у Postgres — содержимое `PG_VERSION` и т.д.)
 3. Создать каталоги из `main.env` (`LANGFUSE_*_DATA_DIR`), **остановленные** данные скопировать:  
    `sudo rsync -a <mountpoint>/_data/ "${LANGFUSE_POSTGRES_DATA_DIR}/"` (и аналогично для clickhouse, minio, redis — смотрите точку монтирования в старом compose).
-4. **`./slgpu monitoring fix-perms`** → **`./slgpu monitoring up`**
+4. **`действие fix-perms из UI («Мониторинг»)`** → **`подъём стека из UI («Мониторинг»)`**
 5. После проверки: `docker volume rm` старые `slgpu_lf_*` (только если данные на диске работают).
 
 **Перенос из старых named volumes** (`slgpu_prometheus-data`, `slgpu_grafana-data` — до смены на bind):
 
-1. Остановить стек: **`./slgpu monitoring down`**.
+1. Остановить стек: **остановка стека из UI**.
 2. Узнать путь данных Docker: `docker volume inspect slgpu_prometheus-data` / `slgpu_grafana-data` (поле **`Mountpoint`**, внутри — подкаталог **`_data/`**).
 3. Создать хостовые каталоги и **скопировать** (с сохранением прав, от root):  
    `sudo rsync -a /var/lib/docker/volumes/slgpu_prometheus-data/_data/ "${PROMETHEUS_DATA_DIR}/"`  
    `sudo rsync -a /var/lib/docker/volumes/slgpu_grafana-data/_data/ "${GRAFANA_DATA_DIR}/"`
-4. **Обязательно** выставить владельца: **`./slgpu monitoring fix-perms`** (после `rsync` данные с тома — от `root`, скрипт выставит uid:gid по образам).
-5. Поднять: **`./slgpu monitoring up`**. Старые тома, если больше не нужны, удаляйте только после проверки: `docker volume rm slgpu_prometheus-data slgpu_grafana-data`.
+4. **Обязательно** выставить владельца: **`действие fix-perms из UI («Мониторинг»)`** (после `rsync` данные с тома — от `root`, скрипт выставит uid:gid по образам).
+5. Поднять: **`подъём стека из UI («Мониторинг»)`**. Старые тома, если больше не нужны, удаляйте только после проверки: `docker volume rm slgpu_prometheus-data slgpu_grafana-data`.
 
 **SELinux (RHEL и др.):** если контейнер не видит файлы, для bind mount в compose иногда добавляют суффикс **`:Z`** (или `:z`) к путям; см. документацию Docker/SELinux.
 
 ## Сеть `slgpu`: «incorrect label com.docker.compose.network»
 
-Если **`./slgpu up`** или **`./slgpu monitoring up`** падает с сообщением, что сеть `slgpu` уже есть, но метка `com.docker.compose.network` пустая или не та, значит сеть когда‑то создана **вручную** (`docker network create slgpu`) **до** исправления в репо: Compose v2 ждёт метки `com.docker.compose.project=slgpu` и `com.docker.compose.network=slgpu`.
+Если **`docker compose`** (LLM-слот) или **`подъём стека из UI («Мониторинг»)`** падает с сообщением, что сеть `slgpu` уже есть, но метка `com.docker.compose.network` пустая или не та, значит сеть когда‑то создана **вручную** (`docker network create slgpu`) **до** исправления в репо: Compose v2 ждёт метки `com.docker.compose.project=slgpu` и `com.docker.compose.network=slgpu`.
 
 **Починка:** остановить стеки, удалить сеть, поднять снова (сеть пересоздастся с метками):
 
@@ -198,7 +197,7 @@ cd /opt/slgpu   # корень клона
 docker compose -f docker/docker-compose.monitoring.yml down
 docker compose -f docker/docker-compose.llm.yml down
 docker network rm slgpu
-./slgpu up vllm -m <пресет>   # или sglang; при необходимости затем: ./slgpu monitoring up
+# Далее поднимите LLM-слот из Develonica.LLM и при необходимости стек «Мониторинг» из UI
 ```
 
 (Если `docker network rm` ругается на «active endpoints» — сначала `docker compose down` для всех проектов, использующих эту сеть, либо остановите контейнеры вручную.)
@@ -211,7 +210,7 @@ docker network rm slgpu
 
 1. Посмотреть место: `df -h`, `docker system df` (образы, build cache, тома).
 2. Освободить диск: удалить неиспользуемые образы/кэш (`docker system prune` — осторожно), почистить логи, перенести модели/данные на другой раздел.
-3. Ограничить рост TSDB в [`main.env`](../../main.env): сократить **`PROMETHEUS_RETENTION_TIME`** (по репозиторию по умолчанию **100y** — практически без срока; раньше было 15d) и/или задать ненулевой **`PROMETHEUS_RETENTION_SIZE`** (например `20GB`). **`PROMETHEUS_RETENTION_SIZE=0`** — без лимита по размеру (только по времени). Перезапустить: `./slgpu monitoring restart` или `docker compose -f docker/docker-compose.monitoring.yml up -d prometheus` (из **корня** репо).
+3. Ограничить рост TSDB в [`main.env`](../../main.env): сократить **`PROMETHEUS_RETENTION_TIME`** (по репозиторию по умолчанию **100y** — практически без срока; раньше было 15d) и/или задать ненулевой **`PROMETHEUS_RETENTION_SIZE`** (например `20GB`). **`PROMETHEUS_RETENTION_SIZE=0`** — без лимита по размеру (только по времени). Перезапустить: рестарт из UI или `docker compose -f docker/docker-compose.monitoring.yml up -d prometheus` (из **корня** репо).
 
 TSDB и WAL лежат в каталоге **`PROMETHEUS_DATA_DIR`** на хосте (см. [выше](#данные-на-локальном-диске-не-в-томе-docker)).
 

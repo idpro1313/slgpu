@@ -1,4 +1,4 @@
-<DevelopmentPlan VERSION="4.0.8">
+<DevelopmentPlan VERSION="5.0.1">
   <!--
     GRACE development plan — methodology: https://github.com/osovv/grace-marketplace
     Upstream ships Agent Skills + optional CLI (@osovv/grace-cli): grace lint | module find | module show | file show.
@@ -19,7 +19,7 @@
   <Modules>
     <M-CLI NAME="CLI" TYPE="ENTRY_POINT" LAYER="0" ORDER="1" STATUS="implemented">
       <contract>
-        <purpose>Корневой диспетчер `./slgpu`: парсинг аргумента и делегация в `scripts/cmd_*.sh` (в т.ч. `cmd_web.sh` → `slgpu web up`).</purpose>
+        <purpose>Корневой диспетчер `./slgpu`: `help` и `web` → `cmd_help.sh` / `cmd_web.sh` (v5: без прочих cmd_* на хосте).</purpose>
         <inputs>
           <param name="command" type="string" />
           <param name="args" type="string..." />

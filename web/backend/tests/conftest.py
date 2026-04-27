@@ -46,11 +46,14 @@ def _hermetic_settings(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Itera
     get_settings.cache_clear()
     db_session._engine = None
     db_session._session_factory = None
-    jobs_service._active_locks.clear()
+    # In-process job lock state (see app.services.jobs)
+    jobs_service._held.clear()  # type: ignore[attr-defined]
+    jobs_service._task_by_lock.clear()  # type: ignore[attr-defined]
 
     yield
 
     db_session._engine = None
     db_session._session_factory = None
-    jobs_service._active_locks.clear()
+    jobs_service._held.clear()  # type: ignore[attr-defined]
+    jobs_service._task_by_lock.clear()  # type: ignore[attr-defined]
     get_settings.cache_clear()

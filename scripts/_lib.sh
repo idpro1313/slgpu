@@ -77,7 +77,7 @@ slgpu_fail_if_missing_preset_arg() {
 slgpu_interactive_choose_engine() {
   local choice
   if ! [[ -r /dev/tty ]]; then
-    echo "Интерактивный выбор невозможен: нет TTY. Укажите явно: ./slgpu up <vllm|sglang> -m <пресет>" >&2
+    echo "Интерактивный выбор невозможен: нет TTY. Для v5 поднимите слот движка в Develonica.LLM (Web UI) или задайте параметры вручную для docker compose LLM." >&2
     return 1
   fi
   while true; do
@@ -362,12 +362,12 @@ slgpu_validate_running_config() {
   running_engine="$(slgpu_detect_running_engine)" || true
 
   if [[ -z "${running_engine}" ]]; then
-    echo "[VALIDATE] ОШИБКА: ни vllm, ни sglang не запущены. Сначала: ./slgpu up ${engine}" >&2
+    echo "[VALIDATE] ОШИБКА: ни vllm, ни sglang не запущены. Сначала поднимите слот (${engine}) в UI или через native.slot.* / docker compose." >&2
     return 1
   fi
 
   if [[ "${running_engine}" != "${engine}" ]]; then
-    echo "[VALIDATE] ОШИБКА: запущен ${running_engine}, а бенч для ${engine}. Сначала: ./slgpu down && ./slgpu up ${engine}" >&2
+    echo "[VALIDATE] ОШИБКА: запущен ${running_engine}, а бенч для ${engine}. Остановите слот и поднимите нужный движок в UI / native.slot.*." >&2
     return 1
   fi
 
@@ -435,7 +435,7 @@ slgpu_write_llm_compose_interp_env() {
 # Проверка CLI перед любыми вызовами `docker compose` (диагностика на «голой» VM).
 slgpu_require_docker() {
   if ! command -v docker >/dev/null 2>&1; then
-    echo "slgpu: не найдена команда «docker». Установите Docker Engine и Compose v2 (см. ./slgpu prepare)." >&2
+    echo "slgpu: не найдена команда «docker». Установите Docker Engine и Compose v2 (документация Docker / NVIDIA Container Toolkit)." >&2
     exit 1
   fi
 }

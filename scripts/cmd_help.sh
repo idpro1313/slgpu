@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 cat <<'EOF'
 slgpu 5.x — управление LLM-стендом через Web UI (slgpu-web).
 

@@ -77,7 +77,8 @@ def create_app() -> FastAPI:
             await init_db()
             logger.info("[main][startup] db initialised")
         except Exception:
-            logger.exception("[main][startup] db init failed; continuing")
+            logger.exception("[main][startup] db init failed; aborting startup")
+            raise
 
     if settings.static_dir and settings.static_dir.exists():
         _mount_spa(app, settings.static_dir)

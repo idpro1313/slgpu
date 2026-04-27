@@ -75,8 +75,6 @@ def merged_flat() -> dict[str, str]:
 
 def container_env_for_engine(merged: dict[str, str], engine: str) -> dict[str, str]:
     """Build env for ``scripts/serve.sh`` (flat string dict)."""
-    from app.services.stack_errors import MissingStackParams
-
     m: dict[str, str] = dict(merged)
     apply_vllm_aliases_to_merged(m)
     m["SLGPU_ENGINE"] = engine

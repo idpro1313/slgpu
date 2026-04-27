@@ -29,7 +29,7 @@ export function LiteLLMPage() {
 
   const jobs = useQuery({
     queryKey: ["jobs"],
-    queryFn: () => api.get<Job[]>("/jobs"),
+    queryFn: ({ signal }) => api.get<Job[]>("/jobs", { signal }),
     refetchInterval: 2_000,
   });
 

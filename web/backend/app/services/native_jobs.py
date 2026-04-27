@@ -13,7 +13,10 @@ from pathlib import Path
 from typing import Any
 
 import docker
+from docker.errors import DockerException
+from huggingface_hub.errors import HfHubHTTPError
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import get_settings
 from app.db.session import session_scope
@@ -69,7 +72,7 @@ async def _flush_native_job_stream(
             # HF pull updates ``message`` via tqdm; do not overwrite.
             if last and job_kind != "native.model.pull":
                 job.message = last[:2000]
-    except Exception:  # noqa: BLE001
+    except SQLAlchemyError:
         logger.debug("[native_jobs][_flush_native_job_stream] failed", exc_info=True)
 
 
@@ -226,8 +229,12 @@ async def handle_native_job(job_id: int, command: CliCommand, args: dict[str, An
             f"[stack] missing keys for {exc.scope}: {', '.join(exc.keys)} — задайте в Настройках",
         )
         code = 1
-    except Exception as exc:  # noqa: BLE001
+    except (DockerException, OSError, RuntimeError, ValueError, TypeError) as exc:
         logger.exception("[native_jobs][handle_native_job][BLOCK_FAILURE]")
+        append_job_log(log, log_lock, f"[native] error: {exc}")
+        code = 1
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("[native_jobs][handle_native_job][BLOCK_FAILURE_UNEXPECTED]")
         append_job_log(log, log_lock, f"[native] error: {exc}")
         code = 1
     finally:
@@ -832,7 +839,7 @@ async def _flush_pull_progress(job_id: int, lock: threading.Lock, state: dict[st
                 job.progress = pct
             if msg:
                 job.message = msg
-    except Exception:  # noqa: BLE001
+    except SQLAlchemyError:
         logger.debug("[native_model_pull] progress flush failed", exc_info=True)
 
 
@@ -892,8 +899,11 @@ async def _native_model_pull(
     code = 0
     try:
         await asyncio.to_thread(run_dl)
-    except Exception as exc:  # noqa: BLE001
+    except (HfHubHTTPError, OSError, ValueError, TypeError, RuntimeError) as exc:
         append_job_log(log, log_lock, f"[pull] failed: {exc}")
+        code = 1
+    except Exception as exc:  # noqa: BLE001
+        append_job_log(log, log_lock, f"[pull] failed (unexpected): {exc}")
         code = 1
     finally:
         stop.set()

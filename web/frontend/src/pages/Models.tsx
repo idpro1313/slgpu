@@ -80,7 +80,7 @@ export function ModelsPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ["models"],
-    queryFn: () => api.get<HFModel[]>("/models"),
+    queryFn: ({ signal }) => api.get<HFModel[]>("/models", { signal }),
     refetchInterval: (query) =>
       query.state.data?.some((m) => m.pull_progress) ? 2_000 : 8_000,
   });

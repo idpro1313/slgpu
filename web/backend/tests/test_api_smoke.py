@@ -71,6 +71,32 @@ async def test_litellm_proxy_action_rejects_unknown(client: httpx.AsyncClient) -
 
 
 @pytest.mark.asyncio
+async def test_monitoring_action_returns_409_when_stack_incomplete(
+    client: httpx.AsyncClient,
+) -> None:
+    """Пустой stack_params → raise_if_missing(monitoring_up) → MissingStackParams → 409."""
+    async with client:
+        response = await client.post("/api/v1/monitoring/action", json={"action": "up"})
+    assert response.status_code == 409
+    body = response.json()
+    assert body.get("error") == "missing_stack_params"
+    assert "keys" in body
+
+
+@pytest.mark.asyncio
+async def test_app_config_install_ok(client: httpx.AsyncClient) -> None:
+    """configs/main.env из conftest → install импортирует стек."""
+    async with client:
+        response = await client.post(
+            "/api/v1/app-config/install", json={"force": True}
+        )
+    assert response.status_code == 200
+    data = response.json()
+    assert data.get("installed") is True
+    assert int(data.get("stack_keys", 0)) > 0
+
+
+@pytest.mark.asyncio
 async def test_models_list_starts_empty(client: httpx.AsyncClient) -> None:
     async with client:
         response = await client.get("/api/v1/models")
@@ -81,7 +107,7 @@ async def test_models_list_starts_empty(client: httpx.AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_models_list_discovers_local_model_folders(client: httpx.AsyncClient) -> None:
     settings = get_settings()
-    models_root = settings.slgpu_root.parent / "models"
+    models_root = settings.slgpu_root / "data" / "models"
     model_dir = models_root / "Qwen" / "Qwen3-30B-A3B"
     model_dir.mkdir(parents=True)
     (model_dir / "config.json").write_text("{}", encoding="utf-8")
@@ -95,7 +121,7 @@ async def test_models_list_discovers_local_model_folders(client: httpx.AsyncClie
     assert len(payload) == 1
     assert payload[0]["hf_id"] == "Qwen/Qwen3-30B-A3B"
     assert payload[0]["download_status"] == "ready"
-    assert payload[0]["local_path"].endswith("models/Qwen/Qwen3-30B-A3B")
+    assert payload[0]["local_path"].endswith("data/models/Qwen/Qwen3-30B-A3B")
 
 
 @pytest.mark.asyncio
@@ -169,7 +195,7 @@ async def test_delete_preset_can_remove_exported_file(client: httpx.AsyncClient)
 @pytest.mark.asyncio
 async def test_delete_model_can_remove_local_files(client: httpx.AsyncClient) -> None:
     settings = get_settings()
-    model_dir = settings.slgpu_root.parent / "models" / "Qwen" / "Qwen3-Delete"
+    model_dir = settings.slgpu_root / "data" / "models" / "Qwen" / "Qwen3-Delete"
     model_dir.mkdir(parents=True)
     (model_dir / "config.json").write_text("{}", encoding="utf-8")
     (model_dir / "model.safetensors").write_bytes(b"weights")

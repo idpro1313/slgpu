@@ -122,7 +122,6 @@ class RuntimeLogs:
 async def snapshot() -> RuntimeSnapshot:
     settings = get_settings()
     inspector = get_docker_inspector()
-    ports = ports_for_probes_sync()
     now = datetime.now(timezone.utc)
 
     active = (
@@ -141,6 +140,7 @@ async def snapshot() -> RuntimeSnapshot:
         slot_rows = list(res.scalars().all())
 
     if slot_rows:
+        ports = ports_for_probes_sync()
 
         async def _probe_one(row: EngineSlot) -> RuntimeSlotProbe:
             eng = row.engine
@@ -191,70 +191,21 @@ async def snapshot() -> RuntimeSnapshot:
             slots=list(slot_probes),
         )
 
-    engine: str | None = None
-    container_status: str | None = None
-    api_port: int | None = None
-
-    project = str(ports["compose_project_infer"])
-    for candidate in ("vllm", "sglang"):
-        container = inspector.get_by_service(project, candidate)
-        if container is None:
-            continue
-        if container.status == "running":
-            engine = candidate
-            container_status = container.status
-            api_port = _extract_host_port(container.ports)
-            break
-        engine = engine or candidate
-        container_status = container_status or container.status
-
-    if api_port is None:
-        api_port = int(ports["llm_default_vllm_port"]) if engine == "vllm" else (
-            int(ports["llm_default_sglang_port"]) if engine == "sglang" else None
-        )
-
-    served: list[str] = []
-    metrics_available = False
-    if engine and api_port:
-        bases = _llm_probe_bases(settings, engine, api_port)
-        async with httpx.AsyncClient(timeout=2.0) as client:
-            served, metrics_available, _ = await _fetch_served_and_metrics(client, bases)
-        if not served and not metrics_available:
-            logger.info(
-                "[runtime][snapshot][BLOCK_LLM_HTTP] all_probe_bases_failed bases=%r",
-                bases,
-            )
-
-    if not inspector.is_available:
-        logger.info(
-            "[runtime][snapshot][BLOCK_CHECK_DOCKER] result=unavailable "
-            "labels=vllm|sglang project=%s hint=socket_or_permissions",
-            project,
-        )
-    elif engine is None:
-        logger.info(
-            "[runtime][snapshot][BLOCK_RESOLVE] no running container for "
-            "com.docker.compose.project=%r service=vllm|sglang",
-            project,
-        )
-    else:
-        logger.info(
-            "[runtime][snapshot] engine=%s api_port=%s container_status=%s models=%s",
-            engine,
-            api_port,
-            container_status,
-            len(served),
-        )
-
+    # Slots-only (5.x): do not fall back to legacy LLM docker-compose project when DB has
+    # no active engine_rows — inference is docker-py slots, not vllm/sglang service names.
+    logger.info(
+        "[runtime][snapshot][BLOCK_SLOTS_ONLY] no active engine_slots; "
+        "skipping infer compose vllm|sglang probe"
+    )
     return RuntimeSnapshot(
-        engine=engine,
-        api_port=api_port,
-        container_status=container_status,
+        engine=None,
+        api_port=None,
+        container_status=None,
         preset_name=None,
         hf_id=None,
         tp=None,
-        served_models=served,
-        metrics_available=metrics_available,
+        served_models=[],
+        metrics_available=False,
         last_checked_at=now,
         slots=[],
     )
@@ -287,11 +238,3 @@ async def tail_slot_logs(slot_key: str, tail: int = 300) -> RuntimeLogs:
         logs=logs,
         last_checked_at=datetime.now(timezone.utc),
     )
-
-
-def _extract_host_port(ports: list[dict]) -> int | None:
-    for port in ports:
-        host_port = port.get("host_port")
-        if host_port:
-            return int(host_port)
-    return None

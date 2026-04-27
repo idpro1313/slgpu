@@ -8,7 +8,12 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT" || exit 1
 
 # shellcheck disable=SC1091
-if [[ -f "${ROOT}/main.env" ]]; then
+if [[ -f "${ROOT}/configs/main.env" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "${ROOT}/configs/main.env"
+  set +a
+elif [[ -f "${ROOT}/main.env" ]]; then
   set -a
   # shellcheck disable=SC1090
   source "${ROOT}/main.env"
@@ -32,8 +37,8 @@ MINIO_IMG="${MINIO_IMAGE:-${SLGPU_MINIO_IMAGE:-minio/minio:latest}}"
 REDIS_IMG="${LANGFUSE_REDIS_IMAGE:-${SLGPU_LANGFUSE_REDIS_IMAGE:-redis:7}}"
 
 # Образ-помощник для root-операций (mkdir/chown). Должен иметь `sh` и `chown` —
-# `alpine:latest` минимален и работает и на хосте, и из контейнера web (через docker.sock).
-SLGPU_FIXPERMS_HELPER_IMAGE="${SLGPU_FIXPERMS_HELPER_IMAGE:-alpine:latest}"
+# Синхрон с web: native.monitoring.fix-perms / SLGPU_BENCH_CHOWN_IMAGE; legacy: SLGPU_FIXPERMS_HELPER_IMAGE.
+SLGPU_BENCH_CHOWN_IMAGE="${SLGPU_BENCH_CHOWN_IMAGE:-${SLGPU_FIXPERMS_HELPER_IMAGE:-alpine:latest}}"
 
 need_docker() {
   if ! command -v docker &>/dev/null; then
@@ -54,12 +59,12 @@ slgpu_root_chown_dir() {
   if [[ ! -d "${parent}" ]]; then
     docker run --rm --user 0:0 \
       -v "$(dirname "${parent}"):/pp" \
-      --entrypoint sh "${SLGPU_FIXPERMS_HELPER_IMAGE}" \
+      --entrypoint sh "${SLGPU_BENCH_CHOWN_IMAGE}" \
       -c "mkdir -p '/pp/$(basename "${parent}")/${base}'" >/dev/null
   fi
   docker run --rm --user 0:0 \
     -v "${parent}:/p" \
-    --entrypoint sh "${SLGPU_FIXPERMS_HELPER_IMAGE}" \
+    --entrypoint sh "${SLGPU_BENCH_CHOWN_IMAGE}" \
     -c "mkdir -p '/p/${base}' && chown -R ${uidgid} '/p/${base}'" >/dev/null
 }
 

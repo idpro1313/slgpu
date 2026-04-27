@@ -3,6 +3,12 @@
 set -e
 : "${POSTGRES_USER:=postgres}"
 : "${LITELLM_DB_NAME:=litellm}"
+case "$LITELLM_DB_NAME" in
+  ''|*[![:alnum:]_]*)
+    echo "init-litellm-db: LITELLM_DB_NAME must be a simple identifier [A-Za-z0-9_]" >&2
+    exit 1
+    ;;
+esac
 export PGUSER="${POSTGRES_USER}"
 export PGPASSWORD="${POSTGRES_PASSWORD:-postgres}"
 echo "init-litellm-db: ждём postgres…"

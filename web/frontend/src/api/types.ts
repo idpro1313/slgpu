@@ -79,7 +79,8 @@ export interface DashboardData {
 
 export interface ModelPullProgress {
   job_id: number;
-  status: JobStatus;
+  /** Бэк отдаёт enum-строку; при сбоях маппинга допускается произвольная строка */
+  status: JobStatus | string;
   progress: number | null;
   message: string | null;
 }
@@ -176,6 +177,8 @@ export interface GpuProcessState {
   used_memory_mib?: number | string;
   gpu_uuid?: string | null;
   slot_key?: string | null;
+  /** Имя контейнера, если сопоставлено (docker top / слот) */
+  container_name?: string | null;
 }
 
 export interface GpuBusy {
