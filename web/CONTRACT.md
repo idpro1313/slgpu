@@ -101,6 +101,7 @@ API (все публичные ручки под префиксом **`/api/v1`*
 ### Docker API
 
 - **UI «Docker» (логи), read-only (4.1.0+):** `GET /api/v1/docker/containers?scope=slgpu|all` — список контейнеров на хосте (`slgpu` — фильтр по префиксу/compose/лейблу `com.develonica.slgpu.*`). `GET /api/v1/docker/containers/{name_or_id}/logs?tail=1..5000` — tail stdout+stderr. **`GET /api/v1/docker/engine-events?since_sec=..&limit=..`** — хвост событий Docker Engine (`/events`, pull/start/die…). **`GET /api/v1/docker/daemon-log?lines=..`** — best-effort лог **dockerd** через `journalctl` (в контейнере без journal хоста может быть пусто). Страница `/docker-logs` в SPA. При недоступном socket — `docker_available: false` в списке, `503` на `…/logs` и `…/engine-events`.
+- **UI «Логи» (журнал slgpu-web), read-only (5.0.2+):** **`GET /api/v1/app-logs/tail?tail=1..20000`** — хвост непустых строк JSON-логов (тот же формат, что **stdout** backend). Источник: **`${WEB_DATA_DIR}/.slgpu/app.log`** (ротация 5 MiB×3, дублирует root-лог). Middleware фиксирует исход каждого HTTP-запроса (`[app][http][BLOCK_API_REQUEST]` / при 5xx — ERROR, при необработанном исключении — `BLOCK_API_ERROR` с `exc_info`); `GET /healthz` и статика **`/assets/*`** в access middleware не пишутся (шум); **`uvicorn.access`** → WARNING, чтобы не дублировать access. Страница SPA: **`/app-logs`**. Тела запросов в лог **не** пишутся (секреты); операции в сервисах — через существующие `logger.*` (попадают в файл).
 - **Чтение (внутр.):** список контейнеров по `com.docker.compose.project`, атрибуты, хвост логов; слоты — по `com.develonica.slgpu.slot` / имени `slgpu-{engine}-{slot_key}`.
 - **Запись:** `native.monitoring.fix-perms` (chown через ephemeral контейнер); **LLM-слоты** — `docker run` / stop через **docker-py** (`app.services.slot_runtime`); стек мониторинга — `docker compose` из web.
 
@@ -165,13 +166,12 @@ API (все публичные ручки под префиксом **`/api/v1`*
 - Имена стеков Compose для **опроса Docker** (`com.docker.compose.project`) читаются из
   `stack_params`: `WEB_COMPOSE_PROJECT_INFER`, `WEB_COMPOSE_PROJECT_MONITORING`,
   `WEB_COMPOSE_PROJECT_PROXY`.
-- **Наблюдаемость:** логи в **stdout** в JSON (`app.core.logging`); один
-  `LogRecord` — одна строка. `configure_logging()` оставляет **единственный** handler
-  на **root**, снимает handlers с `app`, `httpx`, `httpcore`, `h11`, `uvicorn*`,
+- **Наблюдаемость:** логи в **stdout** и (при доступном `WEB_DATA_DIR`) в **`${WEB_DATA_DIR}/.slgpu/app.log`** в JSON (`app.core.logging`); один
+  `LogRecord` — одна строка. `configure_logging(data_dir=…)` оставляет **StreamHandler** и **RotatingFileHandler** на **root**, снимает handlers с `app`, `httpx`, `httpcore`, `h11`, `uvicorn*`,
   `fastapi`, `starlette` и включает у них `propagate`, чтобы не было дублей
-  (`INFO INFO …` в Loki). Повторный вызов в `startup` сбрасывает handler'ы, которые
+  (`INFO INFO …` в Loki). **`uvicorn.access`** — уровень WARNING (access дублирует middleware). Повторный вызов в `startup` сбрасывает handler'ы, которые
   добавил uvicorn после импорта приложения. В сообщениях
-  якоря вроде `[runtime][snapshot][BLOCK_RESOLVE]`, `[monitoring][probe_all]`, `[api][dashboard]`.
+  якоря вроде `[runtime][snapshot][BLOCK_RESOLVE]`, `[monitoring][probe_all]`, `[api][dashboard]`, `[app][http][BLOCK_API_REQUEST]`.
   `WEB_LOG_LEVEL=DEBUG` включает, в частности, отсутствие контейнера по
   лейблам `com.docker.compose.project` / `…service` (`get_by_service`).
 - **Поиск контейнеров в Docker:** помимо точного фильтра по лейблам — нормализация

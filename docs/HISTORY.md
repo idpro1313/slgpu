@@ -1807,3 +1807,11 @@
 - Файлы: README.md, docker/README.md, data/README.md, examples/presets/README.md, configs/monitoring/README.md, web/README.md, scripts/_lib.sh, scripts/cmd_help.sh, docker/docker-compose.*.yml, configs/monitoring/litellm/init-litellm-db.sh, configs/monitoring/langfuse/minio-bucket-init.sh, web/** (types, Modal, Runtime, Dashboard, Models, Monitoring, LiteLLM, globals.css, formatters), web/backend/** (job model, llm_env, native_jobs), web/backend/tests/test_api_smoke.py, docs/AGENTS.md, web/CONTRACT.md, grace/knowledge-graph/knowledge-graph.xml, grace/plan/development-plan.xml, VERSION, pyproject, package.json, __init__.py.
 - Решение: SemVer PATCH; host CLI сокращён до help+web; устаревшие M-PULL/M-UP/M-DOWN помечены deprecated в графе.
 
+## Фаза 5.0.2 (журнал приложения в UI)
+
+### Раздел «Логи» + файловый JSON-лог + HTTP middleware
+- Что: `WEB_DATA_DIR/.slgpu/app.log` (RotatingFileHandler 5 MB × 3) дублирует root JSON-лог; `AppHttpRequestLogMiddleware` пишет исход каждого API-запроса (`[app][http][BLOCK_API_REQUEST]`; при 5xx — error; неперехваченные исключения — `BLOCK_API_ERROR`); без `/healthz` и `/assets/*`; `uvicorn.access` → WARNING. API `GET /api/v1/app-logs/tail?tail=1..20000`; UI `/app-logs` с автообновлением. Тест `test_app_logs_tail_shape`.
+- Почему: Запрос пользователя — полные логи работы приложения, операции и ошибки.
+- Файлы: `web/backend/app/core/logging.py`, `main.py`, `middleware/request_log.py`, `services/app_log_file.py`, `api/v1/app_logs.py`, `schemas/app_logs.py`, `api/v1/__init__.py`, `web/frontend` (AppLogs, App, Layout, types), `web/backend/tests/test_api_smoke.py`, `web/CONTRACT.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/plan/development-plan.xml`, `VERSION` 5.0.2, pyproject, package.json, `__init__.py`, `docs/HISTORY.md`.
+- Решение: MINOR 5.0.2; тела запросов в лог не пишем (секреты); бизнес-логи — существующие `logger` в сервисах + новый access-слой.
+

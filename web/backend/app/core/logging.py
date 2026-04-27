@@ -9,6 +9,8 @@ from __future__ import annotations
 import json
 import logging
 import sys
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 from typing import Any
 
 
@@ -56,13 +58,16 @@ class _JsonFormatter(logging.Formatter):
         return json.dumps(base, ensure_ascii=False, default=str)
 
 
-def configure_logging(level: str = "INFO") -> None:
-    """Один StreamHandler на **root**: одна строка JSON на LogRecord.
+def configure_logging(level: str = "INFO", data_dir: Path | None = None) -> None:
+    """StreamHandler + опциональный RotatingFileHandler на **root** (JSON-строка на LogRecord).
 
-    Раньше тот же handler вешали на ``httpx``/``app`` и на root — при ``propagate``
-    у промежуточных логгеров запись могла обрабатываться несколько раз, что давало
-    ``INFO INFO …`` в Docker/Loki. Uvicorn после импорта приложения снова добавляет
-    свои handler'ы — вызывайте эту функцию повторно из ``startup`` (см. ``main``).
+    Файл: ``<WEB_DATA_DIR>/.slgpu/app.log`` (5 MiB, 3 бэкапа) — тот же поток, что
+    в stdout, читается API ``GET /api/v1/app-logs/tail`` и UI «Логи». Дублирование
+    access от ``uvicorn.access`` приглушено (WARNING), т.к. исход запроса пишет
+    ``app.middleware.request_log`` (см. ``AppHttpRequestLogMiddleware``).
+
+    Uvicorn после импорта приложения снова добавляет handler'ы — вызывайте эту
+    функцию повторно из ``startup`` (см. ``main``) с ``data_dir``.
     """
 
     handler = logging.StreamHandler(stream=sys.stdout)
@@ -76,6 +81,26 @@ def configure_logging(level: str = "INFO") -> None:
     root.addHandler(handler)
     root.setLevel(resolved_level)
 
+    if data_dir is not None:
+        log_sub = data_dir / ".slgpu"
+        try:
+            log_sub.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:  # noqa: BLE001
+            sys.stderr.write(f"slgpu-web: could not create {log_sub}: {exc}\n")
+        else:
+            fpath = log_sub / "app.log"
+            try:
+                fh = RotatingFileHandler(
+                    fpath,
+                    maxBytes=5 * 1024 * 1024,
+                    backupCount=3,
+                    encoding="utf-8",
+                )
+                fh.setFormatter(_JsonFormatter())
+                root.addHandler(fh)
+            except OSError as exc:  # noqa: BLE001
+                sys.stderr.write(f"slgpu-web: file logging disabled ({fpath}): {exc}\n")
+
     for logger_name in (
         "app",
         "httpx",
@@ -83,7 +108,6 @@ def configure_logging(level: str = "INFO") -> None:
         "h11",
         "uvicorn",
         "uvicorn.error",
-        "uvicorn.access",
         "fastapi",
         "starlette",
     ):
@@ -91,3 +115,8 @@ def configure_logging(level: str = "INFO") -> None:
         named.handlers.clear()
         named.setLevel(resolved_level)
         named.propagate = True
+    # Дубли с middleware «HTTP исход» — только WARNING+ на access.
+    access = logging.getLogger("uvicorn.access")
+    access.handlers.clear()
+    access.setLevel(logging.WARNING)
+    access.propagate = True

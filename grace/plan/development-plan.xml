@@ -1,4 +1,4 @@
-<DevelopmentPlan VERSION="5.0.1">
+<DevelopmentPlan VERSION="5.0.2">
   <!--
     GRACE development plan — methodology: https://github.com/osovv/grace-marketplace
     Upstream ships Agent Skills + optional CLI (@osovv/grace-cli): grace lint | module find | module show | file show.
@@ -269,7 +269,7 @@
       </contract>
       <interface>
         <export-web-image PURPOSE="Docker image slgpu-web:dev" />
-        <export-api-v1 PURPOSE="REST /api/v1: dashboard, models, presets, runtime, monitoring, litellm, jobs, app-config, bench, settings" />
+        <export-api-v1 PURPOSE="REST /api/v1: dashboard, models, presets, runtime, monitoring, litellm, jobs, app-config, bench, settings, app-logs/tail" />
         <export-spa PURPOSE="React SPA, статика встроена в образ" />
         <export-contract-md PURPOSE="web/CONTRACT.md — границы CLI/Docker API/SQLite" />
         <export-settings-public-access PURPOSE="/api/v1/settings/public-access — browser host + litellm_api_key в JSON (Bearer к LiteLLM)" />
@@ -287,7 +287,7 @@
       <observability>
         <log-prefix>[WEB]</log-prefix>
         <critical-block>BLOCK_RUN_JOB</critical-block>
-        <log-format>stdout JSON (`app.core.logging`): один handler на root; `httpx`/`uvicorn*` propagate; `configure_logging` в create_app и в startup.</log-format>
+        <log-format>JSON stdout + `WEB_DATA_DIR/.slgpu/app.log` (rotating); `AppHttpRequestLogMiddleware`; `uvicorn.access` WARNING; `configure_logging` в create_app + startup</log-format>
       </observability>
       <verification-ref>V-M-WEB</verification-ref>
     </M-WEB>

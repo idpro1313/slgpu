@@ -342,3 +342,15 @@ async def test_docker_containers_rejects_bad_scope(client: httpx.AsyncClient) ->
     async with client:
         r = await client.get("/api/v1/docker/containers?scope=noop")
     assert r.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_app_logs_tail_shape(client: httpx.AsyncClient) -> None:
+    async with client:
+        r = await client.get("/api/v1/app-logs/tail?tail=100")
+    assert r.status_code == 200
+    b = r.json()
+    assert "lines" in b and isinstance(b["lines"], list)
+    assert "path_hint" in b and isinstance(b["path_hint"], str)
+    assert "truncated_scan" in b
+    assert b.get("read_error") is None or isinstance(b.get("read_error"), str)

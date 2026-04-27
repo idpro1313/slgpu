@@ -385,3 +385,12 @@ export interface DockerDaemonLog {
   journal_note: string | null;
   last_checked_at: string;
 }
+
+/** GET /app-logs/tail — хвост JSON-логов slgpu-web. */
+export interface AppLogsTail {
+  path_hint: string;
+  lines: string[];
+  file_size_bytes: number | null;
+  truncated_scan: boolean;
+  read_error: string | null;
+}

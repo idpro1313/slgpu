@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from app.api.v1 import (
     activity,
     app_config,
+    app_logs,
     bench,
     dashboard,
     docker_logs,
@@ -33,4 +34,7 @@ api_router.include_router(app_config.router, prefix="/app-config", tags=["app-co
 api_router.include_router(bench.router, prefix="/bench", tags=["bench"])
 api_router.include_router(
     docker_logs.router, prefix="/docker", tags=["docker-logs"]
+)
+api_router.include_router(
+    app_logs.router, prefix="/app-logs", tags=["app-logs"]
 )

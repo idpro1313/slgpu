@@ -22,6 +22,7 @@ from app.api.v1 import api_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.db.session import init_db
+from app.middleware.request_log import AppHttpRequestLogMiddleware
 from app.schemas.common import HealthResponse
 from app.services.stack_errors import MissingStackParams
 
@@ -31,7 +32,7 @@ logger = logging.getLogger(__name__)
 def create_app() -> FastAPI:
     settings = get_settings()
     app_version = _runtime_version(settings.slgpu_root)
-    configure_logging(settings.log_level)
+    configure_logging(settings.log_level, settings.data_dir)
     logger.info(
         "[main][create_app] log_level=%s app_version=%s",
         settings.log_level,
@@ -46,6 +47,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
         allow_credentials=True,
     )
+    app.add_middleware(AppHttpRequestLogMiddleware)
     app.include_router(api_router, prefix=settings.api_v1_prefix)
 
     @app.exception_handler(MissingStackParams)
@@ -71,8 +73,8 @@ def create_app() -> FastAPI:
 
     @app.on_event("startup")
     async def _startup() -> None:
-        # Uvicorn добавляет свои handler'ы после create_app — снова один JSON на root.
-        configure_logging(settings.log_level)
+        # Uvicorn добавляет свои handler'ы после create_app — снова JSON + файл.
+        configure_logging(settings.log_level, settings.data_dir)
         try:
             await init_db()
             logger.info("[main][startup] db initialised")
