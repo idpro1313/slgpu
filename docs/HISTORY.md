@@ -1611,6 +1611,13 @@
 - **Файлы:** `grace/**/*.xml`, `docs/AGENTS.md`, `web/CONTRACT.md`, `web/README.md`, `VERSION`, `web/backend/pyproject.toml`, `web/backend/app/__init__.py`, `web/frontend/package.json`, `docs/HISTORY.md`.
 - **Решение:** **PATCH 4.0.8** для документации и метаданных версии; функциональные правки предыдущих волон — в тех же коммитах/истории.
 
+### 4.1.3: Сборка frontend — импорт `DockerDaemonLog` в `DockerLogs.tsx`
+
+- **Что:** Восстановлен **`import type { … DockerDaemonLog }`** — тип используется в **`api.get<DockerDaemonLog>`**, без импорта **`tsc`** падает (**TS2304**).
+- **Почему:** регресс после рефакторинга отображения pre-блока (импорт убрали по ошибке).
+- **Файлы:** `web/frontend/src/pages/DockerLogs.tsx`, `VERSION`, версии web/backend, `grace/knowledge-graph/knowledge-graph.xml`, `docs/HISTORY.md`.
+- **Решение:** **PATCH**.
+
 ### 4.1.2: «Docker: логи» — события Engine + journald dockerd
 
 - **Что:** **`GET /api/v1/docker/engine-events`** — хвост событий **`/events`** (окно `since_sec`, лимит строк, deque — самые свежие при перегрузе). **`GET /api/v1/docker/daemon-log`** — **`journalctl -u docker.service`** (fallback `-u docker`). Реализация: **`DockerInspector.collect_engine_events_tail`**, **`tail_daemon_journal`** в **`docker_logs.py`**, схемы **`DockerEngineEventsOut`**, **`DockerDaemonLogOut`**. UI **`/docker-logs`**: две секции над таблицей контейнеров.

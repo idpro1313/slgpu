@@ -6,6 +6,7 @@ import type {
   DockerContainerLogs,
   DockerContainersList,
   DockerContainerRow,
+  DockerDaemonLog,
   DockerEngineEvents,
 } from "@/api/types";
 import { PageHeader } from "@/components/PageHeader";
