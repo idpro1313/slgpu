@@ -26,6 +26,8 @@ logger = logging.getLogger(__name__)
 STACK_KEY = "cfg.stack"
 SECRETS_KEY = "cfg.secrets"
 META_KEY = "cfg.meta"
+# См. ``app_settings.PUBLIC_ACCESS_KEY`` — дублируем строку, чтобы не импортировать app_settings (циклы).
+_PUBLIC_ACCESS_KEY = "public_access"
 
 SECRET_SUFFIXES = (
     "_PASSWORD",
@@ -189,6 +191,20 @@ def _load_flat_from_stack_params(conn: sqlite3.Connection) -> dict[str, str] | N
     return {str(k): str(v) if v is not None else "" for k, v in rows}
 
 
+def _merge_public_access_litellm_master_key(conn: sqlite3.Connection, merged: dict[str, str]) -> None:
+    """Ключ из настроек «Публичный доступ» (``litellm_api_key``) = ``LITELLM_MASTER_KEY`` у прокси.
+
+    Без этой подстановки native-задания (``docker compose`` с temp env из ``sync_merged_flat``) поднимают
+    LiteLLM с пустым master key, хотя в UI ключ задан — отсюда ошибка Admin UI «Master Key not set».
+    """
+    pa = _load_json_key(conn, _PUBLIC_ACCESS_KEY)
+    if not isinstance(pa, dict):
+        return
+    raw = pa.get("litellm_api_key")
+    if isinstance(raw, str) and raw.strip():
+        merged["LITELLM_MASTER_KEY"] = raw.strip()
+
+
 def sync_merged_flat() -> dict[str, str]:
     merged = dict(DEFAULT_STACK)
     conn = _connect_ro()
@@ -204,6 +220,7 @@ def sync_merged_flat() -> dict[str, str]:
                     merged.update({k: str(v) for k, v in stack.items() if v is not None})
                 if isinstance(secrets, dict):
                     merged.update({k: str(v) for k, v in secrets.items() if v is not None})
+            _merge_public_access_litellm_master_key(conn, merged)
         finally:
             conn.close()
     apply_vllm_aliases_to_merged(merged)

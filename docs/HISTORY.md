@@ -1674,6 +1674,13 @@
 - **Файлы:** `web/backend/app/services/env_key_aliases.py`, `stack_config.py`, `llm_env.py`, `presets.py`, `env_files.py`, `native_jobs.py`; `scripts/serve.sh`, `_lib.sh`, `monitoring_fix_permissions.sh`, `cmd_monitoring.sh`; `docker/docker-compose.llm.yml`, `docker/docker-compose.monitoring.yml`; `main.env`, `main.env.example`, `examples/presets/*.env`; `web/frontend` `Presets.tsx`, `Settings.tsx`; `README.md`, `configs/models/README.md`; `VERSION`, версии web/backend, `grace/knowledge-graph/knowledge-graph.xml`, `docs/HISTORY.md`.
 - **Решение:** **MINOR 4.2.0** — обратная совместимость через fallback в скриптах, compose и Python.
 
+### 4.3.3: LiteLLM master key из «Публичный доступ» в sync_merged_flat
+
+- **Что:** В **`stack_config.sync_merged_flat`** подмешивание **`public_access.litellm_api_key`** в **`LITELLM_MASTER_KEY`** (после `stack_params`); обновлены **configs/monitoring/README.md**, **docs/AGENTS.md**, **grace/knowledge-graph/knowledge-graph.xml** (аннотация M-WEB), **VERSION** 4.3.3.
+- **Почему:** После **перезапуска мониторинга** LiteLLM терял master key: ключ задавался только в UI, а **native compose** брал env из merged без `litellm_api_key` — ошибка Admin UI *Master Key not set*; **`./slgpu monitoring`** с **`main.env`** по-прежнему требует `LITELLM_MASTER_KEY` в файле.
+- **Файлы:** `web/backend/app/services/stack_config.py`, `configs/monitoring/README.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `VERSION`, версии web, `docs/HISTORY.md`.
+- **Решение:** **PATCH**; приоритет: непустой `litellm_api_key` из БД перезаписывает `LITELLM_MASTER_KEY` в merged для docker.
+
 ### 4.3.2: Порты monitoring: main.env vs web; PROMETHEUS_PORT / LOKI в compose
 
 - **Что:** В **docker-compose.monitoring.yml** публикация Prometheus — `${PROMETHEUS_PORT}`; Loki — `ports` с `${LOKI_BIND}` / `${LOKI_PORT}`; **DEFAULT_STACK** + **main.env\*** — `LOKI_BIND`. Раздел в **configs/monitoring/README.md**, **docs/AGENTS.md**, подсказка в **Settings**; в форме мониторинга — **PROMETHEUS_BIND**, **GRAFANA_BIND**, **LOKI_BIND**.
