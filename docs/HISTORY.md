@@ -1611,6 +1611,13 @@
 - **Файлы:** `grace/**/*.xml`, `docs/AGENTS.md`, `web/CONTRACT.md`, `web/README.md`, `VERSION`, `web/backend/pyproject.toml`, `web/backend/app/__init__.py`, `web/frontend/package.json`, `docs/HISTORY.md`.
 - **Решение:** **PATCH 4.0.8** для документации и метаданных версии; функциональные правки предыдущих волон — в тех же коммитах/истории.
 
+### 4.1.2: «Docker: логи» — события Engine + journald dockerd
+
+- **Что:** **`GET /api/v1/docker/engine-events`** — хвост событий **`/events`** (окно `since_sec`, лимит строк, deque — самые свежие при перегрузе). **`GET /api/v1/docker/daemon-log`** — **`journalctl -u docker.service`** (fallback `-u docker`). Реализация: **`DockerInspector.collect_engine_events_tail`**, **`tail_daemon_journal`** в **`docker_logs.py`**, схемы **`DockerEngineEventsOut`**, **`DockerDaemonLogOut`**. UI **`/docker-logs`**: две секции над таблицей контейнеров.
+- **Почему:** на странице были только **stdout/stderr контейнеров**; для отладки нужны **события Docker** и **лог демона**.
+- **Файлы:** `web/backend/app/services/docker_client.py`, `docker_logs.py`, `schemas/docker_logs.py`, `api/v1/docker_logs.py`, `web/frontend/src/pages/DockerLogs.tsx`, `api/types.ts`, `web/CONTRACT.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `VERSION`, версии web, `docs/HISTORY.md`.
+- **Решение:** **PATCH** — journald из web-контейнера часто пустой; Engine events идут через тот же socket, что и список контейнеров.
+
 ### 4.1.1: Stop на Inference при `native.slot.up` + `POST .../down?force=1`
 
 - **Что:** Блокировка `(scope, resource)` как **множество ключей** (discard идемпотентен). **`force_engine_slot_halt`**: отмена asyncio-task, **`mark_resource_jobs_cancelled`**, **`_release_lock`**, sync **`stop_containers_for_slot_key_sync`**. **`POST /runtime/slots/{key}/down?force=1`** возвращает **`JobAccepted(forced=True, cancelled_job_ids=[])`**. UI: **Stop** не гасится при busy; при активной job на слоте вызывается **`force=1`**. **`_finalize_native_job`**: не перезаписывать **`CANCELLED`**.

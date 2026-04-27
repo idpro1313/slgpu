@@ -34,3 +34,25 @@ class DockerContainerLogsOut(BaseModel):
     logs: str
     docker_available: bool
     last_checked_at: datetime
+
+
+class DockerEngineEventsOut(BaseModel):
+    """Хвост событий Docker Engine API (``/events``), тот же socket, что и для контейнеров."""
+
+    docker_available: bool
+    since_sec: int
+    limit: int
+    events_text: str
+    last_checked_at: datetime
+
+
+class DockerDaemonLogOut(BaseModel):
+    """Best-effort лог **демона** dockerd через ``journalctl`` (на хосте с systemd)."""
+
+    lines: int
+    text: str
+    journal_note: str | None = Field(
+        default=None,
+        description="Если пусто: подсказка, почему нет journalctl или нет логов",
+    )
+    last_checked_at: datetime

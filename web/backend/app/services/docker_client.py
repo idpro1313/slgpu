@@ -7,8 +7,10 @@ fetch tail logs.
 
 from __future__ import annotations
 
+import json
 import logging
 import time
+from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -213,6 +215,73 @@ class DockerInspector:
         except DockerException as exc:
             logger.warning("[docker_client][tail_logs][BLOCK_DOCKER_ERROR] %s", exc)
             return ""
+
+    @staticmethod
+    def _format_engine_event_line(event: dict[str, Any]) -> str:
+        """One line for Docker Engine `/events` (human-readable, no secrets)."""
+        t = event.get("time")
+        if t is None and event.get("timeNano"):
+            t = event["timeNano"] / 1_000_000_000.0
+        if t is not None:
+            try:
+                tf = float(t)
+                if tf > 1e12:
+                    tf /= 1e9
+                ts = datetime.fromtimestamp(tf, tz=timezone.utc).strftime(
+                    "%Y-%m-%d %H:%M:%S UTC"
+                )
+            except (OSError, OverflowError, TypeError, ValueError):
+                ts = "?"
+        else:
+            ts = "?"
+        typ = event.get("Type", "?")
+        act = event.get("Action", "?")
+        actor = event.get("Actor") or {}
+        aid = (actor.get("ID") or "")[:12]
+        attrs = actor.get("Attributes") or {}
+        name = (attrs.get("name") or attrs.get("image") or "").strip()
+        bits = [f"{ts}  {typ}.{act}"]
+        if name:
+            bits.append(name)
+        elif aid:
+            bits.append(aid)
+        if typ == "container" and attrs.get("com.docker.compose.service"):
+            bits.append(f"compose:{attrs['com.docker.compose.service']}")
+        extra = {k: v for k, v in attrs.items() if k in ("exitCode", "signal", "image")}
+        if extra:
+            bits.append(json.dumps(extra, ensure_ascii=False, separators=(",", ":")))
+        return "  ·  ".join(bits)
+
+    def collect_engine_events_tail(self, since_sec: int, max_events: int) -> str:
+        """Last ``max_events`` engine events in the time window (newest if stream is long)."""
+        if not self._client:
+            return ""
+        now = int(time.time())
+        lo = 60
+        hi = 86400 * 7
+        since_sec = max(lo, min(int(since_sec), hi))
+        until_ts = now
+        since_ts = now - since_sec
+        cap = max(1, min(int(max_events), 10_000))
+        buf: deque[dict[str, Any]] = deque(maxlen=cap)
+        try:
+            # Bound with until=now so the stream ends (docker-py / Engine API).
+            for raw in self._client.api.events(
+                since=since_ts, until=until_ts, decode=True
+            ):
+                if isinstance(raw, dict):
+                    buf.append(raw)
+        except DockerException as exc:
+            logger.warning(
+                "[docker_client][collect_engine_events_tail][BLOCK_DOCKER_ERROR] %s", exc
+            )
+            return f"(ошибка чтения событий: {exc})"
+        if not buf:
+            return (
+                f"(нет событий за последние {since_sec} с; увеличьте окно или лимит событий.)"
+            )
+        lines = [self._format_engine_event_line(e) for e in buf]
+        return "\n".join(lines)
 
     def _summary(self, container: Any) -> ContainerSummary:
         attrs = container.attrs or {}

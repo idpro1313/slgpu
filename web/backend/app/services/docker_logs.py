@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+import shutil
+import subprocess
 from datetime import datetime, timezone
 from typing import Literal
 
@@ -68,3 +70,84 @@ def validate_container_ref(raw: str) -> str:
     if not _REF_RE.match(s):
         raise ValueError("invalid container reference")
     return s
+
+
+def collect_engine_events_tail(since_sec: int, max_events: int) -> tuple[bool, str]:
+    """Tail of Docker Engine ``/events`` (same socket as контейнеры)."""
+    bounded_n = max(1, min(max_events, 10_000))
+    insp = get_docker_inspector()
+    if not insp.is_available:
+        return False, ""
+    return True, insp.collect_engine_events_tail(since_sec, bounded_n)
+
+
+def tail_daemon_journal(lines: int) -> tuple[str, str | None]:
+    """
+    Best-effort ``journalctl -u docker`` (linux+systemd). From web-контейнера часто недоступно:
+    тогда возвращаем пустой текст и подсказку.
+    """
+    n = max(1, min(lines, 2000))
+    if not shutil.which("journalctl"):
+        return (
+            "",
+            "journalctl недоступен в этой среде. Логи демона dockerd смотрите на хосте: "
+            "`journalctl -u docker.service -n 200 --no-pager` (или `-u docker`).",
+        )
+    cmd = [
+        "journalctl",
+        "-u",
+        "docker.service",
+        "-n",
+        str(n),
+        "--no-pager",
+        "-o",
+        "short-iso",
+    ]
+    try:
+        r = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=10.0,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return "", f"не удалось выполнить journalctl: {exc}"
+    if r.returncode == 0:
+        out1 = (r.stdout or "").rstrip()
+        if out1:
+            return out1 + "\n", None
+    # Try unit name "docker" (older / alternate)
+    cmd2 = [
+        "journalctl",
+        "-u",
+        "docker",
+        "-n",
+        str(n),
+        "--no-pager",
+        "-o",
+        "short-iso",
+    ]
+    try:
+        r2 = subprocess.run(
+            cmd2,
+            capture_output=True,
+            text=True,
+            timeout=10.0,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return "", f"не удалось выполнить journalctl: {exc}"
+    if r2.returncode == 0:
+        out2 = (r2.stdout or "").rstrip()
+        if out2:
+            return out2 + "\n", None
+    if r.returncode == 0 or r2.returncode == 0:
+        return "", None
+    err = (r.stderr or r2.stderr or "").strip() or (r.stdout or r2.stdout or "").strip()
+    detail = err[:800] if err else "нет вывода"
+    return (
+        "",
+        "journalctl не вернул лог docker (часто так в контейнере без доступа к journal хоста). "
+        f"Деталь: {detail}",
+    )

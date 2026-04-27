@@ -1,5 +1,5 @@
 <KnowledgeGraph>
-  <Project NAME="slgpu" VERSION="4.1.1">
+  <Project NAME="slgpu" VERSION="4.1.2">
     <keywords>slgpu, vllm, sglang, llm-inference, benchmark, docker-compose, gpu, prometheus, grafana, sglang-dashboard-slgpu, sglangdash2-slgpu</keywords>
     <annotation>Стенд для сравнения движков LLM-инференса vLLM и SGLang на Linux-сервере с NVIDIA GPU.</annotation>
 
@@ -189,7 +189,7 @@
         <fn-services_hf_models PURPOSE="Реестр HF моделей и статусы скачивания: GET /models синхронизирует DB с фактическими папками MODELS_DIR/&lt;org&gt;/&lt;repo&gt;; в ответе HFModelOut.pull_progress (активная Job native.model.pull по resource=hf_id); active_pull_jobs_by_resource; PATCH меняет revision/notes, DELETE удаляет запись и опционально локальные веса внутри MODELS_DIR" />
         <fn-services_runtime PURPOSE="snapshot: при активных EngineSlot — пробы по каждому слоту (asyncio.gather, RuntimeSlotProbe); иначе compose legacy; tail_slot_logs по slot_key. Удалено в 4.0.0: EngineRun/attach_run_metadata, REST /runtime/up|down|restart|/logs" />
         <fn-api_runtime_slots PURPOSE="GET/POST /runtime/slots, POST /slots/{key}/down|restart, GET slots/{key}/logs; list EngineSlot" />
-        <fn-api_docker_logs PURPOSE="GET /docker/containers?scope=slgpu|all, GET /docker/containers/{ref}/logs; read-only, DockerInspector" />
+        <fn-api_docker_logs PURPOSE="GET /docker/containers, …/logs, /docker/engine-events (Engine /events), /docker/daemon-log (journalctl docker); read-only, DockerInspector" />
         <fn-api_presets_clone PURPOSE="POST /presets/{id}/clone (PresetCloneRequest), flush перед ответом" />
         <fn-services_monitoring PURPOSE="Probe: Docker + HTTP; порта и compose project monitoring из слитого стека (БД)" />
         <fn-services_litellm PURPOSE="LiteLLM: GET /v1/models и /health* с `Authorization: Bearer` при наличии `litellm_api_key` в public_access (настройки); порт — слитый стек; public URLs — app_settings + ports_for_probes_sync" />

@@ -372,3 +372,20 @@ export interface DockerContainerLogs {
   docker_available: boolean;
   last_checked_at: string;
 }
+
+/** GET /docker/engine-events */
+export interface DockerEngineEvents {
+  docker_available: boolean;
+  since_sec: number;
+  limit: number;
+  events_text: string;
+  last_checked_at: string;
+}
+
+/** GET /docker/daemon-log — journald dockerd (best-effort) */
+export interface DockerDaemonLog {
+  lines: number;
+  text: string;
+  journal_note: string | null;
+  last_checked_at: string;
+}

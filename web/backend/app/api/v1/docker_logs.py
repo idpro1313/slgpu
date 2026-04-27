@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -10,6 +11,8 @@ from app.schemas.docker_logs import (
     DockerContainerLogsOut,
     DockerContainerRow,
     DockerContainersListOut,
+    DockerDaemonLogOut,
+    DockerEngineEventsOut,
 )
 from app.services import docker_logs as docker_logs_service
 
@@ -84,5 +87,59 @@ async def get_container_logs(
         tail=bounded,
         logs=text,
         docker_available=True,
+        last_checked_at=now,
+    )
+
+
+@router.get("/engine-events", response_model=DockerEngineEventsOut)
+async def get_docker_engine_events(
+    since_sec: int = Query(
+        3600,
+        ge=60,
+        le=604800,
+        description="Сколько секунд назад начать (окно [since, now])",
+    ),
+    limit: int = Query(
+        2000,
+        ge=1,
+        le=10_000,
+        description="Максимум последних событий (если за окно больше — остаются самые свежие)",
+    ),
+) -> DockerEngineEventsOut:
+    lo = max(1, min(limit, 10_000))
+    ok, text = await asyncio.to_thread(
+        docker_logs_service.collect_engine_events_tail,
+        since_sec,
+        lo,
+    )
+    if not ok:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="docker socket unavailable",
+        )
+    now = datetime.now(timezone.utc)
+    return DockerEngineEventsOut(
+        docker_available=True,
+        since_sec=since_sec,
+        limit=lo,
+        events_text=text,
+        last_checked_at=now,
+    )
+
+
+@router.get("/daemon-log", response_model=DockerDaemonLogOut)
+async def get_docker_daemon_log(
+    lines: int = Query(400, ge=1, le=2000, description="Строк с конца (journalctl -n)"),
+) -> DockerDaemonLogOut:
+    n = max(1, min(lines, 2000))
+    text, hint = await asyncio.to_thread(
+        docker_logs_service.tail_daemon_journal,
+        n,
+    )
+    now = datetime.now(timezone.utc)
+    return DockerDaemonLogOut(
+        lines=n,
+        text=text,
+        journal_note=hint,
         last_checked_at=now,
     )
