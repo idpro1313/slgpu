@@ -1674,6 +1674,13 @@
 - **Файлы:** `web/backend/app/services/env_key_aliases.py`, `stack_config.py`, `llm_env.py`, `presets.py`, `env_files.py`, `native_jobs.py`; `scripts/serve.sh`, `_lib.sh`, `monitoring_fix_permissions.sh`, `cmd_monitoring.sh`; `docker/docker-compose.llm.yml`, `docker/docker-compose.monitoring.yml`; `main.env`, `main.env.example`, `examples/presets/*.env`; `web/frontend` `Presets.tsx`, `Settings.tsx`; `README.md`, `configs/models/README.md`; `VERSION`, версии web/backend, `grace/knowledge-graph/knowledge-graph.xml`, `docs/HISTORY.md`.
 - **Решение:** **MINOR 4.2.0** — обратная совместимость через fallback в скриптах, compose и Python.
 
+### 4.3.1: MinIO / mc по умолчанию `latest`
+
+- **Что:** Дефолт **`MINIO_IMAGE`** → `minio/minio:latest`, **`MINIO_MC_IMAGE`** → `minio/mc:latest` (compose, `env_key_aliases`, `monitoring_fix_permissions.sh`, комменты `main.env*`).
+- **Почему:** Запрос пользователя — плавающий latest вместо закреплённого RELEASE.
+- **Файлы:** `docker/docker-compose.monitoring.yml`, `web/backend/.../env_key_aliases.py`, `scripts/monitoring_fix_permissions.sh`, `main.env`, `main.env.example`, `VERSION`, версии web, `docs/HISTORY.md`.
+- **Решение:** **PATCH** — в проде по-прежнему лучше зафиксировать тег в `main.env`; `latest` может меняться при pull.
+
 ### 4.3.0: LiteLLM в отдельном compose-проекте `slgpu-proxy`
 
 - **Что:** Новый [`docker/docker-compose.proxy.yml`](docker/docker-compose.proxy.yml): сервис **litellm**, `name: ${WEB_COMPOSE_PROJECT_PROXY:-slgpu-proxy}`, `container_name: slgpu-proxy-litellm`, `DATABASE_URL` и `LANGFUSE_OTEL_HOST` через **slgpu-monitoring-postgres** / **slgpu-monitoring-langfuse-web**; сеть `slgpu` (external). Из **monitoring** compose сервис litellm удалён; **litellm-pg-init** остаётся в monitoring. **`./slgpu monitoring`**: up — monitoring `up -d --remove-orphans`, затем proxy `up -d`; down — сначала proxy, затем monitoring; restart — оба. **native_jobs** то же; **`compose_with_env_file`** в `compose_exec.py`. **`WEB_COMPOSE_PROJECT_PROXY`**, пробы dashboard: **LiteLLM** с `compose_project_proxy`, `docker_client` — префикс **slgpu-proxy-**; **Settings.tsx**, **main.env\***.

@@ -193,7 +193,7 @@ services:
     # S3-совместимое хранилище для Langfuse. Порты на хосте: не 9090 (Prometheus) — MINIO_API_HOST_PORT
     # Не понижайте тег MinIO, если data уже создана новым сервером (xl meta v2+); см. configs/monitoring/README
     container_name: slgpu-monitoring-minio
-    image: ${MINIO_IMAGE:-${SLGPU_MINIO_IMAGE:-minio/minio:RELEASE.2025-10-15T17-29-55Z}}
+    image: ${MINIO_IMAGE:-${SLGPU_MINIO_IMAGE:-minio/minio:latest}}
     restart: unless-stopped
     command: server /data --console-address ":9001"
     networks:
@@ -221,7 +221,7 @@ services:
   # Бакеты Langfuse в MinIO (иначе NoSuchBucket при upload в events/otel/…). Идемпотентно.
   minio-bucket-init:
     container_name: slgpu-monitoring-minio-bucket-init
-    image: ${MINIO_MC_IMAGE:-${SLGPU_MINIO_MC_IMAGE:-minio/mc:RELEASE.2025-10-15T17-29-55Z}}
+    image: ${MINIO_MC_IMAGE:-${SLGPU_MINIO_MC_IMAGE:-minio/mc:latest}}
     profiles: ["bootstrap"]
     restart: "no"
     networks:
