@@ -1674,6 +1674,13 @@
 - **Файлы:** `web/backend/app/services/env_key_aliases.py`, `stack_config.py`, `llm_env.py`, `presets.py`, `env_files.py`, `native_jobs.py`; `scripts/serve.sh`, `_lib.sh`, `monitoring_fix_permissions.sh`, `cmd_monitoring.sh`; `docker/docker-compose.llm.yml`, `docker/docker-compose.monitoring.yml`; `main.env`, `main.env.example`, `examples/presets/*.env`; `web/frontend` `Presets.tsx`, `Settings.tsx`; `README.md`, `configs/models/README.md`; `VERSION`, версии web/backend, `grace/knowledge-graph/knowledge-graph.xml`, `docs/HISTORY.md`.
 - **Решение:** **MINOR 4.2.0** — обратная совместимость через fallback в скриптах, compose и Python.
 
+### 4.4.3: Monitoring/proxy compose строго из БД для web
+
+- **Что:** `compose_with_env_file` запускает `docker compose` с очищенным env (только `--env-file` из БД-снимка); `native_jobs` использует `sync_merged_flat(require_db=True)` для native-операций; `docker-compose.monitoring.yml` / `docker-compose.proxy.yml` убрали `${VAR:-...}` fallback у published-портов, project-name и управляемых переменных; `native.monitoring.up` / `native.proxy.up` делают `--force-recreate` и логируют `[compose-env]` с фактическими портами; `docker-compose.web.yml` убрал старые `WEB_*_PORT`; `DEFAULT_STACK` досевает все нужные ключи в `stack_params`.
+- **Почему:** Порты из UI/SQLite могли не попадать в опубликованные контейнеры: compose мог наследовать env процесса или молча брать YAML-default (`3000/9090/3001`). Теперь для web источник — только БД-снимок, а отсутствие ключа приводит к ошибке, не к тихому fallback.
+- **Файлы:** `web/backend/app/services/compose_exec.py`, `stack_config.py`, `native_jobs.py`, `slot_runtime.py`, `core/config.py`, `docker/docker-compose.monitoring.yml`, `docker/docker-compose.proxy.yml`, `docker/docker-compose.web.yml`, `scripts/_lib.sh`, README, `configs/monitoring/README.md`, `web/README.md`, `web/CONTRACT.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `VERSION`, версии web, `docs/HISTORY.md`.
+- **Решение:** **PATCH**. После обновления перезапустить **slgpu-web**, чтобы startup досеял новые `stack_params`, затем выполнить restart/up мониторинга из UI.
+
 ### 4.4.2: Удалён `main.env.example` (дубль `configs/main.env`)
 
 - **Что:** Удалён корневой **`main.env.example`**; комментарий в **`docker/web-compose.defaults.env`**; **README** §5: источник правды для web — БД/`DEFAULT_STACK`, человеко читаемый шаблон — **`configs/main.env`**; **VERSION** 4.4.2.
@@ -1784,3 +1791,10 @@
 - **Что:** В [configs/monitoring/README.md](configs/monitoring/README.md) заменены упоминания `SLGPU_SERVED_MODEL_NAME` / `SLGPU_*_IMAGE` на `SERVED_MODEL_NAME` и канонические имена образов с пометкой про legacy.
 - **Почему:** Согласование с рефакторингом env 4.2.0.
 - **Файлы:** `configs/monitoring/README.md`, `docs/HISTORY.md`.
+
+## v5.0.0 — «всё из БД, без дефолтов»
+
+- **Что:** Реестр `STACK_KEY_REGISTRY`, `MissingStackParams` → HTTP 409; `sync_merged_flat` только из SQLite; `seed_stack_params_from_main_env_if_empty` при пустой БД; install только из `configs/main.env` + `import_presets_from_disk` для `data/presets/*.env`; пресеты слияния в `merge_llm_stack_env` из БД (`preset_db_sync`); удалены `POST /presets/sync` и `import-templates`; YAML docker без `${VAR:-...}`; bootstrap web — только `configs/main.env`; удалены host-скрипты `cmd_up/down/pull/bench/monitoring/load/prepare/restart`, `docker/web-compose.defaults.env`, `configs/secrets/*` examples; `./slgpu` — только `web`; фронт: `ApiError` + баннер 409, `?missing=` в Settings, `GET /app-config/stack` с `registry`; `jobs.py` — только `native.*`; `compose_exec` с `env=_clean_env()`.
+- **Почему:** План db-only-config-rework (v5.0.0), единая правда в БД.
+- **Файлы:** `web/backend/app/services/stack_registry.py`, `stack_errors.py`, `stack_config.py`, `preset_db_sync.py`, `llm_env.py`, `app_config.py`, `db/session.py`, `compose_exec.py`, `jobs.py`, `app_settings.py`, `docker/docker-compose.*.yml`, `configs/main.env`, `slgpu`, `scripts/cmd_web.sh`, `scripts/_lib.sh`, `scripts/check-stack-guards.sh`, `web/frontend/src/api/client.ts`, `stackErrorBus.ts`, `MissingStackParamsToast.tsx`, `grace/knowledge-graph/knowledge-graph.xml`, `VERSION`, `README.md`, `web/CONTRACT.md`, `web/README.md`, `docs/AGENTS.md` (при обновлении), удалённые `scripts/cmd_*.sh` и `configs/secrets/*`.
+- **Решение:** MAJOR 5.0.0; guard-скрипт `scripts/check-stack-guards.sh` для репо.

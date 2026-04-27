@@ -215,6 +215,15 @@ async def import_files_into_db(
     return imported, updated, skipped, errors
 
 
+async def import_presets_from_disk(
+    session: AsyncSession,
+    directory: Path,
+) -> tuple[int, int, int, list[str]]:
+    """Одноразовый seed пресетов из ``data/presets/*.env`` при install (алиас для тестов и app_config)."""
+
+    return await import_files_into_db(session, directory)
+
+
 async def export_preset_to_file(session: AsyncSession, preset: Preset) -> Path:
     settings = get_settings()
     validate_slug(preset.name)

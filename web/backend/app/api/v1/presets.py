@@ -1,8 +1,7 @@
-"""Preset CRUD and synchronisation."""
+"""Preset CRUD (источник правды — БД; диск — только one-shot seed при install)."""
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -20,9 +19,7 @@ from app.models.preset import Preset
 from app.schemas.presets import (
     PresetCloneRequest,
     PresetCreate,
-    PresetImportTemplatesResult,
     PresetOut,
-    PresetSyncResult,
     PresetUpdate,
 )
 from app.services import presets as preset_service
@@ -36,63 +33,6 @@ async def list_presets(session: AsyncSession = Depends(db_session)) -> list[Pres
     await preset_service.migrate_preset_parameters_to_canonical_if_needed(session)
     result = await session.execute(select(Preset).order_by(Preset.name))
     return list(result.scalars().all())
-
-
-@router.post("/sync", response_model=PresetSyncResult)
-async def sync_presets(
-    session: AsyncSession = Depends(db_session),
-    actor: str | None = Depends(actor_from_header),
-) -> PresetSyncResult:
-    imported, updated, skipped, errors = await preset_service.import_files_into_db(session)
-    await record_ui_action(
-        session,
-        action="presets.sync",
-        actor=actor,
-        target=None,
-        note=f"imported={imported} updated={updated} skipped={skipped} errors={len(errors)}",
-        payload={"imported": imported, "updated": updated, "skipped": skipped, "error_lines": errors[:20]},
-    )
-    return PresetSyncResult(imported=imported, updated=updated, skipped=skipped, errors=errors)
-
-
-@router.post("/import-templates", response_model=PresetImportTemplatesResult)
-async def import_preset_templates(
-    session: AsyncSession = Depends(db_session),
-    actor: str | None = Depends(actor_from_header),
-) -> PresetImportTemplatesResult:
-    """Скопировать шаблоны из ``<repo>/examples/presets`` в PRESETS_DIR (без перезаписи), затем импорт в БД."""
-
-    copied, skipped_files, errs_copy = await asyncio.to_thread(
-        preset_service.copy_example_presets_to_disk
-    )
-    imported, updated, skipped_imp, errs_db = await preset_service.import_files_into_db(session)
-    errors = [*errs_copy, *errs_db]
-    await record_ui_action(
-        session,
-        action="presets.import_templates",
-        actor=actor,
-        target=None,
-        note=(
-            f"files_copied={copied} files_skipped={skipped_files} "
-            f"imported={imported} updated={updated} skipped={skipped_imp} errors={len(errors)}"
-        ),
-        payload={
-            "files_copied": copied,
-            "files_skipped_existing": skipped_files,
-            "imported": imported,
-            "updated": updated,
-            "skipped": skipped_imp,
-            "error_lines": errors[:40],
-        },
-    )
-    return PresetImportTemplatesResult(
-        files_copied=copied,
-        files_skipped_existing=skipped_files,
-        imported=imported,
-        updated=updated,
-        skipped=skipped_imp,
-        errors=errors,
-    )
 
 
 @router.post("", response_model=PresetOut, status_code=status.HTTP_201_CREATED)
@@ -242,6 +182,7 @@ async def update_preset(
     if "is_active" in fields and payload.is_active is not None:
         preset.is_active = payload.is_active
     preset.is_synced = False
+    preset.file_path = None
     await record_ui_action(
         session,
         action="preset.update",

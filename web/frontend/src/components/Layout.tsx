@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { NavLink } from "react-router-dom";
 
 import { api } from "@/api/client";
+import { MissingStackParamsToast } from "@/components/MissingStackParamsToast";
 
 const NAV_ITEMS = [
   { to: "/dashboard", label: "Dashboard" },
@@ -26,6 +27,7 @@ export function Layout({ children }: PropsWithChildren) {
 
   return (
     <div className="app-shell">
+      <MissingStackParamsToast />
       <header className="app-header">
         <div className="app-header__brand">
           <div className="app-header__brand-mark" aria-hidden="true" />

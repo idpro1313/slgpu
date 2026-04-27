@@ -20,6 +20,12 @@ from typing import Any
 from sqlalchemy import delete, func, select
 
 from app.services.env_key_aliases import apply_vllm_aliases_to_merged
+from app.services.stack_errors import MissingStackParams
+from app.services.stack_registry import (
+    STACK_KEY_REGISTRY,
+    is_secret_key,
+    missing_keys_in_db,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,85 +35,7 @@ META_KEY = "cfg.meta"
 # См. ``app_settings.PUBLIC_ACCESS_KEY`` — дублируем строку, чтобы не импортировать app_settings (циклы).
 _PUBLIC_ACCESS_KEY = "public_access"
 
-SECRET_SUFFIXES = (
-    "_PASSWORD",
-    "_SECRET",
-    "_KEY",
-    "_SALT",
-    "_TOKEN",
-    "SECRET_KEY",
-    "ENCRYPTION_KEY",
-    "NEXTAUTH_SECRET",
-    "LANGFUSE_REDIS_AUTH",
-)
-
-SECRET_EXACT = frozenset(
-    {
-        "HF_TOKEN",
-        "LANGFUSE_PUBLIC_KEY",
-        "LANGFUSE_SECRET_KEY",
-        "LANGFUSE_SALT",
-        "LANGFUSE_ENCRYPTION_KEY",
-        "NEXTAUTH_SECRET",
-        "LANGFUSE_POSTGRES_PASSWORD",
-        "LANGFUSE_REDIS_AUTH",
-        "LANGFUSE_CLICKHOUSE_PASSWORD",
-        "MINIO_ROOT_PASSWORD",
-        "LITELLM_MASTER_KEY",
-        "UI_PASSWORD",
-        "GRAFANA_ADMIN_PASSWORD",
-    }
-)
-
-
-def _is_secret_key(name: str) -> bool:
-    if name in SECRET_EXACT:
-        return True
-    return any(name.endswith(s) for s in SECRET_SUFFIXES)
-
-
-DEFAULT_STACK: dict[str, str] = {
-    "MODELS_DIR": "./data/models",
-    "PRESETS_DIR": "./data/presets",
-    "WEB_DATA_DIR": "./data/web",
-    "SLGPU_MODEL_ROOT": "/models",
-    "SERVED_MODEL_NAME": "devllm",
-    "LLM_API_BIND": "0.0.0.0",
-    "LLM_API_PORT": "8111",
-    "LLM_API_PORT_SGLANG": "8222",
-    "MAX_MODEL_LEN": "32768",
-    "TP": "8",
-    "GPU_MEM_UTIL": "0.92",
-    "KV_CACHE_DTYPE": "fp8_e4m3",
-    "WEB_PORT": "8089",
-    "WEB_BIND": "0.0.0.0",
-    "WEB_LOG_LEVEL": "INFO",
-    "WEB_COMPOSE_PROJECT_INFER": "slgpu",
-    "WEB_COMPOSE_PROJECT_MONITORING": "slgpu-monitoring",
-    "WEB_COMPOSE_PROJECT_PROXY": "slgpu-proxy",
-    "PROMETHEUS_PORT": "9090",
-    "GRAFANA_PORT": "3000",
-    "LANGFUSE_PORT": "3001",
-    "LITELLM_PORT": "4000",
-    "LOKI_PORT": "3100",
-    "LOKI_BIND": "127.0.0.1",
-    "TOOL_CALL_PARSER": "hermes",
-    "REASONING_PARSER": "qwen3",
-    "NVIDIA_VISIBLE_DEVICES": "0,1,2,3,4,5,6,7",
-    "MAX_NUM_BATCHED_TOKENS": "8192",
-    "DISABLE_CUSTOM_ALL_REDUCE": "1",
-    "ENABLE_PREFIX_CACHING": "1",
-    "ENABLE_EXPERT_PARALLEL": "0",
-    "VLLM_HOST": "0.0.0.0",
-    "VLLM_PORT": "8111",
-    "TRUST_REMOTE_CODE": "1",
-    "ENABLE_CHUNKED_PREFILL": "1",
-    "ENABLE_AUTO_TOOL_CHOICE": "1",
-    "PROMETHEUS_DATA_DIR": "./data/monitoring/prometheus",
-    "GRAFANA_DATA_DIR": "./data/monitoring/grafana",
-    "LOKI_DATA_DIR": "./data/monitoring/loki",
-    "PROMTAIL_DATA_DIR": "./data/monitoring/promtail",
-}
+# Secret detection for upserts: ``stack_registry.is_secret_key`` (single source of truth).
 
 
 def sqlite_path_from_database_url(url: str) -> Path | None:
@@ -142,7 +70,7 @@ def split_stack_and_secrets(flat: dict[str, str]) -> tuple[dict[str, str], dict[
     stack: dict[str, str] = {}
     secrets: dict[str, str] = {}
     for k, v in flat.items():
-        if _is_secret_key(k):
+        if is_secret_key(k):
             secrets[k] = v
         else:
             stack[k] = v
@@ -206,23 +134,27 @@ def _merge_public_access_litellm_master_key(conn: sqlite3.Connection, merged: di
 
 
 def sync_merged_flat() -> dict[str, str]:
-    merged = dict(DEFAULT_STACK)
+    """Merged stack values from SQLite only (no code defaults)."""
+    merged: dict[str, str] = {}
     conn = _connect_ro()
-    if conn is not None:
-        try:
-            from_params = _load_flat_from_stack_params(conn)
-            if from_params is not None:
-                merged.update(from_params)
-            else:
-                stack = _load_json_key(conn, STACK_KEY)
-                secrets = _load_json_key(conn, SECRETS_KEY)
-                if isinstance(stack, dict):
-                    merged.update({k: str(v) for k, v in stack.items() if v is not None})
-                if isinstance(secrets, dict):
-                    merged.update({k: str(v) for k, v in secrets.items() if v is not None})
-            _merge_public_access_litellm_master_key(conn, merged)
-        finally:
-            conn.close()
+    if conn is None:
+        raise RuntimeError("stack_params DB is unavailable; configure WEB_DATABASE_URL")
+    try:
+        from_params = _load_flat_from_stack_params(conn)
+        if from_params is not None:
+            merged.update(from_params)
+        else:
+            stack = _load_json_key(conn, STACK_KEY)
+            secrets = _load_json_key(conn, SECRETS_KEY)
+            if isinstance(stack, dict):
+                merged.update({k: str(v) for k, v in stack.items() if v is not None})
+            if isinstance(secrets, dict):
+                merged.update({k: str(v) for k, v in secrets.items() if v is not None})
+        if not merged:
+            raise RuntimeError("stack_params is empty; run app-config install from configs/main.env")
+        _merge_public_access_litellm_master_key(conn, merged)
+    finally:
+        conn.close()
     apply_vllm_aliases_to_merged(merged)
     return merged
 
@@ -238,7 +170,7 @@ def compose_service_env_path(
     Заполняется из **БД** в native jobs или из **main.env** в bash (см. ``scripts/_lib.sh``). Не в git (под ``data/``).
     """
     m = merged if merged is not None else sync_merged_flat()
-    wdd = m.get("WEB_DATA_DIR", "./data/web")
+    wdd = m["WEB_DATA_DIR"]
     return (resolve_path_relative(root, wdd) / ".slgpu" / "compose-service.env").resolve()
 
 
@@ -267,7 +199,7 @@ def langfuse_litellm_env_path(
     """Generated Langfuse API keys for LiteLLM. Lives under **WEB_DATA_DIR** (e.g. ``data/web/``) so
     the slgpuweb user can create it; ``configs/secrets/`` is often host root-only and not writable
     from the web container."""
-    wdd = (merged or DEFAULT_STACK).get("WEB_DATA_DIR", "./data/web")
+    wdd = (merged or sync_merged_flat())["WEB_DATA_DIR"]
     return resolve_path_relative(root, wdd) / "secrets" / "langfuse-litellm.env"
 
 
@@ -276,8 +208,7 @@ def models_dir_sync() -> Path:
 
     root = get_settings().slgpu_root
     m = sync_merged_flat()
-    md = m.get("MODELS_DIR", "./data/models")
-    return resolve_path_relative(root, md)
+    return resolve_path_relative(root, m["MODELS_DIR"])
 
 
 def presets_dir_sync() -> Path:
@@ -285,30 +216,29 @@ def presets_dir_sync() -> Path:
 
     root = get_settings().slgpu_root
     m = sync_merged_flat()
-    pd = m.get("PRESETS_DIR", "./data/presets")
-    return resolve_path_relative(root, pd)
+    return resolve_path_relative(root, m["PRESETS_DIR"])
 
 
 def ports_for_probes_sync() -> dict[str, int | str]:
     m = sync_merged_flat()
 
-    def _i(k: str, d: str) -> int:
+    def _i(k: str) -> int:
         try:
-            return int(m.get(k, d))
-        except ValueError:
-            return int(d)
+            return int(m[k])
+        except KeyError as exc:
+            raise RuntimeError(f"missing required stack param {k}") from exc
 
     return {
-        "llm_default_vllm_port": _i("LLM_API_PORT", "8111"),
-        "llm_default_sglang_port": _i("LLM_API_PORT_SGLANG", "8222"),
-        "grafana_port": _i("GRAFANA_PORT", "3000"),
-        "prometheus_port": _i("PROMETHEUS_PORT", "9090"),
-        "langfuse_port": _i("LANGFUSE_PORT", "3001"),
-        "litellm_port": _i("LITELLM_PORT", "4000"),
-        "loki_port": _i("LOKI_PORT", "3100"),
-        "compose_project_infer": m.get("WEB_COMPOSE_PROJECT_INFER", "slgpu"),
-        "compose_project_monitoring": m.get("WEB_COMPOSE_PROJECT_MONITORING", "slgpu-monitoring"),
-        "compose_project_proxy": m.get("WEB_COMPOSE_PROJECT_PROXY", "slgpu-proxy"),
+        "llm_default_vllm_port": _i("LLM_API_PORT"),
+        "llm_default_sglang_port": _i("LLM_API_PORT_SGLANG"),
+        "grafana_port": _i("GRAFANA_PORT"),
+        "prometheus_port": _i("PROMETHEUS_PORT"),
+        "langfuse_port": _i("LANGFUSE_PORT"),
+        "litellm_port": _i("LITELLM_PORT"),
+        "loki_port": _i("LOKI_PORT"),
+        "compose_project_infer": m["WEB_COMPOSE_PROJECT_INFER"],
+        "compose_project_monitoring": m["WEB_COMPOSE_PROJECT_MONITORING"],
+        "compose_project_proxy": m["WEB_COMPOSE_PROJECT_PROXY"],
     }
 
 
@@ -408,7 +338,13 @@ async def migrate_legacy_json_to_rows(session) -> None:
     for k, v in stack_d.items():
         if v is None:
             continue
-        session.add(StackParam(param_key=str(k), param_value=str(v), is_secret=False))
+        session.add(
+            StackParam(
+                param_key=str(k),
+                param_value=str(v),
+                is_secret=is_secret_key(str(k)),
+            )
+        )
     for k, v in secrets_d.items():
         if v is None:
             continue
@@ -446,13 +382,28 @@ async def ensure_default_settings(session) -> None:
             logger.info("[stack_config] seeded %s", k)
 
 
-async def ensure_default_stack_params(session) -> None:
+async def log_missing_canonical_keys(session) -> None:
+    if await _stack_param_count(session) == 0:
+        return
+    stack, sec, _ = await load_sections(session)
+    merged = {**stack, **sec}
+    miss = missing_keys_in_db(merged)
+    if miss:
+        logger.warning(
+            "[stack_config] incomplete stack vs registry (fill in Настройки or install main.env): %s",
+            miss[:50],
+        )
+
+
+async def ensure_secret_flags_only(session) -> None:
+    """Sync ``is_secret`` on existing rows from ``is_secret_key``; no value inserts."""
     from app.models.stack_param import StackParam
 
-    for k, v in DEFAULT_STACK.items():
-        r = await session.execute(select(StackParam).where(StackParam.param_key == k))
-        if r.scalar_one_or_none() is None:
-            session.add(StackParam(param_key=k, param_value=str(v), is_secret=False))
+    r = await session.execute(select(StackParam))
+    for row in r.scalars().all():
+        want = is_secret_key(str(row.param_key))
+        if row.is_secret != want:
+            row.is_secret = want
 
 
 async def replace_all_params_from_flat(session, flat: dict[str, str]) -> None:
@@ -464,15 +415,39 @@ async def replace_all_params_from_flat(session, flat: dict[str, str]) -> None:
             StackParam(
                 param_key=str(k),
                 param_value=str(v),
-                is_secret=_is_secret_key(str(k)),
+                is_secret=is_secret_key(str(k)),
             )
         )
+
+
+async def seed_stack_params_from_main_env_if_empty(session) -> None:
+    """Если ``stack_params`` пуста и существует ``configs/main.env`` — загрузка (тесты, dev)."""
+    if await _stack_param_count(session) > 0:
+        return
+    from app.core.config import get_settings
+
+    p = get_settings().main_env_path
+    if not p.is_file():
+        return
+    try:
+        raw = p.read_text(encoding="utf-8")
+    except OSError:
+        return
+    flat = parse_dotenv_text(raw)
+    if not flat:
+        return
+    await replace_all_params_from_flat(session, flat)
+    logger.info(
+        "[stack_config][seed_stack_params_from_main_env_if_empty][BLOCK_OK] path=%s keys=%s",
+        p,
+        len(flat),
+    )
 
 
 async def upsert_stack_param(session, key: str, value: str) -> None:
     from app.models.stack_param import StackParam
 
-    is_sec = _is_secret_key(key)
+    is_sec = is_secret_key(key)
     r = await session.execute(select(StackParam).where(StackParam.param_key == key))
     row = r.scalar_one_or_none()
     if row is None:
@@ -550,15 +525,8 @@ def write_langfuse_litellm_env(
     path.parent.mkdir(parents=True, exist_ok=True)
     pub = str(secrets.get("LANGFUSE_PUBLIC_KEY", "") or "")
     sec = str(secrets.get("LANGFUSE_SECRET_KEY", "") or "")
-    if not (pub.strip() or sec.strip()):
-        legacy = root / "configs" / "secrets" / "langfuse-litellm.env"
-        with suppress(PermissionError, OSError, UnicodeError):
-            if legacy.is_file():
-                d = parse_dotenv_text(legacy.read_text(encoding="utf-8"))
-                pub = str(d.get("LANGFUSE_PUBLIC_KEY", pub) or pub)
-                sec = str(d.get("LANGFUSE_SECRET_KEY", sec) or sec)
     text = (
-        "# Generated by slgpu-web from DB (or legacy read) — do not commit.\n"
+        "# Generated by slgpu-web from DB — do not commit.\n"
         f"LANGFUSE_PUBLIC_KEY={pub}\n"
         f"LANGFUSE_SECRET_KEY={sec}\n"
     )
@@ -567,60 +535,78 @@ def write_langfuse_litellm_env(
         path.chmod(0o600)
 
 
+def _stack_val(m: dict[str, str], key: str) -> str:
+    meta = STACK_KEY_REGISTRY.get(key)
+    v = m.get(key)
+    if meta and meta.allow_empty:
+        return "" if v is None else str(v)
+    if v is None or str(v).strip() == "":
+        raise MissingStackParams([key], "llm_interp")
+    return str(v)
+
+
 def write_llm_interp_env(path: Path, merged: dict[str, str]) -> None:
     from app.services.env_key_aliases import coalesce_str
 
     m = dict(merged)
     apply_vllm_aliases_to_merged(m)
 
-    def g(key: str, default: str = "") -> str:
-        return str(m.get(key) or default)
-
-    batch = coalesce_str(m, "MAX_NUM_BATCHED_TOKENS", "SLGPU_MAX_NUM_BATCHED_TOKENS", "VLLM_MAX_NUM_BATCHED_TOKENS", default="8192")
+    batch = coalesce_str(
+        m,
+        "MAX_NUM_BATCHED_TOKENS",
+        "SLGPU_MAX_NUM_BATCHED_TOKENS",
+        "VLLM_MAX_NUM_BATCHED_TOKENS",
+        default="",
+    )
+    if not str(batch).strip():
+        raise MissingStackParams(
+            ["MAX_NUM_BATCHED_TOKENS", "SLGPU_MAX_NUM_BATCHED_TOKENS", "VLLM_MAX_NUM_BATCHED_TOKENS"],
+            "llm_slot",
+        )
     lines = [
-        f"VLLM_DOCKER_IMAGE={g('VLLM_DOCKER_IMAGE')}",
-        f"LLM_API_BIND={g('LLM_API_BIND', '0.0.0.0')}",
-        f"LLM_API_PORT={g('LLM_API_PORT', '8111')}",
-        f"SLGPU_MODEL_ROOT={g('SLGPU_MODEL_ROOT', '/models')}",
-        f"SERVED_MODEL_NAME={g('SERVED_MODEL_NAME', 'devllm')}",
-        f"VLLM_HOST={g('VLLM_HOST', '0.0.0.0')}",
-        f"VLLM_PORT={g('VLLM_PORT', '8111')}",
-        f"TRUST_REMOTE_CODE={g('TRUST_REMOTE_CODE', '1')}",
-        f"ENABLE_CHUNKED_PREFILL={g('ENABLE_CHUNKED_PREFILL', '1')}",
-        f"ENABLE_AUTO_TOOL_CHOICE={g('ENABLE_AUTO_TOOL_CHOICE', '1')}",
-        f"MODEL_ID={g('MODEL_ID')}",
-        f"MODEL_REVISION={g('MODEL_REVISION')}",
-        f"MAX_MODEL_LEN={g('MAX_MODEL_LEN', '32768')}",
-        f"BLOCK_SIZE={g('BLOCK_SIZE')}",
-        f"TP={g('TP', '8')}",
-        f"GPU_MEM_UTIL={g('GPU_MEM_UTIL', '0.92')}",
-        f"KV_CACHE_DTYPE={g('KV_CACHE_DTYPE', 'fp8_e4m3')}",
+        f"VLLM_DOCKER_IMAGE={_stack_val(m, 'VLLM_DOCKER_IMAGE')}",
+        f"LLM_API_BIND={_stack_val(m, 'LLM_API_BIND')}",
+        f"LLM_API_PORT={_stack_val(m, 'LLM_API_PORT')}",
+        f"SLGPU_MODEL_ROOT={_stack_val(m, 'SLGPU_MODEL_ROOT')}",
+        f"SERVED_MODEL_NAME={_stack_val(m, 'SERVED_MODEL_NAME')}",
+        f"VLLM_HOST={_stack_val(m, 'VLLM_HOST')}",
+        f"VLLM_PORT={_stack_val(m, 'VLLM_PORT')}",
+        f"TRUST_REMOTE_CODE={_stack_val(m, 'TRUST_REMOTE_CODE')}",
+        f"ENABLE_CHUNKED_PREFILL={_stack_val(m, 'ENABLE_CHUNKED_PREFILL')}",
+        f"ENABLE_AUTO_TOOL_CHOICE={_stack_val(m, 'ENABLE_AUTO_TOOL_CHOICE')}",
+        f"MODEL_ID={_stack_val(m, 'MODEL_ID')}",
+        f"MODEL_REVISION={_stack_val(m, 'MODEL_REVISION')}",
+        f"MAX_MODEL_LEN={_stack_val(m, 'MAX_MODEL_LEN')}",
+        f"BLOCK_SIZE={_stack_val(m, 'BLOCK_SIZE')}",
+        f"TP={_stack_val(m, 'TP')}",
+        f"GPU_MEM_UTIL={_stack_val(m, 'GPU_MEM_UTIL')}",
+        f"KV_CACHE_DTYPE={_stack_val(m, 'KV_CACHE_DTYPE')}",
         f"MAX_NUM_BATCHED_TOKENS={batch}",
-        f"MAX_NUM_SEQS={g('MAX_NUM_SEQS')}",
-        f"DISABLE_CUSTOM_ALL_REDUCE={g('DISABLE_CUSTOM_ALL_REDUCE', '1')}",
-        f"ENABLE_PREFIX_CACHING={g('ENABLE_PREFIX_CACHING', '1')}",
-        f"TOOL_CALL_PARSER={g('TOOL_CALL_PARSER', 'hermes')}",
-        f"REASONING_PARSER={g('REASONING_PARSER', 'qwen3')}",
-        f"CHAT_TEMPLATE_CONTENT_FORMAT={g('CHAT_TEMPLATE_CONTENT_FORMAT')}",
-        f"COMPILATION_CONFIG={g('COMPILATION_CONFIG')}",
-        f"ENFORCE_EAGER={g('ENFORCE_EAGER', '0')}",
-        f"SPECULATIVE_CONFIG={g('SPECULATIVE_CONFIG')}",
-        f"ENABLE_EXPERT_PARALLEL={g('ENABLE_EXPERT_PARALLEL', '0')}",
-        f"DATA_PARALLEL_SIZE={g('DATA_PARALLEL_SIZE')}",
-        f"MM_ENCODER_TP_MODE={g('MM_ENCODER_TP_MODE')}",
-        f"ATTENTION_BACKEND={g('ATTENTION_BACKEND')}",
-        f"TOKENIZER_MODE={g('TOKENIZER_MODE')}",
-        f"VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS={g('VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS', '1')}",
-        f"NVIDIA_VISIBLE_DEVICES={g('NVIDIA_VISIBLE_DEVICES', '0,1,2,3,4,5,6,7')}",
-        f"MODELS_DIR={g('MODELS_DIR', './data/models')}",
-        f"SGLANG_TRUST_REMOTE_CODE={g('SGLANG_TRUST_REMOTE_CODE', '1')}",
-        f"SGLANG_MEM_FRACTION_STATIC={g('SGLANG_MEM_FRACTION_STATIC', '0.90')}",
-        f"SGLANG_CUDA_GRAPH_MAX_BS={g('SGLANG_CUDA_GRAPH_MAX_BS')}",
-        f"SGLANG_ENABLE_TORCH_COMPILE={g('SGLANG_ENABLE_TORCH_COMPILE', '1')}",
-        f"SGLANG_DISABLE_CUDA_GRAPH={g('SGLANG_DISABLE_CUDA_GRAPH', '0')}",
-        f"SGLANG_DISABLE_CUSTOM_ALL_REDUCE={g('SGLANG_DISABLE_CUSTOM_ALL_REDUCE', '0')}",
-        f"SGLANG_ENABLE_METRICS={g('SGLANG_ENABLE_METRICS', '1')}",
-        f"SGLANG_ENABLE_MFU_METRICS={g('SGLANG_ENABLE_MFU_METRICS', '0')}",
+        f"MAX_NUM_SEQS={_stack_val(m, 'MAX_NUM_SEQS')}",
+        f"DISABLE_CUSTOM_ALL_REDUCE={_stack_val(m, 'DISABLE_CUSTOM_ALL_REDUCE')}",
+        f"ENABLE_PREFIX_CACHING={_stack_val(m, 'ENABLE_PREFIX_CACHING')}",
+        f"TOOL_CALL_PARSER={_stack_val(m, 'TOOL_CALL_PARSER')}",
+        f"REASONING_PARSER={_stack_val(m, 'REASONING_PARSER')}",
+        f"CHAT_TEMPLATE_CONTENT_FORMAT={_stack_val(m, 'CHAT_TEMPLATE_CONTENT_FORMAT')}",
+        f"COMPILATION_CONFIG={_stack_val(m, 'COMPILATION_CONFIG')}",
+        f"ENFORCE_EAGER={_stack_val(m, 'ENFORCE_EAGER')}",
+        f"SPECULATIVE_CONFIG={_stack_val(m, 'SPECULATIVE_CONFIG')}",
+        f"ENABLE_EXPERT_PARALLEL={_stack_val(m, 'ENABLE_EXPERT_PARALLEL')}",
+        f"DATA_PARALLEL_SIZE={_stack_val(m, 'DATA_PARALLEL_SIZE')}",
+        f"MM_ENCODER_TP_MODE={_stack_val(m, 'MM_ENCODER_TP_MODE')}",
+        f"ATTENTION_BACKEND={_stack_val(m, 'ATTENTION_BACKEND')}",
+        f"TOKENIZER_MODE={_stack_val(m, 'TOKENIZER_MODE')}",
+        f"VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS={_stack_val(m, 'VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS')}",
+        f"NVIDIA_VISIBLE_DEVICES={_stack_val(m, 'NVIDIA_VISIBLE_DEVICES')}",
+        f"MODELS_DIR={_stack_val(m, 'MODELS_DIR')}",
+        f"SGLANG_TRUST_REMOTE_CODE={_stack_val(m, 'SGLANG_TRUST_REMOTE_CODE')}",
+        f"SGLANG_MEM_FRACTION_STATIC={_stack_val(m, 'SGLANG_MEM_FRACTION_STATIC')}",
+        f"SGLANG_CUDA_GRAPH_MAX_BS={_stack_val(m, 'SGLANG_CUDA_GRAPH_MAX_BS')}",
+        f"SGLANG_ENABLE_TORCH_COMPILE={_stack_val(m, 'SGLANG_ENABLE_TORCH_COMPILE')}",
+        f"SGLANG_DISABLE_CUDA_GRAPH={_stack_val(m, 'SGLANG_DISABLE_CUDA_GRAPH')}",
+        f"SGLANG_DISABLE_CUSTOM_ALL_REDUCE={_stack_val(m, 'SGLANG_DISABLE_CUSTOM_ALL_REDUCE')}",
+        f"SGLANG_ENABLE_METRICS={_stack_val(m, 'SGLANG_ENABLE_METRICS')}",
+        f"SGLANG_ENABLE_MFU_METRICS={_stack_val(m, 'SGLANG_ENABLE_MFU_METRICS')}",
     ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     try:

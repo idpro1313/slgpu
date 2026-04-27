@@ -23,6 +23,7 @@ from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.db.session import init_db
 from app.schemas.common import HealthResponse
+from app.services.stack_errors import MissingStackParams
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,18 @@ def create_app() -> FastAPI:
         allow_credentials=True,
     )
     app.include_router(api_router, prefix=settings.api_v1_prefix)
+
+    @app.exception_handler(MissingStackParams)
+    async def _missing_stack_params_handler(_request: Request, exc: MissingStackParams) -> JSONResponse:
+        return JSONResponse(
+            status_code=409,
+            content={
+                "error": "missing_stack_params",
+                "scope": exc.scope,
+                "keys": exc.keys,
+                "detail": f"Задайте значения в Настройках → Стек: {', '.join(exc.keys)}",
+            },
+        )
 
     @app.get("/healthz", response_model=HealthResponse, tags=["health"])
     async def healthz() -> HealthResponse:

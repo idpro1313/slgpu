@@ -13,6 +13,8 @@ from app.services import jobs as jobs_service
 from app.services import app_settings
 from app.services.monitoring import probe_all
 from app.services.slgpu_cli import cmd_monitoring
+from app.services.stack_config import sync_merged_flat
+from app.services.stack_registry import raise_if_missing
 
 router = APIRouter()
 
@@ -53,6 +55,9 @@ async def stack_action(
 ) -> JobAccepted:
     if payload.action not in _ALLOWED_ACTIONS:
         raise HTTPException(status_code=400, detail=f"action must be one of {sorted(_ALLOWED_ACTIONS)}")
+    merged = sync_merged_flat()
+    if payload.action in ("up", "restart", "fix-perms", "down"):
+        raise_if_missing(merged, "monitoring_up")
     settings = get_settings()
     try:
         command = cmd_monitoring(settings.slgpu_root, payload.action)

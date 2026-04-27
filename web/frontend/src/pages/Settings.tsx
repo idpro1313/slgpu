@@ -1,4 +1,5 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
@@ -231,6 +232,18 @@ function buildStackPatch(
 }
 
 export function SettingsPage() {
+  const [searchParams] = useSearchParams();
+  const missingHighlight = useMemo(() => {
+    const raw = searchParams.get("missing");
+    if (!raw?.trim()) return new Set<string>();
+    return new Set(
+      raw
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+    );
+  }, [searchParams]);
+
   const queryClient = useQueryClient();
   const [serverHost, setServerHost] = useState("");
   /** Пусто = не менять; ввод = новый ключ; сброс — отдельная кнопка. */
@@ -482,14 +495,15 @@ export function SettingsPage() {
       <div className="settings-group">
         <h2 className="settings-group__heading">Стек в базе данных</h2>
         <p className="settings-group__lead">
-          Первичный импорт из <span className="mono">main.env</span> и связанных secret-файлов; правка
-          переменных — по группам ниже (<span className="mono">stack_params</span>). Для смены секрета
-          введите новое значение в строке, не вставляйте <span className="mono">***</span>.
+          Первичный импорт из <span className="mono">configs/main.env</span> (секреты — вручную в
+          таблице ниже); правка переменных — по группам (<span className="mono">stack_params</span>).
+          Для смены секрета введите новое значение в строке, не вставляйте{" "}
+          <span className="mono">***</span>.
         </p>
 
         <Section
           title="Импорт из файлов"
-          subtitle="Читает `main.env` в корне репозитория и опционально `configs/secrets/hf.env`, ключи Langfuse из `configs/secrets/` или `data/web/secrets/langfuse-litellm.env`. Повтор без force вернёт 409."
+          subtitle="Читает только `configs/main.env`, затем импортирует пресеты из `data/presets/*.env` в таблицу БД. Повтор без force вернёт 409."
         >
           <div className="flex flex--col flex--gap-sm">
             <p className="section__subtitle" style={{ margin: 0 }}>
@@ -517,7 +531,7 @@ export function SettingsPage() {
               disabled={installCfg.isPending}
               onClick={() => installCfg.mutate(installForce)}
             >
-              {installCfg.isPending ? "Импорт…" : "Импортировать из main.env"}
+              {installCfg.isPending ? "Импорт…" : "Импортировать из configs/main.env"}
             </button>
           </div>
         </Section>
@@ -572,7 +586,14 @@ export function SettingsPage() {
                         </thead>
                         <tbody>
                           {rowsInGroup.map((row) => (
-                            <tr key={row.id}>
+                            <tr
+                              key={row.id}
+                              className={
+                                row.key && missingHighlight.has(row.key)
+                                  ? "settings-stack-row--missing"
+                                  : undefined
+                              }
+                            >
                               <td>
                                 <input
                                   className="input"

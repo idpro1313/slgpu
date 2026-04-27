@@ -62,7 +62,7 @@ async def compose_inherit_env(
         str(root),
         *compose_args,
         cwd=str(root),
-        env=None,
+        env=_clean_env(),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
@@ -77,7 +77,12 @@ async def compose_with_env_file(
     main_env_file: Path,
     *compose_args: str,
 ) -> tuple[int, str, str]:
-    """``docker compose --project-directory <root> --env-file <main> ...`` (как monitoring/proxy)."""
+    """``docker compose --project-directory <root> --env-file <main> ...``.
+
+    Do not inherit the web container/host environment here: Docker Compose gives
+    process env higher precedence than ``--env-file`` during interpolation, which
+    can silently override values that were just written from SQLite.
+    """
 
     proc = await asyncio.create_subprocess_exec(
         "docker",
@@ -88,7 +93,7 @@ async def compose_with_env_file(
         str(main_env_file),
         *compose_args,
         cwd=str(root),
-        env=None,
+        env=_clean_env(),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
@@ -136,7 +141,7 @@ async def docker_network_create_slgpu() -> tuple[int, str, str]:
         "slgpu",
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
-        env=None,
+        env=_clean_env(),
     )
     out_b, err_b = await proc.communicate()
     return proc.returncode or 0, out_b.decode("utf-8", errors="replace"), err_b.decode(

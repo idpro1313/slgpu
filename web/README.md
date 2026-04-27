@@ -137,7 +137,7 @@ daemon не нашёл бы файлы по `/slgpu/...` и создал бы п
 
 **Инференс-пробы** (`/v1/models`, `/metrics` к vLLM/SGLang) из backend используют `WEB_LLM_HTTP_HOST` (в compose тоже `host.docker.internal`) и при необходимости прямой DNS сервиса `http://vllm:8111` / `http://sglang:8222` в сети `slgpu`, потому что `127.0.0.1` внутри web — не хост с опубликованным портом движка.
 
-**LiteLLM** (`GET /api/v1/litellm/health` и `…/models`) ходит к тому же хосту, что и пробы мониторинга: `WEB_MONITORING_HTTP_HOST` + `WEB_LITELLM_PORT` (порт из `main.env` / compose).
+**LiteLLM** (`GET /api/v1/litellm/health` и `…/models`) ходит к тому же хосту, что и пробы мониторинга: `WEB_MONITORING_HTTP_HOST` + `LITELLM_PORT` из SQLite `stack_params` (страница **Настройки**).
 
 ## API
 
@@ -154,8 +154,6 @@ daemon не нашёл бы файлы по `/slgpu/...` и создал бы п
 | POST | `/api/v1/models/{id}/pull` | `slgpu pull` через job runner |
 | GET/POST | `/api/v1/presets` | список и создание пресетов |
 | GET/PATCH/DELETE | `/api/v1/presets/{id}` | просмотр, параметрическое редактирование и удаление пресета |
-| POST | `/api/v1/presets/sync` | импорт `PRESETS_DIR/*.env` в БД (не вызывается из SPA) |
-| POST | `/api/v1/presets/import-templates` | шаблоны из `examples/presets` (не вызывается из SPA) |
 | POST | `/api/v1/presets/{id}/export` | выгрузка пресета в `.env` (кнопка в карточке пресета в UI) |
 | GET/POST | `/api/v1/runtime/slots`, `POST …/slots/{key}/down`, `POST …/restart`, `GET …/slots/{key}/logs` | мультислотный инференс (4.0.0) |
 | GET | `/api/v1/gpu/state`, `GET /api/v1/gpu/availability` | live GPU и свободные индексы |
@@ -167,6 +165,8 @@ daemon не нашёл бы файлы по `/slgpu/...` и создал бы п
 | GET | `/api/v1/activity` | **объединённая** лента: `jobs` + UI-действия (`audit_events` с `correlation_id IS NULL`); страница «Задачи» — по клику строки детали в модальном окне |
 | GET/PATCH | `/api/v1/settings/public-access` | публичный `server_host` для ссылок в браузере; **`litellm_api_key_set`** в GET; в PATCH опционально **`litellm_api_key`** (не возвращается; при смене ключа — audit с `[BLOCK_KEY_ROTATED]`) |
 
+Импорт `data/presets/*.env` в таблицу пресетов — только в составе **`POST /app-config/install`** (v5.0.0; отдельные `POST /presets/sync` и `import-templates` удалены).
+
 Страница **Бенчмарки:** выбранный прогон открывается в **модальном окне** с разбором `summary.json` (load / scenario).
 
 ## Безопасность
@@ -174,9 +174,7 @@ daemon не нашёл бы файлы по `/slgpu/...` и создал бы п
 - Любой аргумент, идущий в shell, проходит через
   [`app.core.security`](backend/app/core/security.py) с whitelist-регулярками.
 - Команды формируются ТОЛЬКО в [`app.services.slgpu_cli`](backend/app/services/slgpu_cli.py)
-  и исполняются через `asyncio.create_subprocess_exec` **без** оболочки для разбора строки;
-  сам репозиторный `slgpu` вызывается как `/bin/bash /…/slgpu …`, чтобы на bind mount не
-  зависеть от бита исполняемости файла `slgpu`.
+  и для стека поддерживается только **`native.*`** (docker compose / docker-py), **без** вызова host `./slgpu`.
 - На каждый mutating job ставится in-memory advisory lock на
   `(scope, resource)` — слоты `("engine", "slot:{slot_key}")`,
   monitoring — `("monitoring", "stack")`; повторный конфликтующий клик

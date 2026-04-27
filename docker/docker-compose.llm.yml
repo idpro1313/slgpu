@@ -1,75 +1,55 @@
 name: slgpu
 
-# vLLM/SGLang: scripts/serve.sh (SLGPU_ENGINE). Слой env: main.env → пресет (export в ./slgpu up).
-# Мониторинг: `docker/docker-compose.monitoring.yml`, подъём: ./slgpu monitoring up (сеть `slgpu` общая).
-# Подстановка ${VAR} в YAML: env процесса; для значений из main: docker compose --env-file main.env …
-#   (или: set -a && source main.env && docker compose …). В контейнер: env_file main.env ниже.
+# vLLM/SGLang: scripts/serve.sh (SLGPU_ENGINE). Подстановки только ${VAR} — значения в compose-service.env / configs/main.env + БД.
 
 services:
   vllm:
-    # Жёсткое имя: без автоматического …-1 (масштабирование >1 несовместимо с container_name)
     container_name: slgpu-vllm
-    image: ${VLLM_DOCKER_IMAGE:-vllm/vllm-openai:v0.19.1-cu130}
+    image: ${VLLM_DOCKER_IMAGE}
     profiles: ["vllm"]
     restart: unless-stopped
-    # Список физических GPU задаётся через NVIDIA_VISIBLE_DEVICES (0..TP-1 от ./slgpu up), см. cmd_up.sh
     gpus: all
     shm_size: "32gb"
     ipc: host
     ports:
-      - "${LLM_API_BIND:-0.0.0.0}:${LLM_API_PORT:-8111}:8111"
+      - "${LLM_API_BIND}:${LLM_API_PORT}:${VLLM_PORT}"
     env_file:
-      - main.env
+      - configs/main.env
     environment:
       SLGPU_ENGINE: vllm
-      SLGPU_MODEL_ROOT: ${SLGPU_MODEL_ROOT:-/models}
-      SERVED_MODEL_NAME: ${SERVED_MODEL_NAME:-${SLGPU_SERVED_MODEL_NAME:-devllm}}
-      VLLM_HOST: ${VLLM_HOST:-${SLGPU_VLLM_HOST:-0.0.0.0}}
-      VLLM_PORT: ${VLLM_PORT:-${SLGPU_VLLM_PORT:-${LLM_API_PORT:-8111}}}
-      TRUST_REMOTE_CODE: ${TRUST_REMOTE_CODE:-${SLGPU_VLLM_TRUST_REMOTE_CODE:-1}}
-      ENABLE_CHUNKED_PREFILL: ${ENABLE_CHUNKED_PREFILL:-${SLGPU_VLLM_ENABLE_CHUNKED_PREFILL:-1}}
-      ENABLE_AUTO_TOOL_CHOICE: ${ENABLE_AUTO_TOOL_CHOICE:-${SLGPU_VLLM_ENABLE_AUTO_TOOL_CHOICE:-1}}
-      MODEL_ID: ${MODEL_ID:-}
-      MODEL_REVISION: ${MODEL_REVISION:-}
-      MAX_MODEL_LEN: ${MAX_MODEL_LEN:-32768}
-      # опционально: --block-size (DeepSeek V4: 256 в блоге vLLM)
-      BLOCK_SIZE: ${BLOCK_SIZE:-${SLGPU_VLLM_BLOCK_SIZE:-}}
-      TP: ${TP:-8}
-      GPU_MEM_UTIL: ${GPU_MEM_UTIL:-0.92}
-      KV_CACHE_DTYPE: ${KV_CACHE_DTYPE:-fp8_e4m3}
-      # max-num-batched-tokens; в старых .env: SLGPU_MAX_NUM_BATCHED_TOKENS, VLLM_MAX_NUM_BATCHED_TOKENS
-      MAX_NUM_BATCHED_TOKENS: ${MAX_NUM_BATCHED_TOKENS:-${SLGPU_MAX_NUM_BATCHED_TOKENS:-${VLLM_MAX_NUM_BATCHED_TOKENS:-8192}}}
-      # опционально: --max-num-seqs (одновременные последовательности; упирается в KV, см. README)
-      MAX_NUM_SEQS: ${MAX_NUM_SEQS:-${SLGPU_VLLM_MAX_NUM_SEQS:-}}
-      # 1 (по умолчанию) = --disable-custom-all-reduce (NCCL). 0 = custom all-reduce; см. serve.sh
-      DISABLE_CUSTOM_ALL_REDUCE: ${DISABLE_CUSTOM_ALL_REDUCE:-${SLGPU_DISABLE_CUSTOM_ALL_REDUCE:-1}}
-      # 1 = --enable-prefix-caching, 0 = --no-enable-prefix-caching; иначе из пресета в контейнер не попадёт
-      ENABLE_PREFIX_CACHING: ${ENABLE_PREFIX_CACHING:-${SLGPU_ENABLE_PREFIX_CACHING:-1}}
-      TOOL_CALL_PARSER: ${TOOL_CALL_PARSER:-hermes}
-      REASONING_PARSER: ${REASONING_PARSER:-qwen3}
-      # GLM-5.1 (FP8): string — см. GLM/GLM5.md в vllm-project/recipes
-      CHAT_TEMPLATE_CONTENT_FORMAT: ${CHAT_TEMPLATE_CONTENT_FORMAT:-}
-      # MiniMax M2: JSON для --compilation-config; см. MiniMax/MiniMax-M2.md
-      COMPILATION_CONFIG: ${COMPILATION_CONFIG:-${SLGPU_VLLM_COMPILATION_CONFIG:-}}
-      # 1 = --enforce-eager (Inductor/CUDA graph issues на части MoE+compile)
-      ENFORCE_EAGER: ${ENFORCE_EAGER:-${SLGPU_VLLM_ENFORCE_EAGER:-0}}
-      # GLM-5.1-FP8 и др.: JSON для --speculative-config (напр. MTP); см. GLM/GLM5.md
-      SPECULATIVE_CONFIG: ${SPECULATIVE_CONFIG:-${SLGPU_VLLM_SPECULATIVE_CONFIG:-}}
-      # 1 = --enable-expert-parallel (8×GPU при TP4); 0 = не передавать
-      ENABLE_EXPERT_PARALLEL: ${ENABLE_EXPERT_PARALLEL:-${SLGPU_ENABLE_EXPERT_PARALLEL:-0}}
-      # опционально: --data-parallel-size (сценарий DP8+EP в рецепте MiniMax)
-      DATA_PARALLEL_SIZE: ${DATA_PARALLEL_SIZE:-${SLGPU_VLLM_DATA_PARALLEL_SIZE:-}}
-      # Только vLLM (например moonshotai/Kimi-K2.6 — data; см. референс Moonshot / доку vLLM).
-      MM_ENCODER_TP_MODE: ${MM_ENCODER_TP_MODE:-}
-      # Опционально: --attention-backend (DeepSeek V4: см. INFO fp8_ds_mla vs FLASHINFER_MLA_SPARSE в serve.sh)
-      ATTENTION_BACKEND: ${ATTENTION_BACKEND:-${SLGPU_VLLM_ATTENTION_BACKEND:-}}
-      # Опционально: --tokenizer-mode (DeepSeek V4: deepseek_v4, см. vllm.ai/blog/deepseek-v4)
-      TOKENIZER_MODE: ${TOKENIZER_MODE:-${SLGPU_VLLM_TOKENIZER_MODE:-}}
-      VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS: ${VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS:-1}
-      # Согласовано с TP: первые N GPU (0..TP-1), выставляет ./slgpu up; override: SLGPU_NVIDIA_VISIBLE_DEVICES
-      NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-0,1,2,3,4,5,6,7}
+      SLGPU_MODEL_ROOT: ${SLGPU_MODEL_ROOT}
+      SERVED_MODEL_NAME: ${SERVED_MODEL_NAME}
+      VLLM_HOST: ${VLLM_HOST}
+      VLLM_PORT: ${VLLM_PORT}
+      TRUST_REMOTE_CODE: ${TRUST_REMOTE_CODE}
+      ENABLE_CHUNKED_PREFILL: ${ENABLE_CHUNKED_PREFILL}
+      ENABLE_AUTO_TOOL_CHOICE: ${ENABLE_AUTO_TOOL_CHOICE}
+      MODEL_ID: ${MODEL_ID}
+      MODEL_REVISION: ${MODEL_REVISION}
+      MAX_MODEL_LEN: ${MAX_MODEL_LEN}
+      BLOCK_SIZE: ${BLOCK_SIZE}
+      TP: ${TP}
+      GPU_MEM_UTIL: ${GPU_MEM_UTIL}
+      KV_CACHE_DTYPE: ${KV_CACHE_DTYPE}
+      MAX_NUM_BATCHED_TOKENS: ${MAX_NUM_BATCHED_TOKENS}
+      MAX_NUM_SEQS: ${MAX_NUM_SEQS}
+      DISABLE_CUSTOM_ALL_REDUCE: ${DISABLE_CUSTOM_ALL_REDUCE}
+      ENABLE_PREFIX_CACHING: ${ENABLE_PREFIX_CACHING}
+      TOOL_CALL_PARSER: ${TOOL_CALL_PARSER}
+      REASONING_PARSER: ${REASONING_PARSER}
+      CHAT_TEMPLATE_CONTENT_FORMAT: ${CHAT_TEMPLATE_CONTENT_FORMAT}
+      COMPILATION_CONFIG: ${COMPILATION_CONFIG}
+      ENFORCE_EAGER: ${ENFORCE_EAGER}
+      SPECULATIVE_CONFIG: ${SPECULATIVE_CONFIG}
+      ENABLE_EXPERT_PARALLEL: ${ENABLE_EXPERT_PARALLEL}
+      DATA_PARALLEL_SIZE: ${DATA_PARALLEL_SIZE}
+      MM_ENCODER_TP_MODE: ${MM_ENCODER_TP_MODE}
+      ATTENTION_BACKEND: ${ATTENTION_BACKEND}
+      TOKENIZER_MODE: ${TOKENIZER_MODE}
+      VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS: ${VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS}
+      NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES}
     volumes:
-      - ${MODELS_DIR:-./data/models}:/models:ro
+      - ${MODELS_DIR}:/models:ro
       - ./scripts/serve.sh:/etc/slgpu/serve.sh:ro
     entrypoint: ["/bin/bash"]
     command: ["/etc/slgpu/serve.sh"]
@@ -83,42 +63,38 @@ services:
 
   sglang:
     container_name: slgpu-sglang
-    image: lmsysorg/sglang:latest
+    image: ${SGLANG_DOCKER_IMAGE}
     profiles: ["sglang"]
     restart: unless-stopped
     gpus: all
     shm_size: "32gb"
     ipc: host
     ports:
-      # Внутри контейнера API SGLang — 8222 (см. SGLANG_LISTEN_PORT); vLLM по-прежнему 8111.
-      - "${LLM_API_BIND:-0.0.0.0}:${LLM_API_PORT:-8222}:8222"
+      - "${LLM_API_BIND}:${LLM_API_PORT_SGLANG}:${SGLANG_LISTEN_PORT}"
     env_file:
-      - main.env
-    # Переменные из пресета (source в ./slgpu up) обязаны быть здесь, иначе в контейнер не попадут
-    # (пресет не в env_file). См. scripts/serve.sh
+      - configs/main.env
     environment:
       SLGPU_ENGINE: sglang
-      SLGPU_MODEL_ROOT: ${SLGPU_MODEL_ROOT:-/models}
-      SGLANG_TRUST_REMOTE_CODE: ${SGLANG_TRUST_REMOTE_CODE:-1}
-      MODEL_ID: ${MODEL_ID:-}
-      MODEL_REVISION: ${MODEL_REVISION:-}
-      MAX_MODEL_LEN: ${MAX_MODEL_LEN:-32768}
-      TP: ${TP:-8}
-      SGLANG_MEM_FRACTION_STATIC: ${SGLANG_MEM_FRACTION_STATIC:-0.90}
-      KV_CACHE_DTYPE: ${KV_CACHE_DTYPE:-fp8_e4m3}
-      REASONING_PARSER: ${REASONING_PARSER:-qwen3}
-      TOOL_CALL_PARSER: ${TOOL_CALL_PARSER:-}
-      SGLANG_CUDA_GRAPH_MAX_BS: ${SGLANG_CUDA_GRAPH_MAX_BS:-}
-      SGLANG_ENABLE_TORCH_COMPILE: ${SGLANG_ENABLE_TORCH_COMPILE:-1}
-      SGLANG_DISABLE_CUDA_GRAPH: ${SGLANG_DISABLE_CUDA_GRAPH:-0}
-      SGLANG_DISABLE_CUSTOM_ALL_REDUCE: ${SGLANG_DISABLE_CUSTOM_ALL_REDUCE:-0}
-      SGLANG_ENABLE_METRICS: ${SGLANG_ENABLE_METRICS:-1}
-      SGLANG_ENABLE_MFU_METRICS: ${SGLANG_ENABLE_MFU_METRICS:-0}
-      NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-0,1,2,3,4,5,6,7}
+      SLGPU_MODEL_ROOT: ${SLGPU_MODEL_ROOT}
+      SGLANG_TRUST_REMOTE_CODE: ${SGLANG_TRUST_REMOTE_CODE}
+      MODEL_ID: ${MODEL_ID}
+      MODEL_REVISION: ${MODEL_REVISION}
+      MAX_MODEL_LEN: ${MAX_MODEL_LEN}
+      TP: ${TP}
+      SGLANG_MEM_FRACTION_STATIC: ${SGLANG_MEM_FRACTION_STATIC}
+      KV_CACHE_DTYPE: ${KV_CACHE_DTYPE}
+      REASONING_PARSER: ${REASONING_PARSER}
+      TOOL_CALL_PARSER: ${TOOL_CALL_PARSER}
+      SGLANG_CUDA_GRAPH_MAX_BS: ${SGLANG_CUDA_GRAPH_MAX_BS}
+      SGLANG_ENABLE_TORCH_COMPILE: ${SGLANG_ENABLE_TORCH_COMPILE}
+      SGLANG_DISABLE_CUDA_GRAPH: ${SGLANG_DISABLE_CUDA_GRAPH}
+      SGLANG_DISABLE_CUSTOM_ALL_REDUCE: ${SGLANG_DISABLE_CUSTOM_ALL_REDUCE}
+      SGLANG_ENABLE_METRICS: ${SGLANG_ENABLE_METRICS}
+      SGLANG_ENABLE_MFU_METRICS: ${SGLANG_ENABLE_MFU_METRICS}
+      NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES}
     volumes:
-      - ${MODELS_DIR:-./data/models}:/models:ro
+      - ${MODELS_DIR}:/models:ro
       - ./scripts/serve.sh:/etc/slgpu/serve.sh:ro
-      # Triton / TorchInductor: autotune и скомпиленные ядра (см. TRITON_CACHE_DIR в main.env)
       - sglang-kernel-cache:/var/cache/slgpu-kernels
     entrypoint: ["/bin/bash"]
     command: ["/etc/slgpu/serve.sh"]

@@ -1,10 +1,14 @@
 import type { Healthz } from "@/api/types";
+import { publishMissingStackParams } from "@/stackErrorBus";
 
 const API_PREFIX = "/api/v1";
 
 export class ApiError extends Error {
   status: number;
   detail: unknown;
+  code?: string;
+  keys?: string[];
+  scope?: string;
   constructor(status: number, detail: unknown, message: string) {
     super(message);
     this.status = status;
@@ -29,6 +33,32 @@ function errorMessage(status: number, detail: unknown): string {
     : `HTTP ${status}`;
 }
 
+function throwWithStackDetails(
+  status: number,
+  detail: unknown,
+): never {
+  const err = new ApiError(status, detail, errorMessage(status, detail));
+  if (
+    status === 409 &&
+    typeof detail === "object" &&
+    detail !== null &&
+    (detail as { error?: string }).error === "missing_stack_params"
+  ) {
+    const o = detail as { keys?: string[]; scope?: string; detail?: string };
+    err.code = "missing_stack_params";
+    err.keys = Array.isArray(o.keys) ? o.keys : undefined;
+    err.scope = typeof o.scope === "string" ? o.scope : undefined;
+    if (err.keys?.length) {
+      publishMissingStackParams({
+        keys: err.keys,
+        scope: err.scope ?? "",
+        detail: typeof o.detail === "string" ? o.detail : undefined,
+      });
+    }
+  }
+  throw err;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   if (init?.body && !headers.has("Content-Type")) {
@@ -40,7 +70,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!response.ok) {
     const detail = await parseErrorResponse(response);
-    throw new ApiError(response.status, detail, errorMessage(response.status, detail));
+    throwWithStackDetails(response.status, detail);
   }
   if (response.status === 204) {
     return undefined as T;
@@ -53,7 +83,7 @@ async function requestRoot<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, { ...init });
   if (!response.ok) {
     const detail = await parseErrorResponse(response);
-    throw new ApiError(response.status, detail, errorMessage(response.status, detail));
+    throwWithStackDetails(response.status, detail);
   }
   if (response.status === 204) {
     return undefined as T;

@@ -8,6 +8,7 @@ file-backed SQLite database under tmp_path so the suite is hermetic.
 from __future__ import annotations
 
 import os
+import shutil
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -18,11 +19,18 @@ import pytest
 def _hermetic_settings(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[None]:
     fake_root = tmp_path / "slgpu"
     (fake_root / "data" / "presets").mkdir(parents=True)
-    (fake_root / "main.env").write_text(
-        "MODELS_DIR=" + str(tmp_path / "models") + "\n"
-        "PRESETS_DIR=./data/presets\n",
-        encoding="utf-8",
-    )
+    (fake_root / "configs").mkdir(parents=True)
+    repo_root = Path(__file__).resolve().parents[3]
+    src_main = repo_root / "configs" / "main.env"
+    if src_main.is_file():
+        shutil.copy(src_main, fake_root / "configs" / "main.env")
+    else:
+        (fake_root / "configs" / "main.env").write_text(
+            "MODELS_DIR=./data/models\n"
+            "PRESETS_DIR=./data/presets\n"
+            "WEB_DATA_DIR=./data/web\n",
+            encoding="utf-8",
+        )
     (fake_root / "slgpu").write_text("#!/bin/bash\nexit 0\n", encoding="utf-8")
     os.makedirs(tmp_path / "data", exist_ok=True)
     db_path = tmp_path / "web.db"

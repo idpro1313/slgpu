@@ -144,8 +144,10 @@ async def init_db() -> None:
     )
     from app.services.stack_config import (
         ensure_default_settings,
-        ensure_default_stack_params,
+        ensure_secret_flags_only,
+        log_missing_canonical_keys,
         migrate_legacy_json_to_rows,
+        seed_stack_params_from_main_env_if_empty,
     )
 
     engine = get_engine()
@@ -156,8 +158,10 @@ async def init_db() -> None:
 
     async with session_scope() as session:
         await migrate_legacy_json_to_rows(session)
+        await seed_stack_params_from_main_env_if_empty(session)
         await ensure_default_settings(session)
-        await ensure_default_stack_params(session)
+        await ensure_secret_flags_only(session)
+        await log_missing_canonical_keys(session)
 
 
 @asynccontextmanager

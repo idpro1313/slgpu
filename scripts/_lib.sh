@@ -11,10 +11,10 @@ slgpu_presets_dir() {
   local root p
   root="$(slgpu_root)"
   p=""
-  if [[ -f "${root}/main.env" ]]; then
+  if [[ -f "${root}/configs/main.env" ]]; then
     set -a
     # shellcheck disable=SC1091
-    source "${root}/main.env" 2>/dev/null
+    source "${root}/configs/main.env" 2>/dev/null
     set +a
   fi
   p="${PRESETS_DIR:-./data/presets}"
@@ -141,27 +141,27 @@ slgpu_interactive_choose_preset() {
   done
 }
 
-# Дефолты репозитория: `main.env` в корне (если есть), до движка и пресетов.
+# Базовый стек: `configs/main.env` (импорт в БД и bootstrap web).
 slgpu_source_main_env() {
   local root
   root="$(slgpu_root)"
-  local f="${root}/main.env"
+  local f="${root}/configs/main.env"
   if [[ -f "${f}" ]]; then
     # shellcheck disable=SC1091
     source "${f}"
   fi
 }
 
-# Путь к env-файлу для `docker compose -f docker/docker-compose.web.yml --env-file`.
-# Compose требует существующий файл; без `main.env` используем `docker/web-compose.defaults.env` (дефолты в YAML: ${VAR:-default}).
+# Env-файл для `docker compose -f docker/docker-compose.web.yml` (обязателен).
 slgpu_web_compose_env_file() {
   local root
   root="$(slgpu_root)"
-  if [[ -f "${root}/main.env" ]]; then
-    echo "${root}/main.env"
-  else
-    echo "${root}/docker/web-compose.defaults.env"
+  local f="${root}/configs/main.env"
+  if [[ ! -f "${f}" ]]; then
+    echo "Ошибка: требуется ${f} (скопируйте и заполните параметры стека)." >&2
+    exit 1
   fi
+  echo "${f}"
 }
 
 # Единый снимок для monitoring/proxy: `env_file` — `${WEB_DATA_DIR}/.slgpu/compose-service.env` (по умолч. data/web).
@@ -170,10 +170,10 @@ slgpu_compose_service_env_basename() {
   local root wdd
   root="$(slgpu_root)"
   wdd="${WEB_DATA_DIR:-./data/web}"
-  if [[ -f "${root}/main.env" ]]; then
+  if [[ -f "${root}/configs/main.env" ]]; then
     set -a
     # shellcheck disable=SC1090
-    source "${root}/main.env" 2>/dev/null || true
+    source "${root}/configs/main.env" 2>/dev/null || true
     set +a
   fi
   wdd="${WEB_DATA_DIR:-./data/web}"
@@ -188,10 +188,10 @@ slgpu_ensure_compose_service_env() {
   local root wdd d f
   root="$(slgpu_root)"
   wdd="${WEB_DATA_DIR:-./data/web}"
-  if [[ -f "${root}/main.env" ]]; then
+  if [[ -f "${root}/configs/main.env" ]]; then
     set -a
     # shellcheck disable=SC1090
-    source "${root}/main.env" 2>/dev/null || true
+    source "${root}/configs/main.env" 2>/dev/null || true
     set +a
   fi
   wdd="${WEB_DATA_DIR:-./data/web}"
@@ -201,15 +201,11 @@ slgpu_ensure_compose_service_env() {
     *) d="${root}/${wdd}/.slgpu" ; f="${d}/compose-service.env" ;;
   esac
   mkdir -p "${d}"
-  if [[ -f "${root}/main.env" ]]; then
-    cp -f "${root}/main.env" "${f}"
+  if [[ -f "${root}/configs/main.env" ]]; then
+    cp -f "${root}/configs/main.env" "${f}"
     return 0
   fi
   if [[ -f "${f}" ]]; then
-    return 0
-  fi
-  if [[ -f "${root}/docker/web-compose.defaults.env" ]]; then
-    cp -f "${root}/docker/web-compose.defaults.env" "${f}"
     return 0
   fi
   : > "${f}"
@@ -452,17 +448,17 @@ slgpu_docker_compose() {
   (cd "${_root}" && docker compose --project-directory "${_root}" "$@")
 }
 
-# Создать каталоги для относительных путей из main.env (./data/…). Без main.env — минимальные ./data/* для web.
+# Создать каталоги для относительных путей из `configs/main.env` (./data/…). Без файла — минимальные ./data/* для web.
 slgpu_ensure_data_dirs() {
   local root _p
   root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-  if [[ ! -f "${root}/main.env" ]]; then
+  if [[ ! -f "${root}/configs/main.env" ]]; then
     mkdir -p "${root}/data/web" "${root}/data/models" "${root}/data/presets" "${root}/data/bench/results"
     return 0
   fi
   set -a
   # shellcheck disable=SC1091
-  source "${root}/main.env"
+  source "${root}/configs/main.env"
   set +a
   for _p in \
     "${MODELS_DIR:-}" \

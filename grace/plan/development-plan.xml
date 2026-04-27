@@ -337,7 +337,7 @@
         </errors>
       </contract>
       <interface>
-        <export-monitoring_compose PURPOSE="docker/docker-compose.monitoring.yml (slgpu-monitoring-*) + docker/docker-compose.proxy.yml (slgpu-proxy-*: Langfuse, LiteLLM) + configs/monitoring/*" />
+        <export-monitoring_compose PURPOSE="docker/docker-compose.monitoring.yml (slgpu-monitoring-*) + docker/docker-compose.proxy.yml (slgpu-proxy-*: Langfuse, LiteLLM) + configs/monitoring/*; web-native значения портов/project-name только из stack_params snapshot, без YAML fallback" />
         <export-prometheus_yml PURPOSE="Конфиг скрейпинга" />
         <export-grafana-slgpu-overview PURPOSE="slgpu-overview (provisioning)" />
         <export-grafana-sglang-dashboard-slgpu PURPOSE="sglang-dashboard-slgpu.json" />

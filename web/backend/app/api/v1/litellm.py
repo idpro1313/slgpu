@@ -11,7 +11,8 @@ from app.api.deps import actor_from_header, db_session
 from app.core.config import get_settings
 from app.schemas.common import JobAccepted
 from app.schemas.monitoring import StackActionRequest
-from app.services.stack_config import ports_for_probes_sync
+from app.services.stack_config import ports_for_probes_sync, sync_merged_flat
+from app.services.stack_registry import raise_if_missing
 from app.services import app_settings
 from app.services import jobs as jobs_service
 from app.services import litellm as litellm_service
@@ -57,6 +58,8 @@ async def proxy_stack_action(
             status_code=400,
             detail=f"action must be one of {sorted(_PROXY_ACTIONS)}",
         )
+    merged = sync_merged_flat()
+    raise_if_missing(merged, "proxy_up")
     settings = get_settings()
     try:
         command = cmd_proxy(settings.slgpu_root, payload.action)

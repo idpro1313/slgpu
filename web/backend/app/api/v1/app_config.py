@@ -14,14 +14,15 @@ from app.core.config import get_settings
 from app.models.audit import AuditEvent
 from app.services.stack_config import (
     META_KEY,
-    langfuse_litellm_env_path,
     mask_secrets,
     merge_partial_secrets,
     parse_dotenv_text,
     split_stack_and_secrets,
 )
 from app.services import stack_config as sc
+from app.services import presets as preset_service
 from app.services.env_key_aliases import presentation_stack
+from app.services.stack_registry import registry_to_public
 
 router = APIRouter()
 
@@ -57,30 +58,23 @@ async def install_from_files(
             detail="already installed; use force=true to re-import",
         )
 
-    main = root / "main.env"
+    main = root / "configs" / "main.env"
     if not main.is_file():
         raise HTTPException(status_code=400, detail=f"missing {main}")
 
     flat = parse_dotenv_text(main.read_text(encoding="utf-8"))
-    hf = root / "configs" / "secrets" / "hf.env"
-    if hf.is_file():
-        flat.update(parse_dotenv_text(hf.read_text(encoding="utf-8")))
-    for lf in (
-        root / "configs" / "secrets" / "langfuse-litellm.env",
-        langfuse_litellm_env_path(root, None),
-    ):
-        if lf.is_file():
-            flat.update(parse_dotenv_text(lf.read_text(encoding="utf-8")))
 
     stack, secrets = split_stack_and_secrets(flat)
     await sc.replace_all_params_from_flat(session, flat)
+    pdir = root / "data" / "presets"
+    await preset_service.import_presets_from_disk(session, pdir)
     await sc.save_section(
         session,
         META_KEY,
         {
             "installed": True,
             "installed_at": datetime.now(timezone.utc).isoformat(),
-            "source": "main.env+secrets",
+            "source": "configs/main.env",
         },
     )
     session.add(
@@ -108,6 +102,7 @@ async def get_stack(session: AsyncSession = Depends(db_session)) -> dict[str, An
         "stack": presentation_stack(stack),
         "secrets": mask_secrets(secrets),
         "meta": meta,
+        "registry": registry_to_public(),
     }
 
 

@@ -301,31 +301,6 @@ async def test_activity_includes_ui_after_preset_and_settings(client: httpx.Asyn
 
 
 @pytest.mark.asyncio
-async def test_import_templates_from_examples_presets(client: httpx.AsyncClient) -> None:
-    settings = get_settings()
-    ex_dir = settings.slgpu_root / "examples" / "presets"
-    ex_dir.mkdir(parents=True)
-    (ex_dir / "smoke-template.env").write_text(
-        "MODEL_ID=Qwen/Qwen3-7B\nTP=2\nMAX_MODEL_LEN=8192\n",
-        encoding="utf-8",
-    )
-    async with client:
-        r = await client.post("/api/v1/presets/import-templates")
-    assert r.status_code == 200
-    data = r.json()
-    assert data["files_copied"] == 1
-    assert data["files_skipped_existing"] == 0
-    assert data["imported"] + data["updated"] >= 1
-
-    dest = settings.models_presets_dir / "smoke-template.env"
-    assert dest.is_file()
-    async with client:
-        r2 = await client.post("/api/v1/presets/import-templates")
-    assert r2.status_code == 200
-    assert r2.json()["files_skipped_existing"] >= 1
-
-
-@pytest.mark.asyncio
 async def test_docker_containers_list_shape(client: httpx.AsyncClient) -> None:
     async with client:
         r = await client.get("/api/v1/docker/containers?scope=slgpu")

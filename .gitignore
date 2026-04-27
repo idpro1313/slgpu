@@ -1,6 +1,4 @@
 .env
-configs/secrets/hf.env
-configs/secrets/langfuse-litellm.env
 # Снимок стека для docker compose monitoring/proxy (БД web или копия main.env)
 .slgpu/
 __pycache__/

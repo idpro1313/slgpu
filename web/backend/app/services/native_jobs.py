@@ -31,11 +31,14 @@ from app.services.slot_runtime import (
     stop_containers_for_slot_key_sync,
 )
 from app.services.stack_config import (
+    resolve_path_relative,
     sync_merged_flat,
     write_compose_service_env_file,
     write_langfuse_litellm_env,
     write_llm_interp_env,
 )
+from app.services.stack_errors import MissingStackParams
+from app.services.stack_registry import raise_if_missing
 from app.services.job_log import append_job_log
 from app.services.slgpu_cli import CliCommand
 
@@ -216,6 +219,13 @@ async def handle_native_job(job_id: int, command: CliCommand, args: dict[str, An
         else:
             append_job_log(log, log_lock, f"[native] unknown kind {command.kind}")
             code = 1
+    except MissingStackParams as exc:
+        append_job_log(
+            log,
+            log_lock,
+            f"[stack] missing keys for {exc.scope}: {', '.join(exc.keys)} — задайте в Настройках",
+        )
+        code = 1
     except Exception as exc:  # noqa: BLE001
         logger.exception("[native_jobs][handle_native_job][BLOCK_FAILURE]")
         append_job_log(log, log_lock, f"[native] error: {exc}")
@@ -243,11 +253,7 @@ async def _resolve_gpu_indices(
     log: list[str],
     log_lock: threading.Lock,
 ) -> list[int]:
-    t_default = 8
-    try:
-        t_default = int(merged.get("TP", "8"))
-    except ValueError:
-        t_default = 8
+    t_default = int(merged["TP"])
     async with session_scope() as s:
         r = await s.execute(select(Preset).where(Preset.name == preset_name))
         pr = r.scalar_one_or_none()
@@ -269,8 +275,8 @@ def _default_host_port(merged: dict[str, str], engine: str, port_arg: Any) -> in
     if port_arg is not None:
         return int(port_arg)
     if engine == "vllm":
-        return int(merged.get("LLM_API_PORT", "8111"))
-    return int(merged.get("LLM_API_PORT", merged.get("LLM_API_PORT_SGLANG", "8222")))
+        return int(merged["LLM_API_PORT"])
+    return int(merged["LLM_API_PORT_SGLANG"])
 
 
 async def _db_mark_slot_running(
@@ -374,6 +380,7 @@ async def _native_slot_up(args: dict[str, Any], log: list[str], log_lock: thread
             f"[slot] override TP to match gpu list: {t_eff} (arg was {tp_i})",
         )
     m = merge_llm_stack_env(root, dict(merged), preset, engine, None, t_eff, gpu_indices)
+    raise_if_missing(m, "llm_slot")
     append_job_log(
         log,
         log_lock,
@@ -385,7 +392,7 @@ async def _native_slot_up(args: dict[str, Any], log: list[str], log_lock: thread
         prq = await s.execute(select(Preset).where(Preset.name == preset))
         pr = prq.scalar_one_or_none()
     hf_id = pr.hf_id if pr else None
-    int_port = internal_api_port_for(engine)
+    int_port = internal_api_port_for(engine, m)
 
     res = await run_slot_docker(
         root=root,
@@ -514,6 +521,7 @@ async def _native_monitoring_up(log: list[str], log_lock: threading.Lock) -> int
     settings = get_settings()
     root = settings.slgpu_root
     merged = sync_merged_flat()
+    raise_if_missing(merged, "monitoring_up")
     write_langfuse_litellm_env(
         root,
         {k: merged[k] for k in ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY") if k in merged},
@@ -522,10 +530,21 @@ async def _native_monitoring_up(log: list[str], log_lock: threading.Lock) -> int
     _mkdir_data_dirs(root, merged, log, log_lock)
     await _ensure_config_files_async(root, log, log_lock)
     env_file = write_compose_service_env_file(root, merged)
+    append_job_log(
+        log,
+        log_lock,
+        "[compose-env] "
+        f"file={env_file} "
+        f"grafana={merged.get('GRAFANA_BIND')}:{merged.get('GRAFANA_PORT')} "
+        f"prometheus={merged.get('PROMETHEUS_BIND')}:{merged.get('PROMETHEUS_PORT')} "
+        f"loki={merged.get('LOKI_BIND')}:{merged.get('LOKI_PORT')} "
+        f"langfuse={merged.get('LANGFUSE_BIND')}:{merged.get('LANGFUSE_PORT')} "
+        f"litellm={merged.get('LITELLM_BIND')}:{merged.get('LITELLM_PORT')}",
+    )
     await compose_exec.ensure_slgpu_network(log, log_lock)
     await _monitoring_bootstrap(root, env_file, log, log_lock)
     c, o, e = await compose_exec.compose_monitoring(
-        root, env_file, "-f", _MON_YML, "up", "-d", "--remove-orphans"
+        root, env_file, "-f", _MON_YML, "up", "-d", "--force-recreate", "--remove-orphans"
     )
     append_job_log(log, log_lock, o.strip())
     if e.strip():
@@ -546,6 +565,7 @@ async def _native_monitoring_down(log: list[str], log_lock: threading.Lock) -> i
     settings = get_settings()
     root = settings.slgpu_root
     merged = sync_merged_flat()
+    raise_if_missing(merged, "monitoring_up")
     write_langfuse_litellm_env(
         root,
         {k: merged[k] for k in ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY") if k in merged},
@@ -566,6 +586,7 @@ async def _native_monitoring_restart(log: list[str], log_lock: threading.Lock) -
     settings = get_settings()
     root = settings.slgpu_root
     merged = sync_merged_flat()
+    raise_if_missing(merged, "monitoring_up")
     write_langfuse_litellm_env(
         root,
         {
@@ -597,6 +618,7 @@ async def _native_proxy_up(log: list[str], log_lock: threading.Lock) -> int:
     settings = get_settings()
     root = settings.slgpu_root
     merged = sync_merged_flat()
+    raise_if_missing(merged, "proxy_up")
     write_langfuse_litellm_env(
         root,
         {k: merged[k] for k in ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY") if k in merged},
@@ -604,9 +626,17 @@ async def _native_proxy_up(log: list[str], log_lock: threading.Lock) -> int:
     )
     await _ensure_config_files_async(root, log, log_lock)
     env_file = write_compose_service_env_file(root, merged)
+    append_job_log(
+        log,
+        log_lock,
+        "[compose-env] "
+        f"file={env_file} "
+        f"langfuse={merged.get('LANGFUSE_BIND')}:{merged.get('LANGFUSE_PORT')} "
+        f"litellm={merged.get('LITELLM_BIND')}:{merged.get('LITELLM_PORT')}",
+    )
     await compose_exec.ensure_slgpu_network(log, log_lock)
     c, o, e = await compose_exec.compose_with_env_file(
-        root, env_file, "-f", _PROXY_YML, "up", "-d", "--remove-orphans"
+        root, env_file, "-f", _PROXY_YML, "up", "-d", "--force-recreate", "--remove-orphans"
     )
     append_job_log(log, log_lock, o.strip())
     if e.strip():
@@ -618,6 +648,7 @@ async def _native_proxy_down(log: list[str], log_lock: threading.Lock) -> int:
     settings = get_settings()
     root = settings.slgpu_root
     merged = sync_merged_flat()
+    raise_if_missing(merged, "proxy_up")
     write_langfuse_litellm_env(
         root,
         {k: merged[k] for k in ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY") if k in merged},
@@ -636,6 +667,7 @@ async def _native_proxy_restart(log: list[str], log_lock: threading.Lock) -> int
     settings = get_settings()
     root = settings.slgpu_root
     merged = sync_merged_flat()
+    raise_if_missing(merged, "proxy_up")
     write_langfuse_litellm_env(
         root,
         {
@@ -682,6 +714,8 @@ def _chown_dir(
     gid: str,
     log: list[str],
     log_lock: threading.Lock,
+    *,
+    chown_image: str,
 ) -> None:
     if not str(host_path):
         return
@@ -689,7 +723,7 @@ def _chown_dir(
     base = host_path.name
     try:
         client.containers.run(
-            "alpine:latest",
+            chown_image,
             entrypoint=[
                 "sh",
                 "-c",
@@ -707,28 +741,20 @@ async def _native_fix_perms(log: list[str], log_lock: threading.Lock) -> int:
     settings = get_settings()
     root = settings.slgpu_root
     merged = sync_merged_flat()
+    raise_if_missing(merged, "fix_perms")
 
-    def path_for(key: str, default_rel: str) -> Path:
-        v = merged.get(key, "")
-        if not v:
-            p = root / default_rel
-        elif v.startswith("./"):
-            p = (root / v[2:]).resolve()
-        else:
-            p = Path(v)
-            if not p.is_absolute():
-                p = (root / v).resolve()
-        return p
+    def path_for(key: str) -> Path:
+        return resolve_path_relative(root, merged[key])
 
-    gdir = path_for("GRAFANA_DATA_DIR", "data/monitoring/grafana")
-    pdir = path_for("PROMETHEUS_DATA_DIR", "data/monitoring/prometheus")
-    ldir = path_for("LOKI_DATA_DIR", "data/monitoring/loki")
-    ptdir = path_for("PROMTAIL_DATA_DIR", "data/monitoring/promtail")
-    lf_p = path_for("LANGFUSE_POSTGRES_DATA_DIR", "data/monitoring/langfuse/postgres")
-    lf_c = path_for("LANGFUSE_CLICKHOUSE_DATA_DIR", "data/monitoring/langfuse/clickhouse")
-    lf_cl = path_for("LANGFUSE_CLICKHOUSE_LOGS_DIR", "data/monitoring/langfuse/clickhouse-logs")
-    lf_m = path_for("LANGFUSE_MINIO_DATA_DIR", "data/monitoring/langfuse/minio")
-    lf_r = path_for("LANGFUSE_REDIS_DATA_DIR", "data/monitoring/langfuse/redis")
+    gdir = path_for("GRAFANA_DATA_DIR")
+    pdir = path_for("PROMETHEUS_DATA_DIR")
+    ldir = path_for("LOKI_DATA_DIR")
+    ptdir = path_for("PROMTAIL_DATA_DIR")
+    lf_p = path_for("LANGFUSE_POSTGRES_DATA_DIR")
+    lf_c = path_for("LANGFUSE_CLICKHOUSE_DATA_DIR")
+    lf_cl = path_for("LANGFUSE_CLICKHOUSE_LOGS_DIR")
+    lf_m = path_for("LANGFUSE_MINIO_DATA_DIR")
+    lf_r = path_for("LANGFUSE_REDIS_DATA_DIR")
 
     gimg = monitoring_image(merged, "GRAFANA_IMAGE")
     pimg = monitoring_image(merged, "PROMETHEUS_IMAGE")
@@ -736,6 +762,8 @@ async def _native_fix_perms(log: list[str], log_lock: threading.Lock) -> int:
     pgimg = monitoring_image(merged, "LANGFUSE_POSTGRES_IMAGE")
     minioimg = monitoring_image(merged, "MINIO_IMAGE")
     redisimg = monitoring_image(merged, "LANGFUSE_REDIS_IMAGE")
+
+    chown_image = merged["SLGPU_BENCH_CHOWN_IMAGE"]
 
     def run_sync() -> None:
         client = docker.from_env()
@@ -748,15 +776,15 @@ async def _native_fix_perms(log: list[str], log_lock: threading.Lock) -> int:
         ru, rg = _id_from_image(client, redisimg, log, log_lock)
         mu, mg = _id_from_image(client, minioimg, log, log_lock)
 
-        _chown_dir(client, gdir, gu, gg, log, log_lock)
-        _chown_dir(client, pdir, pu, pg, log, log_lock)
-        _chown_dir(client, ldir, lu, lg, log, log_lock)
-        _chown_dir(client, ptdir, "0", "0", log, log_lock)
-        _chown_dir(client, lf_p, pg_u, pg_g, log, log_lock)
-        _chown_dir(client, lf_c, "101", "101", log, log_lock)
-        _chown_dir(client, lf_cl, "101", "101", log, log_lock)
-        _chown_dir(client, lf_m, mu, mg, log, log_lock)
-        _chown_dir(client, lf_r, ru, rg, log, log_lock)
+        _chown_dir(client, gdir, gu, gg, log, log_lock, chown_image=chown_image)
+        _chown_dir(client, pdir, pu, pg, log, log_lock, chown_image=chown_image)
+        _chown_dir(client, ldir, lu, lg, log, log_lock, chown_image=chown_image)
+        _chown_dir(client, ptdir, "0", "0", log, log_lock, chown_image=chown_image)
+        _chown_dir(client, lf_p, pg_u, pg_g, log, log_lock, chown_image=chown_image)
+        _chown_dir(client, lf_c, "101", "101", log, log_lock, chown_image=chown_image)
+        _chown_dir(client, lf_cl, "101", "101", log, log_lock, chown_image=chown_image)
+        _chown_dir(client, lf_m, mu, mg, log, log_lock, chown_image=chown_image)
+        _chown_dir(client, lf_r, ru, rg, log, log_lock, chown_image=chown_image)
 
     await asyncio.to_thread(run_sync)
     append_job_log(log, log_lock, "[fix-perms] done")
@@ -816,13 +844,14 @@ async def _native_model_pull(
     settings = get_settings()
     root = settings.slgpu_root
     merged = sync_merged_flat()
+    raise_if_missing(merged, "pull")
     hf_id = str(args.get("hf_id", ""))
     revision = args.get("revision") or None
-    token = merged.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+    token = merged.get("HF_TOKEN")
+    if isinstance(token, str) and not token.strip():
+        token = None
 
-    models_dir = Path(merged.get("MODELS_DIR", "./data/models"))
-    if not models_dir.is_absolute():
-        models_dir = (root / models_dir.as_posix().lstrip("./")).resolve()
+    models_dir = resolve_path_relative(root, merged["MODELS_DIR"])
     target = models_dir / hf_id
     target.mkdir(parents=True, exist_ok=True)
 
@@ -887,16 +916,17 @@ async def _native_bench_scenario(args: dict[str, Any], log: list[str], log_lock:
     rounds = int(args.get("rounds", 1))
     warmup = int(args.get("warmup_requests", 3))
     m = merge_llm_stack_env(root, merged, preset, engine, None, None, None)
+    raise_if_missing(m, "bench")
     from datetime import datetime as dt
 
     ts = dt.utcnow().strftime("%Y%m%d_%H%M%S")
     out_dir = root / "data" / "bench" / "results" / engine / ts
     out_dir.mkdir(parents=True, exist_ok=True)
     host = "vllm" if engine == "vllm" else "sglang"
-    internal_port = m.get("LLM_API_PORT", "8111" if engine == "vllm" else "8222")
+    internal_port = m["VLLM_PORT"] if engine == "vllm" else m["SGLANG_LISTEN_PORT"]
     base_url = f"http://{host}:{internal_port}/v1"
     env = os.environ.copy()
-    env["MAX_MODEL_LEN"] = m.get("MAX_MODEL_LEN", "32768")
+    env["MAX_MODEL_LEN"] = m["MAX_MODEL_LEN"]
     bench_name = coalesce_str(m, "SERVED_MODEL_NAME", "SLGPU_SERVED_MODEL_NAME", default="")
     if bench_name:
         env["BENCH_MODEL_NAME"] = bench_name
@@ -928,16 +958,17 @@ async def _native_bench_load(args: dict[str, Any], log: list[str], log_lock: thr
     engine = str(args.get("engine", "vllm"))
     preset = str(args.get("preset", ""))
     m = merge_llm_stack_env(root, merged, preset, engine, None, None, None)
+    raise_if_missing(m, "bench")
     from datetime import datetime as dt
 
     ts = dt.utcnow().strftime("%Y%m%d_%H%M%S")
     out_dir = root / "data" / "bench" / "results" / engine / ts
     out_dir.mkdir(parents=True, exist_ok=True)
     host = "vllm" if engine == "vllm" else "sglang"
-    internal_port = m.get("LLM_API_PORT", "8111" if engine == "vllm" else "8222")
+    internal_port = m["VLLM_PORT"] if engine == "vllm" else m["SGLANG_LISTEN_PORT"]
     base_url = f"http://{host}:{internal_port}/v1"
     env = os.environ.copy()
-    env["MAX_MODEL_LEN"] = m.get("MAX_MODEL_LEN", "32768")
+    env["MAX_MODEL_LEN"] = m["MAX_MODEL_LEN"]
     bench_name = coalesce_str(m, "SERVED_MODEL_NAME", "SLGPU_SERVED_MODEL_NAME", default="")
     if bench_name:
         env["BENCH_MODEL_NAME"] = bench_name

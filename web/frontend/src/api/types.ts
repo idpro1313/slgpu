@@ -302,11 +302,20 @@ export interface AppConfigStatus {
   meta: Record<string, unknown>;
 }
 
-/** Legacy-объект стека при импорте JSON (редко) */
+/** Ответ GET /app-config/stack */
 export interface AppConfigStack {
   stack: Record<string, string>;
   secrets: Record<string, string>;
   meta: Record<string, unknown>;
+  /** Метаданные ключей из реестра (группа, обязательность по сценариям). */
+  registry?: Array<{
+    key: string;
+    group: string;
+    description: string;
+    is_secret: boolean;
+    allow_empty: boolean;
+    required_for: string[];
+  }>;
 }
 
 export interface PublicAccessSettings {

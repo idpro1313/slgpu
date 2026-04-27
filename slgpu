@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Единая точка входа slgpu (Linux VM).
+# Единая точка входа slgpu (Linux VM): bootstrap контейнера slgpu-web.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export SLGPU_ROOT="${ROOT}"
@@ -11,15 +11,15 @@ case "${cmd}" in
   help|-h|--help)
     exec bash "${ROOT}/scripts/cmd_help.sh" "$@"
     ;;
-  prepare|pull|up|down|restart|bench|load|monitoring|web)
-    if [[ ! -f "${ROOT}/scripts/cmd_${cmd}.sh" ]]; then
-      echo "Внутренняя ошибка: нет ${ROOT}/scripts/cmd_${cmd}.sh" >&2
+  web)
+    if [[ ! -f "${ROOT}/scripts/cmd_web.sh" ]]; then
+      echo "Внутренняя ошибка: нет ${ROOT}/scripts/cmd_web.sh" >&2
       exit 1
     fi
-    exec bash "${ROOT}/scripts/cmd_${cmd}.sh" "$@"
+    exec bash "${ROOT}/scripts/cmd_web.sh" "$@"
     ;;
   *)
-    echo "Неизвестная команда: ${cmd}" >&2
+    echo "Неизвестная команда: ${cmd} (см. ./slgpu help)" >&2
     exec bash "${ROOT}/scripts/cmd_help.sh"
     exit 1
     ;;

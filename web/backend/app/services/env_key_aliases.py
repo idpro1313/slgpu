@@ -38,22 +38,22 @@ def _legacy_vllm_keys() -> frozenset[str]:
 
 LEGACY_VLLM_PARAM_KEYS: frozenset[str] = _legacy_vllm_keys()
 
-# Образы мониторинга: (каноническое, legacy, дефолт для fix-perms — как в native_jobs до рефакторинга)
-MONITORING_IMAGE_ALIASES: tuple[tuple[str, str, str], ...] = (
-    ("DCGM_EXPORTER_IMAGE", "SLGPU_DCGM_EXPORTER_IMAGE", "nvidia/dcgm-exporter:3.3.5-3.4.0-ubuntu22.04"),
-    ("NODE_EXPORTER_IMAGE", "SLGPU_NODE_EXPORTER_IMAGE", "prom/node-exporter:v1.8.2"),
-    ("LOKI_IMAGE", "SLGPU_LOKI_IMAGE", "grafana/loki:2.9.8"),
-    ("PROMTAIL_IMAGE", "SLGPU_PROMTAIL_IMAGE", "grafana/promtail:2.9.8"),
-    ("PROMETHEUS_IMAGE", "SLGPU_PROMETHEUS_IMAGE", "prom/prometheus:v2.55.1"),
-    ("GRAFANA_IMAGE", "SLGPU_GRAFANA_IMAGE", "grafana/grafana:11.3.0"),
-    ("LANGFUSE_CLICKHOUSE_IMAGE", "SLGPU_LANGFUSE_CLICKHOUSE_IMAGE", "clickhouse/clickhouse-server:24.3"),
-    ("MINIO_IMAGE", "SLGPU_MINIO_IMAGE", "minio/minio:latest"),
-    ("MINIO_MC_IMAGE", "SLGPU_MINIO_MC_IMAGE", "minio/mc:latest"),
-    ("LANGFUSE_REDIS_IMAGE", "SLGPU_LANGFUSE_REDIS_IMAGE", "redis:7"),
-    ("LANGFUSE_POSTGRES_IMAGE", "SLGPU_LANGFUSE_POSTGRES_IMAGE", "postgres:17.4"),
-    ("LANGFUSE_WORKER_IMAGE", "SLGPU_LANGFUSE_WORKER_IMAGE", "langfuse/langfuse-worker:3"),
-    ("LANGFUSE_IMAGE", "SLGPU_LANGFUSE_IMAGE", "langfuse/langfuse:3"),
-    ("LITELLM_IMAGE", "SLGPU_LITELLM_IMAGE", "ghcr.io/berriai/litellm:main-latest"),
+# Образы мониторинга: (каноническое, legacy)
+MONITORING_IMAGE_ALIASES: tuple[tuple[str, str], ...] = (
+    ("DCGM_EXPORTER_IMAGE", "SLGPU_DCGM_EXPORTER_IMAGE"),
+    ("NODE_EXPORTER_IMAGE", "SLGPU_NODE_EXPORTER_IMAGE"),
+    ("LOKI_IMAGE", "SLGPU_LOKI_IMAGE"),
+    ("PROMTAIL_IMAGE", "SLGPU_PROMTAIL_IMAGE"),
+    ("PROMETHEUS_IMAGE", "SLGPU_PROMETHEUS_IMAGE"),
+    ("GRAFANA_IMAGE", "SLGPU_GRAFANA_IMAGE"),
+    ("LANGFUSE_CLICKHOUSE_IMAGE", "SLGPU_LANGFUSE_CLICKHOUSE_IMAGE"),
+    ("MINIO_IMAGE", "SLGPU_MINIO_IMAGE"),
+    ("MINIO_MC_IMAGE", "SLGPU_MINIO_MC_IMAGE"),
+    ("LANGFUSE_REDIS_IMAGE", "SLGPU_LANGFUSE_REDIS_IMAGE"),
+    ("LANGFUSE_POSTGRES_IMAGE", "SLGPU_LANGFUSE_POSTGRES_IMAGE"),
+    ("LANGFUSE_WORKER_IMAGE", "SLGPU_LANGFUSE_WORKER_IMAGE"),
+    ("LANGFUSE_IMAGE", "SLGPU_LANGFUSE_IMAGE"),
+    ("LITELLM_IMAGE", "SLGPU_LITELLM_IMAGE"),
 )
 
 
@@ -76,24 +76,32 @@ def apply_vllm_aliases_to_merged(merged: dict[str, str]) -> None:
 
 
 def monitoring_image(merged: dict[str, str], canonical: str) -> str:
-    for can, leg, dfl in MONITORING_IMAGE_ALIASES:
+    from app.services.stack_errors import MissingStackParams
+
+    for can, leg in MONITORING_IMAGE_ALIASES:
         if can == canonical:
-            return coalesce_str(merged, can, leg, default=dfl) or dfl
-    return merged.get(canonical, "") or ""
+            v = coalesce_str(merged, can, leg, default="")
+            if not str(v).strip():
+                raise MissingStackParams([can], "fix_perms")
+            return v
+    v = merged.get(canonical, "")
+    if not str(v).strip():
+        raise MissingStackParams([canonical], "fix_perms")
+    return str(v)
 
 
 # Ключи-алиасы vLLM, которые убираем из ответа API / из БД после миграции.
 # LLM_API_PORT — отдельный параметр (хост), не дублирует VLLM_PORT как строку в stack-only смысле.
 STRIP_VLLM_LEGACY_STACK_KEYS: frozenset[str] = frozenset(LEGACY_VLLM_PARAM_KEYS - {"LLM_API_PORT"})
 
-MONITORING_IMAGE_LEGACY_KEYS: frozenset[str] = frozenset(leg for _can, leg, _d in MONITORING_IMAGE_ALIASES)
+MONITORING_IMAGE_LEGACY_KEYS: frozenset[str] = frozenset(leg for _can, leg in MONITORING_IMAGE_ALIASES)
 
 
 def presentation_stack(stack: dict[str, str]) -> dict[str, str]:
     """Канонические имена для UI и API: без дублирующих SLGPU_* / legacy для образов."""
     m = {str(k): str(v) if v is not None else "" for k, v in stack.items()}
     apply_vllm_aliases_to_merged(m)
-    for can, leg, _dfl in MONITORING_IMAGE_ALIASES:
+    for can, leg in MONITORING_IMAGE_ALIASES:
         val = coalesce_str(m, can, leg)
         if val:
             m[can] = val

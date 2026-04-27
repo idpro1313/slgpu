@@ -9,6 +9,7 @@ from app.api.deps import actor_from_header, db_session
 from app.core.security import ValidationError
 from app.schemas.settings import PublicAccessSettings, PublicAccessSettingsUpdate
 from app.services import app_settings
+from app.services.stack_config import sync_merged_flat
 from app.services.ui_audit import record_ui_action
 
 router = APIRouter()
@@ -20,7 +21,13 @@ async def get_public_access(
     session: AsyncSession = Depends(db_session),
 ) -> PublicAccessSettings:
     configured_host = await app_settings.get_public_server_host(session)
-    effective_host = app_settings.effective_server_host(request, configured_host)
+    try:
+        merged = sync_merged_flat()
+    except RuntimeError:
+        merged = None
+    effective_host = app_settings.effective_server_host(
+        request, configured_host, merged
+    )
     urls = app_settings.public_urls(effective_host)
     key_set = (await app_settings.get_litellm_api_key(session)) is not None
     return PublicAccessSettings(

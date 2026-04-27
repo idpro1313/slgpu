@@ -31,6 +31,8 @@ from app.schemas.slot import EngineSlotOut, SlotCreateRequest, SlotRestartReques
 from app.services import gpu_availability
 from app.services import jobs as jobs_service
 from app.services import runtime as runtime_service
+from app.services.stack_config import sync_merged_flat
+from app.services.stack_registry import raise_if_missing
 from app.services.slot_runtime import internal_api_port_for
 from app.services.slgpu_cli import (
     cmd_slot_down,
@@ -115,11 +117,13 @@ async def create_engine_slot(
     p = await _find_preset(session, preset_name)
     if p is None:
         raise HTTPException(status_code=404, detail="preset not found")
+    stack_m = sync_merged_flat()
+    raise_if_missing(stack_m, "port_allocation")
     tpi = payload.tp
     if tpi is None and p.tp is not None:
         tpi = int(p.tp)
     if tpi is None:
-        tpi = 8
+        tpi = int(stack_m["TP"])
     validate_tp(tpi)
     gidx = list(payload.gpu_indices) if payload.gpu_indices else None
     if gidx is None or len(gidx) == 0:
@@ -157,13 +161,13 @@ async def create_engine_slot(
         raise HTTPException(status_code=409, detail="slot_key already in use")
     hport = payload.host_api_port
     if hport is None:
-        hport = await _next_free_port(session, engine)
+        hport = await _next_free_port(session, engine, stack_m)
     else:
         try:
             validate_port(hport)
         except ValidationError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-    int_port = internal_api_port_for(engine)
+    int_port = internal_api_port_for(engine, stack_m)
     now = datetime.now(timezone.utc)
     session.add(
         EngineSlot(
@@ -291,12 +295,19 @@ async def slot_restart(
     )
 
 
-async def _next_free_port(session: AsyncSession, engine: str) -> int:
+async def _next_free_port(
+    session: AsyncSession, engine: str, stack_m: dict[str, str]
+) -> int:
     res = await session.execute(
         select(EngineSlot.host_api_port).where(EngineSlot.host_api_port.isnot(None))
     )
     used = {int(p) for p in res.scalars().all() if p is not None}
-    start, end = (8111, 8130) if engine == "vllm" else (8222, 8241)
+    if engine == "vllm":
+        start = int(stack_m["LLM_HOST_PORT_RANGE_VLLM_START"])
+        end = int(stack_m["LLM_HOST_PORT_RANGE_VLLM_END"])
+    else:
+        start = int(stack_m["LLM_HOST_PORT_RANGE_SGLANG_START"])
+        end = int(stack_m["LLM_HOST_PORT_RANGE_SGLANG_END"])
     for p in range(start, end + 1):
         if p not in used:
             return p

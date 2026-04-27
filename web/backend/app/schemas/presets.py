@@ -55,21 +55,3 @@ class PresetCloneRequest(BaseModel):
     gpu_mask: str | None = None
     served_model_name: str | None = None
     parameters: dict[str, Any] | None = None
-
-
-class PresetSyncResult(BaseModel):
-    imported: int
-    updated: int
-    skipped: int
-    errors: list[str] = Field(default_factory=list)
-
-
-class PresetImportTemplatesResult(BaseModel):
-    """Копирование ``examples/presets/*.env`` в PRESETS_DIR и импорт в БД (как ``POST /presets/sync``)."""
-
-    files_copied: int
-    files_skipped_existing: int
-    imported: int
-    updated: int
-    skipped: int
-    errors: list[str] = Field(default_factory=list)

@@ -80,6 +80,27 @@ pre {
   flex-direction: column;
 }
 
+.stack-missing-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px var(--space-page-x);
+  background: #fff3cd;
+  border-bottom: 1px solid #ffc107;
+  color: #664d03;
+  font-size: 14px;
+}
+
+.stack-missing-banner__text {
+  flex: 1 1 220px;
+}
+
+tr.settings-stack-row--missing {
+  background: rgba(255, 193, 7, 0.25);
+  outline: 1px solid #ffc107;
+}
+
 .app-header {
   background: var(--color-white, #fff);
   color: var(--color-header-text);

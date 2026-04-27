@@ -28,11 +28,7 @@ _CONFIG = "config.json"
 
 def _models_root() -> Path:
     """Weights directory from ``stack_params`` / merged stack in SQLite (``models_dir_sync``)."""
-
-    try:
-        return models_dir_sync()
-    except Exception:  # noqa: BLE001
-        return Path("/opt/models")
+    return models_dir_sync()
 
 
 def _scan_local_state(hf_id: str) -> tuple[ModelDownloadStatus, int | None]:

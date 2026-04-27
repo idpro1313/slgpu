@@ -18,6 +18,7 @@ from app.services.compose_exec import ensure_slgpu_network
 from app.services.gpu_state import invalidate_gpu_state_cache
 from app.services.llm_env import container_env_for_engine, merge_llm_stack_env
 from app.services.stack_config import sync_merged_flat
+from app.services.stack_errors import MissingStackParams
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +26,6 @@ _LABEL_SLOT = "com.develonica.slgpu.slot"
 _LABEL_ENGINE = "com.develonica.slgpu.engine"
 _LABEL_PRESET = "com.develonica.slgpu.preset"
 
-SGLANG_DEFAULT_IMAGE = "lmsysorg/sglang:latest"
-VLLM_DEFAULT_IMAGE = "vllm/vllm-openai:v0.19.1-cu130"
 SGLANG_KERNEL_VOLUME = "slgpu-sglang-kernel-cache-web"
 
 
@@ -36,14 +35,16 @@ def slot_container_name(engine: str, slot_key: str) -> str:
     return f"slgpu-{engine}-{slot_key}"
 
 
-def internal_api_port_for(engine: str) -> int:
-    return 8111 if engine == "vllm" else 8222
+def internal_api_port_for(engine: str, merged: dict[str, str]) -> int:
+    if engine == "vllm":
+        return int(merged["VLLM_PORT"])
+    return int(merged["SGLANG_LISTEN_PORT"])
 
 
 def resolve_image(engine: str, merged: dict[str, str]) -> str:
     if engine == "vllm":
-        return str(merged.get("VLLM_DOCKER_IMAGE") or VLLM_DEFAULT_IMAGE)
-    return str(merged.get("SGLANG_DOCKER_IMAGE") or SGLANG_DEFAULT_IMAGE)
+        return str(merged["VLLM_DOCKER_IMAGE"])
+    return str(merged["SGLANG_DOCKER_IMAGE"])
 
 
 def _resolve_path(root: Path, p: str) -> Path:
@@ -157,15 +158,23 @@ def _run_slot_sync(
 ) -> dict[str, Any]:
     cname = slot_container_name(engine, slot_key)
     merged0 = sync_merged_flat()
-    merged = merge_llm_stack_env(
-        root,
-        dict(merged0),
-        preset,
-        engine,
-        None,
-        tp,
-        gpu_indices,
-    )
+    try:
+        merged = merge_llm_stack_env(
+            root,
+            dict(merged0),
+            preset,
+            engine,
+            None,
+            tp,
+            gpu_indices,
+        )
+    except MissingStackParams as exc:
+        return {
+            "ok": False,
+            "error": f"missing stack/preset keys ({exc.scope}): {', '.join(exc.keys)}",
+            "container_id": None,
+            "container_name": cname,
+        }
     image = resolve_image(engine, merged)
     env = container_env_for_engine(merged, engine)
     client = docker.from_env()
@@ -176,7 +185,7 @@ def _run_slot_sync(
 
     _stop_container_by_name(client, cname, log, log_lock)
 
-    models = _resolve_path(root, str(merged.get("MODELS_DIR", "./data/models")))
+    models = _resolve_path(root, str(merged["MODELS_DIR"]))
     serve = (root / "scripts" / "serve.sh").resolve()
     if not serve.is_file():
         return {"ok": False, "error": f"missing {serve}", "container_id": None, "container_name": cname}
@@ -189,7 +198,7 @@ def _run_slot_sync(
         _ensure_named_volume(client, SGLANG_KERNEL_VOLUME)
         vols[SGLANG_KERNEL_VOLUME] = {"bind": "/var/cache/slgpu-kernels", "mode": "rw"}
 
-    internal = internal_api_port_for(engine)
+    internal = internal_api_port_for(engine, merged)
     port_key = f"{internal}/tcp"
     dr = [DeviceRequest(device_ids=[str(i) for i in gpu_indices], capabilities=[["gpu"]])]
     labels = {

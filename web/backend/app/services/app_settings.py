@@ -11,7 +11,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.services.stack_config import ports_for_probes_sync
+from app.services.stack_config import ports_for_probes_sync, sync_merged_flat
+from app.services.stack_errors import MissingStackParams
 from app.core.security import ValidationError
 from app.models.setting import Setting
 
@@ -85,16 +86,23 @@ async def set_public_server_host(session: AsyncSession, server_host: str | None)
     return normalized
 
 
-def effective_server_host(request: Request, configured_host: str | None) -> str:
+def effective_server_host(
+    request: Request,
+    configured_host: str | None,
+    merged: dict[str, str] | None,
+) -> str:
+    """Публичный host для ссылок. Без молчаливого ``127.0.0.1``: fallback — ``WEB_PUBLIC_HOST`` из стека."""
     if configured_host:
         return configured_host
     request_host = request.url.hostname
     if request_host and request_host not in _INTERNAL_HOSTS:
         return request_host
-    settings = get_settings()
-    if settings.monitoring_http_host not in _INTERNAL_HOSTS:
-        return settings.monitoring_http_host
-    return "127.0.0.1"
+    if merged is None:
+        return request_host or "localhost"
+    pub = (merged.get("WEB_PUBLIC_HOST") or "").strip()
+    if pub:
+        return pub
+    raise MissingStackParams(["WEB_PUBLIC_HOST"], "probes")
 
 
 def public_urls(server_host: str) -> dict[str, str]:
@@ -114,4 +122,8 @@ def public_urls(server_host: str) -> dict[str, str]:
 
 async def get_public_urls(session: AsyncSession, request: Request) -> dict[str, str]:
     configured = await get_public_server_host(session)
-    return public_urls(effective_server_host(request, configured))
+    try:
+        merged = sync_merged_flat()
+    except RuntimeError:
+        merged = None
+    return public_urls(effective_server_host(request, configured, merged))

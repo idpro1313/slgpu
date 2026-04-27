@@ -26,15 +26,6 @@ class Settings(BaseSettings):
 
     slgpu_root: Path = Field(default=Path("/slgpu"))
     data_dir: Path = Field(default=Path("/data"))
-    # Must match Docker label com.docker.compose.project for each stack (see `docker ps --format '{{.Label "com.docker.compose.project"}}'`)
-    compose_project_infer: str = Field(
-        default="slgpu",
-        description="Compose project name for the vLLM/SGLang stack",
-    )
-    compose_project_monitoring: str = Field(
-        default="slgpu-monitoring",
-        description="Compose project name for docker/docker-compose.monitoring.yml stack",
-    )
     database_url: str = Field(
         default="sqlite+aiosqlite:////data/slgpu-web.db",
         description="SQLAlchemy async URL. Use absolute path inside the container.",
@@ -42,26 +33,16 @@ class Settings(BaseSettings):
 
     docker_socket: str = "unix:///var/run/docker.sock"
 
-    llm_default_vllm_port: int = 8111
-    llm_default_sglang_port: int = 8222
-    grafana_port: int = 3000
-    prometheus_port: int = 9090
-    langfuse_port: int = 3001
-    litellm_port: int = 4000
-    loki_port: int = 3100
-
-    # Из контейнера slgpu-web 127.0.0.1 — не хост; published-порты — через host.docker.internal (см. docker-compose.web.yml).
+    # Задаётся в `docker/docker-compose.web.yml` / bootstrap env (без кода-дефолта 127.0.0.1).
     monitoring_http_host: str = Field(
-        default="127.0.0.1",
-        description="Host for HTTP health checks to monitoring services (Prometheus, Grafana, Langfuse, LiteLLM).",
+        default="host.docker.internal",
+        description="Host for HTTP health checks to monitoring services (from inside slgpu-web).",
     )
 
-    # Тот же принцип, что у WEB_MONITORING_HTTP_HOST: из slgpu-web к API vLLM/SGLang нельзя ходить на 127.0.0.1:порт
-    # (это loopback самого web). Дополнительно `runtime.py` пробует http://vllm:8111 и http://sglang:8222
-    # по сети compose `slgpu`.
+    # Тот же принцип: из slgpu-web к published LLM портам на хосте — не 127.0.0.1 контейнера web.
     llm_http_host: str = Field(
-        default="127.0.0.1",
-        description="Host for /v1/models and /metrics probes to the LLM container (published port on host or Docker DNS).",
+        default="host.docker.internal",
+        description="Host for /v1/models and /metrics probes to the LLM stack (published on host or Docker DNS).",
     )
 
     cors_origins: list[str] = Field(default_factory=lambda: ["*"])
@@ -93,7 +74,7 @@ class Settings(BaseSettings):
 
     @property
     def main_env_path(self) -> Path:
-        return self.slgpu_root / "main.env"
+        return self.slgpu_root / "configs" / "main.env"
 
 
 @lru_cache
