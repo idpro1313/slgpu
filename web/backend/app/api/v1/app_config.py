@@ -14,6 +14,7 @@ from app.core.config import get_settings
 from app.models.audit import AuditEvent
 from app.services.stack_config import (
     META_KEY,
+    langfuse_litellm_env_path,
     mask_secrets,
     merge_partial_secrets,
     parse_dotenv_text,
@@ -64,9 +65,12 @@ async def install_from_files(
     hf = root / "configs" / "secrets" / "hf.env"
     if hf.is_file():
         flat.update(parse_dotenv_text(hf.read_text(encoding="utf-8")))
-    lf = root / "configs" / "secrets" / "langfuse-litellm.env"
-    if lf.is_file():
-        flat.update(parse_dotenv_text(lf.read_text(encoding="utf-8")))
+    for lf in (
+        root / "configs" / "secrets" / "langfuse-litellm.env",
+        langfuse_litellm_env_path(root, None),
+    ):
+        if lf.is_file():
+            flat.update(parse_dotenv_text(lf.read_text(encoding="utf-8")))
 
     stack, secrets = split_stack_and_secrets(flat)
     await sc.replace_all_params_from_flat(session, flat)

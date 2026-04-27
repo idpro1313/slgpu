@@ -523,6 +523,7 @@ async def _native_monitoring_up(log: list[str], log_lock: threading.Lock) -> int
     write_langfuse_litellm_env(
         root,
         {k: merged[k] for k in ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY") if k in merged},
+        merged,
     )
     _mkdir_data_dirs(root, merged, log, log_lock)
     await _ensure_config_files_async(root, log, log_lock)
@@ -543,6 +544,11 @@ async def _native_monitoring_down(log: list[str], log_lock: threading.Lock) -> i
     settings = get_settings()
     root = settings.slgpu_root
     merged = sync_merged_flat()
+    write_langfuse_litellm_env(
+        root,
+        {k: merged[k] for k in ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY") if k in merged},
+        merged,
+    )
     env_file = _write_tmp_monitoring_env(merged)
     try:
         c, o, e = await compose_exec.compose_monitoring(root, env_file, "-f", _MON_YML, "down")
@@ -563,6 +569,7 @@ async def _native_monitoring_restart(log: list[str], log_lock: threading.Lock) -
             for k in ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY")
             if k in merged
         },
+        merged,
     )
     await _ensure_config_files_async(root, log, log_lock)
     env_file = _write_tmp_monitoring_env(merged)

@@ -14,10 +14,12 @@ if [ "$(id -u)" = "0" ]; then
   chown -R 10001:10001 /data
   if [ -n "${WEB_SLGPU_ROOT:-}" ]; then
     # bench results: native.bench.* mkdir() as uid 10001 — must not be root-only (e.g. host ran ./slgpu bench)
+    # data/web/secrets: generated langfuse-litellm.env for monitoring compose (not root-only configs/secrets)
     mkdir -p "${WEB_SLGPU_ROOT}/data/models" "${WEB_SLGPU_ROOT}/data/presets" \
-      "${WEB_SLGPU_ROOT}/data/bench/results"
+      "${WEB_SLGPU_ROOT}/data/bench/results" \
+      "${WEB_SLGPU_ROOT}/data/web/secrets"
     chown -R 10001:10001 "${WEB_SLGPU_ROOT}/data/models" "${WEB_SLGPU_ROOT}/data/presets" \
-      "${WEB_SLGPU_ROOT}/data/bench" 2>/dev/null || true
+      "${WEB_SLGPU_ROOT}/data/bench" "${WEB_SLGPU_ROOT}/data/web" 2>/dev/null || true
   fi
   if [ -S /var/run/docker.sock ]; then
     GID=$(stat -c %g /var/run/docker.sock)

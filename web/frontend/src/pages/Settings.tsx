@@ -484,7 +484,7 @@ export function SettingsPage() {
 
         <Section
           title="Импорт из файлов"
-          subtitle="Читает `main.env` в корне репозитория и опционально `configs/secrets/hf.env`, `configs/secrets/langfuse-litellm.env`. Повтор без force вернёт 409."
+          subtitle="Читает `main.env` в корне репозитория и опционально `configs/secrets/hf.env`, ключи Langfuse из `configs/secrets/` или `data/web/secrets/langfuse-litellm.env`. Повтор без force вернёт 409."
         >
           <div className="flex flex--col flex--gap-sm">
             <p className="section__subtitle" style={{ margin: 0 }}>

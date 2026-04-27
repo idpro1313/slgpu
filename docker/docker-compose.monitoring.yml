@@ -452,8 +452,8 @@ services:
     entrypoint: ["/bin/sh", "/etc/slgpu/litellm-entrypoint.sh"]
     env_file:
       - main.env
-      # Перекрывает main.env; ключи не в git: cp configs/secrets/langfuse-litellm.env.example …
-      - configs/secrets/langfuse-litellm.env
+      # Перекрывает main.env; путь под WEB_DATA_DIR (data/web) — slgpuweb может писать (не configs/secrets)
+      - data/web/secrets/langfuse-litellm.env
     environment:
       # Пустое значение передаётся в контейнер; entrypoint (litellm-entrypoint.sh) делает unset — иначе 401
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}

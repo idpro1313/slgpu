@@ -8,5 +8,5 @@ litellm_settings:
   set_verbose: false
   # Клиенты (Cursor и др.) шлют reasoning_effort; vLLM OpenAI-API — нет. Иначе UnsupportedParamsError.
   drop_params: true
-  # OTEL → Langfuse /api/public/otel; ключи в configs/secrets/langfuse-litellm.env; LANGFUSE_OTEL_HOST в compose.
+  # OTEL → Langfuse /api/public/otel; ключи в data/web/secrets/langfuse-litellm.env; LANGFUSE_OTEL_HOST в compose.
   callbacks: ["langfuse_otel"]

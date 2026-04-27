@@ -1674,6 +1674,13 @@
 - **Файлы:** `web/backend/app/services/env_key_aliases.py`, `stack_config.py`, `llm_env.py`, `presets.py`, `env_files.py`, `native_jobs.py`; `scripts/serve.sh`, `_lib.sh`, `monitoring_fix_permissions.sh`, `cmd_monitoring.sh`; `docker/docker-compose.llm.yml`, `docker/docker-compose.monitoring.yml`; `main.env`, `main.env.example`, `examples/presets/*.env`; `web/frontend` `Presets.tsx`, `Settings.tsx`; `README.md`, `configs/models/README.md`; `VERSION`, версии web/backend, `grace/knowledge-graph/knowledge-graph.xml`, `docs/HISTORY.md`.
 - **Решение:** **MINOR 4.2.0** — обратная совместимость через fallback в скриптах, compose и Python.
 
+### 4.2.4: `langfuse-litellm.env` под `WEB_DATA_DIR`, не в `configs/secrets/`
+
+- **Что:** `langfuse_litellm_env_path()`, `write_langfuse_litellm_env(..., merged)` пишет в `data/web/secrets/langfuse-litellm.env`; чтение legacy `configs/secrets/…` при пустых ключах в БД (если файл читается); `POST /install` подхватывает оба пути; compose monitoring — `env_file` на `data/web/...`; `cmd_monitoring.sh` копирует пример в `data/web/secrets/`; entrypoint — `mkdir`/`chown` на `data/web`; `native.monitoring.down` вызывает write перед compose (чтобы файл существовал).
+- **Почему:** Запись в `configs/secrets/langfuse-litellm.env` из web давала **EACCES** (каталог/файл часто root-only на хосте).
+- **Файлы:** `stack_config.py`, `native_jobs.py`, `app_config.py`, `docker/docker-compose.monitoring.yml`, `web/docker-entrypoint.sh`, `scripts/cmd_monitoring.sh`, `configs/secrets/langfuse-litellm.env.example`, `configs/monitoring/litellm/config.yaml`, `main.env`, `main.env.example`, `data/README.md`, `README.md`, `Settings.tsx`, `VERSION`, версии web, `docs/HISTORY.md`.
+- **Решение:** **PATCH** — на сервере один раз `cp` из старого пути в `data/web/secrets/` или перезапуск monitoring из UI после деплоя.
+
 ### 4.2.3: `native.monitoring.*` — временный env не в `data/`
 
 - **Что:** `_write_tmp_monitoring_env()` создаёт файл через `tempfile.mkstemp()` без `dir=…/data` (системный `TMPDIR`, обычно `/tmp` в контейнере web).

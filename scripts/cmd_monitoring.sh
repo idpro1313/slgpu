@@ -69,10 +69,12 @@ slgpu_ensure_monitoring_bind_config_files() {
 }
 
 slgpu_ensure_langfuse_litellm_secrets() {
-  local s="${ROOT}/configs/secrets/langfuse-litellm.env"
+  # С compose: data/web/… (см. docker-compose.monitoring.yml). Устаревший configs/secrets/ — только с хоста вручную.
+  local s="${ROOT}/data/web/secrets/langfuse-litellm.env"
   local ex="${ROOT}/configs/secrets/langfuse-litellm.env.example"
   if [[ ! -f "${s}" ]]; then
     if [[ -f "${ex}" ]]; then
+      mkdir -p "$(dirname "${s}")"
       cp "${ex}" "${s}"
       echo "Создан ${s} из примера — при необходимости вставьте LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY (Langfuse → Project → API keys)."
     else
