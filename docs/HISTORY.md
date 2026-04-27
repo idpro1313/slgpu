@@ -1970,3 +1970,12 @@
 - **Файлы:** `configs/main.env`, `configs/monitoring/README.md`, `VERSION`, `README.md`, `docs/AGENTS.md`, `web/backend/app/__init__.py`, `web/backend/pyproject.toml`, `web/frontend/package.json`, `web/frontend/package-lock.json`, `docs/HISTORY.md`.
 - **Решение:** PATCH 5.2.9 — смена дефолтного тега образа и документация. Пользователи с зафиксированным в БД старым **`LANGFUSE_REDIS_IMAGE`** меняют значение в **Настройки** вручную или переимпортируют шаблон. Альтернатива «оставить 7.2 и чистить `LANGFUSE_REDIS_DATA_DIR`» остаётся в README как вариант с **потерей данных Redis**.
 
+## Фаза 5.2.10 (актуализация тегов образов стека мониторинга)
+
+### Что: сверка с релизами и bump дефолтов в `main.env`
+
+- **Что сделано:** По GitHub API и Docker Hub проверены актуальные релизы. В [`configs/main.env`](configs/main.env) обновлены: **`LOKI_IMAGE`** / **`PROMTAIL_IMAGE`** — **2.9.17**; **`GRAFANA_IMAGE`** — **11.6.14**; **`NODE_EXPORTER_IMAGE`** — **v1.11.1**; **`DCGM_EXPORTER_IMAGE`** — **4.5.2-4.8.1-ubuntu22.04**; **`SLGPU_BENCH_CHOWN_IMAGE`** — **alpine:3.21.7**. **`PROMETHEUS_IMAGE`** оставлен **`v2.55.1`** (последний релиз ветки **v2**). Обновлены [`README.md`](README.md) (таблица §3, ограничения §15, блок версии), [`configs/monitoring/README.md`](configs/monitoring/README.md) (абзац о версиях и миграциях), [`docs/AGENTS.md`](docs/AGENTS.md), реестр [`stack_registry.py`](web/backend/app/services/stack_registry.py) (описание alpine), версии web (`VERSION` **5.2.10**, `package.json` / `package-lock`, `pyproject.toml`, `__init__.py`), [`docs/HISTORY.md`](docs/HISTORY.md).
+- **Почему:** Запрос: проверить самые актуальные версии образов мониторинга, поднять, проверить, при необходимости доработать. Локальный подъём стека агентом не выполнялся (правила репо); теги выверены по upstream. **Loki 3** / **Prometheus 3** / **Grafana 12+** не включены в дефолт — требуют миграции конфигов/правил; зафиксировано в доке.
+- **Файлы:** `configs/main.env`, `configs/monitoring/README.md`, `README.md`, `docs/AGENTS.md`, `docs/HISTORY.md`, `web/backend/app/services/stack_registry.py`, `VERSION`, `web/backend/app/__init__.py`, `web/backend/pyproject.toml`, `web/frontend/package.json`, `web/frontend/package-lock.json`.
+- **Решение:** PATCH 5.2.10 — обновление дефолтных тегов и документация. Пользователю на VM: **`docker compose pull`** и пересоздание сервисов monitoring после **импорта** в БД; при сбоях DCGM — сверка версии **nv-hostengine** на хосте с тегом образа (см. NVIDIA DCGM docs).
+

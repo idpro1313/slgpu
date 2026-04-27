@@ -167,7 +167,7 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
     "LANGFUSE_CLICKHOUSE_LOGS_DIR": _e("LANGFUSE_CLICKHOUSE_LOGS_DIR", "paths", "Каталог логов ClickHouse на хосте.", *S_MON, "fix_perms"),
     "LANGFUSE_MINIO_DATA_DIR": _e("LANGFUSE_MINIO_DATA_DIR", "paths", "Каталог MinIO на хосте.", *S_MON, "fix_perms"),
     "LANGFUSE_REDIS_DATA_DIR": _e("LANGFUSE_REDIS_DATA_DIR", "paths", "Каталог Redis (Langfuse) на хосте.", *S_MON, "fix_perms"),
-    "SLGPU_BENCH_CHOWN_IMAGE": _e("SLGPU_BENCH_CHOWN_IMAGE", "paths", "Образ для эфемерного chown в `monitoring fix-perms` и bench-job (alpine:3.20 / любой образ с chown).", "fix_perms"),
+    "SLGPU_BENCH_CHOWN_IMAGE": _e("SLGPU_BENCH_CHOWN_IMAGE", "paths", "Образ для эфемерного chown в `monitoring fix-perms` и bench-job (alpine:3.21 / любой образ с chown).", "fix_perms"),
 
     # ----- 4. Образы Docker (LLM + monitoring + proxy) -----
     "VLLM_DOCKER_IMAGE": _e("VLLM_DOCKER_IMAGE", "images", "Образ vLLM (OpenAI-совместимый сервер); пресет может перекрыть.", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),

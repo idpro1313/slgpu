@@ -17,6 +17,8 @@
 
 **Grafana: provisioning.** Сервис `grafana` монтирует **отдельно** каталоги `configs/monitoring/grafana/provisioning/{dashboards,alerting,plugins}` и **файл** `${WEB_DATA_DIR}/.slgpu/monitoring/datasource.yml` → `…/datasources/datasource.yml`. Раньше весь `provisioning` с `:ro` и второй bind файла внутри дерева давал у runc «read-only file system» (нельзя создать mountpoint внутри read-only parent).
 
+**Версии образов (дефолты `main.env`, пересмотр 2026):** теги согласованы с релизами upstream (проверка: GitHub Releases + наличие тега на Docker Hub). **Loki/Promtail** — **2.9.17** (последние **2.9.x**; линия **Loki 3** потребует новой схемы/config — не включена по умолчанию). **Grafana** — **11.6.14** (остаёмся в **v11**; **12/13** — отдельный апгрейд UI/provisioning). **Prometheus** — **v2.55.1** (последний **v2**; **Prometheus 3** — отдельная миграция rules/OPA). **node-exporter** — **v1.11.1**; **DCGM exporter** — **4.5.2-4.8.1** (`ubuntu22.04`); DCGM на хосте не должен быть сильно старше образа. **`SLGPU_BENCH_CHOWN_IMAGE`** — **alpine:3.21.7**. На VM после смены тегов: `docker compose pull` и пересоздание сервисов стека мониторинга.
+
 ### LiteLLM: подробные логи (отладка)
 
 В [`main.env`](../../main.env) задайте **`LITELLM_LOG=DEBUG`**, пересоздайте контейнер `slgpu-proxy-litellm` (эквивалент CLI **`--detailed_debug`**: больше деталей по запросам к vLLM и по ошибкам). По умолчанию **`LITELLM_LOG=INFO`**. См. [Debugging | LiteLLM](https://docs.litellm.ai/docs/proxy/debugging). Для диагностики OTEL-экспорта (Langfuse) можно временно **`OTEL_LOG_LEVEL=debug`** в `main.env`.
