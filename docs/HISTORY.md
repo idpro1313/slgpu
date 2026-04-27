@@ -1673,3 +1673,9 @@
 - **Почему:** Запрос пользователя — убрать путаницу `SLGPU_` при настройке пресетов и web; разделить «наши» и «как у движка».
 - **Файлы:** `web/backend/app/services/env_key_aliases.py`, `stack_config.py`, `llm_env.py`, `presets.py`, `env_files.py`, `native_jobs.py`; `scripts/serve.sh`, `_lib.sh`, `monitoring_fix_permissions.sh`, `cmd_monitoring.sh`; `docker/docker-compose.llm.yml`, `docker/docker-compose.monitoring.yml`; `main.env`, `main.env.example`, `examples/presets/*.env`; `web/frontend` `Presets.tsx`, `Settings.tsx`; `README.md`, `configs/models/README.md`; `VERSION`, версии web/backend, `grace/knowledge-graph/knowledge-graph.xml`, `docs/HISTORY.md`.
 - **Решение:** **MINOR 4.2.0** — обратная совместимость через fallback в скриптах, compose и Python.
+
+### 4.2.0 (доп.): configs/monitoring/README
+
+- **Что:** В [configs/monitoring/README.md](configs/monitoring/README.md) заменены упоминания `SLGPU_SERVED_MODEL_NAME` / `SLGPU_*_IMAGE` на `SERVED_MODEL_NAME` и канонические имена образов с пометкой про legacy.
+- **Почему:** Согласование с рефакторингом env 4.2.0.
+- **Файлы:** `configs/monitoring/README.md`, `docs/HISTORY.md`.
