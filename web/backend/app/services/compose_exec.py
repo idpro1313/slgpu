@@ -72,11 +72,13 @@ async def compose_inherit_env(
     )
 
 
-async def compose_monitoring(
+async def compose_with_env_file(
     root: Path,
     main_env_file: Path,
     *compose_args: str,
 ) -> tuple[int, str, str]:
+    """``docker compose --project-directory <root> --env-file <main> ...`` (как monitoring/proxy)."""
+
     proc = await asyncio.create_subprocess_exec(
         "docker",
         "compose",
@@ -94,6 +96,14 @@ async def compose_monitoring(
     return proc.returncode or 0, out_b.decode("utf-8", errors="replace"), err_b.decode(
         "utf-8", errors="replace"
     )
+
+
+async def compose_monitoring(
+    root: Path,
+    main_env_file: Path,
+    *compose_args: str,
+) -> tuple[int, str, str]:
+    return await compose_with_env_file(root, main_env_file, *compose_args)
 
 
 async def docker_network_inspect(name: str) -> tuple[int, str, str]:

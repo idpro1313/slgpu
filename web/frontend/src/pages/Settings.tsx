@@ -42,6 +42,7 @@ const MONITORING_COMPOSE_KEYS = new Set<string>([
   "LOKI_PORT",
   "WEB_COMPOSE_PROJECT_INFER",
   "WEB_COMPOSE_PROJECT_MONITORING",
+  "WEB_COMPOSE_PROJECT_PROXY",
 ]);
 
 const WEB_UI_KEYS = new Set<string>(["WEB_PORT", "WEB_BIND", "WEB_LOG_LEVEL"]);
@@ -129,7 +130,8 @@ const STACK_GROUP_META: Record<
   },
   monitoring: {
     title: "Мониторинг и compose",
-    subtitle: "Порты Prometheus, Grafana, Langfuse, LiteLLM, Loki и имена compose-проектов.",
+    subtitle:
+      "Порты Prometheus, Grafana, Langfuse, LiteLLM, Loki; проекты: slgpu, slgpu-monitoring, slgpu-proxy (LiteLLM).",
   },
   inference: {
     title: "GPU и инференс",

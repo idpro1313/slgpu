@@ -1674,6 +1674,13 @@
 - **Файлы:** `web/backend/app/services/env_key_aliases.py`, `stack_config.py`, `llm_env.py`, `presets.py`, `env_files.py`, `native_jobs.py`; `scripts/serve.sh`, `_lib.sh`, `monitoring_fix_permissions.sh`, `cmd_monitoring.sh`; `docker/docker-compose.llm.yml`, `docker/docker-compose.monitoring.yml`; `main.env`, `main.env.example`, `examples/presets/*.env`; `web/frontend` `Presets.tsx`, `Settings.tsx`; `README.md`, `configs/models/README.md`; `VERSION`, версии web/backend, `grace/knowledge-graph/knowledge-graph.xml`, `docs/HISTORY.md`.
 - **Решение:** **MINOR 4.2.0** — обратная совместимость через fallback в скриптах, compose и Python.
 
+### 4.3.0: LiteLLM в отдельном compose-проекте `slgpu-proxy`
+
+- **Что:** Новый [`docker/docker-compose.proxy.yml`](docker/docker-compose.proxy.yml): сервис **litellm**, `name: ${WEB_COMPOSE_PROJECT_PROXY:-slgpu-proxy}`, `container_name: slgpu-proxy-litellm`, `DATABASE_URL` и `LANGFUSE_OTEL_HOST` через **slgpu-monitoring-postgres** / **slgpu-monitoring-langfuse-web**; сеть `slgpu` (external). Из **monitoring** compose сервис litellm удалён; **litellm-pg-init** остаётся в monitoring. **`./slgpu monitoring`**: up — monitoring `up -d --remove-orphans`, затем proxy `up -d`; down — сначала proxy, затем monitoring; restart — оба. **native_jobs** то же; **`compose_with_env_file`** в `compose_exec.py`. **`WEB_COMPOSE_PROJECT_PROXY`**, пробы dashboard: **LiteLLM** с `compose_project_proxy`, `docker_client` — префикс **slgpu-proxy-**; **Settings.tsx**, **main.env\***.
+- **Почему:** Запрос — разделить группы запуска: прокси LiteLLM отдельно от **slgpu-monitoring**.
+- **Файлы:** `docker/docker-compose.proxy.yml`, `docker/docker-compose.monitoring.yml`, `web/backend/.../native_jobs.py`, `compose_exec.py`, `stack_config.py`, `monitoring.py`, `docker_client.py`, `scripts/cmd_monitoring.sh`, `cmd_down.sh`, `README.md`, `docs/AGENTS.md`, `web/CONTRACT.md`, `configs/monitoring/README.md`, `Settings.tsx`, `grace/knowledge-graph/knowledge-graph.xml`, `VERSION`, версии web, `docs/HISTORY.md`.
+- **Решение:** **MINOR** — после `git pull`: остановить стек, при необходимости `docker rm` старого **`slgpu-monitoring-litellm`**; **`./slgpu monitoring up`** поднимет **slgpu-proxy-litellm**.
+
 ### 4.2.5: MinIO по умолчанию `RELEASE.2025-10-15` + README про `xl meta version`
 
 - **Что:** Дефолт **`MINIO_IMAGE`** / **`MINIO_MC_IMAGE`** приведён к `RELEASE.2025-10-15T17-29-55Z` (compose, `env_key_aliases`, `monitoring_fix_permissions.sh`, комменты в `main.env*`). В **`configs/monitoring/README.md`** — разбор **`decodeXLHeaders: Unknown xl meta version 3`**, действия (upgrade / очистка `LANGFUSE_MINIO_DATA_DIR`).

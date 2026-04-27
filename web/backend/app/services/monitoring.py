@@ -31,6 +31,7 @@ def _settings_probes() -> list[ServiceProbe]:
     s = get_settings()
     p = ports_for_probes_sync()
     mon = str(p["compose_project_monitoring"])
+    pxy = str(p["compose_project_proxy"])
     h = s.monitoring_http_host
     prom = int(p["prometheus_port"])
     graf = int(p["grafana_port"])
@@ -104,7 +105,7 @@ def _settings_probes() -> list[ServiceProbe]:
             key="litellm",
             display_name="LiteLLM Proxy",
             category="gateway",
-            project=mon,
+            project=pxy,
             service="litellm",
             health_url=f"http://{h}:{llm}/health/liveliness",
             web_url=f"http://{h}:{llm}/ui",

@@ -82,6 +82,7 @@ DEFAULT_STACK: dict[str, str] = {
     "WEB_LOG_LEVEL": "INFO",
     "WEB_COMPOSE_PROJECT_INFER": "slgpu",
     "WEB_COMPOSE_PROJECT_MONITORING": "slgpu-monitoring",
+    "WEB_COMPOSE_PROJECT_PROXY": "slgpu-proxy",
     "PROMETHEUS_PORT": "9090",
     "GRAFANA_PORT": "3000",
     "LANGFUSE_PORT": "3001",
@@ -264,6 +265,7 @@ def ports_for_probes_sync() -> dict[str, int | str]:
         "loki_port": _i("LOKI_PORT", "3100"),
         "compose_project_infer": m.get("WEB_COMPOSE_PROJECT_INFER", "slgpu"),
         "compose_project_monitoring": m.get("WEB_COMPOSE_PROJECT_MONITORING", "slgpu-monitoring"),
+        "compose_project_proxy": m.get("WEB_COMPOSE_PROJECT_PROXY", "slgpu-proxy"),
     }
 
 

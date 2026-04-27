@@ -1,0 +1,41 @@
+# LiteLLM Proxy — отдельный compose-проект (имя: WEB_COMPOSE_PROJECT_PROXY, по умолч. slgpu-proxy).
+# Postgres, Langfuse и остальное — в slgpu-monitoring; DNS по container_name: slgpu-monitoring-postgres, slgpu-monitoring-langfuse-web.
+# Порядок: сначала `docker compose -f monitoring.yml up -d`, затем `… -f proxy.yml up -d` (см. ./slgpu monitoring up, native_jobs).
+
+name: ${WEB_COMPOSE_PROJECT_PROXY:-slgpu-proxy}
+
+services:
+  litellm:
+    # OpenAI-совместимый шлюз → vLLM (host.docker.internal). БД `litellm` создаётся litellm-pg-init (monitoring, bootstrap).
+    container_name: slgpu-proxy-litellm
+    image: ${LITELLM_IMAGE:-${SLGPU_LITELLM_IMAGE:-ghcr.io/berriai/litellm:main-latest}}
+    restart: unless-stopped
+    networks:
+      - slgpu
+    entrypoint: ["/bin/sh", "/etc/slgpu/litellm-entrypoint.sh"]
+    env_file:
+      - main.env
+      - data/web/secrets/langfuse-litellm.env
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
+      # Имя хоста — container_name сервиса postgres в docker-compose.monitoring.yml
+      DATABASE_URL: postgresql://${LANGFUSE_POSTGRES_USER:-postgres}:${LANGFUSE_POSTGRES_PASSWORD:-postgres}@slgpu-monitoring-postgres:5432/${LITELLM_POSTGRES_DB:-litellm}
+      LANGFUSE_OTEL_HOST: http://slgpu-monitoring-langfuse-web:3000
+      STORE_MODEL_IN_DB: ${STORE_MODEL_IN_DB:-True}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${LITELLM_BIND:-0.0.0.0}:${LITELLM_PORT:-4000}:4000"
+    volumes:
+      - ./configs/monitoring/litellm/litellm-entrypoint.sh:/etc/slgpu/litellm-entrypoint.sh:ro
+      - ./configs/monitoring/litellm/config.yaml:/etc/slgpu/config.yaml:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "5"
+
+networks:
+  slgpu:
+    name: slgpu
+    external: true

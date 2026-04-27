@@ -86,6 +86,7 @@ async def _native_log_poller(
 
 _LL_YML = "docker/docker-compose.llm.yml"
 _MON_YML = "docker/docker-compose.monitoring.yml"
+_PROXY_YML = "docker/docker-compose.proxy.yml"
 
 _CONFIG_FILES: list[tuple[str, str]] = [
     ("configs/monitoring/loki/loki-config.yaml", "configs/monitoring/loki/loki-config.yaml"),
@@ -531,11 +532,22 @@ async def _native_monitoring_up(log: list[str], log_lock: threading.Lock) -> int
     try:
         await compose_exec.ensure_slgpu_network(log, log_lock)
         await _monitoring_bootstrap(root, env_file, log, log_lock)
-        c, o, e = await compose_exec.compose_monitoring(root, env_file, "-f", _MON_YML, "up", "-d")
+        c, o, e = await compose_exec.compose_monitoring(
+            root, env_file, "-f", _MON_YML, "up", "-d", "--remove-orphans"
+        )
         append_job_log(log, log_lock, o.strip())
         if e.strip():
             append_job_log(log, log_lock, e.strip())
-        return 0 if c == 0 else c
+        if c != 0:
+            return c
+        c2, o2, e2 = await compose_exec.compose_with_env_file(
+            root, env_file, "-f", _PROXY_YML, "up", "-d"
+        )
+        if o2.strip():
+            append_job_log(log, log_lock, o2.strip())
+        if e2.strip():
+            append_job_log(log, log_lock, e2.strip())
+        return 0 if c2 == 0 else c2
     finally:
         env_file.unlink(missing_ok=True)
 
@@ -551,9 +563,14 @@ async def _native_monitoring_down(log: list[str], log_lock: threading.Lock) -> i
     )
     env_file = _write_tmp_monitoring_env(merged)
     try:
+        c0, o0, e0 = await compose_exec.compose_with_env_file(
+            root, env_file, "-f", _PROXY_YML, "down"
+        )
+        if (o0 + e0).strip():
+            append_job_log(log, log_lock, (o0 + e0).strip())
         c, o, e = await compose_exec.compose_monitoring(root, env_file, "-f", _MON_YML, "down")
         append_job_log(log, log_lock, o + e)
-        return 0 if c == 0 else c
+        return 0 if c == 0 and c0 == 0 else (c if c != 0 else c0)
     finally:
         env_file.unlink(missing_ok=True)
 
@@ -576,10 +593,17 @@ async def _native_monitoring_restart(log: list[str], log_lock: threading.Lock) -
     try:
         await compose_exec.ensure_slgpu_network(log, log_lock)
         c, o, e = await compose_exec.compose_monitoring(
-            root, env_file, "-f", _MON_YML, "up", "-d", "--force-recreate"
+            root, env_file, "-f", _MON_YML, "up", "-d", "--force-recreate", "--remove-orphans"
         )
         append_job_log(log, log_lock, o + e)
-        return 0 if c == 0 else c
+        if c != 0:
+            return c
+        c2, o2, e2 = await compose_exec.compose_with_env_file(
+            root, env_file, "-f", _PROXY_YML, "up", "-d", "--force-recreate"
+        )
+        if (o2 + e2).strip():
+            append_job_log(log, log_lock, (o2 + e2).strip())
+        return 0 if c2 == 0 else c2
     finally:
         env_file.unlink(missing_ok=True)
 

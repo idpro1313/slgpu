@@ -158,9 +158,9 @@ API (все публичные ручки под префиксом **`/api/v1`*
 - Сеть: подключение к существующей `slgpu` (external) для опционального
   доступа к именам сервисов.
 - Имена стеков Compose для **опроса Docker** (`com.docker.compose.project`):
-  по умолчанию `slgpu` (инференс) и `slgpu-monitoring` (мониторинг); при
-  другом `COMPOSE_PROJECT_NAME` задайте `WEB_COMPOSE_PROJECT_INFER` и
-  `WEB_COMPOSE_PROJECT_MONITORING` (см. `main.env` в корне репо).
+  по умолчанию `slgpu` (инференс), `slgpu-monitoring` (мониторинг), `slgpu-proxy`
+  (LiteLLM); при другом `COMPOSE_PROJECT_NAME` задайте `WEB_COMPOSE_PROJECT_INFER`,
+  `WEB_COMPOSE_PROJECT_MONITORING`, `WEB_COMPOSE_PROJECT_PROXY` (см. `main.env`).
 - **Наблюдаемость:** логи в **stdout** в JSON (`app.core.logging`); один
   `LogRecord` — одна строка. `configure_logging()` оставляет **единственный** handler
   на **root**, снимает handlers с `app`, `httpx`, `httpcore`, `h11`, `uvicorn*`,
@@ -173,20 +173,20 @@ API (все публичные ручки под префиксом **`/api/v1`*
 - **Поиск контейнеров в Docker:** помимо точного фильтра по лейблам — нормализация
   (`-`/`_`, регистр) и имя в стиле Compose v2 (`<project>-<service>-N`) / v1
   (`<project>_<service>_N`), если Portainer/стек отдаёт нестандартные лейблы;
-  дополнительно — по жёстким `container_name` из репозитория: **`slgpu-<service>`**
-  (инференс) и **`slgpu-monitoring-<service>`** (стек мониторинга), если
-  `COMPOSE_PROJECT_NAME` не совпадает с ожидаемым.
+  дополнительно — по жёстким `container_name`: **`slgpu-<service>`** (инференс),
+  **`slgpu-monitoring-<service>`** (мониторинг), **`slgpu-proxy-<service>`** (LiteLLM).
 
 ## 6. Совместимость
 
 - Windows-машина — только разработка. Все эксплуатационные команды
   выполняются на Linux VM с Docker и драйвером NVIDIA.
-- Корневые [`docker/docker-compose.llm.yml`](../docker/docker-compose.llm.yml) и
-  [`docker/docker-compose.monitoring.yml`](../docker/docker-compose.monitoring.yml) задают
-  стабильные **`container_name`** (префиксы `slgpu-` / `slgpu-monitoring-`); конфиги
-  стека мониторинга (Prometheus, Grafana, Loki, …) — в
+- Корневые [`docker/docker-compose.llm.yml`](../docker/docker-compose.llm.yml),
+  [`docker/docker-compose.monitoring.yml`](../docker/docker-compose.monitoring.yml) и
+  [`docker/docker-compose.proxy.yml`](../docker/docker-compose.proxy.yml) (LiteLLM) задают
+  стабильные **`container_name`** (`slgpu-*` / `slgpu-monitoring-*` / `slgpu-proxy-*`); конфиги
+  мониторинга (Prometheus, Grafana, Loki, …) — в
   [`configs/monitoring/`](../configs/monitoring/).
-  web-приложение поднимается отдельным [`docker/docker-compose.web.yml`](../docker/docker-compose.web.yml).
+  web-приложение — [`docker/docker-compose.web.yml`](../docker/docker-compose.web.yml).
 
 ## 7. Журнал изменений контракта
 

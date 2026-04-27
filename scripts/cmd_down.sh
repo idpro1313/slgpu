@@ -28,8 +28,9 @@ EOF
 done
 
 if [[ "${ALL}" -eq 1 ]]; then
-  echo "Останавливаю vllm, sglang, мониторинг и slgpu-web…"
+  echo "Останавливаю vllm, sglang, proxy (LiteLLM), мониторинг и slgpu-web…"
   slgpu_docker_compose -f docker/docker-compose.llm.yml stop 2>/dev/null || true
+  slgpu_docker_compose -f docker/docker-compose.proxy.yml --env-file main.env stop 2>/dev/null || true
   slgpu_docker_compose -f docker/docker-compose.monitoring.yml stop 2>/dev/null || true
   slgpu_docker_compose -f docker/docker-compose.web.yml --env-file main.env stop 2>/dev/null || true
 else

@@ -8,11 +8,11 @@ source "${ROOT}/scripts/_lib.sh"
 
 usage() {
   cat <<EOF
-Мониторинг: dcgm-exporter, node-exporter, Prometheus, Grafana, **Loki**, **Promtail**, **Langfuse** (UI + self-host БД/окно трейсинга), **LiteLLM** (шлюз OpenAI → vLLM) — отдельно от движка vLLM/SGLang. Логи: **Grafana → Explore → Loki** (источник в provisioning). Langfuse: \`http://<хост>:\$LANGFUSE_PORT\` (по умолч. 3001), LiteLLM: порт LITELLM_PORT (по умолч. 4000); вызовы LiteLLM — см. `configs/monitoring/litellm/config.yaml` (часто **devllm** = `SERVED_MODEL_NAME`).
+Мониторинг: dcgm-exporter, node-exporter, Prometheus, Grafana, **Loki**, **Promtail**, **Langfuse** (UI + self-host БД) — `docker/docker-compose.monitoring.yml` (проект **slgpu-monitoring**). **LiteLLM** (OpenAI → vLLM) — в отдельном compose **`docker/docker-compose.proxy.yml`**, проект **slgpu-proxy**; сеть `slgpu` та же. Логи: **Grafana → Explore → Loki**. Langfuse: `http://<хост>:$LANGFUSE_PORT` (по умолч. 3001), LiteLLM: LITELLM_PORT (по умолч. 4000); модели/маршруты — `configs/monitoring/litellm/config.yaml` и /ui (часто **devllm** = `SERVED_MODEL_NAME`).
 
 Один раз на хост (или после reboot, если не включён restart: unless-stopped):
   ./slgpu monitoring up
-  (первый up на новом сервере сам выполнит bootstrap: MinIO buckets + БД LiteLLM)
+  (первый up на новом сервере: bootstrap MinIO + БД litellm в postgres, затем monitoring + **proxy (LiteLLM)**)
 
 Остановить только стек мониторинга (модель не трогает):
   ./slgpu monitoring down
@@ -28,7 +28,7 @@ usage() {
   ./slgpu monitoring fix-perms
   (см. scripts/monitoring_fix_permissions.sh, main.env: GRAFANA_DATA_DIR, PROMETHEUS_DATA_DIR, LOKI_DATA_DIR, PROMTAIL_DATA_DIR, LANGFUSE_*_DATA_DIR)
 
-Конфиг: `docker/docker-compose.monitoring.yml`, сеть \`slgpu\` — общая с `docker/docker-compose.llm.yml` (Prometheus → vllm:8111 / sglang:8222).
+Конфиг: `docker/docker-compose.monitoring.yml` + `docker/docker-compose.proxy.yml` (LiteLLM); сеть `slgpu` — общая с `docker/docker-compose.llm.yml`.
 
 Переменные портов и ретенции — main.env (как раньше).
 
@@ -125,12 +125,16 @@ case "${SUB}" in
     slgpu_ensure_monitoring_bind_config_files
     slgpu_monitoring_bootstrap_once
     echo "Поднимаю мониторинг (slgpu-monitoring)…"
-    slgpu_docker_compose -f docker/docker-compose.monitoring.yml --env-file main.env up -d
+    slgpu_docker_compose -f docker/docker-compose.monitoring.yml --env-file main.env up -d --remove-orphans
+    echo "Поднимаю LiteLLM (slgpu-proxy)…"
+    slgpu_docker_compose -f docker/docker-compose.proxy.yml --env-file main.env up -d
     echo "Проверка: Prometheus /targets (http://<хост>:9090/targets) · Grafana: GRAFANA_PORT · Loki: Explore → Loki · Langfuse: :${LANGFUSE_PORT:-3001} · LiteLLM: :${LITELLM_PORT:-4000} (vLLM: LLM_API_PORT → configs/monitoring/litellm/config.yaml, devllm = SERVED_MODEL_NAME)"
     ;;
   down)
     slgpu_require_docker
-    echo "Останавливаю мониторинг…"
+    echo "Останавливаю LiteLLM (slgpu-proxy)…"
+    slgpu_docker_compose -f docker/docker-compose.proxy.yml --env-file main.env down 2>/dev/null || true
+    echo "Останавливаю мониторинг (slgpu-monitoring)…"
     slgpu_docker_compose -f docker/docker-compose.monitoring.yml down
     echo "Готово."
     ;;
@@ -141,7 +145,9 @@ case "${SUB}" in
     slgpu_load_server_env
     slgpu_ensure_monitoring_bind_config_files
     echo "Перезапуск мониторинга…"
-    slgpu_docker_compose -f docker/docker-compose.monitoring.yml --env-file main.env up -d --force-recreate
+    slgpu_docker_compose -f docker/docker-compose.monitoring.yml --env-file main.env up -d --force-recreate --remove-orphans
+    echo "Перезапуск LiteLLM (slgpu-proxy)…"
+    slgpu_docker_compose -f docker/docker-compose.proxy.yml --env-file main.env up -d --force-recreate
     echo "Готово."
     ;;
   bootstrap)
