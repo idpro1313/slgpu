@@ -748,7 +748,9 @@ export function SettingsPage() {
                                       <div>{km.description}</div>
                                       {km.required_for.length > 0 ? (
                                         <div className="settings-stack-desc__scopes">
-                                          обязателен для:{" "}
+                                          {km.allow_empty
+                                            ? "для сценариев (значение может быть пустым):"
+                                            : "обязателен для:"}{" "}
                                           {km.required_for
                                             .map(formatScopeLabel)
                                             .map((s, i, arr) => (

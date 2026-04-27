@@ -116,7 +116,15 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
         "Имя внешней Docker-сети slgpu (общая для web + monitoring + proxy + LLM-слотов).",
         "web_up", *S_LLM, *S_ALL_COMPOSE, "fix_perms",
     ),
-    "WEB_COMPOSE_PROJECT_INFER": _e("WEB_COMPOSE_PROJECT_INFER", "network", "Имя docker compose-проекта для слотов инференса (vLLM/SGLang).", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
+    "WEB_COMPOSE_PROJECT_INFER": _e(
+        "WEB_COMPOSE_PROJECT_INFER",
+        "network",
+        "Имя docker compose-проекта для слотов инференса (vLLM/SGLang); то же имя в снимке портов для проб и runtime.",
+        *S_LLM,
+        *S_ALL_COMPOSE,
+        "probes",
+        "fix_perms",
+    ),
     "WEB_COMPOSE_PROJECT_MONITORING": _e("WEB_COMPOSE_PROJECT_MONITORING", "network", "Имя compose-проекта стека мониторинга (Prometheus/Grafana/Loki/Promtail/DCGM/NodeExporter).", *S_ALL_COMPOSE, "probes", "fix_perms"),
     "WEB_COMPOSE_PROJECT_PROXY": _e("WEB_COMPOSE_PROJECT_PROXY", "network", "Имя compose-проекта стека прокси (Langfuse + LiteLLM + хранилища).", *S_ALL_COMPOSE, "probes", "fix_perms"),
 

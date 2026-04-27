@@ -2012,3 +2012,11 @@
 - **Почему:** Пользователь: переменная — **тег Docker-образа**, не путь на хосте; ошибочно отображалась в блоке «3. Пути на хосте».
 - **Решение:** PATCH 6.0.3 — только группировка и шаблон `main.env`; поведение `fix_perms` / `native_jobs` не менялось.
 
+## Фаза 6.0.4 (подписи «обязателен для» и scope `probes`)
+
+### Что: соответствие UI тексту `validate_required` и `ports_for_probes_sync`
+
+- **Что:** В [`stack_registry.py`](web/backend/app/services/stack_registry.py) у **`WEB_COMPOSE_PROJECT_INFER`** добавлен scope **`probes`** (ключ есть в `ports_for_probes_sync()`). В [`Settings.tsx`](web/frontend/src/pages/Settings.tsx): для **`allow_empty`** строк под списком scope выводится **«для сценариев (значение может быть пустым):»**, а не **«обязателен для»**, т.к. backend для таких ключей не включает их в `/app-config/missing`. **VERSION** **6.0.4**, **`README.md`**, **`docs/HISTORY.md`**.
+- **Почему:** Запрос: проверить верность формулировок «обязателен для: fix-perms, мониторинг, пробы…» у многих параметров.
+- **Решение:** PATCH 6.0.4 — уточнение семантики (обязательно vs опционально) и один недостающий `probes` у infer-проекта.
+
