@@ -497,7 +497,12 @@ export function SettingsPage() {
     event.preventDefault();
     setCfgMessage(null);
     setCfgError(null);
-    const patch = buildStackPatch(appStack.data, stackRows, appStack.data.registry);
+    const stack = appStack.data;
+    if (!stack) {
+      setCfgError("Нет изменений для сохранения (или данные ещё не загружены).");
+      return;
+    }
+    const patch = buildStackPatch(stack, stackRows, stack.registry);
     if (!patch) {
       setCfgError("Нет изменений для сохранения (или данные ещё не загружены).");
       return;

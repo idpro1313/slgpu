@@ -2028,3 +2028,11 @@
 - **Почему:** Запрос: внутри разделов 6 и 7 сделать подгруппировку параметров по сервису.
 - **Решение:** PATCH 6.0.5 — только UX и метаданные реестра; семантика значений ключей без изменений.
 
+## Фаза 6.0.6 (сборка frontend: TS18048 в `onSaveStack`)
+
+### Что: узкий тип для `appStack.data` перед `buildStackPatch`
+
+- **Что сделано:** В [`Settings.tsx`](web/frontend/src/pages/Settings.tsx) в **`onSaveStack`**: локальная переменная **`stack`**, ранний **`return`** если данных нет, **`buildStackPatch(stack, stackRows, stack.registry)`** — устраняет **`TS18048`** («`appStack.data` is possibly `undefined`») при **`tsc -b` / `npm run build`** в Docker. **VERSION 6.0.6**, синхронизация web-пакета, **`README.md`**.
+- **Почему:** Сборка образа **`slgpu-web`** падала на строке с двумя обращениями к **`appStack.data`** без сужения типа между аргументами.
+- **Решение:** PATCH 6.0.6 — только типобезопасность и явная ветка «стек не загружен».
+
