@@ -1674,6 +1674,13 @@
 - **Файлы:** `web/backend/app/services/env_key_aliases.py`, `stack_config.py`, `llm_env.py`, `presets.py`, `env_files.py`, `native_jobs.py`; `scripts/serve.sh`, `_lib.sh`, `monitoring_fix_permissions.sh`, `cmd_monitoring.sh`; `docker/docker-compose.llm.yml`, `docker/docker-compose.monitoring.yml`; `main.env`, `main.env.example`, `examples/presets/*.env`; `web/frontend` `Presets.tsx`, `Settings.tsx`; `README.md`, `configs/models/README.md`; `VERSION`, версии web/backend, `grace/knowledge-graph/knowledge-graph.xml`, `docs/HISTORY.md`.
 - **Решение:** **MINOR 4.2.0** — обратная совместимость через fallback в скриптах, compose и Python.
 
+### 4.4.1: Снимок compose для monitoring — под `data/web`, не `<repo>/.slgpu`
+
+- **Что:** `write_compose_service_env_file` / `compose_service_env_path` → **`${WEB_DATA_DIR}/.slgpu/compose-service.env`** (по умолч. `data/web/…`); в **docker-compose.monitoring.yml** и **proxy** — `env_file: ${WEB_DATA_DIR}/.slgpu/compose-service.env`; **`scripts/_lib.sh`**, **web/docker-entrypoint.sh** (`mkdir data/web/.slgpu`); документация; **VERSION** 4.4.1.
+- **Почему:** Из UI (`native.monitoring.*`) запись в **`<repo>/.slgpu`** давала **Permission denied** у slgpuweb на хостах, где корень репо не writable (например `/opt/slgpu`); стек из **БД** уже был, падал только путь.
+- **Файлы:** `web/backend/app/services/stack_config.py`, `docker/docker-compose.monitoring.yml`, `docker/docker-compose.proxy.yml`, `scripts/_lib.sh`, `web/docker-entrypoint.sh`, `web/backend/app/services/jobs.py`, `slgpu_cli.py`, README, CONTRACT, configs/monitoring/README, docs/AGENTS, grace, VERSION, web versions, `docs/HISTORY.md`.
+- **Решение:** **PATCH**. Web по-прежнему вызывает **docker compose** (не `./slgpu`); параметры — из **БД**; **`main.env`** не обязателен.
+
 ### 4.4.0: Langfuse и зависимости перенесены в `docker-compose.proxy.yml`
 
 - **Что:** Сервисы **Langfuse** (web, worker), **Postgres**, **ClickHouse**, **Redis**, **MinIO**, одноразовые **minio-bucket-init** и **litellm-pg-init** (profile `bootstrap`) — в **`docker/docker-compose.proxy.yml`** (проект `slgpu-proxy`, префикс контейнеров **`slgpu-proxy-*`**). В **`docker-compose.monitoring.yml`** остались только метрики и логи (Prometheus, Grafana, Loki, Promtail, DCGM, node-exporter). Обновлены **`./slgpu monitoring`**, **`native_jobs._monitoring_bootstrap`** (bootstrap через proxy compose), пробы **`monitoring.py`** (Langfuse → проект proxy), **README**, **CONTRACT**, **configs/monitoring/README**, **main.env.example**, **GRACE**.

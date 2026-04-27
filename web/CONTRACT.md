@@ -149,9 +149,10 @@ API (все публичные ручки под префиксом **`/api/v1`*
 - Данные **метрик и логов** (Prometheus, Grafana, Loki и т.д.) вынесены в
   `docker/docker-compose.monitoring.yml`; **Langfuse** (и связанные тома) — в
   `docker/docker-compose.proxy.yml`. В web-контейнер **не** монтируются: UI опрашивает по HTTP / Docker API.
+- Снимок стека для `docker compose` (monitoring/proxy): **`${WEB_DATA_DIR}/.slgpu/compose-service.env`** (по умолч. `data/web/…` на хосте); web пишет **из БД** (`write_compose_service_env_file`), не требуя `main.env` в корне. Корень **`<repo>/.slgpu`** не используется (раньше давал EACCES у slgpuweb).
 - Entrypoint образа (`web/docker-entrypoint.sh`): PID 1 кратко под root,
   `chown` на смонтированные `/data`, `${WEB_SLGPU_ROOT}/data/models` и
-  `${WEB_SLGPU_ROOT}/data/presets` под UID приложения (10001);
+  `${WEB_SLGPU_ROOT}/data/presets` и **`${WEB_SLGPU_ROOT}/data/web`** (в т.ч. `.slgpu`) под UID приложения (10001);
   сокет Docker при монтировании часто `root:docker` (660) — создаётся/используется
   группа с GID, совпадающим с `stat` сокета, в неё добавляется `slgpuweb`, затем
   `tini` (PID 1) → entrypoint → `runuser` (uvicorn), группа = GID `docker.sock`

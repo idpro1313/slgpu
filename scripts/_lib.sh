@@ -164,16 +164,42 @@ slgpu_web_compose_env_file() {
   fi
 }
 
-# Единый снимок для monitoring/proxy: `env_file` в compose — `.slgpu/compose-service.env`. Web пишет из БД; bash — **slgpu_ensure_compose_service_env**.
+# Единый снимок для monitoring/proxy: `env_file` — `${WEB_DATA_DIR}/.slgpu/compose-service.env` (по умолч. data/web).
+# Web пишет из БД под каталог, доступный slgpuweb; bash — **slgpu_ensure_compose_service_env** (см. main.env → WEB_DATA_DIR).
 slgpu_compose_service_env_basename() {
-  echo ".slgpu/compose-service.env"
+  local root wdd
+  root="$(slgpu_root)"
+  wdd="${WEB_DATA_DIR:-./data/web}"
+  if [[ -f "${root}/main.env" ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "${root}/main.env" 2>/dev/null || true
+    set +a
+  fi
+  wdd="${WEB_DATA_DIR:-./data/web}"
+  case "${wdd}" in
+    /*) echo "${wdd}/.slgpu/compose-service.env" ;;
+    ./*) echo "${wdd#./}/.slgpu/compose-service.env" ;;
+    *) echo "${wdd}/.slgpu/compose-service.env" ;;
+  esac
 }
 
 slgpu_ensure_compose_service_env() {
-  local root d f
+  local root wdd d f
   root="$(slgpu_root)"
-  d="${root}/.slgpu"
-  f="${d}/compose-service.env"
+  wdd="${WEB_DATA_DIR:-./data/web}"
+  if [[ -f "${root}/main.env" ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "${root}/main.env" 2>/dev/null || true
+    set +a
+  fi
+  wdd="${WEB_DATA_DIR:-./data/web}"
+  case "${wdd}" in
+    /*) d="${wdd}/.slgpu" ; f="${d}/compose-service.env" ;;
+    ./*) d="${root}/${wdd#./}/.slgpu" ; f="${d}/compose-service.env" ;;
+    *) d="${root}/${wdd}/.slgpu" ; f="${d}/compose-service.env" ;;
+  esac
   mkdir -p "${d}"
   if [[ -f "${root}/main.env" ]]; then
     cp -f "${root}/main.env" "${f}"

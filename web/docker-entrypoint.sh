@@ -17,7 +17,8 @@ if [ "$(id -u)" = "0" ]; then
     # data/web/secrets: generated langfuse-litellm.env for monitoring compose (not root-only configs/secrets)
     mkdir -p "${WEB_SLGPU_ROOT}/data/models" "${WEB_SLGPU_ROOT}/data/presets" \
       "${WEB_SLGPU_ROOT}/data/bench/results" \
-      "${WEB_SLGPU_ROOT}/data/web/secrets"
+      "${WEB_SLGPU_ROOT}/data/web/secrets" \
+      "${WEB_SLGPU_ROOT}/data/web/.slgpu"
     chown -R 10001:10001 "${WEB_SLGPU_ROOT}/data/models" "${WEB_SLGPU_ROOT}/data/presets" \
       "${WEB_SLGPU_ROOT}/data/bench" "${WEB_SLGPU_ROOT}/data/web" 2>/dev/null || true
   fi

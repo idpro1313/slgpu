@@ -1,9 +1,7 @@
-"""Background runner for CLI commands.
+"""Фоновый runner заданий стека (native.* → docker compose / docker-py, legacy → bash ./slgpu).
 
-Each `CliCommand` produced by `app.services.slgpu_cli` is enqueued
-through `submit`, which stores a `Job` row, validates an advisory lock
-on `(scope, resource)` and spawns an asyncio task that streams stdout
-and stderr into the database.
+`CliCommand` из `app.services.slgpu_cli` — дескриптор вида; web ставит `native.monitoring.*` и др.
+без вызова shell CLI. Задача пишет `Job`, advisory lock, asyncio task, лог.
 """
 
 from __future__ import annotations

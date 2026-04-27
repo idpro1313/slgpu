@@ -1,7 +1,6 @@
-"""Allowlist for stack operations (native docker compose / jobs).
+"""Дескрипторы заданий стека: ``kind`` = ``native.*`` (docker compose / docker-py) или legacy ``argv`` → ``bash ./slgpu``.
 
-Legacy argv-shaped ``CliCommand`` is kept for tests and optional CLI fallback;
-web uses ``native.*`` kinds with empty ``argv``.
+Web UI ставит **только** ``native.*`` с пустым ``argv``; данные стека — из БД (см. ``stack_config`` / ``write_compose_service_env_file``).
 """
 
 from __future__ import annotations

@@ -1,7 +1,7 @@
 # Langfuse v3 (Postgres, ClickHouse, Redis, MinIO) + worker + UI; LiteLLM; bootstrap (MinIO buckets, БД litellm).
 # Проект `slgpu-proxy` — **не** зависит от стека метрик (Prometheus/Grafana/Loki) в `docker-compose.monitoring.yml`.
 # Порядок: `./slgpu monitoring up` (bootstrap → monitoring metrics → **этот** compose) или `native.proxy.up` / UI LiteLLM.
-# Сеть `slgpu` общая с `docker-compose.llm.yml`. env: `.slgpu/compose-service.env`.
+# Сеть `slgpu` общая с `docker-compose.llm.yml`. env: `${WEB_DATA_DIR}/.slgpu/compose-service.env`.
 
 name: ${WEB_COMPOSE_PROJECT_PROXY:-slgpu-proxy}
 
@@ -161,7 +161,7 @@ services:
     ports:
       - "${LANGFUSE_WORKER_BIND:-127.0.0.1}:${LANGFUSE_WORKER_PORT:-3030}:3030"
     env_file:
-      - .slgpu/compose-service.env
+      - ${WEB_DATA_DIR}/.slgpu/compose-service.env
     environment:
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://127.0.0.1:3001}
       SALT: ${LANGFUSE_SALT:-slgpu-salt}
@@ -219,7 +219,7 @@ services:
     ports:
       - "${LANGFUSE_BIND:-0.0.0.0}:${LANGFUSE_PORT:-3001}:3000"
     env_file:
-      - .slgpu/compose-service.env
+      - ${WEB_DATA_DIR}/.slgpu/compose-service.env
     environment:
       HOSTNAME: "0.0.0.0"
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://127.0.0.1:3001}
@@ -294,7 +294,7 @@ services:
       - slgpu
     entrypoint: ["/bin/sh", "/etc/slgpu/litellm-entrypoint.sh"]
     env_file:
-      - .slgpu/compose-service.env
+      - ${WEB_DATA_DIR}/.slgpu/compose-service.env
       - data/web/secrets/langfuse-litellm.env
     depends_on:
       postgres:

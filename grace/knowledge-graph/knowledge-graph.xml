@@ -1,5 +1,5 @@
 <KnowledgeGraph>
-  <Project NAME="slgpu" VERSION="4.4.0">
+  <Project NAME="slgpu" VERSION="4.4.1">
     <keywords>slgpu, vllm, sglang, llm-inference, benchmark, docker-compose, gpu, prometheus, grafana, sglang-dashboard-slgpu, sglangdash2-slgpu</keywords>
     <annotation>Стенд для сравнения движков LLM-инференса vLLM и SGLang на Linux-сервере с NVIDIA GPU.</annotation>
 
@@ -26,7 +26,7 @@
         <fn-slgpu_list_presets PURPOSE="Список пресетов" />
         <fn-slgpu_source_main_env PURPOSE="Подмешать main.env в корне (дефолты)" />
         <fn-slgpu_web_compose_env_file PURPOSE="Путь для docker compose web: main.env иначе docker/web-compose.defaults.env" />
-        <fn-slgpu_ensure_compose_service_env PURPOSE="Перед monitoring/proxy: .slgpu/compose-service.env из main.env или оставить снимок / defaults" />
+        <fn-slgpu_ensure_compose_service_env PURPOSE="Перед monitoring/proxy: ${WEB_DATA_DIR}/.slgpu/compose-service.env (по умолч. data/web) из main.env или снимок / defaults" />
         <fn-slgpu_fail_if_missing_preset_arg PURPOSE="Если -m без имени — подсказка и список пресетов" />
         <fn-slgpu_load_env PURPOSE="Загрузка окружения (SLGPU_ROOT + main.env + preset)" />
         <fn-slgpu_load_compose_env PURPOSE="Загрузка env для compose" />

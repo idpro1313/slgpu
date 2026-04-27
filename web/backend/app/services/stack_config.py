@@ -227,18 +227,24 @@ def sync_merged_flat() -> dict[str, str]:
     return merged
 
 
-def compose_service_env_path(root: Path) -> Path:
-    """Файл со снимком стека для `docker compose --env-file` и `env_file:` в monitoring/proxy YAML.
+def compose_service_env_path(
+    root: Path, merged: dict[str, str] | None = None
+) -> Path:
+    """Файл со снимком стека для ``docker compose --env-file`` и ``env_file:`` в monitoring/proxy YAML.
 
-    Заполняется из **БД** (`sync_merged_flat`) в native jobs или из **main.env** в bash (см. ``scripts/_lib.sh``).
-    Не храните в git — каталог ``.slgpu/`` в ``.gitignore``.
+    Путь: ``${WEB_DATA_DIR}/.slgpu/compose-service.env`` (по умолчанию ``data/web/.slgpu/…``), чтобы
+    **slgpu-web** мог создать каталог (том ``data/web`` chown в entrypoint), а не ``<repo>/.slgpu`` в корне.
+
+    Заполняется из **БД** в native jobs или из **main.env** в bash (см. ``scripts/_lib.sh``). Не в git (под ``data/``).
     """
-    return (root / ".slgpu" / "compose-service.env").resolve()
+    m = merged if merged is not None else sync_merged_flat()
+    wdd = m.get("WEB_DATA_DIR", "./data/web")
+    return (resolve_path_relative(root, wdd) / ".slgpu" / "compose-service.env").resolve()
 
 
 def write_compose_service_env_file(root: Path, merged: dict[str, str]) -> Path:
-    """Записать плоский стек в ``.slgpu/compose-service.env`` (права 0600)."""
-    p = compose_service_env_path(root)
+    """Записать плоский стек в ``<WEB_DATA_DIR>/.slgpu/compose-service.env`` (права 0600)."""
+    p = compose_service_env_path(root, merged)
     p.parent.mkdir(parents=True, exist_ok=True)
     body = "\n".join(f"{k}={v}" for k, v in sorted(merged.items()) if v is not None) + "\n"
     p.write_text(body, encoding="utf-8")
