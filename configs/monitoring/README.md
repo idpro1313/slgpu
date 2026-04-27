@@ -144,6 +144,17 @@ sudo chown -R 472:0 ./data/monitoring/grafana
 1. **`./slgpu monitoring fix-perms`**
 2. **`./slgpu monitoring restart`**
 
+### MinIO: `FATAL ... decodeXLHeaders: Unknown xl meta version 3` (цикл restart)
+
+**Смысл:** в каталоге **`LANGFUSE_MINIO_DATA_DIR`** лежат метаданные в формате, который **текущий** бинарник MinIO **не умеет читать**. Типично: данные записала **более новая** версия (например, когда-то тянули `minio/minio:latest` или другой тег), а в compose сейчас зашит **более старый** образ — откат сервера MinIO на «старые» данные **не поддерживается** (см. обсуждения upstream: `Unknown xl meta version`).
+
+**Что сделать:**
+
+1. **Обновить образ** до версии **не ниже** той, на которой создавались данные, или до актуального дефолта в репо (`MINIO_IMAGE` / `SLGPU_MINIO_IMAGE` в `main.env` и в stack web). Затем: **`docker pull`** нужного тега, **`./slgpu monitoring up`** (или рестарт из UI).
+2. **Если S3 в MinIO — только вспомогательное хранилище для Langfuse** и потеря объектов не критична: **`./slgpu monitoring down`**, очистить **`LANGFUSE_MINIO_DATA_DIR`** на диске (содержимое каталога), при необходимости удалить маркер **`data/monitoring/.bootstrap/minio-bucket-init.done`**, снова **`./slgpu monitoring up`** (bootstrap пересоздаст бакеты). Langfuse/Postgres/ClickHouse при этом **не** трогаем, если не переустанавливаете весь стек.
+
+**Порты (GRAFANA_PORT, MinIO_*, …) с настройками web не конфликтуют** — ошибка идёт от **несоответствия бинарник ↔ формат диска**, а не от смены портов.
+
 **Перенос Langfuse с named volumes** (старые версии compose: `slgpu_lf_postgres_data`, `slgpu_lf_clickhouse_data`, …):
 
 1. **`./slgpu monitoring down`**

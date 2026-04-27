@@ -1674,6 +1674,13 @@
 - **Файлы:** `web/backend/app/services/env_key_aliases.py`, `stack_config.py`, `llm_env.py`, `presets.py`, `env_files.py`, `native_jobs.py`; `scripts/serve.sh`, `_lib.sh`, `monitoring_fix_permissions.sh`, `cmd_monitoring.sh`; `docker/docker-compose.llm.yml`, `docker/docker-compose.monitoring.yml`; `main.env`, `main.env.example`, `examples/presets/*.env`; `web/frontend` `Presets.tsx`, `Settings.tsx`; `README.md`, `configs/models/README.md`; `VERSION`, версии web/backend, `grace/knowledge-graph/knowledge-graph.xml`, `docs/HISTORY.md`.
 - **Решение:** **MINOR 4.2.0** — обратная совместимость через fallback в скриптах, compose и Python.
 
+### 4.2.5: MinIO по умолчанию `RELEASE.2025-10-15` + README про `xl meta version`
+
+- **Что:** Дефолт **`MINIO_IMAGE`** / **`MINIO_MC_IMAGE`** приведён к `RELEASE.2025-10-15T17-29-55Z` (compose, `env_key_aliases`, `monitoring_fix_permissions.sh`, комменты в `main.env*`). В **`configs/monitoring/README.md`** — разбор **`decodeXLHeaders: Unknown xl meta version 3`**, действия (upgrade / очистка `LANGFUSE_MINIO_DATA_DIR`).
+- **Почему:** Данные MinIO, записанные новым сервером (формат meta v3+), не читаются старым бинарником (`RELEASE.2024-11-07`); смена портов в UI не причина.
+- **Файлы:** `docker/docker-compose.monitoring.yml`, `web/backend/.../env_key_aliases.py`, `scripts/monitoring_fix_permissions.sh`, `main.env`, `main.env.example`, `configs/monitoring/README.md`, `VERSION`, версии web, `docs/HISTORY.md`.
+- **Решение:** **PATCH** — пользователи с явным старым `MINIO_IMAGE` в `main.env` сохраняют его до ручного изменения.
+
 ### 4.2.4: `langfuse-litellm.env` под `WEB_DATA_DIR`, не в `configs/secrets/`
 
 - **Что:** `langfuse_litellm_env_path()`, `write_langfuse_litellm_env(..., merged)` пишет в `data/web/secrets/langfuse-litellm.env`; чтение legacy `configs/secrets/…` при пустых ключах в БД (если файл читается); `POST /install` подхватывает оба пути; compose monitoring — `env_file` на `data/web/...`; `cmd_monitoring.sh` копирует пример в `data/web/secrets/`; entrypoint — `mkdir`/`chown` на `data/web`; `native.monitoring.down` вызывает write перед compose (чтобы файл существовал).
