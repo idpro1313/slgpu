@@ -1,4 +1,4 @@
-<DevelopmentPlan VERSION="5.0.3">
+<DevelopmentPlan VERSION="5.1.0">
   <!--
     GRACE development plan — methodology: https://github.com/osovv/grace-marketplace
     Upstream ships Agent Skills + optional CLI (@osovv/grace-cli): grace lint | module find | module show | file show.
@@ -269,7 +269,7 @@
       </contract>
       <interface>
         <export-web-image PURPOSE="Docker image slgpu-web:dev" />
-        <export-api-v1 PURPOSE="REST /api/v1: dashboard, models, presets, runtime, monitoring, litellm, jobs, app-config, bench, settings, app-logs/tail" />
+        <export-api-v1 PURPOSE="REST /api/v1: dashboard, models, presets, runtime, monitoring, litellm, jobs, app-config, bench, settings, app-logs/events (app_log_event)" />
         <export-spa PURPOSE="React SPA, статика встроена в образ" />
         <export-contract-md PURPOSE="web/CONTRACT.md — границы CLI/Docker API/SQLite" />
         <export-settings-public-access PURPOSE="/api/v1/settings/public-access — browser host + litellm_api_key в JSON (Bearer к LiteLLM)" />
@@ -287,7 +287,7 @@
       <observability>
         <log-prefix>[WEB]</log-prefix>
         <critical-block>BLOCK_RUN_JOB</critical-block>
-        <log-format>JSON stdout + `WEB_DATA_DIR/.slgpu/app.log` (rotating); `AppHttpRequestLogMiddleware`; `uvicorn.access` WARNING; `configure_logging` в create_app + startup</log-format>
+        <log-format>JSON stdout + DbLogHandler → SQLite `app_log_event` + опц. RotatingFile при `WEB_LOG_FILE_ENABLED`; `AppHttpRequestLogMiddleware` (`X-Request-ID`, `[app][http][BLOCK_API_REQUEST]`); `uvicorn.access` WARNING; `start_writer`/`stop_writer` в startup/shutdown</log-format>
       </observability>
       <verification-ref>V-M-WEB</verification-ref>
     </M-WEB>

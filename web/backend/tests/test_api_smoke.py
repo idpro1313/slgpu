@@ -8,20 +8,28 @@ does not fire FastAPI startup hooks by default.
 
 from __future__ import annotations
 
+import asyncio
+
 import httpx
 import pytest
 from httpx import ASGITransport
 
 from app.core.config import get_settings
-from app.db.session import init_db
+from app.db.session import get_engine, init_db
 from app.main import app
+from app.services.app_log_sink import start_writer, stop_writer
 
 
 @pytest.fixture
 async def client() -> httpx.AsyncClient:
     await init_db()
+    await start_writer(get_engine())
     transport = ASGITransport(app=app)
-    return httpx.AsyncClient(transport=transport, base_url="http://test")
+    c = httpx.AsyncClient(transport=transport, base_url="http://test")
+    try:
+        yield c
+    finally:
+        await stop_writer()
 
 
 @pytest.mark.asyncio
@@ -345,12 +353,24 @@ async def test_docker_containers_rejects_bad_scope(client: httpx.AsyncClient) ->
 
 
 @pytest.mark.asyncio
-async def test_app_logs_tail_shape(client: httpx.AsyncClient) -> None:
+async def test_app_logs_events_shape(client: httpx.AsyncClient) -> None:
     async with client:
-        r = await client.get("/api/v1/app-logs/tail?tail=100")
+        r = await client.get("/api/v1/jobs")
+        assert r.status_code == 200
+        await asyncio.sleep(0.6)
+        r2 = await client.get("/api/v1/app-logs/events?limit=50")
+    assert r2.status_code == 200
+    b = r2.json()
+    assert "items" in b and isinstance(b["items"], list)
+    assert "next_before_id" in b
+
+
+@pytest.mark.asyncio
+async def test_app_logs_event_kind_filter(client: httpx.AsyncClient) -> None:
+    async with client:
+        await client.get("/api/v1/jobs")
+        await asyncio.sleep(0.6)
+        r = await client.get("/api/v1/app-logs/events?event_kind=http_request&limit=10")
     assert r.status_code == 200
-    b = r.json()
-    assert "lines" in b and isinstance(b["lines"], list)
-    assert "path_hint" in b and isinstance(b["path_hint"], str)
-    assert "truncated_scan" in b
-    assert b.get("read_error") is None or isinstance(b.get("read_error"), str)
+    for row in r.json()["items"]:
+        assert row["event_kind"] == "http_request"

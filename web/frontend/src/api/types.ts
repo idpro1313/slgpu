@@ -386,11 +386,28 @@ export interface DockerDaemonLog {
   last_checked_at: string;
 }
 
-/** GET /app-logs/tail — хвост JSON-логов slgpu-web. */
-export interface AppLogsTail {
-  path_hint: string;
-  lines: string[];
-  file_size_bytes: number | null;
-  truncated_scan: boolean;
-  read_error: string | null;
+/** GET /app-logs/events — структурированные события в SQLite. */
+export interface AppLogEvent {
+  id: number;
+  created_at: string;
+  updated_at: string;
+  level: string;
+  logger_name: string;
+  event_kind: string;
+  message: string;
+  http_method: string | null;
+  http_path: string | null;
+  query_hint: string | null;
+  status_code: number | null;
+  duration_ms: number | null;
+  request_id: string | null;
+  correlation_id: string | null;
+  module_anchor: string | null;
+  log_extra: Record<string, unknown> | null;
+  exc_summary: string | null;
+}
+
+export interface AppLogEventsList {
+  items: AppLogEvent[];
+  next_before_id: number | null;
 }

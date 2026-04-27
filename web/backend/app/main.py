@@ -21,8 +21,9 @@ from app import __version__
 from app.api.v1 import api_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging
-from app.db.session import init_db
+from app.db.session import get_engine, init_db
 from app.middleware.request_log import AppHttpRequestLogMiddleware
+from app.services.app_log_sink import start_writer, stop_writer
 from app.schemas.common import HealthResponse
 from app.services.stack_errors import MissingStackParams
 
@@ -32,7 +33,9 @@ logger = logging.getLogger(__name__)
 def create_app() -> FastAPI:
     settings = get_settings()
     app_version = _runtime_version(settings.slgpu_root)
-    configure_logging(settings.log_level, settings.data_dir)
+    configure_logging(
+        settings.log_level, settings.data_dir, log_file_enabled=settings.log_file_enabled
+    )
     logger.info(
         "[main][create_app] log_level=%s app_version=%s",
         settings.log_level,
@@ -73,14 +76,24 @@ def create_app() -> FastAPI:
 
     @app.on_event("startup")
     async def _startup() -> None:
-        # Uvicorn добавляет свои handler'ы после create_app — снова JSON + файл.
-        configure_logging(settings.log_level, settings.data_dir)
+        # Uvicorn добавляет свои handler'ы после create_app — снова настроить root.
+        configure_logging(
+            settings.log_level, settings.data_dir, log_file_enabled=settings.log_file_enabled
+        )
         try:
             await init_db()
+            await start_writer(get_engine())
             logger.info("[main][startup] db initialised")
         except Exception:
             logger.exception("[main][startup] db init failed; aborting startup")
             raise
+
+    @app.on_event("shutdown")
+    async def _shutdown() -> None:
+        try:
+            await stop_writer()
+        except Exception:  # noqa: BLE001
+            logger.debug("[main][shutdown] app_log writer stop", exc_info=True)
 
     if settings.static_dir and settings.static_dir.exists():
         _mount_spa(app, settings.static_dir)

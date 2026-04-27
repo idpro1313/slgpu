@@ -1,18 +1,39 @@
-"""Схемы API журнала приложения (файл JSON-логов)."""
+"""Схемы API структурированного журнала приложения (таблица ``app_log_event``)."""
 
 from __future__ import annotations
+
+from datetime import datetime
 
 from pydantic import BaseModel, Field
 
 
-class AppLogsOut(BaseModel):
-    """Хвост файла `WEB_DATA_DIR/.slgpu/app.log`."""
+class AppLogEventOut(BaseModel):
+    """Одна строка журнала."""
 
-    path_hint: str = Field(description="Семантический путь для UI (каталог data).")
-    lines: list[str] = Field(default_factory=list, description="Строки JSON, как в логе.")
-    file_size_bytes: int | None = None
-    truncated_scan: bool = Field(
-        default=False,
-        description="Файл большой: прочитан только конец; первые строки срезаны по байтам.",
+    id: int
+    created_at: datetime
+    updated_at: datetime
+    level: str
+    logger_name: str
+    event_kind: str
+    message: str
+    http_method: str | None = None
+    http_path: str | None = None
+    query_hint: str | None = None
+    status_code: int | None = None
+    duration_ms: float | None = None
+    request_id: str | None = None
+    correlation_id: str | None = None
+    module_anchor: str | None = None
+    log_extra: dict | None = None
+    exc_summary: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class AppLogEventsListOut(BaseModel):
+    items: list[AppLogEventOut]
+    next_before_id: int | None = Field(
+        default=None,
+        description="Курсор для следующей страницы: передать как `before_id`, если не null.",
     )
-    read_error: str | None = None

@@ -58,17 +58,19 @@ class _JsonFormatter(logging.Formatter):
         return json.dumps(base, ensure_ascii=False, default=str)
 
 
-def configure_logging(level: str = "INFO", data_dir: Path | None = None) -> None:
-    """StreamHandler + опциональный RotatingFileHandler на **root** (JSON-строка на LogRecord).
+def configure_logging(
+    level: str = "INFO",
+    data_dir: Path | None = None,
+    *,
+    log_file_enabled: bool = False,
+) -> None:
+    """StreamHandler + ``DbLogHandler`` (очередь → SQLite ``app_log_event``) + опциональный файл.
 
-    Файл: ``<WEB_DATA_DIR>/.slgpu/app.log`` (5 MiB, 3 бэкапа) — тот же поток, что
-    в stdout, читается API ``GET /api/v1/app-logs/tail`` и UI «Логи». Дублирование
-    access от ``uvicorn.access`` приглушено (WARNING), т.к. исход запроса пишет
-    ``app.middleware.request_log`` (см. ``AppHttpRequestLogMiddleware``).
-
-    Uvicorn после импорта приложения снова добавляет handler'ы — вызывайте эту
-    функцию повторно из ``startup`` (см. ``main``) с ``data_dir``.
+    Файл ``<WEB_DATA_DIR>/.slgpu/app.log`` (5 MiB×3) — только при ``WEB_LOG_FILE_ENABLED=true`` (Loki).
+    UI «Логи» читает ``GET /api/v1/app-logs/events`` из БД. ``uvicorn.access`` → WARNING.
+    Uvicorn после импорта снова добавляет handler'ы — вызывайте в ``startup`` с теми же аргументами.
     """
+    from app.services.app_log_sink import get_db_log_handler
 
     handler = logging.StreamHandler(stream=sys.stdout)
     handler.setFormatter(_JsonFormatter())
@@ -79,9 +81,10 @@ def configure_logging(level: str = "INFO", data_dir: Path | None = None) -> None
     root = logging.getLogger()
     root.handlers.clear()
     root.addHandler(handler)
+    root.addHandler(get_db_log_handler())
     root.setLevel(resolved_level)
 
-    if data_dir is not None:
+    if data_dir is not None and log_file_enabled:
         log_sub = data_dir / ".slgpu"
         try:
             log_sub.mkdir(parents=True, exist_ok=True)

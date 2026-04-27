@@ -133,6 +133,7 @@ async def init_db() -> None:
     """
 
     from app.models import (  # noqa: F401  - register mappers
+        app_log_event,
         audit,
         job,
         model,
@@ -155,6 +156,15 @@ async def init_db() -> None:
         await conn.run_sync(Base.metadata.create_all)
         await conn.run_sync(_sqlite_drop_legacy_preset_engine_column)
         await conn.run_sync(_sqlite_drop_runs_table)
+        if conn.engine.dialect.name == "sqlite":
+
+            def _wal(c: Connection) -> None:  # noqa: ANN001
+                c.execute(text("PRAGMA journal_mode=WAL"))
+
+            try:
+                await conn.run_sync(_wal)
+            except Exception:  # noqa: BLE001
+                logger.debug("WAL pragma skipped", exc_info=True)
 
     async with session_scope() as session:
         await migrate_legacy_json_to_rows(session)

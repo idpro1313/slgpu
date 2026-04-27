@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+import uuid
 from collections.abc import Awaitable, Callable
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -43,27 +44,38 @@ class AppHttpRequestLogMiddleware(BaseHTTPMiddleware):
         p = request.url.path
         if p in _SKIP_PATHS or p.startswith(_SKIP_PREFIXES):
             return await call_next(request)
-        if p == "/api/v1/app-logs/tail" or p.startswith("/api/v1/app-logs/tail"):
+        if p == "/api/v1/app-logs/events" or p.startswith(
+            "/api/v1/app-logs/events"
+        ):
             return await call_next(request)
 
+        request_id = uuid.uuid4().hex
+        request.state.request_id = request_id
         t0 = time.perf_counter()
         method = request.method
         sp = _path_for_log(request)
+        ex_base: dict = {
+            "method": method,
+            "path": sp,
+            "request_id": request_id,
+        }
 
         try:
             response = await call_next(request)
         except Exception as exc:
-            # Полный traceback пишет uvicorn/starlette; здесь — кратко, без дубля «ExceptionGroup».
             log.error(
                 "[app][http][BLOCK_API_ERROR] method=%s path=%s err=%s",
                 method,
                 sp,
                 exc,
+                extra={**ex_base},
             )
             raise
         else:
             status = int(response.status_code)
             ms = (time.perf_counter() - t0) * 1000.0
+            response.headers["X-Request-ID"] = request_id
+            line_ex = {**ex_base, "status": status, "duration_ms": ms}
             if status >= 500:
                 log.error(
                     "[app][http][BLOCK_API_REQUEST] method=%s path=%s status=%s duration_ms=%.1f",
@@ -71,6 +83,7 @@ class AppHttpRequestLogMiddleware(BaseHTTPMiddleware):
                     sp,
                     status,
                     ms,
+                    extra=line_ex,
                 )
             else:
                 log.info(
@@ -79,5 +92,6 @@ class AppHttpRequestLogMiddleware(BaseHTTPMiddleware):
                     sp,
                     status,
                     ms,
+                    extra=line_ex,
                 )
             return response

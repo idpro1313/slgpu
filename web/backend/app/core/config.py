@@ -23,6 +23,10 @@ class Settings(BaseSettings):
         default="INFO",
         description="Root log level: DEBUG, INFO, WARNING, …",
     )
+    log_file_enabled: bool = Field(
+        default=False,
+        description="Если true — писать JSON-лог в WEB_DATA_DIR/.slgpu/app.log (для Loki); основной UI — app_log_event в SQLite.",
+    )
 
     slgpu_root: Path = Field(default=Path("/slgpu"))
     data_dir: Path = Field(default=Path("/data"))

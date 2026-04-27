@@ -1821,3 +1821,11 @@
 - Файлы: `web/backend/app/services/stack_config.py`, `middleware/request_log.py`, `tests/test_stack_config_sqlite_path.py`, `VERSION` 5.0.3, pyproject, package.json, `__init__.py`, README, `grace/knowledge-graph/knowledge-graph.xml`, `development-plan.xml`, `docs/HISTORY.md`.
 - Решение: PATCH; корневая причина — неверный разбор DSN, не отсутствие БД.
 
+## Фаза 5.1.0 (журнал приложения в SQLite)
+
+### UI «Логи»: `app_log_event` + `GET /app-logs/events`
+- **Что:** Таблица **`app_log_event`** (ORM `AppLogEvent`); **`DbLogHandler`** + очередь + фоновый батч INSERT (`app_log_sink.start_writer` / `stop_writer` в startup/shutdown); **`WEB_LOG_FILE_ENABLED`** (по умолчанию false) для RotatingFileHandler; middleware: **`X-Request-ID`**, `extra` для `app.http`, пропуск **`/api/v1/app-logs/events`**; API **`GET /api/v1/app-logs/events`** с фильтрами и курсором **`before_id`**; удалён **`app_log_file`** и **`/app-logs/tail`**; UI: таблица, фильтры, модалка деталей, пагинация «ещё», refetch 4 с без пагинации; тесты `test_app_log_sink`, фикстура **`client`** с `start_writer`/`stop_writer`; SQLite **`PRAGMA journal_mode=WAL`** при init.
+- **Почему:** План app-logs-db-refactor — структурированный журнал вместо хвоста файла.
+- **Файлы:** `web/backend/app/models/app_log_event.py`, `services/app_log_sink.py`, `core/config.py`, `core/logging.py`, `main.py`, `db/session.py`, `middleware/request_log.py`, `api/v1/app_logs.py`, `schemas/app_logs.py`, `web/frontend` (`AppLogs.tsx`, `types.ts`), `tests/test_api_smoke.py`, `tests/test_app_log_sink.py`, `web/CONTRACT.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/plan/development-plan.xml`, `VERSION` 5.1.0, README, pyproject, package.json, `__init__.py`, `docs/HISTORY.md`.
+- **Решение:** MINOR 5.1.0; ломающая замена API `/tail` → `/events`.
+

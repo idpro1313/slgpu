@@ -1,5 +1,5 @@
 <KnowledgeGraph>
-  <Project NAME="slgpu" VERSION="5.0.3">
+  <Project NAME="slgpu" VERSION="5.1.0">
     <keywords>slgpu, vllm, sglang, llm-inference, benchmark, docker-compose, gpu, prometheus, grafana, sglang-dashboard-slgpu, sglangdash2-slgpu</keywords>
     <annotation>Стенд для сравнения движков LLM-инференса vLLM и SGLang на Linux-сервере с NVIDIA GPU.</annotation>
 
@@ -198,9 +198,11 @@
         <fn-services_monitoring PURPOSE="Probe: Docker + HTTP; порта и compose project monitoring из слитого стека (БД)" />
         <fn-services_litellm PURPOSE="LiteLLM: GET /v1/models и /health* с `Authorization: Bearer` при наличии `litellm_api_key` в public_access (настройки); порт — слитый стек; public URLs — app_settings + ports_for_probes_sync" />
         <fn-services_app_settings PURPOSE="Persistent UI settings: /api/v1/settings/public-access — `server_host` + опциональный `litellm_api_key` (не отдаётся в GET, только `litellm_api_key_set`)" />
-        <fn-core_logging PURPOSE="JSON: StreamHandler + RotatingFileHandler WEB_DATA_DIR/.slgpu/app.log (5MB×3); у app/httpx/httpcore/h11/uvicorn.error/fastapi/starlette — handlers сняты, propagate; uvicorn.access → WARNING; повтор в startup" />
-        <fn-api_app_logs PURPOSE="GET /app-logs/tail — хвост app.log; app.services.app_log_file.read_app_log_tail" />
-        <fn-middleware_request_log PURPOSE="AppHttpRequestLogMiddleware: [app][http][BLOCK_API_REQUEST|BLOCK_API_ERROR], без /assets /healthz" />
+        <fn-core_logging PURPOSE="JSON: StreamHandler + DbLogHandler (очередь → app_log_event) + RotatingFileHandler при WEB_LOG_FILE_ENABLED; propagate; uvicorn.access → WARNING; startup/shutdown" />
+        <fn-models_app_log_event PURPOSE="app.models.app_log_event.AppLogEvent — структурированные события журнала UI «Логи»" />
+        <fn-services_app_log_sink PURPOSE="app.services.app_log_sink: classify_record, батч INSERT в app_log_event, start_writer/stop_writer" />
+        <fn-api_app_logs PURPOSE="GET /app-logs/events — фильтры, курсор before_id, из SQLite" />
+        <fn-middleware_request_log PURPOSE="AppHttpRequestLogMiddleware: X-Request-ID, extra, [app][http][BLOCK_API_*], пропуск /app-logs/events, /assets, /healthz" />
         <fn-frontend_app PURPOSE="React SPA (globals.css — компактный макет): Dashboard, Presets, Inference (слоты), Логи (app-logs), Docker, Models, Monitoring, Jobs, Benchmarks, Settings" />
         <export-web-image PURPOSE="slgpu-web:dev, подъём: ./slgpu web up; тома: repo root по тому же абсолютному хост-пути (SLGPU_HOST_REPO=$(pwd) в scripts/cmd_web.sh), ./data/web, ./data/models, docker.sock; entrypoint chown'ит /data и ${WEB_SLGPU_ROOT}/data/{models,presets,bench} под uid 10001 (bench — native.bench.* → data/bench/results); working_dir из compose НЕ задаётся (uvicorn стартует из WORKDIR /srv/app в Dockerfile.web); huggingface_hub[cli] + hf_transfer установлены для slgpu pull, HF_HOME=/data/huggingface и /home/slgpuweb writable; критично для команд из web → docker compose monitoring/llm с корректными bind-маунтами" />
         <export-contract PURPOSE="web/CONTRACT.md — границы CLI/Docker API/SQLite" />
