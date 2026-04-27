@@ -320,6 +320,8 @@ export interface AppConfigStack {
     required_for: string[];
     /** Backend: не показывать строку отдельно (значение выводится из других ключей стека). */
     ui_hidden?: boolean;
+    /** Backend: slug подгруппы внутри `monitoring` / `proxy` (сервис compose). */
+    subgroup?: string | null;
   }>;
 }
 

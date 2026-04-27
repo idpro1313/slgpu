@@ -75,6 +75,8 @@ class KeyMeta:
     required_for: frozenset[StackScope]
     # Не показывать отдельной строкой в «Настройки» — значение подставляется из LLM_API_* см. env_key_aliases
     ui_hidden: bool = False
+    # Подгруппа внутри monitoring / proxy (.slug для UI-сортировки и подписи)
+    subgroup: str | None = None
 
 
 def _e(
@@ -84,6 +86,7 @@ def _e(
     *req: str,
     allow_empty: bool = False,
     ui_hidden: bool = False,
+    subgroup: str | None = None,
 ) -> KeyMeta:
     return KeyMeta(
         key=key,
@@ -93,6 +96,7 @@ def _e(
         is_secret=is_secret_key(key),
         required_for=_scopes(*req) if req else frozenset(),
         ui_hidden=ui_hidden,
+        subgroup=subgroup,
     )
 
 
@@ -107,7 +111,8 @@ def _e(
 #   7. proxy      — Langfuse + LiteLLM + Postgres + Redis + ClickHouse + MinIO (имена/порты/binds/cred/secrets)
 #   8. secrets    — отдельные секреты приложения (HF_TOKEN)
 # Порядок dict сохраняется и используется UI «Настройки» как источник сортировки строк
-# в группе (см. registry_to_public()).
+# в группе (см. registry_to_public()). Для group in (monitoring, proxy) поле ``subgroup`` —
+# подзаголовок по сервису (Prometheus, Langfuse, …); UI сортирует строки по subgroup.
 _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
     # ----- 1. Сеть Docker и compose-проекты -----
     "SLGPU_NETWORK_NAME": _e(
@@ -292,96 +297,360 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
     "SGLANG_ENABLE_MFU_METRICS": _e("SGLANG_ENABLE_MFU_METRICS", "inference", "0/1 — MFU-метрики SGLang.", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
 
     # ----- 6. Мониторинг — Prometheus, Grafana, Loki, Promtail, DCGM, NodeExporter -----
-    "PROMETHEUS_SERVICE_NAME": _e("PROMETHEUS_SERVICE_NAME", "monitoring", "DNS-имя Prometheus в сети slgpu (используется в *.tmpl рендерах).", *S_MON),
-    "GRAFANA_SERVICE_NAME": _e("GRAFANA_SERVICE_NAME", "monitoring", "DNS-имя Grafana в сети slgpu.", *S_MON),
-    "LOKI_SERVICE_NAME": _e("LOKI_SERVICE_NAME", "monitoring", "DNS-имя Loki в сети slgpu.", *S_MON),
-    "PROMTAIL_SERVICE_NAME": _e("PROMTAIL_SERVICE_NAME", "monitoring", "DNS-имя Promtail в сети slgpu.", *S_MON),
-    "DCGM_EXPORTER_SERVICE_NAME": _e("DCGM_EXPORTER_SERVICE_NAME", "monitoring", "DNS-имя dcgm-exporter в сети slgpu.", *S_MON),
-    "NODE_EXPORTER_SERVICE_NAME": _e("NODE_EXPORTER_SERVICE_NAME", "monitoring", "DNS-имя node-exporter в сети slgpu.", *S_MON),
-    "PROMETHEUS_INTERNAL_PORT": _e("PROMETHEUS_INTERNAL_PORT", "monitoring", "Внутренний порт Prometheus в контейнере.", *S_MON),
-    "GRAFANA_INTERNAL_PORT": _e("GRAFANA_INTERNAL_PORT", "monitoring", "Внутренний порт Grafana.", *S_MON),
-    "LOKI_INTERNAL_PORT": _e("LOKI_INTERNAL_PORT", "monitoring", "Внутренний порт Loki.", *S_MON),
-    "DCGM_EXPORTER_INTERNAL_PORT": _e("DCGM_EXPORTER_INTERNAL_PORT", "monitoring", "Внутренний порт dcgm-exporter.", *S_MON),
-    "NODE_EXPORTER_INTERNAL_PORT": _e("NODE_EXPORTER_INTERNAL_PORT", "monitoring", "Внутренний порт node-exporter.", *S_MON),
-    "PROMETHEUS_CONTAINER_NAME": _e("PROMETHEUS_CONTAINER_NAME", "monitoring", "Имя контейнера Prometheus (по нему backend ищет статусы и логи).", *S_MON),
-    "GRAFANA_CONTAINER_NAME": _e("GRAFANA_CONTAINER_NAME", "monitoring", "Имя контейнера Grafana.", *S_MON),
-    "LOKI_CONTAINER_NAME": _e("LOKI_CONTAINER_NAME", "monitoring", "Имя контейнера Loki.", *S_MON),
-    "PROMTAIL_CONTAINER_NAME": _e("PROMTAIL_CONTAINER_NAME", "monitoring", "Имя контейнера Promtail.", *S_MON),
-    "DCGM_EXPORTER_CONTAINER_NAME": _e("DCGM_EXPORTER_CONTAINER_NAME", "monitoring", "Имя контейнера dcgm-exporter.", *S_MON),
-    "NODE_EXPORTER_CONTAINER_NAME": _e("NODE_EXPORTER_CONTAINER_NAME", "monitoring", "Имя контейнера node-exporter.", *S_MON),
-    "PROMETHEUS_BIND": _e("PROMETHEUS_BIND", "monitoring", "Bind Prometheus UI/API на хосте (0.0.0.0 — снаружи; 127.0.0.1 — только SSH-туннель).", *S_MON),
-    "PROMETHEUS_PORT": _e("PROMETHEUS_PORT", "monitoring", "Опубликованный порт Prometheus на хосте.", *S_MON, "probes", "fix_perms"),
-    "GRAFANA_BIND": _e("GRAFANA_BIND", "monitoring", "Bind Grafana на хосте.", *S_MON),
-    "GRAFANA_PORT": _e("GRAFANA_PORT", "monitoring", "Опубликованный порт Grafana на хосте.", *S_MON, "probes", "fix_perms"),
-    "LOKI_BIND": _e("LOKI_BIND", "monitoring", "Bind Loki HTTP push API на хосте.", *S_MON, "fix_perms"),
-    "LOKI_PORT": _e("LOKI_PORT", "monitoring", "Опубликованный порт Loki на хосте.", *S_MON, "probes", "fix_perms"),
-    "DCGM_BIND": _e("DCGM_BIND", "monitoring", "Bind DCGM exporter (метрики GPU) на хосте.", *S_MON),
-    "NODE_EXPORTER_BIND": _e("NODE_EXPORTER_BIND", "monitoring", "Bind node-exporter (host-метрики) на хосте.", *S_MON),
-    "PROMETHEUS_RETENTION_TIME": _e("PROMETHEUS_RETENTION_TIME", "monitoring", "Срок хранения TSDB Prometheus (--storage.tsdb.retention.time): 7d / 30d / 1y / 100y.", *S_MON, "fix_perms"),
-    "PROMETHEUS_RETENTION_SIZE": _e("PROMETHEUS_RETENTION_SIZE", "monitoring", "Макс. размер TSDB Prometheus (0 = без лимита; 20GB / 100GB).", *S_MON, "fix_perms"),
-    "GRAFANA_ADMIN_USER": _e("GRAFANA_ADMIN_USER", "monitoring", "Логин администратора Grafana.", *S_MON, "fix_perms"),
-    "GRAFANA_ADMIN_PASSWORD": _e("GRAFANA_ADMIN_PASSWORD", "monitoring", "Пароль администратора Grafana (в проде сменить).", *S_MON, "fix_perms"),
-    "GF_SERVER_ROOT_URL": _e("GF_SERVER_ROOT_URL", "monitoring", "GF_SERVER_ROOT_URL (если Grafana за reverse proxy). Пусто — http://<host>:GRAFANA_PORT.", *S_MON, "fix_perms", allow_empty=True),
+    "PROMETHEUS_SERVICE_NAME": _e(
+        "PROMETHEUS_SERVICE_NAME", "monitoring", "DNS-имя Prometheus в сети slgpu (используется в *.tmpl рендерах).", *S_MON, subgroup="prometheus"
+    ),
+    "GRAFANA_SERVICE_NAME": _e("GRAFANA_SERVICE_NAME", "monitoring", "DNS-имя Grafana в сети slgpu.", *S_MON, subgroup="grafana"),
+    "LOKI_SERVICE_NAME": _e("LOKI_SERVICE_NAME", "monitoring", "DNS-имя Loki в сети slgpu.", *S_MON, subgroup="loki"),
+    "PROMTAIL_SERVICE_NAME": _e("PROMTAIL_SERVICE_NAME", "monitoring", "DNS-имя Promtail в сети slgpu.", *S_MON, subgroup="promtail"),
+    "DCGM_EXPORTER_SERVICE_NAME": _e(
+        "DCGM_EXPORTER_SERVICE_NAME", "monitoring", "DNS-имя dcgm-exporter в сети slgpu.", *S_MON, subgroup="dcgm_exporter"
+    ),
+    "NODE_EXPORTER_SERVICE_NAME": _e(
+        "NODE_EXPORTER_SERVICE_NAME", "monitoring", "DNS-имя node-exporter в сети slgpu.", *S_MON, subgroup="node_exporter"
+    ),
+    "PROMETHEUS_INTERNAL_PORT": _e(
+        "PROMETHEUS_INTERNAL_PORT", "monitoring", "Внутренний порт Prometheus в контейнере.", *S_MON, subgroup="prometheus"
+    ),
+    "GRAFANA_INTERNAL_PORT": _e("GRAFANA_INTERNAL_PORT", "monitoring", "Внутренний порт Grafana.", *S_MON, subgroup="grafana"),
+    "LOKI_INTERNAL_PORT": _e("LOKI_INTERNAL_PORT", "monitoring", "Внутренний порт Loki.", *S_MON, subgroup="loki"),
+    "DCGM_EXPORTER_INTERNAL_PORT": _e(
+        "DCGM_EXPORTER_INTERNAL_PORT", "monitoring", "Внутренний порт dcgm-exporter.", *S_MON, subgroup="dcgm_exporter"
+    ),
+    "NODE_EXPORTER_INTERNAL_PORT": _e(
+        "NODE_EXPORTER_INTERNAL_PORT", "monitoring", "Внутренний порт node-exporter.", *S_MON, subgroup="node_exporter"
+    ),
+    "PROMETHEUS_CONTAINER_NAME": _e(
+        "PROMETHEUS_CONTAINER_NAME",
+        "monitoring",
+        "Имя контейнера Prometheus (по нему backend ищет статусы и логи).",
+        *S_MON,
+        subgroup="prometheus",
+    ),
+    "GRAFANA_CONTAINER_NAME": _e("GRAFANA_CONTAINER_NAME", "monitoring", "Имя контейнера Grafana.", *S_MON, subgroup="grafana"),
+    "LOKI_CONTAINER_NAME": _e("LOKI_CONTAINER_NAME", "monitoring", "Имя контейнера Loki.", *S_MON, subgroup="loki"),
+    "PROMTAIL_CONTAINER_NAME": _e("PROMTAIL_CONTAINER_NAME", "monitoring", "Имя контейнера Promtail.", *S_MON, subgroup="promtail"),
+    "DCGM_EXPORTER_CONTAINER_NAME": _e(
+        "DCGM_EXPORTER_CONTAINER_NAME", "monitoring", "Имя контейнера dcgm-exporter.", *S_MON, subgroup="dcgm_exporter"
+    ),
+    "NODE_EXPORTER_CONTAINER_NAME": _e(
+        "NODE_EXPORTER_CONTAINER_NAME", "monitoring", "Имя контейнера node-exporter.", *S_MON, subgroup="node_exporter"
+    ),
+    "PROMETHEUS_BIND": _e(
+        "PROMETHEUS_BIND",
+        "monitoring",
+        "Bind Prometheus UI/API на хосте (0.0.0.0 — снаружи; 127.0.0.1 — только SSH-туннель).",
+        *S_MON,
+        subgroup="prometheus",
+    ),
+    "PROMETHEUS_PORT": _e(
+        "PROMETHEUS_PORT", "monitoring", "Опубликованный порт Prometheus на хосте.", *S_MON, "probes", "fix_perms", subgroup="prometheus"
+    ),
+    "GRAFANA_BIND": _e("GRAFANA_BIND", "monitoring", "Bind Grafana на хосте.", *S_MON, subgroup="grafana"),
+    "GRAFANA_PORT": _e(
+        "GRAFANA_PORT", "monitoring", "Опубликованный порт Grafana на хосте.", *S_MON, "probes", "fix_perms", subgroup="grafana"
+    ),
+    "LOKI_BIND": _e("LOKI_BIND", "monitoring", "Bind Loki HTTP push API на хосте.", *S_MON, "fix_perms", subgroup="loki"),
+    "LOKI_PORT": _e(
+        "LOKI_PORT", "monitoring", "Опубликованный порт Loki на хосте.", *S_MON, "probes", "fix_perms", subgroup="loki"
+    ),
+    "DCGM_BIND": _e(
+        "DCGM_BIND", "monitoring", "Bind DCGM exporter (метрики GPU) на хосте.", *S_MON, subgroup="dcgm_exporter"
+    ),
+    "NODE_EXPORTER_BIND": _e(
+        "NODE_EXPORTER_BIND", "monitoring", "Bind node-exporter (host-метрики) на хосте.", *S_MON, subgroup="node_exporter"
+    ),
+    "PROMETHEUS_RETENTION_TIME": _e(
+        "PROMETHEUS_RETENTION_TIME",
+        "monitoring",
+        "Срок хранения TSDB Prometheus (--storage.tsdb.retention.time): 7d / 30d / 1y / 100y.",
+        *S_MON,
+        "fix_perms",
+        subgroup="prometheus",
+    ),
+    "PROMETHEUS_RETENTION_SIZE": _e(
+        "PROMETHEUS_RETENTION_SIZE",
+        "monitoring",
+        "Макс. размер TSDB Prometheus (0 = без лимита; 20GB / 100GB).",
+        *S_MON,
+        "fix_perms",
+        subgroup="prometheus",
+    ),
+    "GRAFANA_ADMIN_USER": _e("GRAFANA_ADMIN_USER", "monitoring", "Логин администратора Grafana.", *S_MON, "fix_perms", subgroup="grafana"),
+    "GRAFANA_ADMIN_PASSWORD": _e(
+        "GRAFANA_ADMIN_PASSWORD", "monitoring", "Пароль администратора Grafana (в проде сменить).", *S_MON, "fix_perms", subgroup="grafana"
+    ),
+    "GF_SERVER_ROOT_URL": _e(
+        "GF_SERVER_ROOT_URL",
+        "monitoring",
+        "GF_SERVER_ROOT_URL (если Grafana за reverse proxy). Пусто — http://<host>:GRAFANA_PORT.",
+        *S_MON,
+        "fix_perms",
+        allow_empty=True,
+        subgroup="grafana",
+    ),
 
     # ----- 7. Прокси — Langfuse + LiteLLM + Postgres + Redis + ClickHouse + MinIO -----
-    "LANGFUSE_WEB_SERVICE_NAME": _e("LANGFUSE_WEB_SERVICE_NAME", "proxy", "DNS-имя langfuse-web в сети slgpu.", *S_MON),
-    "LANGFUSE_WEB_INTERNAL_PORT": _e("LANGFUSE_WEB_INTERNAL_PORT", "proxy", "Внутренний порт langfuse-web в контейнере.", *S_MON),
-    "LANGFUSE_WEB_CONTAINER_NAME": _e("LANGFUSE_WEB_CONTAINER_NAME", "proxy", "Имя контейнера langfuse-web.", *S_MON),
-    "LANGFUSE_WORKER_SERVICE_NAME": _e("LANGFUSE_WORKER_SERVICE_NAME", "proxy", "DNS-имя langfuse-worker в сети slgpu.", *S_MON),
-    "LANGFUSE_WORKER_INTERNAL_PORT": _e("LANGFUSE_WORKER_INTERNAL_PORT", "proxy", "Внутренний порт langfuse-worker.", *S_MON),
-    "LANGFUSE_WORKER_CONTAINER_NAME": _e("LANGFUSE_WORKER_CONTAINER_NAME", "proxy", "Имя контейнера langfuse-worker.", *S_MON),
-    "POSTGRES_SERVICE_NAME": _e("POSTGRES_SERVICE_NAME", "proxy", "DNS-имя Postgres в сети slgpu.", *S_MON),
-    "POSTGRES_INTERNAL_PORT": _e("POSTGRES_INTERNAL_PORT", "proxy", "Внутренний порт Postgres в контейнере.", *S_MON),
-    "POSTGRES_CONTAINER_NAME": _e("POSTGRES_CONTAINER_NAME", "proxy", "Имя контейнера Postgres.", *S_MON),
-    "REDIS_SERVICE_NAME": _e("REDIS_SERVICE_NAME", "proxy", "DNS-имя Redis в сети slgpu.", *S_MON),
-    "REDIS_INTERNAL_PORT": _e("REDIS_INTERNAL_PORT", "proxy", "Внутренний порт Redis в контейнере.", *S_MON),
-    "REDIS_CONTAINER_NAME": _e("REDIS_CONTAINER_NAME", "proxy", "Имя контейнера Redis.", *S_MON),
-    "CLICKHOUSE_SERVICE_NAME": _e("CLICKHOUSE_SERVICE_NAME", "proxy", "DNS-имя ClickHouse в сети slgpu.", *S_MON),
-    "CLICKHOUSE_HTTP_INTERNAL_PORT": _e("CLICKHOUSE_HTTP_INTERNAL_PORT", "proxy", "HTTP-порт ClickHouse в контейнере.", *S_MON),
-    "CLICKHOUSE_TCP_INTERNAL_PORT": _e("CLICKHOUSE_TCP_INTERNAL_PORT", "proxy", "TCP/native-порт ClickHouse в контейнере.", *S_MON),
-    "CLICKHOUSE_CONTAINER_NAME": _e("CLICKHOUSE_CONTAINER_NAME", "proxy", "Имя контейнера ClickHouse.", *S_MON),
-    "MINIO_SERVICE_NAME": _e("MINIO_SERVICE_NAME", "proxy", "DNS-имя MinIO в сети slgpu.", *S_MON),
-    "MINIO_API_INTERNAL_PORT": _e("MINIO_API_INTERNAL_PORT", "proxy", "S3 API-порт MinIO внутри контейнера.", *S_MON),
-    "MINIO_CONSOLE_INTERNAL_PORT": _e("MINIO_CONSOLE_INTERNAL_PORT", "proxy", "Консольный порт MinIO внутри контейнера.", *S_MON),
-    "MINIO_CONTAINER_NAME": _e("MINIO_CONTAINER_NAME", "proxy", "Имя контейнера MinIO.", *S_MON),
-    "MINIO_BUCKET_INIT_CONTAINER_NAME": _e("MINIO_BUCKET_INIT_CONTAINER_NAME", "proxy", "Имя bootstrap-контейнера minio bucket-init.", *S_MON),
-    "LITELLM_SERVICE_NAME": _e("LITELLM_SERVICE_NAME", "proxy", "DNS-имя LiteLLM в сети slgpu.", *S_MON),
-    "LITELLM_CONTAINER_NAME": _e("LITELLM_CONTAINER_NAME", "proxy", "Имя контейнера LiteLLM.", *S_MON),
-    "LITELLM_PG_INIT_CONTAINER_NAME": _e("LITELLM_PG_INIT_CONTAINER_NAME", "proxy", "Имя bootstrap-контейнера litellm-pg-init (создаёт ${LITELLM_POSTGRES_DB}).", *S_MON),
-    "NEXTAUTH_URL": _e("NEXTAUTH_URL", "proxy", "Канонический URL Langfuse в браузере (NextAuth, cookies, редиректы); должен совпадать с адресной строкой клиента.", *S_MON, "fix_perms"),
-    "LANGFUSE_BIND": _e("LANGFUSE_BIND", "proxy", "Bind Langfuse Web (UI) на хосте.", *S_MON, "fix_perms"),
-    "LANGFUSE_PORT": _e("LANGFUSE_PORT", "proxy", "Опубликованный порт Langfuse Web на хосте.", *S_MON, "probes", "fix_perms"),
-    "LANGFUSE_WORKER_BIND": _e("LANGFUSE_WORKER_BIND", "proxy", "Bind Langfuse Worker на хосте.", *S_MON, "fix_perms"),
-    "LANGFUSE_WORKER_PORT": _e("LANGFUSE_WORKER_PORT", "proxy", "Опубликованный порт Langfuse Worker.", *S_MON, "fix_perms"),
-    "LITELLM_BIND": _e("LITELLM_BIND", "proxy", "Bind LiteLLM proxy (OpenAI-совместимый шлюз) на хосте.", *S_MON, "fix_perms"),
-    "LITELLM_PORT": _e("LITELLM_PORT", "proxy", "Опубликованный порт LiteLLM на хосте.", *S_MON, "probes", "fix_perms"),
-    "LITELLM_POSTGRES_DB": _e("LITELLM_POSTGRES_DB", "proxy", "Имя БД LiteLLM в общем Postgres (создаётся litellm-pg-init).", *S_MON, "fix_perms"),
-    "LITELLM_MASTER_KEY": _e("LITELLM_MASTER_KEY", "proxy", "Master-key прокси (Bearer); пусто = ключ не требуется (только доверенная сеть). Меняется в UI «Публичный доступ».", *S_MON, "fix_perms", allow_empty=True),
-    "LITELLM_LOG": _e("LITELLM_LOG", "proxy", "Уровень логов прокси LiteLLM (INFO / DEBUG как --detailed_debug).", *S_MON, allow_empty=True),
-    "LITELLM_LLM_ID": _e("LITELLM_LLM_ID", "proxy", "id маршрута LiteLLM в Admin UI / БД (опционально, при STORE_MODEL_IN_DB).", *S_MON, allow_empty=True),
-    "STORE_MODEL_IN_DB": _e("STORE_MODEL_IN_DB", "proxy", "True = хранить список моделей LiteLLM в Postgres (Admin UI редактирует).", *S_MON, "fix_perms"),
-    "UI_USERNAME": _e("UI_USERNAME", "proxy", "Учётка Admin UI LiteLLM (/ui).", *S_MON, allow_empty=True),
-    "UI_PASSWORD": _e("UI_PASSWORD", "proxy", "Пароль Admin UI LiteLLM (/ui).", *S_MON, allow_empty=True),
-    "LANGFUSE_POSTGRES_USER": _e("LANGFUSE_POSTGRES_USER", "proxy", "Учётка общего Postgres (Langfuse, LiteLLM); placeholder для dev.", *S_MON, "fix_perms"),
-    "LANGFUSE_POSTGRES_PASSWORD": _e("LANGFUSE_POSTGRES_PASSWORD", "proxy", "Пароль общего Postgres.", *S_MON, "fix_perms"),
-    "LANGFUSE_POSTGRES_DB": _e("LANGFUSE_POSTGRES_DB", "proxy", "Имя основной БД Postgres (Langfuse).", *S_MON, "fix_perms"),
-    "LANGFUSE_REDIS_AUTH": _e("LANGFUSE_REDIS_AUTH", "proxy", "Пароль Redis (используется Langfuse).", *S_MON, "fix_perms"),
-    "LANGFUSE_CLICKHOUSE_USER": _e("LANGFUSE_CLICKHOUSE_USER", "proxy", "Учётка ClickHouse (Langfuse).", *S_MON, "fix_perms"),
-    "LANGFUSE_CLICKHOUSE_PASSWORD": _e("LANGFUSE_CLICKHOUSE_PASSWORD", "proxy", "Пароль ClickHouse (Langfuse).", *S_MON, "fix_perms"),
-    "MINIO_ROOT_USER": _e("MINIO_ROOT_USER", "proxy", "MinIO root user.", *S_MON, "fix_perms"),
-    "MINIO_ROOT_PASSWORD": _e("MINIO_ROOT_PASSWORD", "proxy", "MinIO root password.", *S_MON, "fix_perms"),
-    "MINIO_API_BIND": _e("MINIO_API_BIND", "proxy", "Bind MinIO API на хосте.", *S_MON, "fix_perms"),
-    "MINIO_API_HOST_PORT": _e("MINIO_API_HOST_PORT", "proxy", "Опубликованный порт MinIO API на хосте.", *S_MON, "fix_perms"),
-    "MINIO_CONSOLE_BIND": _e("MINIO_CONSOLE_BIND", "proxy", "Bind консоли MinIO на хосте.", *S_MON, "fix_perms"),
-    "MINIO_CONSOLE_HOST_PORT": _e("MINIO_CONSOLE_HOST_PORT", "proxy", "Опубликованный порт консоли MinIO на хосте.", *S_MON, "fix_perms"),
-    "LANGFUSE_SALT": _e("LANGFUSE_SALT", "proxy", "Соль Langfuse (для хеширования). В проде — длинная случайная строка.", *S_MON, "fix_perms"),
-    "LANGFUSE_ENCRYPTION_KEY": _e("LANGFUSE_ENCRYPTION_KEY", "proxy", "32-байтный ключ шифрования Langfuse (hex, 64 символа). `openssl rand -hex 32`.", *S_MON, "fix_perms"),
-    "NEXTAUTH_SECRET": _e("NEXTAUTH_SECRET", "proxy", "NEXTAUTH_SECRET (cookie session). `openssl rand -base64 32`.", *S_MON, "fix_perms"),
-    "LANGFUSE_S3_EVENT_UPLOAD_BUCKET": _e("LANGFUSE_S3_EVENT_UPLOAD_BUCKET", "proxy", "Имя S3-бакета Langfuse для events в MinIO.", *S_MON, "fix_perms"),
-    "LANGFUSE_S3_MEDIA_BUCKET": _e("LANGFUSE_S3_MEDIA_BUCKET", "proxy", "Имя S3-бакета Langfuse для media в MinIO.", *S_MON, "fix_perms"),
-    "LANGFUSE_TELEMETRY": _e("LANGFUSE_TELEMETRY", "proxy", "true/false — отправлять анонимную телеметрию Langfuse в их API.", *S_MON, "fix_perms"),
-    "LANGFUSE_PUBLIC_KEY": _e("LANGFUSE_PUBLIC_KEY", "proxy", "Langfuse public key для интеграции LiteLLM → Langfuse (OTEL); создаётся в Langfuse → Settings → API Keys.", *S_MON, allow_empty=True),
-    "LANGFUSE_SECRET_KEY": _e("LANGFUSE_SECRET_KEY", "proxy", "Langfuse secret key для интеграции LiteLLM → Langfuse (OTEL).", *S_MON, allow_empty=True),
+    "LANGFUSE_WEB_SERVICE_NAME": _e(
+        "LANGFUSE_WEB_SERVICE_NAME", "proxy", "DNS-имя langfuse-web в сети slgpu.", *S_MON, subgroup="langfuse"
+    ),
+    "LANGFUSE_WEB_INTERNAL_PORT": _e(
+        "LANGFUSE_WEB_INTERNAL_PORT", "proxy", "Внутренний порт langfuse-web в контейнере.", *S_MON, subgroup="langfuse"
+    ),
+    "LANGFUSE_WEB_CONTAINER_NAME": _e(
+        "LANGFUSE_WEB_CONTAINER_NAME", "proxy", "Имя контейнера langfuse-web.", *S_MON, subgroup="langfuse"
+    ),
+    "LANGFUSE_WORKER_SERVICE_NAME": _e(
+        "LANGFUSE_WORKER_SERVICE_NAME", "proxy", "DNS-имя langfuse-worker в сети slgpu.", *S_MON, subgroup="langfuse"
+    ),
+    "LANGFUSE_WORKER_INTERNAL_PORT": _e(
+        "LANGFUSE_WORKER_INTERNAL_PORT", "proxy", "Внутренний порт langfuse-worker.", *S_MON, subgroup="langfuse"
+    ),
+    "LANGFUSE_WORKER_CONTAINER_NAME": _e(
+        "LANGFUSE_WORKER_CONTAINER_NAME", "proxy", "Имя контейнера langfuse-worker.", *S_MON, subgroup="langfuse"
+    ),
+    "POSTGRES_SERVICE_NAME": _e("POSTGRES_SERVICE_NAME", "proxy", "DNS-имя Postgres в сети slgpu.", *S_MON, subgroup="postgresql"),
+    "POSTGRES_INTERNAL_PORT": _e(
+        "POSTGRES_INTERNAL_PORT", "proxy", "Внутренний порт Postgres в контейнере.", *S_MON, subgroup="postgresql"
+    ),
+    "POSTGRES_CONTAINER_NAME": _e(
+        "POSTGRES_CONTAINER_NAME", "proxy", "Имя контейнера Postgres.", *S_MON, subgroup="postgresql"
+    ),
+    "REDIS_SERVICE_NAME": _e("REDIS_SERVICE_NAME", "proxy", "DNS-имя Redis в сети slgpu.", *S_MON, subgroup="redis"),
+    "REDIS_INTERNAL_PORT": _e(
+        "REDIS_INTERNAL_PORT", "proxy", "Внутренний порт Redis в контейнере.", *S_MON, subgroup="redis"
+    ),
+    "REDIS_CONTAINER_NAME": _e("REDIS_CONTAINER_NAME", "proxy", "Имя контейнера Redis.", *S_MON, subgroup="redis"),
+    "CLICKHOUSE_SERVICE_NAME": _e(
+        "CLICKHOUSE_SERVICE_NAME", "proxy", "DNS-имя ClickHouse в сети slgpu.", *S_MON, subgroup="clickhouse"
+    ),
+    "CLICKHOUSE_HTTP_INTERNAL_PORT": _e(
+        "CLICKHOUSE_HTTP_INTERNAL_PORT", "proxy", "HTTP-порт ClickHouse в контейнере.", *S_MON, subgroup="clickhouse"
+    ),
+    "CLICKHOUSE_TCP_INTERNAL_PORT": _e(
+        "CLICKHOUSE_TCP_INTERNAL_PORT", "proxy", "TCP/native-порт ClickHouse в контейнере.", *S_MON, subgroup="clickhouse"
+    ),
+    "CLICKHOUSE_CONTAINER_NAME": _e(
+        "CLICKHOUSE_CONTAINER_NAME", "proxy", "Имя контейнера ClickHouse.", *S_MON, subgroup="clickhouse"
+    ),
+    "MINIO_SERVICE_NAME": _e("MINIO_SERVICE_NAME", "proxy", "DNS-имя MinIO в сети slgpu.", *S_MON, subgroup="minio"),
+    "MINIO_API_INTERNAL_PORT": _e(
+        "MINIO_API_INTERNAL_PORT", "proxy", "S3 API-порт MinIO внутри контейнера.", *S_MON, subgroup="minio"
+    ),
+    "MINIO_CONSOLE_INTERNAL_PORT": _e(
+        "MINIO_CONSOLE_INTERNAL_PORT", "proxy", "Консольный порт MinIO внутри контейнера.", *S_MON, subgroup="minio"
+    ),
+    "MINIO_CONTAINER_NAME": _e("MINIO_CONTAINER_NAME", "proxy", "Имя контейнера MinIO.", *S_MON, subgroup="minio"),
+    "MINIO_BUCKET_INIT_CONTAINER_NAME": _e(
+        "MINIO_BUCKET_INIT_CONTAINER_NAME",
+        "proxy",
+        "Имя bootstrap-контейнера minio bucket-init.",
+        *S_MON,
+        subgroup="minio",
+    ),
+    "LITELLM_SERVICE_NAME": _e("LITELLM_SERVICE_NAME", "proxy", "DNS-имя LiteLLM в сети slgpu.", *S_MON, subgroup="litellm"),
+    "LITELLM_CONTAINER_NAME": _e("LITELLM_CONTAINER_NAME", "proxy", "Имя контейнера LiteLLM.", *S_MON, subgroup="litellm"),
+    "LITELLM_PG_INIT_CONTAINER_NAME": _e(
+        "LITELLM_PG_INIT_CONTAINER_NAME",
+        "proxy",
+        "Имя bootstrap-контейнера litellm-pg-init (создаёт ${LITELLM_POSTGRES_DB}).",
+        *S_MON,
+        subgroup="postgresql",
+    ),
+    "NEXTAUTH_URL": _e(
+        "NEXTAUTH_URL",
+        "proxy",
+        "Канонический URL Langfuse в браузере (NextAuth, cookies, редиректы); должен совпадать с адресной строкой клиента.",
+        *S_MON,
+        "fix_perms",
+        subgroup="langfuse",
+    ),
+    "LANGFUSE_BIND": _e("LANGFUSE_BIND", "proxy", "Bind Langfuse Web (UI) на хосте.", *S_MON, "fix_perms", subgroup="langfuse"),
+    "LANGFUSE_PORT": _e(
+        "LANGFUSE_PORT", "proxy", "Опубликованный порт Langfuse Web на хосте.", *S_MON, "probes", "fix_perms", subgroup="langfuse"
+    ),
+    "LANGFUSE_WORKER_BIND": _e(
+        "LANGFUSE_WORKER_BIND", "proxy", "Bind Langfuse Worker на хосте.", *S_MON, "fix_perms", subgroup="langfuse"
+    ),
+    "LANGFUSE_WORKER_PORT": _e(
+        "LANGFUSE_WORKER_PORT", "proxy", "Опубликованный порт Langfuse Worker.", *S_MON, "fix_perms", subgroup="langfuse"
+    ),
+    "LITELLM_BIND": _e(
+        "LITELLM_BIND",
+        "proxy",
+        "Bind LiteLLM proxy (OpenAI-совместимый шлюз) на хосте.",
+        *S_MON,
+        "fix_perms",
+        subgroup="litellm",
+    ),
+    "LITELLM_PORT": _e(
+        "LITELLM_PORT",
+        "proxy",
+        "Опубликованный порт LiteLLM на хосте.",
+        *S_MON,
+        "probes",
+        "fix_perms",
+        subgroup="litellm",
+    ),
+    "LITELLM_POSTGRES_DB": _e(
+        "LITELLM_POSTGRES_DB",
+        "proxy",
+        "Имя БД LiteLLM в общем Postgres (создаётся litellm-pg-init).",
+        *S_MON,
+        "fix_perms",
+        subgroup="postgresql",
+    ),
+    "LITELLM_MASTER_KEY": _e(
+        "LITELLM_MASTER_KEY",
+        "proxy",
+        "Master-key прокси (Bearer); пусто = ключ не требуется (только доверенная сеть). Меняется в UI «Публичный доступ».",
+        *S_MON,
+        "fix_perms",
+        allow_empty=True,
+        subgroup="litellm",
+    ),
+    "LITELLM_LOG": _e(
+        "LITELLM_LOG", "proxy", "Уровень логов прокси LiteLLM (INFO / DEBUG как --detailed_debug).", *S_MON, allow_empty=True, subgroup="litellm"
+    ),
+    "LITELLM_LLM_ID": _e(
+        "LITELLM_LLM_ID",
+        "proxy",
+        "id маршрута LiteLLM в Admin UI / БД (опционально, при STORE_MODEL_IN_DB).",
+        *S_MON,
+        allow_empty=True,
+        subgroup="litellm",
+    ),
+    "STORE_MODEL_IN_DB": _e(
+        "STORE_MODEL_IN_DB",
+        "proxy",
+        "True = хранить список моделей LiteLLM в Postgres (Admin UI редактирует).",
+        *S_MON,
+        "fix_perms",
+        subgroup="litellm",
+    ),
+    "UI_USERNAME": _e(
+        "UI_USERNAME", "proxy", "Учётка Admin UI LiteLLM (/ui).", *S_MON, allow_empty=True, subgroup="litellm"
+    ),
+    "UI_PASSWORD": _e(
+        "UI_PASSWORD", "proxy", "Пароль Admin UI LiteLLM (/ui).", *S_MON, allow_empty=True, subgroup="litellm"
+    ),
+    "LANGFUSE_POSTGRES_USER": _e(
+        "LANGFUSE_POSTGRES_USER",
+        "proxy",
+        "Учётка общего Postgres (Langfuse, LiteLLM); placeholder для dev.",
+        *S_MON,
+        "fix_perms",
+        subgroup="postgresql",
+    ),
+    "LANGFUSE_POSTGRES_PASSWORD": _e(
+        "LANGFUSE_POSTGRES_PASSWORD", "proxy", "Пароль общего Postgres.", *S_MON, "fix_perms", subgroup="postgresql"
+    ),
+    "LANGFUSE_POSTGRES_DB": _e(
+        "LANGFUSE_POSTGRES_DB",
+        "proxy",
+        "Имя основной БД Postgres (Langfuse).",
+        *S_MON,
+        "fix_perms",
+        subgroup="postgresql",
+    ),
+    "LANGFUSE_REDIS_AUTH": _e(
+        "LANGFUSE_REDIS_AUTH",
+        "proxy",
+        "Пароль Redis (используется Langfuse).",
+        *S_MON,
+        "fix_perms",
+        subgroup="redis",
+    ),
+    "LANGFUSE_CLICKHOUSE_USER": _e(
+        "LANGFUSE_CLICKHOUSE_USER", "proxy", "Учётка ClickHouse (Langfuse).", *S_MON, "fix_perms", subgroup="clickhouse"
+    ),
+    "LANGFUSE_CLICKHOUSE_PASSWORD": _e(
+        "LANGFUSE_CLICKHOUSE_PASSWORD",
+        "proxy",
+        "Пароль ClickHouse (Langfuse).",
+        *S_MON,
+        "fix_perms",
+        subgroup="clickhouse",
+    ),
+    "MINIO_ROOT_USER": _e("MINIO_ROOT_USER", "proxy", "MinIO root user.", *S_MON, "fix_perms", subgroup="minio"),
+    "MINIO_ROOT_PASSWORD": _e("MINIO_ROOT_PASSWORD", "proxy", "MinIO root password.", *S_MON, "fix_perms", subgroup="minio"),
+    "MINIO_API_BIND": _e("MINIO_API_BIND", "proxy", "Bind MinIO API на хосте.", *S_MON, "fix_perms", subgroup="minio"),
+    "MINIO_API_HOST_PORT": _e(
+        "MINIO_API_HOST_PORT", "proxy", "Опубликованный порт MinIO API на хосте.", *S_MON, "fix_perms", subgroup="minio"
+    ),
+    "MINIO_CONSOLE_BIND": _e("MINIO_CONSOLE_BIND", "proxy", "Bind консоли MinIO на хосте.", *S_MON, "fix_perms", subgroup="minio"),
+    "MINIO_CONSOLE_HOST_PORT": _e(
+        "MINIO_CONSOLE_HOST_PORT",
+        "proxy",
+        "Опубликованный порт консоли MinIO на хосте.",
+        *S_MON,
+        "fix_perms",
+        subgroup="minio",
+    ),
+    "LANGFUSE_SALT": _e(
+        "LANGFUSE_SALT",
+        "proxy",
+        "Соль Langfuse (для хеширования). В проде — длинная случайная строка.",
+        *S_MON,
+        "fix_perms",
+        subgroup="langfuse",
+    ),
+    "LANGFUSE_ENCRYPTION_KEY": _e(
+        "LANGFUSE_ENCRYPTION_KEY",
+        "proxy",
+        "32-байтный ключ шифрования Langfuse (hex, 64 символа). `openssl rand -hex 32`.",
+        *S_MON,
+        "fix_perms",
+        subgroup="langfuse",
+    ),
+    "NEXTAUTH_SECRET": _e(
+        "NEXTAUTH_SECRET",
+        "proxy",
+        "NEXTAUTH_SECRET (cookie session). `openssl rand -base64 32`.",
+        *S_MON,
+        "fix_perms",
+        subgroup="langfuse",
+    ),
+    "LANGFUSE_S3_EVENT_UPLOAD_BUCKET": _e(
+        "LANGFUSE_S3_EVENT_UPLOAD_BUCKET",
+        "proxy",
+        "Имя S3-бакета Langfuse для events в MinIO.",
+        *S_MON,
+        "fix_perms",
+        subgroup="langfuse",
+    ),
+    "LANGFUSE_S3_MEDIA_BUCKET": _e(
+        "LANGFUSE_S3_MEDIA_BUCKET",
+        "proxy",
+        "Имя S3-бакета Langfuse для media в MinIO.",
+        *S_MON,
+        "fix_perms",
+        subgroup="langfuse",
+    ),
+    "LANGFUSE_TELEMETRY": _e(
+        "LANGFUSE_TELEMETRY",
+        "proxy",
+        "true/false — отправлять анонимную телеметрию Langfuse в их API.",
+        *S_MON,
+        "fix_perms",
+        subgroup="langfuse",
+    ),
+    "LANGFUSE_PUBLIC_KEY": _e(
+        "LANGFUSE_PUBLIC_KEY",
+        "proxy",
+        "Langfuse public key для интеграции LiteLLM → Langfuse (OTEL); создаётся в Langfuse → Settings → API Keys.",
+        *S_MON,
+        allow_empty=True,
+        subgroup="langfuse",
+    ),
+    "LANGFUSE_SECRET_KEY": _e(
+        "LANGFUSE_SECRET_KEY",
+        "proxy",
+        "Langfuse secret key для интеграции LiteLLM → Langfuse (OTEL).",
+        *S_MON,
+        allow_empty=True,
+        subgroup="langfuse",
+    ),
 
     # ----- 8. Секреты приложения -----
     "HF_TOKEN": _e("HF_TOKEN", "secrets", "HuggingFace токен для приватных или gated моделей. Пусто = без аутентификации.", "pull", allow_empty=True),
@@ -455,6 +724,7 @@ def registry_to_public() -> list[dict[str, Any]]:
             "allow_empty": m.allow_empty,
             "required_for": sorted(m.required_for),
             "ui_hidden": m.ui_hidden,
+            "subgroup": m.subgroup,
         }
         for m in STACK_KEY_REGISTRY.values()
     ]

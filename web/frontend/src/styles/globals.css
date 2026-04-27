@@ -499,6 +499,26 @@ tr.settings-stack-row--missing-required td:first-child {
   max-width: 48rem;
 }
 
+tr.settings-stack-service-row td.settings-stack-service-heading {
+  padding: 10px 10px 6px;
+  vertical-align: bottom;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--color-primary) 8%, var(--color-surface-alt)) 0%,
+    var(--color-surface-alt) 100%
+  );
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 85%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--color-primary) 18%, transparent);
+}
+
+.settings-stack-service-heading__text {
+  font-family: var(--font-accent);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  color: var(--color-primary-deep);
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;

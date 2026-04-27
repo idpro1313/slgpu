@@ -128,6 +128,56 @@ function formatScopeLabel(scope: string): string {
   return SCOPE_LABELS[scope] ?? scope;
 }
 
+/** Подзаголовки внутри блоков реестра 6 и 7 (slug → см. stack_registry subgroup). */
+const MONITORING_SUBGROUP_TITLE: Record<string, string> = {
+  prometheus: "Prometheus",
+  grafana: "Grafana",
+  loki: "Loki",
+  promtail: "Promtail",
+  dcgm_exporter: "DCGM Exporter",
+  node_exporter: "Node Exporter",
+};
+
+const PROXY_SUBGROUP_TITLE: Record<string, string> = {
+  langfuse: "Langfuse",
+  postgresql: "PostgreSQL",
+  redis: "Redis",
+  clickhouse: "ClickHouse",
+  minio: "MinIO",
+  litellm: "LiteLLM",
+};
+
+function subgroupSortRank(gid: StackGroupId, slug: string | undefined | null): number {
+  if (!slug || (gid !== "monitoring" && gid !== "proxy")) return 0;
+  const mon = ["prometheus", "grafana", "loki", "promtail", "dcgm_exporter", "node_exporter"];
+  const px = ["langfuse", "postgresql", "redis", "clickhouse", "minio", "litellm"];
+  const idx = gid === "monitoring" ? mon.indexOf(slug) : px.indexOf(slug);
+  return idx >= 0 ? idx : 999;
+}
+
+function orderRowsWithSubgroupSort(
+  gid: StackGroupId,
+  rows: StackRow[],
+  regByKey: Map<string, RegistryEntry>,
+): StackRow[] {
+  if (gid !== "monitoring" && gid !== "proxy") return rows;
+  const indexed = rows.map((r, i) => ({ r, i }));
+  indexed.sort((a, b) => {
+    const sa = regByKey.get(a.r.key.trim())?.subgroup;
+    const sb = regByKey.get(b.r.key.trim())?.subgroup;
+    const ra = subgroupSortRank(gid, sa);
+    const rb = subgroupSortRank(gid, sb);
+    if (ra !== rb) return ra - rb;
+    return a.i - b.i;
+  });
+  return indexed.map(({ r }) => r);
+}
+
+function serviceSubgroupHeading(gid: StackGroupId, slug: string): string {
+  if (gid === "monitoring") return MONITORING_SUBGROUP_TITLE[slug] ?? slug;
+  return PROXY_SUBGROUP_TITLE[slug] ?? slug;
+}
+
 function isMissingRequired(
   meta: RegistryEntry | undefined,
   value: string,
@@ -602,6 +652,10 @@ export function SettingsPage() {
             <form className="flex flex--col flex--gap-md" onSubmit={onSaveStack}>
               {STACK_GROUP_ORDER.map((gid) => {
                 const rowsInGroup = stackRows.filter((r) => stackGroupId(r, regByKey) === gid);
+                const rowsDisplayed =
+                  gid === "monitoring" || gid === "proxy"
+                    ? orderRowsWithSubgroupSort(gid, rowsInGroup, regByKey)
+                    : rowsInGroup;
                 const meta = STACK_GROUP_META[gid];
                 const showEmptyOther = gid === "other";
                 if (rowsInGroup.length === 0 && !showEmptyOther) return null;
@@ -670,23 +724,45 @@ export function SettingsPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {rowsInGroup.map((row) => {
-                            const km = regByKey.get(row.key.trim());
-                            const missingRequired = isMissingRequired(km, row.value, row.secretSet);
-                            const queryHighlight =
-                              row.key && missingHighlight.has(row.key);
-                            const rowClass = [
-                              missingRequired ? "settings-stack-row--missing-required" : "",
-                              queryHighlight ? "settings-stack-row--missing" : "",
-                            ]
-                              .filter(Boolean)
-                              .join(" ");
-                            const secretValuePlaceholder = row.secretSet
-                              ? "•••••••• (значение задано в БД — введите новое, чтобы заменить; пусто = не менять)"
-                              : missingRequired
-                                ? "обязательный — заполните секрет"
-                                : "новое значение (пусто = не менять)";
-                            return (
+                          {(() => {
+                            let lastSubgroupSlug: string | undefined;
+                            const chunks: JSX.Element[] = [];
+                            rowsDisplayed.forEach((row) => {
+                              const km = regByKey.get(row.key.trim());
+                              const sub = km?.subgroup ?? undefined;
+                              if (
+                                (gid === "monitoring" || gid === "proxy") &&
+                                typeof sub === "string" &&
+                                sub.length > 0 &&
+                                sub !== lastSubgroupSlug
+                              ) {
+                                lastSubgroupSlug = sub;
+                                chunks.push(
+                                  <tr key={`sub-${gid}-${sub}`} className="settings-stack-service-row">
+                                    <td colSpan={5} className="settings-stack-service-heading">
+                                      <span className="settings-stack-service-heading__text">
+                                        {serviceSubgroupHeading(gid, sub)}
+                                      </span>
+                                    </td>
+                                  </tr>,
+                                );
+                              }
+
+                              const missingRequired = isMissingRequired(km, row.value, row.secretSet);
+                              const queryHighlight =
+                                row.key && missingHighlight.has(row.key);
+                              const rowClass = [
+                                missingRequired ? "settings-stack-row--missing-required" : "",
+                                queryHighlight ? "settings-stack-row--missing" : "",
+                              ]
+                                .filter(Boolean)
+                                .join(" ");
+                              const secretValuePlaceholder = row.secretSet
+                                ? "•••••••• (значение задано в БД — введите новое, чтобы заменить; пусто = не менять)"
+                                : missingRequired
+                                  ? "обязательный — заполните секрет"
+                                  : "новое значение (пусто = не менять)";
+                              chunks.push(
                               <tr key={row.id} className={rowClass || undefined}>
                                 <td>
                                   <input
@@ -846,8 +922,10 @@ export function SettingsPage() {
                                   </button>
                                 </td>
                               </tr>
-                            );
-                          })}
+                              );
+                            });
+                            return chunks;
+                          })()}
                         </tbody>
                       </table>
                     </div>
