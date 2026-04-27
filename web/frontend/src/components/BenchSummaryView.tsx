@@ -86,24 +86,24 @@ function LoadSummaryBody({ data }: { data: Record<string, unknown> }) {
         <MetaLine label="Время (UTC)" value={<span className="mono">{str(data.timestamp) ?? "—"}</span>} />
       </div>
 
-      <div className="metric-grid" style={{ marginBottom: 20 }}>
+      <div className="metric-grid" style={{ marginBottom: 12 }}>
         <div className="metric-card metric-card--accent">
           <span className="metric-card__label">Throughput</span>
-          <span className="metric-card__value" style={{ fontSize: "2.25rem" }}>
+          <span className="metric-card__value" style={{ fontSize: "1.65rem" }}>
             {fmtRps(data.throughput_rps)}
           </span>
           <span className="metric-card__hint">запросов / с</span>
         </div>
         <div className="metric-card">
           <span className="metric-card__label">Генерация</span>
-          <span className="metric-card__value" style={{ fontSize: "2.25rem" }}>
+          <span className="metric-card__value" style={{ fontSize: "1.65rem" }}>
             {fmtFloat(data.tokens_per_sec, 1)}
           </span>
           <span className="metric-card__hint">токенов / с</span>
         </div>
         <div className="metric-card">
           <span className="metric-card__label">Ошибки</span>
-          <span className="metric-card__value" style={{ fontSize: "2.25rem" }}>
+          <span className="metric-card__value" style={{ fontSize: "1.65rem" }}>
             {fmtErrRate(data.error_rate)}
           </span>
           <span className="metric-card__hint">

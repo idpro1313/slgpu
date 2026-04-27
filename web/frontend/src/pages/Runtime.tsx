@@ -465,7 +465,7 @@ export function RuntimePage() {
             </>
           ) : null}
         </p>
-        <pre className="code-block" style={{ maxHeight: 420, overflow: "auto" }}>
+        <pre className="code-block" style={{ maxHeight: 300, overflow: "auto" }}>
           {logSlotKey
             ? slotLogs.isLoading
               ? "Загружаем…"

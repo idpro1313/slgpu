@@ -1611,6 +1611,13 @@
 - **Файлы:** `grace/**/*.xml`, `docs/AGENTS.md`, `web/CONTRACT.md`, `web/README.md`, `VERSION`, `web/backend/pyproject.toml`, `web/backend/app/__init__.py`, `web/frontend/package.json`, `docs/HISTORY.md`.
 - **Решение:** **PATCH 4.0.8** для документации и метаданных версии; функциональные правки предыдущих волон — в тех же коммитах/истории.
 
+### 4.1.5: Компактный макет web UI (все страницы)
+
+- **Что:** Глобальная **плотность** в **`web/frontend/src/styles/globals.css`**: меньше `padding` у header/main/footer, **`page-header`**, **`.section`**, модалок, таблиц, **`btn`** / inputs, мельче **H1** страницы и **H2** секции, **metric-card**, **badges**, **code-block**; сетки `metric-grid` / `cards-grid` / `form-grid` с меньшими gap; `BenchSummaryView` — числа 1.65rem; **Runtime** / **DockerLogs** — ниже `maxHeight` у pre. Переменные `--space-page-*`, `--space-section-pad`. **`docs/AGENTS.md`** — пометка о плотном макете.
+- **Почему:** Слишком много пустого места и крупные элементы на всех экранах.
+- **Файлы:** `web/frontend/src/styles/globals.css`, `BenchSummaryView.tsx`, `Runtime.tsx`, `DockerLogs.tsx`, `VERSION`, версии web/backend, `grace/knowledge-graph/knowledge-graph.xml`, `docs/AGENTS.md`, `docs/HISTORY.md`.
+- **Решение:** **PATCH** (только визуал, без смены API).
+
 ### 4.1.4: Лог слота на Inference — ограничение по числу строк (tail)
 
 - **Что:** Секция **«Лог слота»** в **`/runtime`**: селектор **tail** (200…2000, как на бэке **`Query(..., le=2000)`**), `queryKey` учитывает tail; отображение через **`limitLogLinesToMax(..., data.tail)`**. Подзаголовок и **CONTRACT**/`AGENTS` — явный предел 2000 строк.

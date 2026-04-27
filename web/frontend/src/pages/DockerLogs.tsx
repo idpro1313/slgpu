@@ -163,7 +163,7 @@ export function DockerLogsPage() {
       >
         <pre
           className="code-block"
-          style={{ maxHeight: 320, overflow: "auto" }}
+          style={{ maxHeight: 260, overflow: "auto" }}
         >
           {engineQ.isLoading
             ? "Загружаем…"
@@ -213,7 +213,7 @@ export function DockerLogsPage() {
         ) : null}
         <pre
           className="code-block"
-          style={{ maxHeight: 320, overflow: "auto" }}
+          style={{ maxHeight: 260, overflow: "auto" }}
         >
           {daemonQ.isLoading
             ? "Загружаем…"
@@ -378,7 +378,7 @@ export function DockerLogsPage() {
         </p>
         <pre
           className="code-block"
-          style={{ maxHeight: 480, overflow: "auto" }}
+          style={{ maxHeight: 360, overflow: "auto" }}
         >
           {!refForRequest
             ? "—"
