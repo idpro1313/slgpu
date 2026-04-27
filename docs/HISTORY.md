@@ -1988,3 +1988,11 @@
 - **Файлы:** `configs/main.env`, `configs/monitoring/loki/loki-config.yaml.tmpl`, `configs/monitoring/README.md`, `README.md`, `docs/AGENTS.md`, `docs/HISTORY.md`, `VERSION`, `web/backend/app/__init__.py`, `web/backend/pyproject.toml`, `web/frontend/package.json`, `web/frontend/package-lock.json`.
 - **Решение:** На VM: импорт ключей из `main.env`, **`native.monitoring.up`** (рендер конфигов), **`docker compose pull`**, пересоздать **loki**, **promtail**, **prometheus**, **grafana**. При старте Loki с **старым** `LOKI_DATA_DIR` от 2.x — [Upgrade Loki](https://grafana.com/docs/loki/latest/setup/upgrade/) или бэкап + очистка каталога.
 
+## Фаза 6.0.1 (раздельные `native.monitoring.*` и `native.proxy.*`)
+
+### Что: мониторинг без автоподъёма proxy
+
+- **Что сделано:** В [`web/backend/app/services/native_jobs.py`](web/backend/app/services/native_jobs.py): **`_native_monitoring_up` / `_restart`** больше **не** вызывают `docker compose … proxy`; убраны **`write_langfuse_litellm_env`** и **`_monitoring_bootstrap`** из monitoring. **`_native_monitoring_down`** опускает **только** `docker-compose.monitoring.yml`. **`_native_proxy_up`:** добавлены **`_mkdir_data_dirs`** и **`await _monitoring_bootstrap`** (MinIO buckets, БД LiteLLM) перед `compose … proxy`; в **`_native_proxy_restart`** — **`_mkdir_data_dirs`**. Обновлены [`web/CONTRACT.md`](web/CONTRACT.md), [`README.md`](README.md), [`configs/monitoring/README.md`](configs/monitoring/README.md), [`docs/AGENTS.md`](docs/AGENTS.md); **VERSION** **6.0.1** и синхронизация package/pyproject.
+- **Почему:** Запрос: «мониторинг отдельно, прокси стек — отдельно» — раньше `native.monitoring.up` последовательно поднимала proxy-compose.
+- **Решение:** PATCH 6.0.1 — поведение API/jobs; пользователь поднимает **LiteLLM Proxy** отдельной кнопкой/задачей, если нужны Langfuse/LiteLLM.
+

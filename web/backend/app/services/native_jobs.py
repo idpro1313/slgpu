@@ -546,11 +546,6 @@ async def _native_monitoring_up(log: list[str], log_lock: threading.Lock) -> int
     root = settings.slgpu_root
     merged = sync_merged_flat()
     raise_if_missing(merged, "monitoring_up")
-    write_langfuse_litellm_env(
-        root,
-        {k: merged[k] for k in ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY") if k in merged},
-        merged,
-    )
     _mkdir_data_dirs(root, merged, log, log_lock)
     await _ensure_config_files_async(root, log, log_lock)
     rendered = render_monitoring_configs(root, merged)
@@ -563,9 +558,7 @@ async def _native_monitoring_up(log: list[str], log_lock: threading.Lock) -> int
         f"file={env_file} "
         f"grafana={merged.get('GRAFANA_BIND')}:{merged.get('GRAFANA_PORT')} "
         f"prometheus={merged.get('PROMETHEUS_BIND')}:{merged.get('PROMETHEUS_PORT')} "
-        f"loki={merged.get('LOKI_BIND')}:{merged.get('LOKI_PORT')} "
-        f"langfuse={merged.get('LANGFUSE_BIND')}:{merged.get('LANGFUSE_PORT')} "
-        f"litellm={merged.get('LITELLM_BIND')}:{merged.get('LITELLM_PORT')}",
+        f"loki={merged.get('LOKI_BIND')}:{merged.get('LOKI_PORT')}",
     )
     await compose_exec.ensure_slgpu_network(
         log,
@@ -573,23 +566,13 @@ async def _native_monitoring_up(log: list[str], log_lock: threading.Lock) -> int
         network_name=str(merged.get("SLGPU_NETWORK_NAME") or "slgpu"),
         project_label=str(merged.get("WEB_COMPOSE_PROJECT_MONITORING") or "slgpu-monitoring"),
     )
-    await _monitoring_bootstrap(root, env_file, log, log_lock)
     c, o, e = await compose_exec.compose_monitoring(
         root, env_file, "-f", _MON_YML, "up", "-d", "--force-recreate", "--remove-orphans"
     )
     append_job_log(log, log_lock, o.strip())
     if e.strip():
         append_job_log(log, log_lock, e.strip())
-    if c != 0:
-        return c
-    c2, o2, e2 = await compose_exec.compose_with_env_file(
-        root, env_file, "-f", _PROXY_YML, "up", "-d"
-    )
-    if o2.strip():
-        append_job_log(log, log_lock, o2.strip())
-    if e2.strip():
-        append_job_log(log, log_lock, e2.strip())
-    return 0 if c2 == 0 else c2
+    return c
 
 
 async def _native_monitoring_down(log: list[str], log_lock: threading.Lock) -> int:
@@ -597,20 +580,10 @@ async def _native_monitoring_down(log: list[str], log_lock: threading.Lock) -> i
     root = settings.slgpu_root
     merged = sync_merged_flat()
     raise_if_missing(merged, "monitoring_up")
-    write_langfuse_litellm_env(
-        root,
-        {k: merged[k] for k in ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY") if k in merged},
-        merged,
-    )
     env_file = write_compose_service_env_file(root, merged)
-    c0, o0, e0 = await compose_exec.compose_with_env_file(
-        root, env_file, "-f", _PROXY_YML, "down"
-    )
-    if (o0 + e0).strip():
-        append_job_log(log, log_lock, (o0 + e0).strip())
     c, o, e = await compose_exec.compose_monitoring(root, env_file, "-f", _MON_YML, "down")
     append_job_log(log, log_lock, o + e)
-    return 0 if c == 0 and c0 == 0 else (c if c != 0 else c0)
+    return c
 
 
 async def _native_monitoring_restart(log: list[str], log_lock: threading.Lock) -> int:
@@ -618,15 +591,6 @@ async def _native_monitoring_restart(log: list[str], log_lock: threading.Lock) -
     root = settings.slgpu_root
     merged = sync_merged_flat()
     raise_if_missing(merged, "monitoring_up")
-    write_langfuse_litellm_env(
-        root,
-        {
-            k: merged[k]
-            for k in ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY")
-            if k in merged
-        },
-        merged,
-    )
     await _ensure_config_files_async(root, log, log_lock)
     rendered = render_monitoring_configs(root, merged)
     append_job_log(log, log_lock, f"[render] monitoring configs -> {rendered}")
@@ -641,18 +605,11 @@ async def _native_monitoring_restart(log: list[str], log_lock: threading.Lock) -
         root, env_file, "-f", _MON_YML, "up", "-d", "--force-recreate", "--remove-orphans"
     )
     append_job_log(log, log_lock, o + e)
-    if c != 0:
-        return c
-    c2, o2, e2 = await compose_exec.compose_with_env_file(
-        root, env_file, "-f", _PROXY_YML, "up", "-d", "--force-recreate"
-    )
-    if (o2 + e2).strip():
-        append_job_log(log, log_lock, (o2 + e2).strip())
-    return 0 if c2 == 0 else c2
+    return c
 
 
 async def _native_proxy_up(log: list[str], log_lock: threading.Lock) -> int:
-    """Compose proxy: Langfuse + LiteLLM (без Prometheus/Grafana/Loki)."""
+    """Compose proxy: Langfuse + LiteLLM (без Prometheus/Grafana/Loki). Bootstrap MinIO/LiteLLM DB — здесь, не в monitoring."""
     settings = get_settings()
     root = settings.slgpu_root
     merged = sync_merged_flat()
@@ -662,6 +619,7 @@ async def _native_proxy_up(log: list[str], log_lock: threading.Lock) -> int:
         {k: merged[k] for k in ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY") if k in merged},
         merged,
     )
+    _mkdir_data_dirs(root, merged, log, log_lock)
     await _ensure_config_files_async(root, log, log_lock)
     env_file = write_compose_service_env_file(root, merged)
     append_job_log(
@@ -678,6 +636,7 @@ async def _native_proxy_up(log: list[str], log_lock: threading.Lock) -> int:
         network_name=str(merged.get("SLGPU_NETWORK_NAME") or "slgpu"),
         project_label=str(merged.get("WEB_COMPOSE_PROJECT_PROXY") or "slgpu-proxy"),
     )
+    await _monitoring_bootstrap(root, env_file, log, log_lock)
     c, o, e = await compose_exec.compose_with_env_file(
         root, env_file, "-f", _PROXY_YML, "up", "-d", "--force-recreate", "--remove-orphans"
     )
@@ -720,6 +679,7 @@ async def _native_proxy_restart(log: list[str], log_lock: threading.Lock) -> int
         },
         merged,
     )
+    _mkdir_data_dirs(root, merged, log, log_lock)
     await _ensure_config_files_async(root, log, log_lock)
     env_file = write_compose_service_env_file(root, merged)
     await compose_exec.ensure_slgpu_network(
