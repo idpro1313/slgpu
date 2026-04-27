@@ -432,6 +432,38 @@ async def delete_stack_param(session, key: str) -> None:
     await session.execute(delete(StackParam).where(StackParam.param_key == key))
 
 
+async def migrate_stack_params_to_canonical_if_needed(session) -> None:
+    """Переписать stack_params: убрать устаревшие SLGPU_*-алиасы, оставить канонические имена.
+
+    Один проход при первом обращении к API после обновления 4.2.x; дальше legacy-строк нет.
+    """
+    from app.services.env_key_aliases import (
+        MONITORING_IMAGE_LEGACY_KEYS,
+        STRIP_VLLM_LEGACY_STACK_KEYS,
+        presentation_stack,
+    )
+
+    stack, _, _ = await load_sections(session)
+    if not stack:
+        return
+    legacy = [
+        k
+        for k in stack
+        if k in STRIP_VLLM_LEGACY_STACK_KEYS or k in MONITORING_IMAGE_LEGACY_KEYS
+    ]
+    if not legacy:
+        return
+    pres = presentation_stack(stack)
+    for k, v in pres.items():
+        await upsert_stack_param(session, k, v)
+    for k in legacy:
+        await delete_stack_param(session, k)
+    logger.info(
+        "[stack_config][migrate_stack_params_to_canonical][BLOCK_MIGRATED] removed_legacy=%s",
+        legacy,
+    )
+
+
 async def replace_secret_params(session, secrets: dict[str, str]) -> None:
     from app.models.stack_param import StackParam
 

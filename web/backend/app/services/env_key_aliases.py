@@ -81,3 +81,24 @@ def monitoring_image(merged: dict[str, str], canonical: str) -> str:
             return coalesce_str(merged, can, leg, default=dfl) or dfl
     return merged.get(canonical, "") or ""
 
+
+# Ключи-алиасы vLLM, которые убираем из ответа API / из БД после миграции.
+# LLM_API_PORT — отдельный параметр (хост), не дублирует VLLM_PORT как строку в stack-only смысле.
+STRIP_VLLM_LEGACY_STACK_KEYS: frozenset[str] = frozenset(LEGACY_VLLM_PARAM_KEYS - {"LLM_API_PORT"})
+
+MONITORING_IMAGE_LEGACY_KEYS: frozenset[str] = frozenset(leg for _can, leg, _d in MONITORING_IMAGE_ALIASES)
+
+
+def presentation_stack(stack: dict[str, str]) -> dict[str, str]:
+    """Канонические имена для UI и API: без дублирующих SLGPU_* / legacy для образов."""
+    m = {str(k): str(v) if v is not None else "" for k, v in stack.items()}
+    apply_vllm_aliases_to_merged(m)
+    for can, leg, _dfl in MONITORING_IMAGE_ALIASES:
+        val = coalesce_str(m, can, leg)
+        if val:
+            m[can] = val
+        m.pop(leg, None)
+    for k in STRIP_VLLM_LEGACY_STACK_KEYS:
+        m.pop(k, None)
+    return m
+

@@ -1674,6 +1674,13 @@
 - **Файлы:** `web/backend/app/services/env_key_aliases.py`, `stack_config.py`, `llm_env.py`, `presets.py`, `env_files.py`, `native_jobs.py`; `scripts/serve.sh`, `_lib.sh`, `monitoring_fix_permissions.sh`, `cmd_monitoring.sh`; `docker/docker-compose.llm.yml`, `docker/docker-compose.monitoring.yml`; `main.env`, `main.env.example`, `examples/presets/*.env`; `web/frontend` `Presets.tsx`, `Settings.tsx`; `README.md`, `configs/models/README.md`; `VERSION`, версии web/backend, `grace/knowledge-graph/knowledge-graph.xml`, `docs/HISTORY.md`.
 - **Решение:** **MINOR 4.2.0** — обратная совместимость через fallback в скриптах, compose и Python.
 
+### 4.2.1: Настройки web — канонические ключи в API и миграция stack_params
+
+- **Что:** `presentation_stack()` для ответов `GET/PATCH /app-config/stack`; `migrate_stack_params_to_canonical_if_needed()` — перенос значений в канонические ключи и удаление строк с `SLGPU_*`-алиасами (vLLM + образы мониторинга) из `stack_params`.
+- **Почему:** После 4.2.0 в SQLite оставались старые имена; UI показывал `SLGPU_*`, хотя `main.env` уже обновлён.
+- **Файлы:** `web/backend/app/services/env_key_aliases.py`, `stack_config.py`, `api/v1/app_config.py`, `VERSION`, версии web/backend, `grace/knowledge-graph/knowledge-graph.xml`, `docs/HISTORY.md`.
+- **Решение:** **PATCH** — обратная совместимость: миграция идемпотентна.
+
 ### 4.2.0 (доп.): configs/monitoring/README
 
 - **Что:** В [configs/monitoring/README.md](configs/monitoring/README.md) заменены упоминания `SLGPU_SERVED_MODEL_NAME` / `SLGPU_*_IMAGE` на `SERVED_MODEL_NAME` и канонические имена образов с пометкой про legacy.

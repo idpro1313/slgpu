@@ -20,6 +20,7 @@ from app.services.stack_config import (
     split_stack_and_secrets,
 )
 from app.services import stack_config as sc
+from app.services.env_key_aliases import presentation_stack
 
 router = APIRouter()
 
@@ -97,9 +98,10 @@ async def install_from_files(
 
 @router.get("/stack")
 async def get_stack(session: AsyncSession = Depends(db_session)) -> dict[str, Any]:
+    await sc.migrate_stack_params_to_canonical_if_needed(session)
     stack, secrets, meta = await sc.load_sections(session)
     return {
-        "stack": stack,
+        "stack": presentation_stack(stack),
         "secrets": mask_secrets(secrets),
         "meta": meta,
     }
@@ -126,6 +128,7 @@ async def patch_stack(
             {str(k): v for k, v in payload["secrets"].items()},
         )
         await sc.replace_secret_params(session, secrets)
+    await sc.migrate_stack_params_to_canonical_if_needed(session)
     stack, secrets, _ = await sc.load_sections(session)
     session.add(
         AuditEvent(
@@ -137,4 +140,8 @@ async def patch_stack(
             note="patch stack/secrets",
         )
     )
-    return {"ok": True, "stack": stack, "secrets": mask_secrets(secrets)}
+    return {
+        "ok": True,
+        "stack": presentation_stack(stack),
+        "secrets": mask_secrets(secrets),
+    }
