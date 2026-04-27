@@ -1,12 +1,16 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 
 import { api } from "@/api/client";
-import type { LiteLLMHealth, LiteLLMInfo } from "@/api/types";
+import type { Job, JobAccepted, LiteLLMHealth, LiteLLMInfo } from "@/api/types";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
 import { StatusBadge } from "@/components/StatusBadge";
 
 export function LiteLLMPage() {
+  const queryClient = useQueryClient();
+  const [actionError, setActionError] = useState<string | null>(null);
+
   const health = useQuery({
     queryKey: ["litellm", "health"],
     queryFn: ({ signal }) => api.get<LiteLLMHealth>("/litellm/health", { signal }),
@@ -23,23 +27,99 @@ export function LiteLLMPage() {
     refetchInterval: 15_000,
   });
 
+  const jobs = useQuery({
+    queryKey: ["jobs"],
+    queryFn: () => api.get<Job[]>("/jobs"),
+    refetchInterval: 2_000,
+  });
+
+  const proxyAction = useMutation({
+    mutationFn: (act: string) =>
+      api.post<JobAccepted>("/litellm/proxy/action", { action: act }),
+    onSuccess: () => {
+      setActionError(null);
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["activity"] });
+      queryClient.invalidateQueries({ queryKey: ["litellm"] });
+      queryClient.invalidateQueries({ queryKey: ["monitoring", "services"] });
+    },
+    onError: (err: Error) => setActionError(err.message),
+  });
+
+  const activeStackJob = jobs.data?.find(
+    (job) => job.scope === "monitoring" && (job.status === "queued" || job.status === "running"),
+  );
+  const stackBusy = Boolean(activeStackJob) || proxyAction.isPending;
+
   return (
     <>
       <PageHeader
         title="LiteLLM Proxy"
-        subtitle="Single OpenAI-compatible API в проект slgpu. Маршрутами и ключами управляет Admin UI самого LiteLLM. Подъём стека мониторинга — со страницы «Мониторинг» или CLI."
+        subtitle="OpenAI-совместимый шлюз (compose `slgpu-proxy`). Старт/стоп только прокси — кнопки справа; полный стек мониторинга — страница «Мониторинг». Пока выполняется любая job мониторинга или прокси, кнопки заблокированы."
         actions={
-          info.data?.ui_url ? (
-            <a className="btn" href={info.data.ui_url} target="_blank" rel="noreferrer">
-              Открыть Admin UI
-            </a>
-          ) : (
-            <span className="btn btn--ghost" aria-disabled="true" title="Дождитесь загрузки URL">
-              Admin UI…
-            </span>
-          )
+          <div className="flex flex--gap-sm flex--wrap" style={{ alignItems: "center" }}>
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={() => proxyAction.mutate("up")}
+              disabled={stackBusy}
+              title="docker compose -f docker-compose.proxy.yml up -d"
+            >
+              Прокси up
+            </button>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => proxyAction.mutate("restart")}
+              disabled={stackBusy}
+            >
+              Перезапуск
+            </button>
+            <button
+              type="button"
+              className="btn btn--danger"
+              onClick={() => proxyAction.mutate("down")}
+              disabled={stackBusy}
+            >
+              Прокси down
+            </button>
+            {info.data?.ui_url ? (
+              <a className="btn" href={info.data.ui_url} target="_blank" rel="noreferrer">
+                Admin UI
+              </a>
+            ) : (
+              <span className="btn btn--ghost" aria-disabled="true" title="Дождитесь загрузки URL">
+                Admin UI…
+              </span>
+            )}
+          </div>
         }
       />
+
+      {stackBusy ? (
+        <Section
+          title="Команда стека выполняется"
+          subtitle="Полный monitoring или прокси LiteLLM — один lock; повтор до завершения job вернёт 409."
+        >
+          {activeStackJob ? (
+            <div className="status-card">
+              <div className="status-card__head">
+                <span className="status-card__name">
+                  #{activeStackJob.id} {activeStackJob.kind}
+                </span>
+                <StatusBadge status={activeStackJob.status} />
+              </div>
+              <div className="status-card__detail mono">
+                {activeStackJob.message ?? activeStackJob.command.join(" ")}
+              </div>
+              <div className="status-card__detail">Подробности — в «Задачи».</div>
+            </div>
+          ) : (
+            <div className="empty-state">Отправляем команду…</div>
+          )}
+        </Section>
+      ) : null}
+      {actionError ? <p style={{ color: "var(--color-danger)" }}>{actionError}</p> : null}
 
       <Section title="Health" subtitle="Liveliness / Readiness / UI">
         <div className="cards-grid">

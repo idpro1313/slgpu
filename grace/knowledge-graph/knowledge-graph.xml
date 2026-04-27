@@ -182,7 +182,7 @@
         <fn-services_slot_runtime PURPOSE="app.services.slot_runtime: run_slot_docker, stream docker pull (decode) перед run, контейнер slgpu-{engine} или slgpu-{engine}-{slot_key}, сеть slgpu" />
         <fn-services_host_info PURPOSE="Снимок ОС/CPU/RAM/диска/NVIDIA для дашборда: docker run с bind /proc,/etc хоста (busybox) и nvidia-smi в GPU-контейнере; fallback — локальный /proc и nvidia-smi в namespace web" />
         <fn-services_compose_exec PURPOSE="async docker compose для LLM и monitoring стеков, subprocess logged" />
-        <fn-services_native_jobs PURPOSE="handle_native_job: native.slot.up|down|restart (docker-py, мультислот); lock resource slot:{key}; native.model.pull, monitoring, bench; периодический flush stdout_tail/message во время RUNNING; stream docker pull перед containers.run. Удалено в 4.0.0: native.llm.*" />
+        <fn-services_native_jobs PURPOSE="handle_native_job: native.slot.up|down|restart (docker-py, мультислот); lock resource slot:{key}; native.model.pull, monitoring, native.proxy.up|down|restart (только compose proxy), bench; периодический flush stdout_tail/message во время RUNNING; stream docker pull перед containers.run. Удалено в 4.0.0: native.llm.*" />
         <fn-job_log PURPOSE="append_job_log: thread-safe строки лога native job; обновление UI по GET /jobs/{id}" />
         <fn-services_slgpu_cli PURPOSE="CliCommand kind=native.* с пустым argv; resource slot:default|slot:{key} (4.0.0: без lock runtime); валидация slot_key/slug/engine/port/tp" />
         <fn-services_jobs PURPOSE="Job runner: native.* → native_jobs; lock по ключу (set discard); task registry; force_engine_slot_halt + POST /runtime/slots/{k}/down?force=1; CancelledError → mark job cancelled" />

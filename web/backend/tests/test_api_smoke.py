@@ -62,6 +62,15 @@ async def test_monitoring_action_rejects_unknown(client: httpx.AsyncClient) -> N
 
 
 @pytest.mark.asyncio
+async def test_litellm_proxy_action_rejects_unknown(client: httpx.AsyncClient) -> None:
+    async with client:
+        response = await client.post(
+            "/api/v1/litellm/proxy/action", json={"action": "nuke"}
+        )
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
 async def test_models_list_starts_empty(client: httpx.AsyncClient) -> None:
     async with client:
         response = await client.get("/api/v1/models")

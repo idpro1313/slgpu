@@ -214,6 +214,12 @@ async def handle_native_job(job_id: int, command: CliCommand, args: dict[str, An
             code = await _native_monitoring_restart(log, log_lock)
         elif command.kind == "native.monitoring.fix-perms":
             code = await _native_fix_perms(log, log_lock)
+        elif command.kind == "native.proxy.up":
+            code = await _native_proxy_up(log, log_lock)
+        elif command.kind == "native.proxy.down":
+            code = await _native_proxy_down(log, log_lock)
+        elif command.kind == "native.proxy.restart":
+            code = await _native_proxy_restart(log, log_lock)
         elif command.kind == "native.model.pull":
             code = await _native_model_pull(job_id, args, log, log_lock)
         elif command.kind == "native.bench.scenario":
@@ -604,6 +610,79 @@ async def _native_monitoring_restart(log: list[str], log_lock: threading.Lock) -
         if (o2 + e2).strip():
             append_job_log(log, log_lock, (o2 + e2).strip())
         return 0 if c2 == 0 else c2
+    finally:
+        env_file.unlink(missing_ok=True)
+
+
+async def _native_proxy_up(log: list[str], log_lock: threading.Lock) -> int:
+    """Только compose proxy (LiteLLM), без monitoring-стека."""
+    settings = get_settings()
+    root = settings.slgpu_root
+    merged = sync_merged_flat()
+    write_langfuse_litellm_env(
+        root,
+        {k: merged[k] for k in ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY") if k in merged},
+        merged,
+    )
+    await _ensure_config_files_async(root, log, log_lock)
+    env_file = _write_tmp_monitoring_env(merged)
+    try:
+        await compose_exec.ensure_slgpu_network(log, log_lock)
+        c, o, e = await compose_exec.compose_with_env_file(
+            root, env_file, "-f", _PROXY_YML, "up", "-d", "--remove-orphans"
+        )
+        append_job_log(log, log_lock, o.strip())
+        if e.strip():
+            append_job_log(log, log_lock, e.strip())
+        return c
+    finally:
+        env_file.unlink(missing_ok=True)
+
+
+async def _native_proxy_down(log: list[str], log_lock: threading.Lock) -> int:
+    settings = get_settings()
+    root = settings.slgpu_root
+    merged = sync_merged_flat()
+    write_langfuse_litellm_env(
+        root,
+        {k: merged[k] for k in ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY") if k in merged},
+        merged,
+    )
+    env_file = _write_tmp_monitoring_env(merged)
+    try:
+        c, o, e = await compose_exec.compose_with_env_file(
+            root, env_file, "-f", _PROXY_YML, "down"
+        )
+        if (o + e).strip():
+            append_job_log(log, log_lock, (o + e).strip())
+        return c
+    finally:
+        env_file.unlink(missing_ok=True)
+
+
+async def _native_proxy_restart(log: list[str], log_lock: threading.Lock) -> int:
+    settings = get_settings()
+    root = settings.slgpu_root
+    merged = sync_merged_flat()
+    write_langfuse_litellm_env(
+        root,
+        {
+            k: merged[k]
+            for k in ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY")
+            if k in merged
+        },
+        merged,
+    )
+    await _ensure_config_files_async(root, log, log_lock)
+    env_file = _write_tmp_monitoring_env(merged)
+    try:
+        await compose_exec.ensure_slgpu_network(log, log_lock)
+        c, o, e = await compose_exec.compose_with_env_file(
+            root, env_file, "-f", _PROXY_YML, "up", "-d", "--force-recreate", "--remove-orphans"
+        )
+        if (o + e).strip():
+            append_job_log(log, log_lock, (o + e).strip())
+        return c
     finally:
         env_file.unlink(missing_ok=True)
 

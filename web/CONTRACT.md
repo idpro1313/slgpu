@@ -74,8 +74,9 @@ Footer приложения показывает версию из `/healthz`; b
 |---|---|
 | `native.model.pull` | Скачать веса через `huggingface_hub.snapshot_download` (`HF_TOKEN` из слитого стека). |
 | `native.slot.up` / `down` / `restart` | Управление одним слотом: `args.slot_key`, `engine`, `preset`, `gpu_indices` (list int), `host_api_port`, опционально `tp`. `down` останавливает контейнеры по label `com.develonica.slgpu.slot={slot_key}` и по имени `slgpu-{engine}-{slot_key}`. Локи jobs: `("engine", "slot:{slot_key}")`. **Удалено в 4.0.0:** `native.llm.*` (больше нет веб-обёрток; bash `./slgpu` на хосте не использует web jobs). |
-| `native.monitoring.up` / `down` / `restart` | Стек мониторинга. |
+| `native.monitoring.up` / `down` / `restart` | Стек мониторинга + прокси LiteLLM (`docker-compose.proxy.yml` после monitoring). |
 | `native.monitoring.fix-perms` | Права на data-dir через docker-py + helper-образ. |
+| `native.proxy.up` / `down` / `restart` | Только [`docker/docker-compose.proxy.yml`](../docker/docker-compose.proxy.yml) (LiteLLM). Тот же lock, что и monitoring: `("monitoring", "stack")`. |
 | `native.bench.scenario` / `native.bench.load` | Subprocess `scripts/bench_openai.py` / `bench_load.py`, вывод в `data/bench/results/`. |
 
 `CliCommand.argv` для этих операций **пустой**; параметры в **`Job.args`** (JSON-совместимая карта: слот, пресет, порты и т.д.). Унаследованный путь с subprocess `./slgpu` не используется для стека.
@@ -106,7 +107,7 @@ API (все публичные ручки под префиксом **`/api/v1`*
 ## 4. Безопасность
 
 - Секреты стека хранятся в **`stack_params`** с `is_secret=true`; в API отдаются **маскированными** (`***`). Пользователь может обновить значение через `PATCH /app-config/stack` (не отправляйте `***` как новое значение). В теле `stack` значение **`null`** удаляет ключ; в `secrets` — **`null`** удаляет секрет (после `merge_partial_secrets`).
-- Один mutating job на scope+resource (advisory lock в памяти job-runner): **слоты** — `("engine", "slot:{slot_key}")`; monitoring — `("monitoring", "stack")`; model pull — `("model", hf_id)`; bench — `("bench", …)`. **4.0.0:** `native.llm.*` и lock `("engine", "runtime")` **удалены**.
+- Один mutating job на scope+resource (advisory lock в памяти job-runner): **слоты** — `("engine", "slot:{slot_key}")`; **monitoring и отдельный proxy LiteLLM** — `("monitoring", "stack")` (нельзя параллелить `native.monitoring.*` и `native.proxy.*`); model pull — `("model", hf_id)`; bench — `("bench", …)`. **4.0.0:** `native.llm.*` и lock `("engine", "runtime")` **удалены**.
 - Mutations, **не** порождающие CLI-job, пишут `audit_events` с `correlation_id IS NULL` (см. `app.services.ui_audit`). Команды через `jobs.submit` дополнительно пишут audit **с** `correlation_id`; в ленте `GET /activity` для таких команд показывается только строка `jobs` (лог, exit).
 - Корневой запуск не нужен. Контейнер web-приложения работает от
   не-root пользователя; для CLI он `exec`-ает в slgpu-репозиторий через

@@ -125,6 +125,24 @@ def cmd_monitoring(slgpu_root: Path, action: str) -> CliCommand:
     )
 
 
+_PROXY_ACTIONS = frozenset({"up", "down", "restart"})
+
+
+def cmd_proxy(_slgpu_root: Path, action: str) -> CliCommand:
+    """Только `docker/docker-compose.proxy.yml` (LiteLLM), тот же lock `monitoring`/`stack`, что и полный monitoring up."""
+    if action not in _PROXY_ACTIONS:
+        raise ValueError(
+            f"proxy action must be one of {sorted(_PROXY_ACTIONS)}, got {action!r}"
+        )
+    return CliCommand(
+        kind=f"native.proxy.{action}",
+        argv=[],
+        scope="monitoring",
+        resource="stack",
+        summary=f"proxy {action}",
+    )
+
+
 def cmd_bench_scenario(
     slgpu_root: Path,
     *,

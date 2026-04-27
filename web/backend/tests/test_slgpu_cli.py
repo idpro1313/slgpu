@@ -9,6 +9,7 @@ import pytest
 from app.core.security import ValidationError
 from app.services.slgpu_cli import (
     cmd_monitoring,
+    cmd_proxy,
     cmd_pull,
     cmd_slot_down,
     cmd_slot_up,
@@ -81,3 +82,17 @@ def test_cmd_monitoring_native(action: str):
 def test_cmd_monitoring_rejects_unknown():
     with pytest.raises(ValueError):
         cmd_monitoring(_root(), "nuke")
+
+
+@pytest.mark.parametrize("action", ["up", "down", "restart"])
+def test_cmd_proxy_native(action: str):
+    cmd = cmd_proxy(_root(), action)
+    assert cmd.argv == []
+    assert cmd.kind == f"native.proxy.{action}"
+    assert cmd.scope == "monitoring"
+    assert cmd.resource == "stack"
+
+
+def test_cmd_proxy_rejects_unknown():
+    with pytest.raises(ValueError):
+        cmd_proxy(_root(), "fix-perms")

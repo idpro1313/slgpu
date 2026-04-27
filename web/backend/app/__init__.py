@@ -1,3 +1,3 @@
 """slgpu-web backend package."""
 
-__version__ = "4.3.4"
+__version__ = "4.3.5"

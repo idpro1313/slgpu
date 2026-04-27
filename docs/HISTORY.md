@@ -1674,6 +1674,13 @@
 - **Файлы:** `web/backend/app/services/env_key_aliases.py`, `stack_config.py`, `llm_env.py`, `presets.py`, `env_files.py`, `native_jobs.py`; `scripts/serve.sh`, `_lib.sh`, `monitoring_fix_permissions.sh`, `cmd_monitoring.sh`; `docker/docker-compose.llm.yml`, `docker/docker-compose.monitoring.yml`; `main.env`, `main.env.example`, `examples/presets/*.env`; `web/frontend` `Presets.tsx`, `Settings.tsx`; `README.md`, `configs/models/README.md`; `VERSION`, версии web/backend, `grace/knowledge-graph/knowledge-graph.xml`, `docs/HISTORY.md`.
 - **Решение:** **MINOR 4.2.0** — обратная совместимость через fallback в скриптах, compose и Python.
 
+### 4.3.5: UI LiteLLM — отдельно старт/стоп/рестарт прокси (`native.proxy.*`)
+
+- **Что:** API и UI для **`native.proxy.up|down|restart`** (только `docker-compose.proxy.yml`).
+- **Почему:** Запрос — отдельные кнопки только для compose **proxy** (LiteLLM), без полного стека monitoring.
+- **Файлы:** `web/…/litellm.py`, `native_jobs.py`, `slgpu_cli.py`, `LiteLLM.tsx`, `test_slgpu_cli.py`, `test_api_smoke.py`, `web/CONTRACT.md`, `docs/AGENTS.md`, `docs/HISTORY.md`, `README.md`, `grace/knowledge-graph/knowledge-graph.xml`, `VERSION`, версии web.
+- **Решение:** Тот же advisory lock **`monitoring` / `stack`**, что и **`native.monitoring.*`**, чтобы не параллелить конкурирующие compose-операции.
+
 ### 4.3.4: `web up` без `main.env` (fallback `docker/web-compose.defaults.env`)
 
 - **Что:** Функция **`slgpu_web_compose_env_file`** в **`_lib.sh`**; фолбэк-файл **`docker/web-compose.defaults.env`**; **`cmd_web.sh`** / **`cmd_down.sh` (`--all`)**; без **`main.env`** создаются **`data/web`**, **`data/models`**, **`data/presets`**, **`data/bench/results`**; **README**, **AGENTS**, **docker-compose.web.yml** коммент, **GRACE** (M-CLI, M-LIB, `web-compose.defaults.env`).
