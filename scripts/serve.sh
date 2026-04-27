@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Универсальный entrypoint: vLLM или SGLang по SLGPU_ENGINE=vllm|sglang.
-# Env: main.env → пресет (через compose + ./slgpu up). Монтируется в контейнер как /etc/slgpu/serve.sh.
+# Env: БД (`stack_params` + пресет) → backend (`llm_env.py`) собирает плоский dict и передаёт docker-py при старте слота. Монтируется в контейнер LLM-слота как /etc/slgpu/serve.sh.
 # Имена vLLM-флагов — без префикса SLGPU_ (SERVED_MODEL_NAME, MAX_NUM_BATCHED_TOKENS, …); устаревший SLGPU_* читается как fallback.
 set -euo pipefail
 

@@ -273,7 +273,7 @@ curl -s http://127.0.0.1:8111/v1/chat/completions \
 ## 15. Ограничения
 
 - В пресетах vLLM задайте тег/дижест через **`VLLM_DOCKER_IMAGE`** (в compose — fallback, по умолчанию `v0.19.1-cu130`); **Loki** и **Promtail** в [`docker/docker-compose.monitoring.yml`](docker/docker-compose.monitoring.yml) зафиксированы **2.9.8** (переопределяемые через **`LOKI_IMAGE`** / **`PROMTAIL_IMAGE`** в `main.env`, либо старые `SLGPU_*`); **Langfuse 3** и **LiteLLM** — в основном **`:3` / `main-*`**; для SGLang, Prometheus, Grafana, node-exporter, MinIO, Postgres, dcgm-exporter в compose в основом **`latest`** — при необходимости зафиксируйте **digest** или явный **тег** (префикс канонического имени образа без `SLGPU_`, см. `main.env`).
-- **Langfuse** (Postgres, MinIO, секреты `NEXTAUTH_*` / `LANGFUSE_ENCRYPTION_KEY`) — для **прод** смените пароли и `NEXTAUTH_URL`; данные в **`LANGFUSE_*_DATA_DIR`**. Права на тома: **`scripts/monitoring_fix_permissions.sh`** (см. [configs/monitoring/README](configs/monitoring/README.md)). **LiteLLM** — при поднятом инференсе; в **/ui** задайте тот же **`model`**, что отдаёт API (**`SERVED_MODEL_NAME`**, `GET /v1/models`).
+- **Langfuse** (Postgres, MinIO, секреты `NEXTAUTH_*` / `LANGFUSE_ENCRYPTION_KEY`) — для **прод** смените пароли и `NEXTAUTH_URL`; данные в **`LANGFUSE_*_DATA_DIR`**. Права на тома — UI: «Стек мониторинга» → «Чинить права» (`native.monitoring.fix-perms`); см. [configs/monitoring/README](configs/monitoring/README.md). **LiteLLM** — при поднятом инференсе; в **/ui** задайте тот же **`model`**, что отдаёт API (**`SERVED_MODEL_NAME`**, `GET /v1/models`).
 - SGLang может не знать те же `--reasoning-parser`, что vLLM.
 - Сервисы LLM используют **`gpus: all`**, а реальная маска GPU — **`NVIDIA_VISIBLE_DEVICES`**: **первые `TP` карт** (`0`…`TP-1`) задаёт **слот/пресет** в UI. На хосте с **4** GPU — **`TP=4`** в пресете; маппинг вручную — **`SLGPU_NVIDIA_VISIBLE_DEVICES`** в стеке / `export`.
 
@@ -305,11 +305,11 @@ slgpu/
 │   └── monitoring/             # *.tmpl → рендер в WEB_DATA_DIR/.slgpu/monitoring/
 ├── data/                       # см. data/README.md
 ├── scripts/
-│   ├── serve.sh
-│   ├── _lib.sh
-│   ├── cmd_web.sh, cmd_help.sh
-│   ├── bench_openai.py, bench_load.py
-│   └── monitoring_fix_permissions.sh
+│   ├── serve.sh                    # entrypoint LLM-слота (vLLM / SGLang)
+│   ├── _lib.sh                     # bash helpers для cmd_web.sh
+│   ├── cmd_web.sh, cmd_help.sh     # подкоманды диспетчера ./slgpu
+│   ├── bench_openai.py, bench_load.py  # native.bench.scenario / .load
+│   ├── check-stack-guards.sh, test_web.sh  # local guards / pytest+tsc
 ├── grace/                      # GRACE (требования, план, верификация, граф)
 └── web/                        # Develonica.LLM: FastAPI + Vite
 ```

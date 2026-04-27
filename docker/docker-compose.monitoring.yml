@@ -115,7 +115,7 @@ services:
     container_name: ${PROMETHEUS_CONTAINER_NAME}
     hostname: ${PROMETHEUS_SERVICE_NAME}
     image: ${PROMETHEUS_IMAGE}
-    # Права на PROMETHEUS_DATA_DIR: ./scripts/monitoring_fix_permissions.sh или ./slgpu monitoring fix-perms
+    # Права на PROMETHEUS_DATA_DIR: UI «Стек мониторинга» → «Чинить права» (native.monitoring.fix-perms)
     # Скрейп vLLM/SGLang идёт на host.docker.internal:порт (см. отрендеренный prometheus.yml) — мост в хост.
     env_file:
       - ${WEB_DATA_DIR}/.slgpu/compose-service.env

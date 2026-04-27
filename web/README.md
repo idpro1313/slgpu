@@ -118,7 +118,7 @@ daemon не нашёл бы файлы по `/slgpu/...` и создал бы п
 
 **Зависимости в образе для CLI-задач:**
 - `huggingface_hub[cli]` и `hf_transfer` — в [`../docker/Dockerfile.web`](../docker/Dockerfile.web); без `hf` падает **`native.model.pull`**. `HF_HOME=/data/huggingface`; загрузка использует `MODELS_DIR` с хоста.
-- `monitoring fix-perms` / **`scripts/monitoring_fix_permissions.sh`**: root helper-контейнер (`SLGPU_BENCH_CHOWN_IMAGE` / fallback), `sudo` на хосте **не** нужен.
+- `native.monitoring.fix-perms`: backend выполняет `mkdir -p` / `chown -R` через короткоживущий root-helper контейнер (`SLGPU_BENCH_CHOWN_IMAGE` / fallback `alpine:latest`); `sudo` на хосте **не** нужен.
 
 **Вариант вручную (из корня репо):** `SLGPU_HOST_REPO="$(pwd)" docker compose -f docker/docker-compose.web.yml --project-directory . --env-file main.env up --build -d`. Без `SLGPU_HOST_REPO` compose уйдёт в fallback `.:/slgpu` (старая схема — с известной проблемой mount-маунтов из web).
 

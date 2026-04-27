@@ -171,10 +171,11 @@ def write_preset_file(directory: Path, slug: str, values: dict[str, str], header
 
 
 def hf_id_to_slug(hf_id: str) -> str:
-    """Mirror of `slgpu_hf_id_to_slug` in scripts/_lib.sh.
+    """Convert a Hugging Face repo id to a preset slug.
 
     Lowercase the HF repo name, replace underscores with dashes, drop
-    the org prefix.
+    the org prefix. Single source of truth for slug generation
+    (host-side bash mirror was removed in v5.2.5).
     """
 
     if "/" in hf_id:

@@ -129,10 +129,10 @@ curl -X POST "http://127.0.0.1:9090/-/reload"
 ### Рекомендуется: автоматически по образам
 
 ```text
-# Сначала fix-perms (UI «Мониторинг» или scripts/monitoring_fix_permissions.sh), затем подъём стека из UI
+# UI «Стек мониторинга» → «Чинить права» (job native.monitoring.fix-perms), затем подъём стека из UI
 ```
 
-Скрипт [`scripts/monitoring_fix_permissions.sh`](../../scripts/monitoring_fix_permissions.sh) читает uid/gid из образов Grafana, Prometheus, Loki, Postgres, MinIO, Redis и фиксированные **101:101** для ClickHouse; делает **`mkdir -p`** и **`chown -R`** на все перечисленные каталоги. В [`main.env`](../../main.env) при необходимости задайте **`GRAFANA_IMAGE`**, **`PROMETHEUS_IMAGE`**, … (или старые **`SLGPU_*_IMAGE`**) для совпадения с compose. Нужен только **docker** (CLI и доступ к daemon): `mkdir`/`chown` выполняются через короткоживущий root-контейнер `docker run --rm -u 0:0` с образом из переменной **`SLGPU_FIXPERMS_HELPER_IMAGE`** (по умолчанию `alpine:latest`); это работает и от обычного пользователя на хосте, и из web-контейнера через `docker.sock`. **`sudo` не требуется.**
+Backend job **`native.monitoring.fix-perms`** ([`web/backend/app/services/native_jobs.py`](../../web/backend/app/services/native_jobs.py) → `_native_fix_perms`) читает uid/gid из образов Grafana, Prometheus, Loki, Postgres, MinIO, Redis и берёт фиксированные **101:101** для ClickHouse; затем делает **`mkdir -p`** и **`chown -R`** на все перечисленные каталоги. Образы — `GRAFANA_IMAGE`, `PROMETHEUS_IMAGE`, … в БД (см. UI «Настройки»). `mkdir`/`chown` выполняются через короткоживущий root-helper контейнер `docker run --rm -u 0:0` с образом из переменной **`SLGPU_BENCH_CHOWN_IMAGE`** (по умолчанию `alpine:latest`); работает и от обычного пользователя на хосте, и из web-контейнера через `docker.sock`. **`sudo` не требуется.**
 
 **Вручную:** см. [оф. Grafana (docker)](https://grafana.com/docs/grafana/latest/setup-grafana/installation/docker/) и проверяйте `docker run --rm --entrypoint sh grafana/grafana -c 'id'`.
 

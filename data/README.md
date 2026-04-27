@@ -10,6 +10,6 @@
 | **`monitoring/`** | TSDB, Loki, Grafana, Langfuse, MinIO и т.д. — пути задаются в `main.env` (`PROMETHEUS_DATA_DIR`, `LOKI_DATA_DIR`, `LANGFUSE_*_DATA_DIR`, …), по умолчанию подкаталоги **`./data/monitoring/...`**. |
 | **`bench/`** | Результаты **UI/API** и `scripts/bench_*.py`: **`data/bench/results/<engine>/<timestamp>/`**. В git — [`.gitkeep`](bench/.gitkeep). **slgpu-web** делает `chown` на **`data/bench`** (`web/docker-entrypoint.sh`). |
 
-Каталоги `./data/...` создаются при **`./slgpu web up`** / `slgpu_ensure_data_dirs` (`scripts/_lib.sh`). Права на тома мониторинга — **`scripts/monitoring_fix_permissions.sh`** (или действие из UI).
+Каталоги `./data/...` создаются при **`./slgpu web up`** / `slgpu_ensure_data_dirs` (`scripts/_lib.sh`). Права на тома мониторинга — UI «Стек мониторинга» → «Чинить права» (job `native.monitoring.fix-perms`).
 
 Абсолютные пути в `main.env` (например отдельный диск `/mnt/models`) допустимы и перекрывают defaults.
