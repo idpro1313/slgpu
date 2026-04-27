@@ -1674,6 +1674,13 @@
 - **Файлы:** `web/backend/app/services/env_key_aliases.py`, `stack_config.py`, `llm_env.py`, `presets.py`, `env_files.py`, `native_jobs.py`; `scripts/serve.sh`, `_lib.sh`, `monitoring_fix_permissions.sh`, `cmd_monitoring.sh`; `docker/docker-compose.llm.yml`, `docker/docker-compose.monitoring.yml`; `main.env`, `main.env.example`, `examples/presets/*.env`; `web/frontend` `Presets.tsx`, `Settings.tsx`; `README.md`, `configs/models/README.md`; `VERSION`, версии web/backend, `grace/knowledge-graph/knowledge-graph.xml`, `docs/HISTORY.md`.
 - **Решение:** **MINOR 4.2.0** — обратная совместимость через fallback в скриптах, compose и Python.
 
+### 4.3.4: `web up` без `main.env` (fallback `docker/web-compose.defaults.env`)
+
+- **Что:** Функция **`slgpu_web_compose_env_file`** в **`_lib.sh`**; фолбэк-файл **`docker/web-compose.defaults.env`**; **`cmd_web.sh`** / **`cmd_down.sh` (`--all`)**; без **`main.env`** создаются **`data/web`**, **`data/models`**, **`data/presets`**, **`data/bench/results`**; **README**, **AGENTS**, **docker-compose.web.yml** коммент, **GRACE** (M-CLI, M-LIB, `web-compose.defaults.env`).
+- **Почему:** Запрос — `docker compose` падал: *couldn’t find env file … main.env*; **`main.env`** нужен для **`app-config/install`**, а не обязателен для подъёма web.
+- **Файлы:** `scripts/_lib.sh`, `scripts/cmd_web.sh`, `scripts/cmd_down.sh`, `docker/web-compose.defaults.env`, `docker/docker-compose.web.yml`, `README.md`, `docs/AGENTS.md`, `docs/HISTORY.md`, `grace/knowledge-graph/knowledge-graph.xml`, `VERSION`, версии web.
+- **Решение:** **PATCH**.
+
 ### 4.3.3: LiteLLM master key из «Публичный доступ» в sync_merged_flat
 
 - **Что:** В **`stack_config.sync_merged_flat`** подмешивание **`public_access.litellm_api_key`** в **`LITELLM_MASTER_KEY`** (после `stack_params`); обновлены **configs/monitoring/README.md**, **docs/AGENTS.md**, **grace/knowledge-graph/knowledge-graph.xml** (аннотация M-WEB), **VERSION** 4.3.3.

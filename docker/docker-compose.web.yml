@@ -2,7 +2,7 @@ name: slgpu-web
 
 # Single-container web control plane for the slgpu LLM bench.
 #
-# Project directory for `docker compose` — корень репозитория (`./slgpu web up` — `--env-file main.env` в корне, отдельный web/.env не нужен).
+# Project directory for `docker compose` — корень репозитория. `--env-file`: `main.env` или `docker/web-compose.defaults.env` (см. scripts/_lib.sh `slgpu_web_compose_env_file`).
 # What this compose file mounts and why:
 #   - SLGPU_HOST_REPO (host) -> SLGPU_HOST_REPO (container, тот же абсолютный путь!): репо CLI, configs, jobs.
 #       Это критично для команд, которые из web вызывают `./slgpu monitoring up`: docker compose внутри

@@ -152,6 +152,18 @@ slgpu_source_main_env() {
   fi
 }
 
+# Путь к env-файлу для `docker compose -f docker/docker-compose.web.yml --env-file`.
+# Compose требует существующий файл; без `main.env` используем `docker/web-compose.defaults.env` (дефолты в YAML: ${VAR:-default}).
+slgpu_web_compose_env_file() {
+  local root
+  root="$(slgpu_root)"
+  if [[ -f "${root}/main.env" ]]; then
+    echo "${root}/main.env"
+  else
+    echo "${root}/docker/web-compose.defaults.env"
+  fi
+}
+
 # `main.env` (пути, мониторинг). Без пресета.
 slgpu_load_server_env() {
   set -a
@@ -388,11 +400,12 @@ slgpu_docker_compose() {
   (cd "${_root}" && docker compose --project-directory "${_root}" "$@")
 }
 
-# Создать каталоги для относительных путей из main.env (./data/…), если файла нет — no-op.
+# Создать каталоги для относительных путей из main.env (./data/…). Без main.env — минимальные ./data/* для web.
 slgpu_ensure_data_dirs() {
   local root _p
   root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
   if [[ ! -f "${root}/main.env" ]]; then
+    mkdir -p "${root}/data/web" "${root}/data/models" "${root}/data/presets" "${root}/data/bench/results"
     return 0
   fi
   set -a

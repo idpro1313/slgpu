@@ -11,12 +11,12 @@
       <annotations>
         <fn-main PURPOSE="Точка входа, dispatch в cmd_*.sh (в т.ч. web, monitoring)" />
         <export-slgpu PURPOSE="Исполняемый диспетчер" />
-        <fn-cmd_web PURPOSE="scripts/cmd_web.sh: web up|down|restart|install; install — slgpu-web должен быть up; иначе подсказка; fallback docker exec curl :8000" />
+        <fn-cmd_web PURPOSE="scripts/cmd_web.sh: web up|down|restart|install; compose --env-file: main.env или docker/web-compose.defaults.env; install — POST требует main.env на диске; install — slgpu-web должен быть up" />
       </annotations>
     </M-CLI>
 
     <M-LIB NAME="Library" TYPE="UTILITY" STATUS="implemented">
-      <purpose>Загрузка env: `main.env` в корне (дефолты) → пресет; пресеты — `data/presets/*.env` (PRESETS_DIR), вручную или из web.</purpose>
+      <purpose>Загрузка env: `main.env` в корне (если есть, дефолты) → пресет; пресеты — `data/presets/*.env` (PRESETS_DIR), вручную или из web.</purpose>
       <path>scripts/_lib.sh</path>
       <depends>none</depends>
       <verification-ref>V-M-LIB</verification-ref>
@@ -25,6 +25,7 @@
         <fn-slgpu_presets_dir PURPOSE="Каталог PRESETS_DIR (data/presets)" />
         <fn-slgpu_list_presets PURPOSE="Список пресетов" />
         <fn-slgpu_source_main_env PURPOSE="Подмешать main.env в корне (дефолты)" />
+        <fn-slgpu_web_compose_env_file PURPOSE="Путь для docker compose web: main.env иначе docker/web-compose.defaults.env" />
         <fn-slgpu_fail_if_missing_preset_arg PURPOSE="Если -m без имени — подсказка и список пресетов" />
         <fn-slgpu_load_env PURPOSE="Загрузка окружения (SLGPU_ROOT + main.env + preset)" />
         <fn-slgpu_load_compose_env PURPOSE="Загрузка env для compose" />
