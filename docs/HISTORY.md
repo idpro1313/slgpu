@@ -1855,3 +1855,28 @@
 - **Файлы:** `web/frontend/src/pages/Settings.tsx`, `web/frontend/src/styles/globals.css`, `configs/monitoring/prometheus/prometheus.yml.tmpl`, `configs/monitoring/loki/loki-config.yaml.tmpl`, `configs/monitoring/promtail/promtail-config.yml.tmpl`, `configs/monitoring/grafana/provisioning/datasources/datasource.yml.tmpl`, `VERSION` (5.2.1), `web/backend/pyproject.toml`, `web/backend/app/__init__.py`, `web/frontend/package.json`, `docs/HISTORY.md`, `web/CONTRACT.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/plan/development-plan.xml`, `grace/verification/verification-plan.xml`.
 - **Решение:** PATCH 5.2.1 — UX-доработка существующей страницы и точечный фикс шаблонов; контракт API не изменён (используется уже отдаваемый `registry` в `/app-config/stack`).
 
+## Фаза 5.2.2 (UI «Настройки»: сортировка и группы строго по `configs/main.env`)
+
+### Что: реестр и UI «Настройки» приведены к разделам main.env (1..8)
+
+- **Что сделано:**
+  - `web/backend/app/services/stack_registry.py`: **переписан `_STACK_KEY_REGISTRY`** — порядок ключей и их `meta.group` приведены 1-в-1 к разделам `configs/main.env`:
+    1. `network` — Docker-сеть и compose-проекты (`SLGPU_NETWORK_NAME`, `WEB_COMPOSE_PROJECT_*`).
+    2. `web` — slgpu-web (`WEB_DOCKER_IMAGE`, `WEB_CONTAINER_NAME`, `WEB_INTERNAL_PORT`, `WEB_BIND`, `WEB_PORT`, `WEB_LOG_LEVEL`, `WEB_LOG_FILE_ENABLED`, `WEB_PUBLIC_HOST`, `WEB_MONITORING_HTTP_HOST`, `WEB_LLM_HTTP_HOST`).
+    3. `paths` — bind-mount пути на хосте + `SLGPU_BENCH_CHOWN_IMAGE`.
+    4. `images` — все Docker-образы (vLLM/SGLang/мониторинг/прокси) собраны в одну группу.
+    5. `inference` — LLM API + движок + vLLM + SGLang.
+    6. `monitoring` — DNS-имена/порты/контейнеры стека Prometheus/Grafana/Loki/Promtail/DCGM/NodeExporter + retention + `GRAFANA_ADMIN_*` + `GF_SERVER_ROOT_URL`.
+    7. `proxy` — DNS/порты/контейнеры стека прокси (Langfuse/LiteLLM/Postgres/Redis/ClickHouse/MinIO) + cred + `NEXTAUTH_*` + `LANGFUSE_*` (соль, encryption-key, S3-бакеты, телеметрия, public/secret keys).
+    8. `secrets` — отдельные секреты приложения (`HF_TOKEN`).
+  - Добавлено описание `WEB_LOG_FILE_ENABLED` (был только в `main.env`, в реестре не было).
+  - Описания (`description`) приведены к русскоязычным подсказкам из `main.env` (что/для чего/варианты).
+  - `registry_to_public()` больше **не сортирует ключи** алфавитом — отдаёт в порядке вставки `_STACK_KEY_REGISTRY` (т.е. в порядке секций main.env).
+  - **Удалены** группы `compose` и `llm_api`: их ключи перенесены в `network` и `inference` соответственно (так в main.env).
+  - `web/frontend/src/pages/Settings.tsx`: тип `StackGroupId` упрощён до 8+1 групп (`network/web/paths/images/inference/monitoring/proxy/secrets/other`), `STACK_GROUP_ORDER` совпадает с порядком main.env, `STACK_GROUP_META` переименованы (`1. Сеть Docker и compose-проекты`, …, `8. Секреты приложения`) и расширены описаниями.
+  - `rowsFromServer()` больше **не делает алфавитную сортировку** ключей реестра — идёт строго по порядку, в котором их отдал backend (= порядок main.env).
+  - `stackGroupId()` **больше не вырывает секреты в отдельную группу**: чекбокс «секрет» оставляет строку в её смысловом разделе (как в `main.env`, где `GRAFANA_ADMIN_PASSWORD` — в «Мониторинг», `LANGFUSE_SALT` — в «Прокси», `HF_TOKEN` — в собственной секции «Секреты»).
+- **Почему:** Запрос пользователя — «после сортировки параметров в main, в разделе Настройки параметры тоже нужно отсортировать и сгруппировать по смыслу». До 5.2.2 группы в UI («Compose-проекты», «Контейнеры и DNS», «Сеть API движка», «Docker-образы» и т.д.) не совпадали с разделами `main.env`, а внутри группы ключи шли по алфавиту. Теперь UI «Настройки» = `main.env` 1-в-1.
+- **Файлы:** `web/backend/app/services/stack_registry.py`, `web/frontend/src/pages/Settings.tsx`, `VERSION` (5.2.2), `web/backend/pyproject.toml`, `web/backend/app/__init__.py`, `web/frontend/package.json`, `docs/HISTORY.md`, `README.md`, `web/CONTRACT.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/plan/development-plan.xml`, `grace/verification/verification-plan.xml`.
+- **Решение:** PATCH 5.2.2 — backward-совместимое изменение (контракт API не меняется: `registry` так же возвращает `[{key, group, description, is_secret, allow_empty, required_for}]`, поменялся только порядок и значения `group` для части ключей; на фронте обновлена таблица групп). Новых обязательных полей нет, миграции не требуется.
+

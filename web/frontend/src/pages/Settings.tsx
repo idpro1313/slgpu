@@ -28,82 +28,79 @@ function newRowId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `r-${Math.random().toString(36).slice(2)}`;
 }
 
-/** ID групп берём из stack_registry (services/stack_registry.py KeyMeta.group). */
+/**
+ * ID групп = разделы `configs/main.env` 1..8.
+ * Порядок повторяет порядок секций в main.env (registry на бэке тоже отсортирован
+ * в этом порядке, см. _STACK_KEY_REGISTRY).
+ */
 type StackGroupId =
-  | "paths"
-  | "web"
-  | "llm_api"
   | "network"
-  | "compose"
+  | "web"
+  | "paths"
   | "images"
+  | "inference"
   | "monitoring"
   | "proxy"
-  | "inference"
   | "secrets"
   | "other";
 
 const STACK_GROUP_ORDER: StackGroupId[] = [
-  "paths",
-  "web",
-  "llm_api",
   "network",
-  "compose",
+  "web",
+  "paths",
+  "images",
+  "inference",
   "monitoring",
   "proxy",
-  "inference",
-  "images",
   "secrets",
   "other",
 ];
 
 const STACK_GROUP_META: Record<StackGroupId, { title: string; subtitle: string }> = {
-  paths: {
-    title: "Пути и каталоги",
-    subtitle: "Хост-пути для моделей, пресетов, web-данных и каталогов мониторинга (bind mount).",
+  network: {
+    title: "1. Сеть Docker и compose-проекты",
+    subtitle:
+      "Имя общей Docker-сети slgpu и имена docker-compose проектов для слотов инференса, мониторинга и прокси.",
   },
   web: {
-    title: "Web UI приложения",
-    subtitle: "Публикация slgpu-web (порт/bind), уровень логов, host для проб мониторинга и LLM.",
-  },
-  llm_api: {
-    title: "Сеть API движка",
-    subtitle: "Хостовой bind и порты OpenAI-совместимого API vLLM / SGLang.",
-  },
-  network: {
-    title: "Контейнеры и DNS",
+    title: "2. Web UI (slgpu-web)",
     subtitle:
-      "Имя slgpu-сети, контейнеры/service DNS и внутренние порты сервисов мониторинга и прокси (используются compose и Prometheus / Grafana datasource).",
+      "Образ, контейнер, внутренний и опубликованный порт slgpu-web; уровень логов uvicorn; запасной host для публичных ссылок и host-проб мониторинга/LLM из контейнера web.",
   },
-  compose: {
-    title: "Compose-проекты",
-    subtitle: "Имена docker-compose проектов для LLM, мониторинга и прокси.",
-  },
-  monitoring: {
-    title: "Мониторинг",
+  paths: {
+    title: "3. Пути на хосте (bind mount)",
     subtitle:
-      "Порты, bind, ретенция и параметры стека мониторинга. Конфиги Prometheus/Loki/Promtail/Grafana рендерятся backend'ом из этих значений (см. configs/monitoring/README.md).",
-  },
-  proxy: {
-    title: "LiteLLM, Langfuse и зависимости",
-    subtitle: "Порты, bind и креды Langfuse/LiteLLM, Postgres, ClickHouse, Redis, MinIO.",
-  },
-  inference: {
-    title: "GPU и инференс",
-    subtitle:
-      "TP, память, KV, видимые GPU, парсеры; диапазоны портов для авто-распределения слотов; служебные SLGPU_* / VLLM_* / SGLANG_*.",
+      "Абсолютные пути для slgpu-web, моделей, пресетов, данных мониторинга и прокси (Prometheus TSDB, Grafana, Loki/Promtail, Postgres/ClickHouse/MinIO/Redis), а также образ для chown в fix-perms.",
   },
   images: {
-    title: "Docker-образы",
-    subtitle: "Теги контейнеров для slgpu-web и сервисов мониторинга/прокси.",
+    title: "4. Образы Docker (LLM + monitoring + proxy)",
+    subtitle:
+      "Теги контейнеров vLLM, SGLang, Prometheus/Grafana/Loki/Promtail, DCGM/NodeExporter, Langfuse + Worker, Postgres/Redis/ClickHouse, MinIO/mc, LiteLLM.",
+  },
+  inference: {
+    title: "5. Инференс — LLM API, движок, vLLM, SGLang, кеши",
+    subtitle:
+      "Движок (vllm|sglang), модель/ревизия, host bind и опубликованные порты LLM API, авто-диапазоны портов слотов, параметры vLLM (TP/MAX_MODEL_LEN/GPU_MEM_UTIL/KV/parsers/...) и SGLang.",
+  },
+  monitoring: {
+    title: "6. Мониторинг — Prometheus, Grafana, Loki, Promtail, DCGM, NodeExporter",
+    subtitle:
+      "DNS-имена сервисов в сети slgpu, внутренние и опубликованные порты, имена контейнеров; ретенция Prometheus, учётка Grafana, GF_SERVER_ROOT_URL. Конфиги *.tmpl рендерятся backend'ом из этих значений.",
+  },
+  proxy: {
+    title: "7. Прокси — Langfuse + LiteLLM + Postgres + Redis + ClickHouse + MinIO",
+    subtitle:
+      "DNS-имена/порты/контейнеры сервисов прокси-стека, host bind и порты Langfuse/Worker/LiteLLM/MinIO, креды Postgres/Redis/ClickHouse/MinIO, NEXTAUTH_URL/SECRET, salt/encryption-key, S3-бакеты, ключи Langfuse для интеграции LiteLLM (OTEL).",
   },
   secrets: {
-    title: "Секреты и ключи",
+    title: "8. Секреты приложения",
     subtitle:
-      "Значения не отдаются в API; пустое поле — оставить как есть. Сброс — стереть значение в строке и сохранить.",
+      "Отдельные секреты, не привязанные к стеку прокси/мониторинга (HF_TOKEN). Значения не отдаются в API; пустое поле — оставить как есть. Сброс — стереть значение и сохранить.",
   },
   other: {
     title: "Прочие параметры",
-    subtitle: "Ключи вне реестра — добавленные пользователем переменные.",
+    subtitle:
+      "Ключи вне реестра — добавленные пользователем переменные. Backend их не валидирует.",
   },
 };
 
@@ -134,24 +131,14 @@ function rowsFromServer(data: AppConfigStack): StackRow[] {
   const stack = data.stack ?? {};
   const sec = data.secrets ?? {};
   const registry = data.registry ?? [];
-  const regByKey = new Map<string, RegistryEntry>();
-  for (const r of registry) regByKey.set(r.key, r);
 
   const rows: StackRow[] = [];
   const seen = new Set<string>();
 
-  // Сначала идут ключи из реестра в порядке groups → имени, чтобы группы были полными даже
-  // когда в БД часть ключей ещё не заполнена (видно «чего не хватает»).
-  const orderedRegKeys = [...registry].sort((a, b) => {
-    const gi = STACK_GROUP_ORDER.indexOf(a.group as StackGroupId);
-    const gj = STACK_GROUP_ORDER.indexOf(b.group as StackGroupId);
-    const gia = gi === -1 ? STACK_GROUP_ORDER.length : gi;
-    const gjb = gj === -1 ? STACK_GROUP_ORDER.length : gj;
-    if (gia !== gjb) return gia - gjb;
-    return a.key.localeCompare(b.key);
-  });
-
-  for (const meta of orderedRegKeys) {
+  // Реестр приходит с backend в порядке секций main.env (registry_to_public()
+  // не сортирует — отдаёт порядок _STACK_KEY_REGISTRY). Поэтому идём по нему
+  // как есть: секции 1..8 и внутри секции — порядок ключей из main.env.
+  for (const meta of registry) {
     const k = meta.key;
     const isSecret = meta.is_secret;
     const value = isSecret ? "" : (stack[k] ?? "");
@@ -159,7 +146,8 @@ function rowsFromServer(data: AppConfigStack): StackRow[] {
     seen.add(k);
   }
 
-  // Дополнительно — пользовательские ключи из БД, которых нет в реестре.
+  // Пользовательские ключи из БД, которых нет в реестре, — попадут в группу
+  // "other"; внутри неё сортируем по имени, для стабильного UI.
   for (const k of Object.keys(stack).sort()) {
     if (seen.has(k)) continue;
     rows.push({
@@ -185,15 +173,20 @@ function rowsFromServer(data: AppConfigStack): StackRow[] {
   return rows;
 }
 
+/**
+ * Группа строки = `meta.group` из реестра (= раздел main.env).
+ * Чекбокс «секрет» НЕ перекидывает строку в группу `secrets` — секреты
+ * отображаются в своих смысловых разделах (как в main.env, где
+ * GRAFANA_ADMIN_PASSWORD живёт в «Мониторинг», а LANGFUSE_SALT — в «Прокси»).
+ */
 function stackGroupId(row: StackRow, regByKey: Map<string, RegistryEntry>): StackGroupId {
   const meta = regByKey.get(row.key.trim());
   if (meta) {
-    if (meta.is_secret) return "secrets";
     const g = meta.group as StackGroupId;
     if ((STACK_GROUP_ORDER as string[]).includes(g)) return g;
     return "other";
   }
-  if (row.isSecret) return "secrets";
+  // Пользовательские ключи всегда в "other".
   return "other";
 }
 

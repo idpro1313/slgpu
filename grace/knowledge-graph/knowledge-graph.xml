@@ -1,5 +1,5 @@
 <KnowledgeGraph>
-  <Project NAME="slgpu" VERSION="5.2.1">
+  <Project NAME="slgpu" VERSION="5.2.2">
     <keywords>slgpu, vllm, sglang, llm-inference, benchmark, docker-compose, gpu, prometheus, grafana, sglang-dashboard-slgpu, sglangdash2-slgpu</keywords>
     <annotation>Стенд для сравнения движков LLM-инференса vLLM и SGLang на Linux-сервере с NVIDIA GPU.</annotation>
 
@@ -223,7 +223,7 @@
         <fn-services_app_log_sink PURPOSE="app.services.app_log_sink: classify_record, батч INSERT в app_log_event, start_writer/stop_writer" />
         <fn-api_app_logs PURPOSE="GET /app-logs/events — фильтры, курсор before_id, из SQLite" />
         <fn-middleware_request_log PURPOSE="AppHttpRequestLogMiddleware: X-Request-ID, extra, [app][http][BLOCK_API_*], пропуск /app-logs/events, /assets, /healthz" />
-        <fn-frontend_app PURPOSE="React SPA (globals.css — компактный макет): Dashboard, Presets, Inference (слоты), Логи (app-logs), Docker, Models, Monitoring, Jobs, Benchmarks, Settings (5.2.1: registry-driven форма со столбцом «Описание / для чего», красная подсветка незаполненных required, группировка по meta.group)" />
+        <fn-frontend_app PURPOSE="React SPA (globals.css — компактный макет): Dashboard, Presets, Inference (слоты), Логи (app-logs), Docker, Models, Monitoring, Jobs, Benchmarks, Settings (5.2.1: registry-driven форма со столбцом «Описание / для чего», красная подсветка незаполненных required; 5.2.2: порядок и группы строк строго совпадают с разделами configs/main.env 1..8 — network/web/paths/images/inference/monitoring/proxy/secrets — порядок ключей в группе = порядок _STACK_KEY_REGISTRY, без алфавитной сортировки; чекбокс «секрет» больше не вырывает строку в отдельную группу secrets)" />
         <export-web-image PURPOSE="slgpu-web:dev, подъём: ./slgpu web up; тома: repo root по тому же абсолютному хост-пути (SLGPU_HOST_REPO=$(pwd) в scripts/cmd_web.sh), ./data/web, ./data/models, docker.sock; entrypoint chown'ит /data и ${WEB_SLGPU_ROOT}/data/{models,presets,bench} под uid 10001 (bench — native.bench.* → data/bench/results); working_dir из compose НЕ задаётся (uvicorn стартует из WORKDIR /srv/app в Dockerfile.web); huggingface_hub[cli] + hf_transfer установлены для slgpu pull, HF_HOME=/data/huggingface и /home/slgpuweb writable; критично для команд из web → docker compose monitoring/llm с корректными bind-маунтами" />
         <export-contract PURPOSE="web/CONTRACT.md — границы CLI/Docker API/SQLite" />
       </annotations>
@@ -238,6 +238,7 @@
     <!-- v5.0.0: удалены с хоста cmd_up/down/pull/bench/monitoring/load/prepare/restart, docker/web-compose.defaults.env, configs/secrets/* examples; LLM/мониторинг — только web UI / native.* -->
     <!-- v5.2.0: добавлен M-CONFIG (StackConfig); удалён docker/docker-compose.llm.yml; configs/main.env — только шаблон импорта; добавлен configs/bootstrap.env (минимум для cmd_web); реестр расширен группой network (SLGPU_NETWORK_NAME, *_INTERNAL_PORT, *_SERVICE_NAME, *_CONTAINER_NAME, WEB_DOCKER_IMAGE); compose YAMLs полностью параметризованы; configs/monitoring/{prometheus.yml,loki-config.yaml,promtail-config.yml,datasource.yml} → *.tmpl + render_monitoring_configs(); удалён seed_stack_params_from_main_env_if_empty; добавлен GET /api/v1/app-config/missing -->
     <!-- v5.2.1: UI Settings.tsx переписан под registry (третья колонка «Описание / для чего», подсветка красным незаполненных !allow_empty && required_for≠∅ && value=='', группировка по meta.group, слияние registry-keys с БД); fix комментариев `${VAR}` в *.tmpl (string.Template падал на буквальном плейсхолдере в комментариях, render_monitoring_configs кидал MissingStackParams(['VAR'])); подзаголовок группы Мониторинг очищен от устаревшего упоминания main.env и ./slgpu monitoring -->
+    <!-- v5.2.2: _STACK_KEY_REGISTRY переписан в порядке секций configs/main.env (1.network → 2.web → 3.paths → 4.images → 5.inference → 6.monitoring → 7.proxy → 8.secrets), meta.group унифицирован под эти разделы (удалены прежние group=compose и group=llm_api: первое слилось в network, второе — в inference; все DNS-имена/контейнеры/внутренние порты сервисов мониторинга и прокси переехали из общей group=network в свои разделы monitoring/proxy; все *_IMAGE — в единый раздел images); registry_to_public() больше не сортирует ключи (отдаёт порядок вставки dict); Settings.tsx: типы StackGroupId/STACK_GROUP_ORDER/STACK_GROUP_META синхронизированы с реестром, rowsFromServer() идёт по registry без локального sort, stackGroupId() больше не вырывает is_secret в группу secrets. Описания (description) приведены к русскоязычным «что/для чего/варианты» из main.env; добавлен ключ WEB_LOG_FILE_ENABLED. -->
 
     <!-- CrossLinks -->
     <CrossLink from="M-CLI" to="M-LIB" relation="delegates all commands" />
