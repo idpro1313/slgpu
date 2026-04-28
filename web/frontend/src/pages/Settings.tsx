@@ -114,7 +114,7 @@ const STACK_GROUP_META: Record<StackGroupId, { title: string; subtitle: string }
 
 const SCOPE_LABELS: Record<string, string> = {
   web_up: "запуск web",
-  monitoring_up: "монитори&shy;нг",
+  monitoring_up: "мониторинг",
   proxy_up: "LiteLLM/Langfuse",
   llm_slot: "LLM-слот",
   fix_perms: "fix-perms",
