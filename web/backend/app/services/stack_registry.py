@@ -443,13 +443,8 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
     "CLICKHOUSE_CONTAINER_NAME": _e(
         "CLICKHOUSE_CONTAINER_NAME", "proxy", "Имя контейнера ClickHouse.", *S_MON, subgroup="clickhouse"
     ),
+    # MinIO: в UI подряд — dns/контейнеры, затем API (internal+bind+host), Console (то же), учётка root.
     "MINIO_SERVICE_NAME": _e("MINIO_SERVICE_NAME", "proxy", "DNS-имя MinIO в сети slgpu.", *S_MON, subgroup="minio"),
-    "MINIO_API_INTERNAL_PORT": _e(
-        "MINIO_API_INTERNAL_PORT", "proxy", "S3 API-порт MinIO внутри контейнера.", *S_MON, subgroup="minio"
-    ),
-    "MINIO_CONSOLE_INTERNAL_PORT": _e(
-        "MINIO_CONSOLE_INTERNAL_PORT", "proxy", "Консольный порт MinIO внутри контейнера.", *S_MON, subgroup="minio"
-    ),
     "MINIO_CONTAINER_NAME": _e("MINIO_CONTAINER_NAME", "proxy", "Имя контейнера MinIO.", *S_MON, subgroup="minio"),
     "MINIO_BUCKET_INIT_CONTAINER_NAME": _e(
         "MINIO_BUCKET_INIT_CONTAINER_NAME",
@@ -458,6 +453,26 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
         *S_MON,
         subgroup="minio",
     ),
+    "MINIO_API_INTERNAL_PORT": _e(
+        "MINIO_API_INTERNAL_PORT", "proxy", "S3 API-порт MinIO внутри контейнера.", *S_MON, subgroup="minio"
+    ),
+    "MINIO_API_BIND": _e("MINIO_API_BIND", "proxy", "Bind MinIO API на хосте.", *S_MON, subgroup="minio"),
+    "MINIO_API_HOST_PORT": _e(
+        "MINIO_API_HOST_PORT", "proxy", "Опубликованный порт MinIO API на хосте.", *S_MON, subgroup="minio"
+    ),
+    "MINIO_CONSOLE_INTERNAL_PORT": _e(
+        "MINIO_CONSOLE_INTERNAL_PORT", "proxy", "Консольный порт MinIO внутри контейнера.", *S_MON, subgroup="minio"
+    ),
+    "MINIO_CONSOLE_BIND": _e("MINIO_CONSOLE_BIND", "proxy", "Bind консоли MinIO на хосте.", *S_MON, subgroup="minio"),
+    "MINIO_CONSOLE_HOST_PORT": _e(
+        "MINIO_CONSOLE_HOST_PORT",
+        "proxy",
+        "Опубликованный порт консоли MinIO на хосте.",
+        *S_MON,
+        subgroup="minio",
+    ),
+    "MINIO_ROOT_USER": _e("MINIO_ROOT_USER", "proxy", "MinIO root user.", *S_MON, subgroup="minio"),
+    "MINIO_ROOT_PASSWORD": _e("MINIO_ROOT_PASSWORD", "proxy", "MinIO root password.", *S_MON, subgroup="minio"),
     "LITELLM_SERVICE_NAME": _e("LITELLM_SERVICE_NAME", "proxy", "DNS-имя LiteLLM в сети slgpu.", *S_MON, subgroup="litellm"),
     "LITELLM_CONTAINER_NAME": _e("LITELLM_CONTAINER_NAME", "proxy", "Имя контейнера LiteLLM.", *S_MON, subgroup="litellm"),
     "LITELLM_PG_INIT_CONTAINER_NAME": _e(
@@ -554,20 +569,6 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
         "Пароль ClickHouse (Langfuse).",
         *S_MON,
         subgroup="clickhouse",
-    ),
-    "MINIO_ROOT_USER": _e("MINIO_ROOT_USER", "proxy", "MinIO root user.", *S_MON, subgroup="minio"),
-    "MINIO_ROOT_PASSWORD": _e("MINIO_ROOT_PASSWORD", "proxy", "MinIO root password.", *S_MON, subgroup="minio"),
-    "MINIO_API_BIND": _e("MINIO_API_BIND", "proxy", "Bind MinIO API на хосте.", *S_MON, subgroup="minio"),
-    "MINIO_API_HOST_PORT": _e(
-        "MINIO_API_HOST_PORT", "proxy", "Опубликованный порт MinIO API на хосте.", *S_MON, subgroup="minio"
-    ),
-    "MINIO_CONSOLE_BIND": _e("MINIO_CONSOLE_BIND", "proxy", "Bind консоли MinIO на хосте.", *S_MON, subgroup="minio"),
-    "MINIO_CONSOLE_HOST_PORT": _e(
-        "MINIO_CONSOLE_HOST_PORT",
-        "proxy",
-        "Опубликованный порт консоли MinIO на хосте.",
-        *S_MON,
-        subgroup="minio",
     ),
     "LANGFUSE_SALT": _e(
         "LANGFUSE_SALT",
