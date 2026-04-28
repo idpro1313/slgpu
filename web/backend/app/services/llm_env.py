@@ -72,8 +72,13 @@ def merge_llm_stack_env(
         m["TP"] = str(len(gpu_indices))
         m["NVIDIA_VISIBLE_DEVICES"] = ",".join(str(i) for i in gpu_indices)
     else:
+        # 8.1.1: sentinel-значения NVIDIA_VISIBLE_DEVICES (`void`/`none`/`all`) у свежих
+        # nvidia-container-toolkit (≥1.16) перетирают capability `compute` → Error 803,
+        # даже если устройства запрошены через DeviceRequest. Считаем их «не задано» и
+        # подставляем конкретные индексы из TP (или из SLGPU_NVIDIA_VISIBLE_DEVICES — но
+        # только если там реальный список индексов / UUID).
         override_nv = m.get("SLGPU_NVIDIA_VISIBLE_DEVICES", "").strip()
-        if override_nv:
+        if override_nv and override_nv.lower() not in ("void", "none", "all"):
             m["NVIDIA_VISIBLE_DEVICES"] = override_nv
         else:
             tpi = int(m["TP"])

@@ -185,6 +185,22 @@ def _run_slot_sync(
         }
     image = resolve_image(engine, merged)
     env = container_env_for_engine(merged, engine)
+    # 8.1.1: жёсткая защита — NVIDIA_VISIBLE_DEVICES в env должен совпадать с device_requests.
+    # Sentinel-значения `void` / `none` / `all` (а также пустое) у свежих версий
+    # nvidia-container-toolkit (≥1.16) перетирают capability `compute` (Error 803), даже когда
+    # устройства запрошены через DeviceRequest. Полагаемся на конкретные индексы из gpu_indices.
+    nvd_in = str(env.get("NVIDIA_VISIBLE_DEVICES", "")).strip().lower()
+    if gpu_indices:
+        env["NVIDIA_VISIBLE_DEVICES"] = ",".join(str(i) for i in gpu_indices)
+        if nvd_in in ("", "void", "none", "all") or nvd_in != env["NVIDIA_VISIBLE_DEVICES"]:
+            logger.info(
+                "[slot_runtime][_run_slot_sync][BLOCK_NVD_OVERRIDE] cname=%s nvd_in=%r → %s",
+                cname,
+                nvd_in,
+                env["NVIDIA_VISIBLE_DEVICES"],
+            )
+    elif nvd_in in ("void", "none", "all", ""):
+        env.pop("NVIDIA_VISIBLE_DEVICES", None)
     with closing(docker.from_env()) as client:
         try:
             client.ping()
