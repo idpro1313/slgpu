@@ -2173,3 +2173,12 @@
 - **Файлы:** **`VERSION` 7.0.4**, **`web/backend/pyproject.toml`**, **`web/frontend/package.json`**, **`web/frontend/package-lock.json`**, **`README.md`**, **`docs/HISTORY.md`**.
 - **Решение:** PATCH.
 
+## Фаза 7.0.5 (UI «Запуск слота»: GPU чекбоксами)
+
+### Что: `Runtime.tsx` — выбор GPU без CSV
+
+- **Что:** В модалке **«Запуск слота»** поле ввода GPU через запятую заменено на **чекбоксы по списку `available`** из **`GET /gpu/availability`**: не более **`TP`** отмеченных; кнопки **«Подставить подсказку»** (если `suggested` на полный TP) и **«Сбросить выбор»**; предупреждение, если **`available.length < TP`**; при изменении TP лишние отметки обрезаются (**`useEffect`**).
+- **Почему:** Запрос пользователя — не вводить индексы вручную.
+- **Файлы:** **`web/frontend/src/pages/Runtime.tsx`**, **`VERSION` 7.0.5**, синхронизация версий web, **`README.md`**, **`docs/HISTORY.md`**.
+- **Решение:** MINOR (UX страницы Inference).
+

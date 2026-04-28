@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
@@ -198,7 +198,8 @@ export function RuntimePage() {
   const [launchSlotKey, setLaunchSlotKey] = useState<string>("");
   const [launchTp, setLaunchTp] = useState<string>("");
   const [launchPort, setLaunchPort] = useState<string>("");
-  const [launchGpuText, setLaunchGpuText] = useState<string>("");
+  /** Ручной выбор GPU (пусто → сервер сам подставит по TP). Длина при отправке = TP или 0. */
+  const [launchGpuIndices, setLaunchGpuIndices] = useState<number[]>([]);
   const [launchError, setLaunchError] = useState<string | null>(null);
 
   const presets = useQuery({
@@ -304,7 +305,35 @@ export function RuntimePage() {
       if (presets.data[0].tp != null) setLaunchTp(String(presets.data[0].tp));
       else setLaunchTp("");
     }
-    setLaunchGpuText("");
+    setLaunchGpuIndices([]);
+  };
+
+  useEffect(() => {
+    setLaunchGpuIndices((prev) => {
+      const tp = effectiveLaunchTp;
+      if (prev.length <= tp) return prev;
+      const s = [...prev].sort((a, b) => a - b);
+      return s.slice(0, tp);
+    });
+  }, [effectiveLaunchTp]);
+
+  const toggleLaunchGpu = (idx: number) => {
+    setLaunchGpuIndices((prev) => {
+      const set = new Set(prev);
+      if (set.has(idx)) {
+        set.delete(idx);
+      } else if (set.size < effectiveLaunchTp) {
+        set.add(idx);
+      }
+      return Array.from(set).sort((a, b) => a - b);
+    });
+  };
+
+  const applySuggestedGpus = () => {
+    const s = availability.data?.suggested;
+    if (s?.length === effectiveLaunchTp) {
+      setLaunchGpuIndices([...s]);
+    }
   };
 
   const submitLaunch = () => {
@@ -323,12 +352,14 @@ export function RuntimePage() {
       const p = parseInt(launchPort, 10);
       if (!Number.isNaN(p)) body.host_api_port = p;
     }
-    if (launchGpuText.trim()) {
-      const gpus = launchGpuText
-        .split(",")
-        .map((s) => parseInt(s.trim(), 10))
-        .filter((n) => !Number.isNaN(n));
-      if (gpus.length) body.gpu_indices = gpus;
+    if (launchGpuIndices.length > 0) {
+      if (launchGpuIndices.length !== effectiveLaunchTp) {
+        setLaunchError(
+          `Отмечено ${launchGpuIndices.length} GPU при TP=${effectiveLaunchTp}: снимите лишние или отметьте ровно ${effectiveLaunchTp}.`,
+        );
+        return;
+      }
+      body.gpu_indices = [...launchGpuIndices];
     }
     slotUpMutation.mutate(body);
   };
@@ -485,7 +516,7 @@ export function RuntimePage() {
 
       <Modal
         title="Запуск слота"
-        subtitle="Имя слота `default` соответствует CLI. GPU и порт при необходимости подставляются на сервере; индексы вручную — через запятую (длина = TP)."
+        subtitle="Имя слота `default` соответствует CLI. GPU можно отметить галочками из свободных (ровно TP) или не трогать — сервер подставит сам. Порт опционален."
         isOpen={launchOpen}
         onClose={() => setLaunchOpen(false)}
         actions={
@@ -561,14 +592,93 @@ export function RuntimePage() {
             />
           </div>
           <div style={{ gridColumn: "1 / -1" }}>
-            <label className="label">GPU индексы вручную, через запятую (опц.)</label>
-            <input
-              className="input mono"
-              value={launchGpuText}
-              onChange={(e) => setLaunchGpuText(e.target.value)}
-              placeholder="например: 0,1,2,3"
-              autoComplete="off"
-            />
+            <label className="label">
+              GPU вручную (опц.) — отметьте ровно {effectiveLaunchTp} из свободных, либо не отмечайте (авто)
+            </label>
+            {!launchPreset ? (
+              <p className="section__subtitle" style={{ marginTop: 4 }}>
+                Сначала выберите пресет — появится список доступных GPU.
+              </p>
+            ) : availability.isLoading ? (
+              <div className="empty-state" style={{ marginTop: 8 }}>
+                Загружаем доступность GPU…
+              </div>
+            ) : availability.data?.available?.length ? (
+              <div style={{ marginTop: 8 }}>
+                <div
+                  className="flex flex--wrap"
+                  style={{ gap: "10px 16px", alignItems: "center" }}
+                >
+                  {availability.data.available.map((idx) => {
+                    const on = launchGpuIndices.includes(idx);
+                    const atCap =
+                      launchGpuIndices.length >= effectiveLaunchTp && !on;
+                    return (
+                      <label
+                        key={idx}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          cursor: atCap ? "not-allowed" : "pointer",
+                          opacity: atCap ? 0.45 : 1,
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={on}
+                          disabled={atCap}
+                          onChange={() => toggleLaunchGpu(idx)}
+                        />
+                        <span className="mono" style={{ fontSize: 14 }}>
+                          {idx}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+                <div className="flex flex--gap-sm flex--wrap" style={{ marginTop: 10 }}>
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={
+                      !availability.data.suggested?.length ||
+                      availability.data.suggested.length !== effectiveLaunchTp
+                    }
+                    onClick={applySuggestedGpus}
+                  >
+                    Подставить подсказку
+                  </button>
+                  {launchGpuIndices.length > 0 ? (
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => setLaunchGpuIndices([])}
+                    >
+                      Сбросить выбор
+                    </button>
+                  ) : null}
+                </div>
+                {availability.data.available.length < effectiveLaunchTp ? (
+                  <p
+                    style={{
+                      color: "var(--color-danger)",
+                      fontSize: 13,
+                      marginTop: 10,
+                      maxWidth: 520,
+                    }}
+                  >
+                    Свободных GPU ({availability.data.available.length}) меньше, чем TP (
+                    {effectiveLaunchTp}) — уменьшите TP в поле выше или освободите карты (Stop у
+                    слотов).
+                  </p>
+                ) : null}
+              </div>
+            ) : (
+              <p className="section__subtitle" style={{ marginTop: 8 }}>
+                Нет свободных GPU в ответе сервера (или хост не отдал список).
+              </p>
+            )}
           </div>
         </div>
         {launchPreset && availability.data ? (

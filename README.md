@@ -2,6 +2,8 @@
 
 Репозиторий **стенда для сравнения LLM-инференса** на Linux-сервере с GPU: два движка (**vLLM** и **SGLang**) в Docker, общий локальный кэш моделей, OpenAI-совместимый HTTP API, нагрузочный бенчмарк, **Prometheus + Grafana Loki (логи) + Promtail + Langfuse (трейсинг) + LiteLLM Proxy (шлюз) + NVIDIA DCGM Exporter** (см. [§3](#3-сервисы-и-порты), [`configs/monitoring/README.md`](configs/monitoring/README.md)).
 
+> **Версия 7.0.5:** страница **Inference** / модалка «Запуск слота»: выбор GPU **чекбоксами** по свободным из **`/gpu/availability`**, не более **TP** штук; кнопки «Подставить подсказку» / «Сбросить выбор»; предупреждение при **TP** большем числа свободных GPU.
+>
 > **Версия 7.0.4:** merge пресета в рантайме: поля **`tp`**, **`hf_id`**, **`served_model_name`** в SQLite снова **перебивают** дубликаты из JSON **`parameters`** (раньше устаревший **`TP`** из импортированного `.env` мог отменять TP из UI → `tensor_parallel_size=8` при двух GPU и падение **ParallelConfig** в vLLM).
 >
 > **Версия 7.0.3:** эталонный пресет [`examples/presets/gemma-4-31b-it.env`](examples/presets/gemma-4-31b-it.env) для [google/gemma-4-31B-it](https://huggingface.co/google/gemma-4-31B-it): парсеры **`gemma4`**, ориентир **vLLM** ([рецепт Gemma 4](https://docs.vllm.ai/projects/recipes/en/latest/Google/Gemma4.html)).
