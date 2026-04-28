@@ -8,11 +8,30 @@ from typing import Any
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
 from app.services import app_settings
-from app.services.stack_config import ports_for_probes_sync
+from app.services.stack_config import sync_merged_flat
 
 logger = logging.getLogger(__name__)
+
+
+def _litellm_http_probe_base() -> str:
+    """Базовый URL slgpu-web → LiteLLM по сети ``slgpu`` (Docker DNS alias ``LITELLM_SERVICE_NAME``).
+
+    Не используем ``WEB_MONITORING_HTTP_HOST`` + published port: при ``LITELLM_BIND=127.0.0.1``
+    порт на хосте слушает только loopback и с других контейнеров через ``host.docker.internal``
+    недоступен — ``GET /v1/models`` и health давали ``[litellm][list_models][BLOCK_HTTP_ERROR]``.
+    """
+    m = sync_merged_flat()
+    host = str(m.get("LITELLM_SERVICE_NAME") or "").strip()
+    if not host:
+        raise RuntimeError("missing stack param LITELLM_SERVICE_NAME")
+    try:
+        port = int(m["LITELLM_PORT"])
+    except KeyError as exc:
+        raise RuntimeError("missing stack param LITELLM_PORT") from exc
+    except ValueError as exc:
+        raise RuntimeError("invalid LITELLM_PORT") from exc
+    return f"http://{host}:{port}"
 
 
 async def _bearer_headers(session: AsyncSession | None) -> dict[str, str]:
@@ -25,10 +44,8 @@ async def _bearer_headers(session: AsyncSession | None) -> dict[str, str]:
 
 
 async def list_models(session: AsyncSession | None = None) -> list[dict[str, Any]]:
-    settings = get_settings()
-    h = settings.monitoring_http_host
-    port = int(ports_for_probes_sync()["litellm_port"])
-    url = f"http://{h}:{port}/v1/models"
+    base = _litellm_http_probe_base()
+    url = f"{base}/v1/models"
     headers = await _bearer_headers(session)
     async with httpx.AsyncClient(timeout=3.0, headers=headers) as client:
         try:
@@ -42,10 +59,7 @@ async def list_models(session: AsyncSession | None = None) -> list[dict[str, Any
 
 
 async def health(session: AsyncSession | None = None) -> dict[str, Any]:
-    settings = get_settings()
-    h = settings.monitoring_http_host
-    port = int(ports_for_probes_sync()["litellm_port"])
-    base = f"http://{h}:{port}"
+    base = _litellm_http_probe_base()
     out: dict[str, Any] = {"liveliness": False, "readiness": False, "ui": False}
     headers = await _bearer_headers(session)
     async with httpx.AsyncClient(timeout=2.0, headers=headers) as client:

@@ -11,7 +11,7 @@ import httpx
 from app.core.config import get_settings
 from app.models.service import ServiceStatus
 from app.services.docker_client import ContainerSummary, get_docker_inspector
-from app.services.stack_config import ports_for_probes_sync
+from app.services.stack_config import ports_for_probes_sync, sync_merged_flat
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +37,9 @@ def _settings_probes() -> list[ServiceProbe]:
     graf = int(p["grafana_port"])
     lf = int(p["langfuse_port"])
     llm = int(p["litellm_port"])
+    mflat = sync_merged_flat()
+    lf_svc = str(mflat.get("LANGFUSE_WEB_SERVICE_NAME") or "").strip()
+    ll_svc = str(mflat.get("LITELLM_SERVICE_NAME") or "").strip()
     return [
         ServiceProbe(
             key="prometheus",
@@ -98,7 +101,11 @@ def _settings_probes() -> list[ServiceProbe]:
             category="proxy",
             project=pxy,
             service="langfuse-web",
-            health_url=f"http://{h}:{lf}/api/public/health",
+            health_url=(
+                f"http://{lf_svc}:{lf}/api/public/health"
+                if lf_svc
+                else f"http://{h}:{lf}/api/public/health"
+            ),
             web_url=f"http://{h}:{lf}",
         ),
         ServiceProbe(
@@ -107,7 +114,11 @@ def _settings_probes() -> list[ServiceProbe]:
             category="gateway",
             project=pxy,
             service="litellm",
-            health_url=f"http://{h}:{llm}/health/liveliness",
+            health_url=(
+                f"http://{ll_svc}:{llm}/health/liveliness"
+                if ll_svc
+                else f"http://{h}:{llm}/health/liveliness"
+            ),
             web_url=f"http://{h}:{llm}/ui",
         ),
     ]

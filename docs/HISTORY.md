@@ -2110,3 +2110,40 @@
 - **Файлы:** **`VERSION`** **6.1.4**, **`web/backend/pyproject.toml`**, **`web/frontend/package.json`**, **`web/frontend/package-lock.json`**, **`README.md`**, **`web/CONTRACT.md`**, **`docs/HISTORY.md`**.
 - **Решение:** PATCH (только порядок UI/шаблона, семантика ключей без изменений).
 
+## Фаза 6.1.5 (MinIO в «Настройки» — группировка портов API/Console)
+
+### Что: порядок ключей MinIO в реестре и main.env
+
+- **Что:** В [`web/backend/app/services/stack_registry.py`](web/backend/app/services/stack_registry.py) блок **MinIO**: **`SERVICE_NAME`** → контейнеры → для **API** — внутренний порт, bind, хост-порт; для **Console** — то же; затем **`MINIO_ROOT_*`**. Дубликаты **`MINIO_ROOT_*`** / bind из секции «Postgres/…/MinIO» в [`configs/main.env`](configs/main.env) удалены — значения перенесены в единый блок MinIO в §7.
+- **Почему:** Запрос пользователя — как у Langfuse: внутренние порты MinIO не отделять от bind/хост-портов в UI.
+- **Файлы:** **`VERSION`** **6.1.5**, **`web/backend/pyproject.toml`**, **`web/frontend/package.json`**, **`web/frontend/package-lock.json`**, **`README.md`**, **`web/CONTRACT.md`**, **`configs/main.env`**, **`docs/HISTORY.md`**.
+- **Решение:** PATCH.
+
+## Фаза 6.1.6 (LITELLM_MASTER_KEY без дубля в таблице стека)
+
+### Что: скрытая строка реестра и fix buildStackPatch для скрытых секретов
+
+- **Что:** Да — одно и то же: ключ в блоке **«Внешний доступ»** и строка **`LITELLM_MASTER_KEY`** в прокси/LiteLLM были дублем; merge к compose уже брал **`litellm_api_key`** поверх стека (**`stack_config._merge_public_access_litellm_master_key`**). В **`stack_registry`** для **`LITELLM_MASTER_KEY`** задано **`ui_hidden: true`**. В **`Settings.tsx`** в **`buildStackPatch`** при удалении секретов, отсутствующих в форме, добавлен **`continue`** для **`hiddenKeys`** (раньше скрытые `ui_hidden`-секреты теоретически обнулялись бы при сохранении стека).
+- **Почему:** Вопрос пользователя «дублируется?» и UX.
+- **Файлы:** **`web/backend/app/services/stack_registry.py`**, **`web/frontend/src/pages/Settings.tsx`**, **`VERSION` 6.1.6**, веб-версии, **`README.md`**, **`web/CONTRACT.md`**, **`docs/AGENTS.md`**, **`grace/verification/verification-plan.xml`** (scenario **32**), **`docs/HISTORY.md`**.
+- **Решение:** PATCH; ключ по-прежнему в API **`registry`** с флагом **`ui_hidden`**; импорт из **`configs/main.env`** / секрет БД сохраняются, при непустом `litellm_api_key` — приоритет в merge.
+
+## Фаза 7.0.0 (удалены «скрытые» дубликаты из реестра)
+
+### Что: без VLLM_*/SGLANG_LISTEN_* listen и без LITELLM_MASTER_KEY в стеке
+
+- **Что:** Из **`STACK_KEY_REGISTRY`** и **`configs/main.env`** удалены **`VLLM_HOST`**, **`VLLM_PORT`**, **`SGLANG_LISTEN_HOST`**, **`SGLANG_LISTEN_PORT`**, **`LITELLM_MASTER_KEY`**. Рантайм: порты слотов и **`serve.sh`** опираются на **`LLM_API_BIND`**, **`LLM_API_PORT`**, **`LLM_API_PORT_SGLANG`**; **`internal_llm_listen_port`** в **`env_key_aliases`**; **`sync_merged_flat`** удаляет устаревшие ключи из merge (**`DEPRECATED_MERGED_DROP_KEYS`**), затем **`LITELLM_MASTER_KEY`** задаётся только из **`public_access.litellm_api_key`**. Миграция **`migrate_stack_params_to_canonical_if_needed`** удаляет строки этих ключей из **`stack_params`**. Обновлены **`README`**, **`web/CONTRACT.md`**, **`configs/monitoring/README.md`**, **`docs/AGENTS.md`**, **`scripts/serve.sh`**.
+- **Почему:** Запрос пользователя — убрать дублирование полностью.
+- **Файлы:** **`VERSION`** **7.0.0**, **`web/backend`** (`env_key_aliases`, `stack_registry`, `stack_config`, `llm_env`, `slot_runtime`, `native_jobs`), **`web/frontend/Settings.tsx`**, **`configs/main.env`**, документация.
+- **Решение:** MAJOR (импорт из старого `main.env` без повторного сохранения не подставит удалённые ключи обратно в БД — нужен импорт из нового шаблона или миграция).
+
+## Фаза 7.0.1 (пробы LiteLLM к API из slgpu-web)
+
+### Что: `list_models` / health — Docker DNS, не `host.docker.internal`
+
+- **Что:** В [`web/backend/app/services/litellm.py`](web/backend/app/services/litellm.py) базовый URL для **`GET /v1/models`**, **`/health/*`**, **`/ui`** — **`http://{LITELLM_SERVICE_NAME}:{LITELLM_PORT}`** из **`sync_merged_flat()`** (сеть **slgpu**), вместо **`WEB_MONITORING_HTTP_HOST`** + тот же порт (опубликованный на хосте). В [`web/backend/app/services/monitoring.py`](web/backend/app/services/monitoring.py) **health_url** для прокси **Langfuse** / **LiteLLM** строятся по **`LANGFUSE_WEB_SERVICE_NAME`** / **`LITELLM_SERVICE_NAME`** при непустом значении (fallback — прежний хост).
+- **Почему:** При **`LITELLM_BIND=127.0.0.1`** (и аналогично для Langfuse) порт на хосте слушает только loopback; с **slgpu-web** через **host.docker.internal** соединение не устанавливалось → **`[litellm][list_models][BLOCK_HTTP_ERROR]`** в логах и ложный **DEGRADED** на странице «Мониторинг».
+- **Файлы:** **`VERSION` 7.0.1**, **`web/backend/pyproject.toml`**, **`web/frontend/package.json`**, **`web/frontend/package-lock.json`**, **`README.md`**, **`web/README.md`**, **`docs/HISTORY.md`**.
+- **Решение:** PATCH; ссылки для браузера по-прежнему из **`public_access`** / **`server_host`**, не затронуты.
+
+
