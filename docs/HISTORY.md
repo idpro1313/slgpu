@@ -2209,6 +2209,29 @@
 - **Файлы:** **`configs/main.env`**, **`README.md`**, **`scripts/serve.sh`**, **`VERSION` 7.0.8**, **`web/*/package.json`/lock**, **`pyproject.toml`**, **`docs/HISTORY.md`**.
 - **Решение:** PATCH (док).
 
+## Фаза 8.1.5 (имена контейнеров слотов из имени пресета)
+
+### Что: дефолтный `slot_key` берётся из имени пресета
+
+- **Что:** В `web/backend/app/api/v1/runtime.py` (`POST /runtime/slots`) строка `sk = (payload.slot_key or "").strip() or f"s{uuid.uuid4().hex[:8]}"` заменена на двухветочный путь: явно заданный пользователем `slot_key` валидируется как раньше; пустой запрос идёт через новый хелпер **`_suggest_slot_key_from_preset(session, preset_name)`** — кандидаты `<preset>` → `<preset>-2` → `<preset>-3` → ... → `<preset>-99` (каждый прогоняется через `validate_slot_key`, отбрасывается при превышении лимита `_SLUG_RE` 64 симв.; первый свободный в БД возвращается). Fallback на старый `s{uuid.uuid4().hex[:8]}` остаётся только если все 99 имён заняты или ни одно не проходит валидацию. Имя контейнера (`slot_runtime.slot_container_name`) теперь читаемо: `slgpu-vllm-gpt-oss-120b` вместо `slgpu-vllm-s3e225363`. На фронте (`web/frontend/src/pages/Runtime.tsx`): `placeholder` поля «Имя слота» = выбранный пресет (или `<имя пресета>` пока не выбран); подзаголовок секции «Слоты» переписан под новое поведение, у инпута добавлен `title` с пояснением.
+- **Почему:** запрос пользователя — на скриншоте Portainer два контейнера `slgpu-vllm-s3e225363`/`slgpu-vllm-s348566c4`, по имени невозможно понять, какой слот к какому пресету относится. Особенно мешает при ручном `docker logs`/`docker exec` и сопоставлении логов с UI.
+- **Файлы:** `web/backend/app/api/v1/runtime.py`, `web/frontend/src/pages/Runtime.tsx`, `README.md` (запись 8.1.5), `VERSION` 8.1.5, `web/*/package.json`/lock, `pyproject.toml`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/verification/verification-plan.xml`, `docs/HISTORY.md`.
+- **Решение:** PATCH — UX-улучшение без ломающих API-изменений. Явно заданный `slot_key` (включая legacy `default`) сохраняет приоритет; уже запущенные слоты со старыми uuid-именами продолжают работать (контейнер не переименовывается на лету). Длина `slgpu-<engine>-<preset>` в худшем случае ~80 символов (engine 6+ суффикс «-» + preset 64 + «-99») — укладывается в Docker-лимит 253.
+
+## Фаза 8.1.4 (эталонный пресет openai/gpt-oss-120b)
+
+### Что: новый пресет examples/presets/gpt-oss-120b.env
+
+- **Что:** добавлен `examples/presets/gpt-oss-120b.env` для [openai/gpt-oss-120b](https://huggingface.co/openai/gpt-oss-120b) (Apache 2.0, MoE 120B / 5.1B активных, MXFP4-веса экспертов, 128K контекст, Harmony-формат). Параметры:
+  - `VLLM_DOCKER_IMAGE=vllm/vllm-openai:v0.20.1-x86_64-cu130` (актуальный с поддержкой `openai_gptoss` reasoning parser)
+  - `MODEL_ID=openai/gpt-oss-120b`, `MAX_MODEL_LEN=131072`, `KV_CACHE_DTYPE=fp8_e4m3`, `GPU_MEM_UTIL=0.92`
+  - `TP=2`, `ENABLE_EXPERT_PARALLEL=1` (балансовая комбинация vLLM Recipes; max throughput per GPU — TP=1, min latency — TP=4/8)
+  - `TOOL_CALL_PARSER=openai`, `REASONING_PARSER=openai_gptoss`, `ENABLE_AUTO_TOOL_CHOICE=1` — корректное заполнение `tool_calls[]`/`reasoning_content` в Chat Completions (см. [issue #22337](https://github.com/vllm-project/vllm/issues/22337) — с #22386 добавлен `openai` tool parser, #25514 — фиксы).
+  - `MAX_NUM_BATCHED_TOKENS=8192`, `MAX_NUM_SEQS=128`, `ENABLE_PREFIX_CACHING=1`, `ENABLE_CHUNKED_PREFILL=1`, `TRUST_REMOTE_CODE=1`.
+- **Почему:** запрос пользователя — добавить эталонный пресет в репо.
+- **Файлы:** `examples/presets/gpt-oss-120b.env`, `README.md` (раздел «Готовые пресеты» + запись 8.1.4), `VERSION` 8.1.4, `web/*/package.json`/lock, `pyproject.toml`, `docs/HISTORY.md`.
+- **Решение:** PATCH — расширение каталога пресетов (по правилам репо нумерации это MINOR, но 8.1.x уже идёт рядом; оставляем PATCH-стиль внутри 8.1).
+
 ## Фаза 8.1.3 (карточка пресета: TP/MODEL_ID/SERVED_MODEL_NAME — только в шапке)
 
 ### Что: исключение зеркалирования header-полей в `presets.parameters`

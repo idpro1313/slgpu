@@ -393,7 +393,7 @@ export function RuntimePage() {
 
       <Section
         title="Слоты"
-        subtitle="Активные слоты из снимка runtime. Для `slot_key=default` (как в CLI) укажите имя слота `default` в диалоге запуска."
+        subtitle="Активные слоты из снимка runtime. По умолчанию `slot_key` = имя пресета — контейнер именуется `slgpu-<engine>-<preset>`. Для совместимости с CLI можно явно задать имя `default`."
         actions={
           <div className="flex flex--gap-sm flex--wrap" style={{ alignItems: "center" }}>
             <button
@@ -577,8 +577,9 @@ export function RuntimePage() {
               className="input"
               value={launchSlotKey}
               onChange={(e) => setLaunchSlotKey(e.target.value)}
-              placeholder="auto"
+              placeholder={launchPreset || "<имя пресета>"}
               autoComplete="off"
+              title="Если пусто — slot_key совпадёт с именем пресета (контейнер `slgpu-<engine>-<preset>`); при коллизии добавится `-2`, `-3`, ..."
             />
           </div>
           <div>

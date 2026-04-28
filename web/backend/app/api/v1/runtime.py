@@ -43,6 +43,30 @@ from app.services.slgpu_cli import (
 router = APIRouter()
 
 
+async def _suggest_slot_key_from_preset(session: AsyncSession, preset_name: str) -> str:
+    """Подобрать читаемый `slot_key` из имени пресета.
+
+    Алгоритм: `<preset>` → `<preset>-2` → `<preset>-3` → … (до `-99`); при коллизии длиной
+    >64 символов или после 99 кандидатов — fallback на короткий uuid (старое поведение).
+    """
+
+    base = preset_name.strip()
+    candidates: list[str] = [base]
+    for n in range(2, 100):
+        candidates.append(f"{base}-{n}")
+    for cand in candidates:
+        try:
+            validate_slot_key(cand)
+        except ValidationError:
+            continue
+        existing = await session.execute(
+            select(EngineSlot.slot_key).where(EngineSlot.slot_key == cand)
+        )
+        if existing.scalar_one_or_none() is None:
+            return cand
+    return f"s{uuid.uuid4().hex[:8]}"
+
+
 @router.get("/snapshot", response_model=RuntimeSnapshot)
 async def get_snapshot() -> RuntimeSnapshot:
     snap = await runtime_service.snapshot()
@@ -165,14 +189,20 @@ async def create_engine_slot(
             status_code=409,
             detail=f"GPUs already in use: {sorted(overlap)}",
         )
-    sk = (payload.slot_key or "").strip() or f"s{uuid.uuid4().hex[:8]}"
-    try:
-        sk = validate_slot_key(sk)
-    except ValidationError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    dupe = await session.execute(select(EngineSlot).where(EngineSlot.slot_key == sk))
-    if dupe.scalar_one_or_none() is not None:
-        raise HTTPException(status_code=409, detail="slot_key already in use")
+    sk = (payload.slot_key or "").strip()
+    if sk:
+        try:
+            sk = validate_slot_key(sk)
+        except ValidationError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        dupe = await session.execute(select(EngineSlot).where(EngineSlot.slot_key == sk))
+        if dupe.scalar_one_or_none() is not None:
+            raise HTTPException(status_code=409, detail="slot_key already in use")
+    else:
+        # 8.1.5: slot_key по умолчанию — имя пресета (читаемые имена контейнеров `slgpu-<engine>-<preset>`),
+        # вместо короткого uuid `s3e225363`. Если занято — пробуем `<preset>-2`/`-3`/...; при превышении
+        # лимита `_SLUG_RE` (64 симв.) или 99 коллизий — fallback на старый uuid-генератор.
+        sk = await _suggest_slot_key_from_preset(session, preset_name)
     hport = payload.host_api_port
     if hport is None:
         hport = await _next_free_port(session, engine, stack_m)
