@@ -208,7 +208,12 @@ def _run_slot_sync(
 
         internal = internal_api_port_for(engine, merged)
         port_key = f"{internal}/tcp"
-        dr = [DeviceRequest(device_ids=[str(i) for i in gpu_indices], capabilities=[["gpu"]])]
+        dr = [
+            DeviceRequest(
+                device_ids=[str(i) for i in gpu_indices],
+                capabilities=[["gpu", "compute", "utility"]],
+            )
+        ]
         labels = {
             _LABEL_SLOT: slot_key,
             _LABEL_ENGINE: engine,

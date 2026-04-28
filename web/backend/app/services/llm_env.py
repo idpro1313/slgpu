@@ -103,4 +103,7 @@ def container_env_for_engine(merged: dict[str, str], engine: str) -> dict[str, s
         p = coalesce_str(m, "LLM_API_PORT_SGLANG", "SGLANG_LISTEN", default="")
         if not str(p).strip():
             raise MissingStackParams(["LLM_API_PORT_SGLANG"], "llm_slot")
+    cap_existing = str(m.get("NVIDIA_DRIVER_CAPABILITIES", "")).strip()
+    if not cap_existing:
+        m["NVIDIA_DRIVER_CAPABILITIES"] = "compute,utility"
     return {k: str(v) for k, v in m.items() if v is not None and str(v) != ""}

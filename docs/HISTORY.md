@@ -2209,6 +2209,24 @@
 - **Файлы:** **`configs/main.env`**, **`README.md`**, **`scripts/serve.sh`**, **`VERSION` 7.0.8**, **`web/*/package.json`/lock**, **`pyproject.toml`**, **`docs/HISTORY.md`**.
 - **Решение:** PATCH (док).
 
+## Фаза 8.0.2 (CUDA Error 803 — capability `compute` в DeviceRequest)
+
+### Что: фикс capability у Docker `DeviceRequest` + `NVIDIA_DRIVER_CAPABILITIES`
+
+- **Что:** В `slot_runtime.py:_run_slot_sync` `DeviceRequest(capabilities=[["gpu"]])` заменён на `[["gpu","compute","utility"]]`. В `llm_env.container_env_for_engine` env контейнера дополняется `NVIDIA_DRIVER_CAPABILITIES=compute,utility` (если ключ не задан в пресете/`main.env`). Без этого свежие сборки `nvidia-container-toolkit` не пробрасывают compute-режим libcuda → `cudaGetDeviceCount()` ронят слот с **`Error 803: system has unsupported display driver / cuda driver combination`** даже на корректном драйвере хоста.
+- **Почему:** `nvidia-smi` пользователя показывает `Driver Version: 580.95.05`, `CUDA Version: 13.0`, 8×H200 свободны — драйвер совместим с образом `qwen3_5-…-cu130`. Падение шло на стороне нашего docker-py запроса GPU.
+- **Файлы:** `web/backend/app/services/slot_runtime.py`, `web/backend/app/services/llm_env.py`, `README.md` (§14 переписан + запись о версии), `VERSION` 8.0.2, `web/*/package.json`/lock, `pyproject.toml`, `docs/HISTORY.md`.
+- **Решение:** PATCH (регрессия привода capability).
+
+## Фаза 8.0.1 (`serve.sh`: bash-арифметика и Error 803 в README)
+
+### Что: фикс `((10#tp_env != want))` и троublешутинг по драйверу
+
+- **Что:** В `scripts/serve.sh` поправлено условие лога `[BLOCK_TP_VISIBLE]` — `(( tp_env != want ))` вместо `((10#tp_env != want))` (bash не разворачивает имя переменной в base-prefix-форме `10#NAME`, выдаёт **`((: 10#tp_env: value too great for base (error token is "10#tp_env")`** на каждом старте контейнера). Сама подстановка TP в `--tensor-parallel-size` уже корректная (`tensor_parallel_size: 2` в логе vLLM); сообщение в stderr было только декоративным, но падение под `set -euo pipefail` могло маскировать вывод. В **README §14** добавлена строка про **`Error 803: unsupported display driver / cuda driver combination`** — драйвер хоста VM ниже CUDA образа vLLM (`*-cu130` требует драйвер для CUDA 13).
+- **Почему:** Лог пользователя с предыдущего запуска: `/etc/slgpu/serve.sh: line 50: ((: 10#tp_env: value too great for base`.
+- **Файлы:** `scripts/serve.sh`, `README.md`, `VERSION` 8.0.1, `web/*/package.json`/lock, `pyproject.toml`, `docs/HISTORY.md`.
+- **Решение:** PATCH (бажный лог + троublешутинг).
+
 ## Фаза 8.0.0 (модельные ключи — только из пресета)
 
 ### Что: удалили SLGPU_ENGINE / SERVED_MODEL_NAME / MODEL_ID / MODEL_REVISION / MAX_MODEL_LEN / TP / GPU_MEM_UTIL из «Настройки»
