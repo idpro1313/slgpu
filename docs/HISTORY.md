@@ -2209,6 +2209,45 @@
 - **Файлы:** **`configs/main.env`**, **`README.md`**, **`scripts/serve.sh`**, **`VERSION` 7.0.8**, **`web/*/package.json`/lock**, **`pyproject.toml`**, **`docs/HISTORY.md`**.
 - **Решение:** PATCH (док).
 
+## Фаза 8.1.3 (карточка пресета: TP/MODEL_ID/SERVED_MODEL_NAME — только в шапке)
+
+### Что: исключение зеркалирования header-полей в `presets.parameters`
+
+- **Что:** В `web/backend/app/services/presets.py`:
+  - `TP` удалён из `_RUNTIME_KEYS`; введён `PRESET_HEADER_ONLY_KEYS = {"TP", "MODEL_ID", "SERVED_MODEL_NAME"}` — это поля, у которых **выделенные колонки** в БД (`presets.tp`/`presets.hf_id`/`presets.served_model_name`).
+  - `presentation_preset_parameters` теперь автоматически выкидывает эти ключи из JSON-словаря `parameters` (фильтр по `_RUNTIME_KEYS | LEGACY_VLLM_PARAM_KEYS`).
+  - `migrate_preset_parameters_to_canonical_if_needed` расширена: если в `parameters` найдены `TP`/`MODEL_ID`/`SERVED_MODEL_NAME`, она извлекает их в столбцы шапки (только если колонка пустая) и удаляет из `parameters`. Срабатывает при `GET /api/v1/presets` (auto-cleanup существующих карточек без ручного сохранения).
+- **Почему:** На скриншоте карточки `gemma-4-31b-it-2` пользователь видел `TP=2` в шапке и `TP=8` в «Параметрах запуска». Источник дублирования — старая запись в `_RUNTIME_KEYS`: при импорте `examples/presets/<slug>.env` (`TP=8`) и `tp` колонка БД ставилась, и `parameters["TP"]="8"` сохранялся. Любой ручной клон/правка через UI расходился.
+- **Файлы:** `web/backend/app/services/presets.py`, `README.md` (запись 8.1.3), `VERSION` 8.1.3, `web/*/package.json`/lock, `pyproject.toml`, `docs/HISTORY.md`.
+- **Решение:** PATCH (UI/UX-чистка модели данных пресета). Никаких ломающих API-изменений: `PresetOut.parameters` просто перестаёт содержать `TP`/`MODEL_ID`/`SERVED_MODEL_NAME`; их и раньше следовало читать из шапки.
+
+## Фаза 8.1.2 (Gemma 4: убрана `MM_ENCODER_TP_MODE=data`, троublешутинг EP на dense)
+
+### Что: правка примера пресета Gemma 4 + запись в README §14 про EP на dense
+
+- **Что:** В `examples/presets/gemma-4-31b-it.env` `MM_ENCODER_TP_MODE=data` заменено на пустое значение (vLLM пишет `This model does not support --mm-encoder-tp-mode data. Falling back to weights`); добавлен явный комментарий «Gemma 4 — dense, ENABLE_EXPERT_PARALLEL не задавать». В README §14 добавлена строка про `pydantic_core._pydantic_core.ValidationError: ... Number of experts in the model must be greater than 0 when expert parallelism is enabled.` — рецепт: убрать `ENABLE_EXPERT_PARALLEL` из карточки пресета и пересоздать слот.
+- **Почему:** Пользователь добавил `ENABLE_EXPERT_PARALLEL=1` в клон карточки `gemma-4-31b-it-2`; Gemma 4 31B-it — dense-модель, и `--enable-expert-parallel` ронит запуск pydantic-валидацией.
+- **Файлы:** `examples/presets/gemma-4-31b-it.env`, `README.md`, `VERSION` 8.1.2, `web/*/package.json`/lock, `pyproject.toml`, `docs/HISTORY.md`.
+- **Решение:** PATCH (правка примера + троublешутинг). Кода/реестра не меняем — vLLM сам валидирует, наша задача — сообщить пользователю.
+
+## Фаза 8.1.1 (NVIDIA_VISIBLE_DEVICES=void → Error 803 на свежем nvidia-container-toolkit)
+
+### Что: жёсткая перезапись `NVIDIA_VISIBLE_DEVICES` из gpu_indices слота
+
+- **Что:** В `slot_runtime._run_slot_sync` env, передаваемый в `client.containers.run`, теперь **принудительно** перезаписывает `NVIDIA_VISIBLE_DEVICES` из `gpu_indices` слота (с логом `[BLOCK_NVD_OVERRIDE]`); если `gpu_indices` пуст и в env пришёл sentinel (`void`/`none`/`all`/пусто) — ключ выкидывается. Параллельно в `merge_llm_stack_env` отфильтрованы sentinel-значения у `SLGPU_NVIDIA_VISIBLE_DEVICES` (fallback на `0..TP-1`). В `configs/main.env` явный комментарий «не задавайте sentinel».
+- **Почему:** на хосте Driver 580.95 / CUDA 13 / 8×H200 один пресет (`minimax27-…-cu130`, vLLM 0.19) запускается, а второй (`qwen3_5-…-cu130`, vLLM 0.16.0rc2) валится с `Error 803`. В обоих env `NVIDIA_VISIBLE_DEVICES=void` (хвост от старой версии `main.env` / `stack_params`). Свежие `nvidia-container-toolkit ≥ 1.16` интерпретируют `void` как «не подключать GPU» и **отменяют** capability `compute`, даже когда устройства уже запрошены через `DeviceRequest(capabilities=[["gpu","compute","utility"]])`. Иначе говоря, capability-фикс v8.0.2 был необходим, но недостаточен, пока в env контейнера живёт sentinel.
+- **Файлы:** `web/backend/app/services/slot_runtime.py`, `web/backend/app/services/llm_env.py`, `configs/main.env`, `README.md` (§14 + запись), `VERSION` 8.1.1, `web/*/package.json`/lock, `pyproject.toml`, `docs/HISTORY.md`.
+- **Решение:** PATCH (env-нормализация). Существующие контейнеры до 8.1.1 нужно пересоздать (через UI), т.к. `restart: unless-stopped` НЕ обновляет env у уже запущенного контейнера.
+
+## Фаза 8.1.0 (вторая партия preset-only ключей)
+
+### Что: ещё 8 ключей из «Настройки» перенесены в карточку пресета
+
+- **Что:** в `PRESET_ONLY_KEYS` добавлены `DISABLE_CUSTOM_ALL_REDUCE`, `ENABLE_PREFIX_CACHING`, `ENABLE_EXPERT_PARALLEL`, `ENABLE_CHUNKED_PREFILL`, `ENABLE_AUTO_TOOL_CHOICE`, `TRUST_REMOTE_CODE`, `TOOL_CALL_PARSER`, `REASONING_PARSER` — это параметры архитектуры конкретной модели (MoE/dense, custom-code, парсеры). Удалены из `_STACK_KEY_REGISTRY` (UI «Настройки») и из `configs/main.env`. Добавлены в `_RUNTIME_KEYS` (presets.py) — иначе нормализация пресета их отбрасывала; добавлены в группу «vLLM» в `env_files.py` и в `COMMON_PARAMETERS` UI карточки пресета.
+- **Почему:** запрос пользователя — продолжение архитектурной линии 8.0.0 (UI Settings ≠ модельные параметры).
+- **Решение:** Не идут в `PRESET_REQUIRED_KEYS` — `serve.sh` использует `${VAR:-default}` (Qwen-дефолты `TRUST_REMOTE_CODE=1`, `REASONING_PARSER=qwen3`, `TOOL_CALL_PARSER=hermes`, MoE-`ENABLE_EXPERT_PARALLEL=0`). Для других семейств значения задаются в `examples/presets/<slug>.env`. Bump MINOR (8.0.x не подходит — расширение публичной модели данных stack/preset, хоть и в духе 8.0.0).
+- **Файлы:** `web/backend/app/services/env_key_aliases.py`, `web/backend/app/services/stack_registry.py`, `web/backend/app/services/presets.py`, `web/backend/app/services/env_files.py`, `web/frontend/src/pages/Presets.tsx`, `configs/main.env`, `README.md`, `VERSION`, `web/*/package*.json`, `pyproject.toml`, `docs/HISTORY.md`.
+
 ## Фаза 8.0.2 (CUDA Error 803 — capability `compute` в DeviceRequest)
 
 ### Что: фикс capability у Docker `DeviceRequest` + `NVIDIA_DRIVER_CAPABILITIES`

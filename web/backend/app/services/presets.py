@@ -37,11 +37,15 @@ class PresetImportConflict(Exception):
         self.name = name
 
 
-# Канонические ключи vLLM/SGLang в parameters / экспорт; устаревшие SLGPU_* принимаем при импорте
+# Канонические ключи vLLM/SGLang в parameters / экспорт; устаревшие SLGPU_* принимаем при импорте.
+# 8.1.3: `TP`, `MODEL_ID`, `SERVED_MODEL_NAME` НЕ входят в parameters — у них выделенные колонки в БД
+# (`presets.tp` / `presets.hf_id` / `presets.served_model_name`), они редактируются ТОЛЬКО в шапке
+# карточки UI. Дублирование вело к расхождению `TP` шапки и `TP` в parameters (см. 8.1.2-troubleshooting).
+PRESET_HEADER_ONLY_KEYS: frozenset[str] = frozenset({"TP", "MODEL_ID", "SERVED_MODEL_NAME"})
+
 _RUNTIME_KEYS: frozenset[str] = frozenset(
     {
         "MAX_MODEL_LEN",
-        "TP",
         "KV_CACHE_DTYPE",
         "GPU_MEM_UTIL",
         "VLLM_DOCKER_IMAGE",
@@ -92,15 +96,38 @@ def presentation_preset_parameters(params: Any) -> dict[str, str]:
 
 
 async def migrate_preset_parameters_to_canonical_if_needed(session: AsyncSession) -> None:
-    """Переписать устаревшие ключи в `presets.parameters` (строки с SLGPU_* из импорта <4.2)."""
+    """Переписать устаревшие ключи в `presets.parameters`.
+
+    Срабатывает на:
+    - SLGPU_* из импорта <4.2 (`LEGACY_VLLM_PARAM_KEYS`);
+    - 8.1.3: `TP`/`MODEL_ID`/`SERVED_MODEL_NAME` в parameters — они зеркалят выделенные колонки
+      БД и приводят к расхождению (`TP=8` в parameters при `presets.tp=2` в шапке). Извлекаем
+      в столбец, если он не задан, и удаляем из parameters.
+    """
+
     r = await session.execute(select(Preset))
     n = 0
     for preset in r.scalars().all():
         old = preset.parameters
         if not old or not isinstance(old, dict):
             continue
-        if not any(k in old for k in LEGACY_VLLM_PARAM_KEYS):
+        has_legacy = any(k in old for k in LEGACY_VLLM_PARAM_KEYS)
+        has_header_dup = any(k in old for k in PRESET_HEADER_ONLY_KEYS)
+        if not has_legacy and not has_header_dup:
             continue
+        if has_header_dup:
+            tp_param = old.get("TP")
+            if tp_param is not None and str(tp_param).strip() and preset.tp is None:
+                try:
+                    preset.tp = int(str(tp_param).strip())
+                except ValueError:
+                    pass
+            sn_param = old.get("SERVED_MODEL_NAME")
+            if sn_param and not preset.served_model_name:
+                preset.served_model_name = str(sn_param).strip() or None
+            mid_param = old.get("MODEL_ID")
+            if mid_param and not preset.hf_id:
+                preset.hf_id = str(mid_param).strip()
         preset.parameters = presentation_preset_parameters(old)
         n += 1
     if n:
