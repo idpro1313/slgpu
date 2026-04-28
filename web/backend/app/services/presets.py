@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.security import ValidationError, validate_slug
+from app.core.security import ValidationError, validate_hf_id, validate_slug, validate_tp
 from app.models.model import HFModel, ModelDownloadStatus
 from app.models.preset import Preset
 from app.services.env_key_aliases import LEGACY_VLLM_PARAM_KEYS, apply_vllm_aliases_to_merged
@@ -20,10 +20,21 @@ from app.services.env_files import (
     hf_id_to_slug,
     list_preset_files,
     parse_env_file,
+    parse_env_text,
     write_preset_file,
 )
 
 logger = logging.getLogger(__name__)
+
+
+class PresetImportConflict(Exception):
+    """Имя пресета уже занято в БД при импорте без overwrite."""
+
+    name: str
+
+    def __init__(self, name: str) -> None:
+        super().__init__(name)
+        self.name = name
 
 
 # Канонические ключи vLLM/SGLang в parameters / экспорт; устаревшие SLGPU_* принимаем при импорте
@@ -272,3 +283,95 @@ def env_to_preset_dict(env: EnvFile) -> dict[str, Any]:
             {k: v for k, v in env.values.items() if k in _RUNTIME_KEYS or k in LEGACY_VLLM_PARAM_KEYS}
         ),
     }
+
+
+async def import_preset_from_env_text(
+    session: AsyncSession,
+    *,
+    name: str,
+    text: str,
+    overwrite: bool,
+    source_filename: str | None = None,
+) -> Preset:
+    """Разбор текста пресета (`.env`) и создание или обновление строки ``presets``.
+
+    Имя пресета — ``name`` (slug). При ``overwrite=False`` и существующей записи —
+    ``PresetImportConflict``.
+    """
+
+    validate_slug(name)
+    values = parse_env_text(text)
+    hf_raw = values.get("MODEL_ID")
+    if hf_raw is None or not str(hf_raw).strip():
+        msg = "в файле нет MODEL_ID"
+        raise ValueError(msg)
+    hf_id = str(hf_raw).strip()
+    try:
+        validate_hf_id(hf_id)
+    except ValidationError as exc:
+        raise ValueError(str(exc)) from exc
+
+    tp_val = _int_or_none(values.get("TP"))
+    if tp_val is not None:
+        try:
+            validate_tp(tp_val)
+        except ValidationError as exc:
+            raise ValueError(str(exc)) from exc
+
+    raw_param = {
+        k: v
+        for k, v in values.items()
+        if k in _RUNTIME_KEYS or k in LEGACY_VLLM_PARAM_KEYS
+    }
+    params = presentation_preset_parameters(raw_param)
+
+    served = values.get("SERVED_MODEL_NAME") or values.get("SLGPU_SERVED_MODEL_NAME")
+    served_or = str(served).strip() if served else None
+
+    q = await session.execute(select(Preset).where(Preset.name == name))
+    preset = q.scalar_one_or_none()
+    if preset is not None and not overwrite:
+        raise PresetImportConflict(name)
+
+    model_q = await session.execute(select(HFModel).where(HFModel.hf_id == hf_id))
+    model = model_q.scalar_one_or_none()
+    if model is None:
+        model = HFModel(
+            hf_id=hf_id,
+            revision=values.get("MODEL_REVISION") or None,
+            slug=hf_id_to_slug(hf_id),
+            download_status=ModelDownloadStatus.UNKNOWN,
+        )
+        session.add(model)
+    await session.flush()
+
+    src = f" ({source_filename})" if source_filename else ""
+    desc = f"Imported from uploaded file{src}"
+
+    if preset is None:
+        preset = Preset(
+            name=name,
+            description=desc,
+            model_id=model.id,
+            hf_id=hf_id,
+            tp=tp_val,
+            gpu_mask=None,
+            served_model_name=served_or,
+            parameters=params,
+            file_path=None,
+            is_synced=False,
+            is_active=True,
+        )
+        session.add(preset)
+    else:
+        preset.hf_id = hf_id
+        preset.model_id = model.id
+        preset.tp = tp_val
+        preset.served_model_name = served_or
+        preset.parameters = params
+        preset.file_path = None
+        preset.is_synced = False
+        preset.is_active = True
+
+    await session.flush()
+    return preset

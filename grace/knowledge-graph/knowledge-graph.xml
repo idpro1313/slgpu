@@ -1,5 +1,5 @@
 <KnowledgeGraph>
-  <Project NAME="slgpu" VERSION="5.2.8">
+  <Project NAME="slgpu" VERSION="6.1.0">
     <keywords>slgpu, vllm, sglang, llm-inference, benchmark, docker-compose, gpu, prometheus, grafana, sglang-dashboard-slgpu, sglangdash2-slgpu</keywords>
     <annotation>Стенд для сравнения движков LLM-инференса vLLM и SGLang на Linux-сервере с NVIDIA GPU.</annotation>
 
@@ -210,7 +210,7 @@
         <fn-services_jobs PURPOSE="Job runner: native.* → native_jobs; lock по ключу (set discard); task registry; force_engine_slot_halt + POST /runtime/slots/{k}/down?force=1; CancelledError → mark job cancelled" />
         <fn-services_docker_client PURPOSE="get_docker_inspector(): get_by_service — label filter, fallback: нормализованные лейблы и имена Compose v1/v2 из стека (5.2.0: убраны хардкод-имена slgpu-*)" />
         <fn-services_env_files PURPOSE="Парсер и рендер data/presets/<slug>.env, совместимые с serve.sh" />
-        <fn-services_presets PURPOSE="Preset DB ↔ data/presets/*.env: presentation_preset_parameters, migrate_preset_parameters_to_canonical_if_needed; CRUD, POST /presets/{id}/export; POST /presets/sync и /import-templates; GET/PATCH/DELETE как в CONTRACT" />
+        <fn-services_presets PURPOSE="Preset DB ↔ data/presets/*.env: presentation_preset_parameters, migrate_preset_parameters_to_canonical_if_needed, import_preset_from_env_text (POST /presets/import-env); CRUD, POST /presets/{id}/export; v5 сняты POST /presets/sync и /import-templates; GET/PATCH/DELETE как в CONTRACT" />
         <fn-services_hf_models PURPOSE="Реестр HF моделей и статусы скачивания: GET /models синхронизирует DB с фактическими папками MODELS_DIR/&lt;org&gt;/&lt;repo&gt;; в ответе HFModelOut.pull_progress (активная Job native.model.pull по resource=hf_id); active_pull_jobs_by_resource; PATCH меняет revision/notes, DELETE удаляет запись и опционально локальные веса внутри MODELS_DIR" />
         <fn-services_runtime PURPOSE="snapshot: при активных EngineSlot — пробы по каждому слоту (asyncio.gather, RuntimeSlotProbe); иначе compose legacy; tail_slot_logs по slot_key. Удалено в 4.0.0: EngineRun/attach_run_metadata, REST /runtime/up|down|restart|/logs" />
         <fn-api_runtime_slots PURPOSE="GET/POST /runtime/slots, POST /slots/{key}/down|restart, GET slots/{key}/logs; list EngineSlot" />

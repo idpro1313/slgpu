@@ -2036,6 +2036,15 @@
 - **Почему:** Сборка образа **`slgpu-web`** падала на строке с двумя обращениями к **`appStack.data`** без сужения типа между аргументами.
 - **Решение:** PATCH 6.0.6 — только типобезопасность и явная ветка «стек не загружен».
 
+## Фаза 6.1.0 (импорт пресета из файла в UI и API)
+
+### Что: загрузка `.env` пресета в БД
+
+- **Что:** Реализовано ранее в сессии: **`POST /api/v1/presets/import-env`** (multipart `file`, form `overwrite`), сервис **`import_preset_from_env_text`** в **`web/backend/app/services/presets.py`**, аудит **`preset.import_env`**. Страница **`Presets.tsx`**: блок «Загрузить пресет из файла», скрытый `input[type=file]`, повтор при **409** с **`confirm`**. **`web/frontend`** — **`api.postForm`**, **`request`** без JSON Content-Type для `FormData`.
+- **Почему:** Запрос пользователя — импорт пресета из файла с предупреждением и перезаписью при совпадении имени (slug из stem файла).
+- **Файлы:** **`VERSION`** **6.1.0**, **`web/backend/pyproject.toml`**, **`web/frontend/package.json`**, **`package-lock.json`** (корневые версии); **`README.md`**; **`web/CONTRACT.md`**; **`docs/AGENTS.md`**; **`docs/HISTORY.md`**; **`grace/knowledge-graph/knowledge-graph.xml`**, **`grace/plan/development-plan.xml`**, **`grace/verification/verification-plan.xml`** (сценарий **43**, тест **`test_preset_import_env.py`**); смоук-тест **`web/backend/tests/test_preset_import_env.py`**.
+- **Решение:** MINOR по правилам (новый публичный эндпоинт + UI-поток). Имя пресета = **`Path(filename).stem`** (например `foo.env` → `foo`).
+
 ## Фаза 6.0.7 (показ секретов стека в UI)
 
 ### Что: query `reveal_secrets` и чекбокс в «Настройки»

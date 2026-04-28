@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,6 +23,7 @@ from app.schemas.presets import (
     PresetUpdate,
 )
 from app.services import presets as preset_service
+from app.services.presets import PresetImportConflict
 from app.services.ui_audit import record_ui_action
 
 router = APIRouter()
@@ -73,6 +74,57 @@ async def create_preset(
         target=payload.name,
         note=f"hf_id={payload.hf_id}",
         payload={"name": payload.name, "hf_id": payload.hf_id},
+    )
+    return preset
+
+
+@router.post("/import-env", response_model=PresetOut, status_code=status.HTTP_200_OK)
+async def import_preset_env(
+    session: AsyncSession = Depends(db_session),
+    actor: str | None = Depends(actor_from_header),
+    file: UploadFile = File(..., description=".env пресета (MODEL_ID и параметры как в data/presets)"),
+    overwrite: bool = Form(False),
+) -> Preset:
+    """Загрузить пресет из файла: имя записи = basename файла без `.env` (slug)."""
+    raw = await file.read()
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(
+            status_code=400, detail="файл должен быть в кодировке UTF-8"
+        ) from exc
+    stem = Path(file.filename or "preset.env").stem
+    slug = stem if stem else "preset"
+    try:
+        validate_slug(slug)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"недопустимое имя пресета из имени файла: {exc}",
+        ) from exc
+
+    try:
+        preset = await preset_service.import_preset_from_env_text(
+            session,
+            name=slug,
+            text=text,
+            overwrite=overwrite,
+            source_filename=file.filename,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except PresetImportConflict:
+        raise HTTPException(
+            status_code=409, detail="preset with this name already exists"
+        ) from None
+
+    await record_ui_action(
+        session,
+        action="preset.import_env",
+        actor=actor,
+        target=preset.name,
+        note=file.filename,
+        payload={"overwrite": overwrite, "slug": slug},
     )
     return preset
 

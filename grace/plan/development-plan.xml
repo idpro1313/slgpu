@@ -278,7 +278,7 @@
         <export-app-config PURPOSE="/api/v1/app-config/*" />
         <export-bench-ui PURPOSE="/benchmarks — прогоны data/bench, модалка summary.json, native.bench.*" />
         <export-models-crud PURPOSE="/api/v1/models — sync, PATCH, DELETE" />
-        <export-presets-crud PURPOSE="/api/v1/presets — PATCH, DELETE, clone, import-templates" />
+        <export-presets-crud PURPOSE="/api/v1/presets — CRUD, clone, export `.env`, multipart `POST …/import-env` (upload .env → SQLite; 409 без overwrite)" />
       </interface>
       <depends>M-CLI, M-PULL, M-UP, M-DOWN, M-MONITOR, M-MODELS</depends>
       <target>

@@ -59,9 +59,13 @@ function throwWithStackDetails(
   throw err;
 }
 
+function _isFormData(body: BodyInit | null | undefined): boolean {
+  return typeof FormData !== "undefined" && body instanceof FormData;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
-  if (init?.body && !headers.has("Content-Type")) {
+  if (init?.body && !headers.has("Content-Type") && !_isFormData(init.body)) {
     headers.set("Content-Type", "application/json");
   }
   const response = await fetch(`${API_PREFIX}${path}`, {
@@ -100,6 +104,9 @@ export const api = {
       method: "POST",
       body: body === undefined ? undefined : JSON.stringify(body),
     }),
+  /** multipart/form-data — тело передать как `FormData` (без JSON). */
+  postForm: <T>(path: string, body: FormData, init?: RequestInit) =>
+    request<T>(path, { ...init, method: "POST", body }),
   patch: <T>(path: string, body?: unknown, init?: RequestInit) =>
     request<T>(path, {
       ...init,

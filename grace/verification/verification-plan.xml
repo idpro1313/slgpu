@@ -207,6 +207,7 @@
         <file>web/backend/tests/test_gpu_availability.py</file>
         <file>web/backend/tests/test_slots_runtime.py</file>
         <file>web/backend/tests/test_preset_clone.py</file>
+        <file>web/backend/tests/test_preset_import_env.py</file>
         <file>web/backend/tests/test_4_0_concurrency.py</file>
         <file>web/backend/tests/test_main_env.py</file>
       </test-files>
@@ -260,6 +261,7 @@
         <scenario-40 kind="success">5.2.8 — `docker/docker-compose.monitoring.yml` сервис `grafana`: volumes НЕ содержат одной строки `./configs/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro` сразу перед/вместе с bind файла `…/monitoring/datasource.yml` на `…/provisioning/datasources/datasource.yml` (такой nested mount внутри :ro даёт runc «read-only file system»). Ожидаются **три** bind’а на `…/provisioning/dashboards`, `…/alerting`, `…/plugins` и **четвёртый** на `${WEB_DATA_DIR}/.slgpu/monitoring/datasource.yml`.</scenario-40>
         <scenario-41 kind="success">6.0.2: `GET /api/v1/app-config/stack`: `registry[].ui_hidden=true` для `VLLM_HOST`/`VLLM_PORT`/`SGLANG_LISTEN_*`; тело `stack` не включает эти ключи (`presentation_stack`); `sync_merged_flat` заполняет слушалки через `apply_vllm_aliases_to_merged` + `apply_llm_listen_derived_defaults`. Фронт `Settings.tsx`: `buildStackPatch` при сохранении не посылает удаление ключей из `existingStackKeys`, если они `ui_hidden` — строки формы для них отсутствуют без потери переопределения в БД.</scenario-41>
         <scenario-42 kind="success">6.0.7: `GET /api/v1/app-config/stack?reveal_secrets=true` возвращает `secrets_revealed=true` и реальные значения в объекте `secrets`; без query-параметра — маска как раньше, `secrets_revealed=false`; UI «Настройки» содержит чекбокс «Показывать секреты в явном виде», запрос с параметром из фронта, поля секретных строк — тип `text` в режиме показа, `password` при скрытии; `rowsFromServer` различает маску (`***`) и plaintext по `secrets_revealed`.</scenario-42>
+        <scenario-43 kind="success">6.1.0: `POST /api/v1/presets/import-env` (multipart `file` + form `overwrite`) создаёт запись в `presets` по stem имени файла из UTF-8 текста с `MODEL_ID`; повтор с тем же именем и `overwrite=false` — **409** `preset with this name already exists`; с `overwrite=true` — **200** и обновление полей. UI «Пресеты»: блок «Загрузить пресет из файла», при 409 — `confirm` и повтор с перезаписью.</scenario-43>
       </scenarios>
       <required-log-markers>
         <marker-1>[WEB][jobs][BLOCK_RUN_JOB]</marker-1>

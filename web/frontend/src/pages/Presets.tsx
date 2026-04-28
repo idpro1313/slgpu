@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { ApiError, api } from "@/api/client";
 import type { Preset, PresetCloneRequest } from "@/api/types";
 import { Modal } from "@/components/Modal";
 import { PageHeader } from "@/components/PageHeader";
@@ -125,6 +125,7 @@ const COMMON_PARAMETERS = [
 
 export function PresetsPage() {
   const queryClient = useQueryClient();
+  const presetFileImportRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<NewPresetForm>(EMPTY);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [editor, setEditor] = useState<PresetEditorForm | null>(null);
@@ -156,6 +157,20 @@ export function PresetsPage() {
     setSelectedId(null);
     setEditor(null);
   };
+
+  const importPresetFile = useMutation({
+    mutationFn: ({ file, overwrite }: { file: File; overwrite: boolean }) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("overwrite", overwrite ? "true" : "false");
+      return api.postForm<Preset>("/presets/import-env", fd);
+    },
+    onSuccess: () => {
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: ["presets"] });
+      queryClient.invalidateQueries({ queryKey: ["activity"] });
+    },
+  });
 
   const create = useMutation({
     mutationFn: (payload: NewPresetForm) =>
@@ -244,6 +259,57 @@ export function PresetsPage() {
         title="Пресеты запуска"
         subtitle="Реестр в БД для UI и Inference. Для `./slgpu` и файлов в PRESETS_DIR используйте «Выгрузить в .env» в карточке пресета. Импорт с диска и шаблоны — с хоста (CLI / `examples/presets`)."
       />
+
+      <Section
+        title="Загрузить пресет из файла"
+        subtitle="Файл как data/presets/*.env (KEY=VALUE), обязателен MODEL_ID. Имя пресета в БД = basename файла без расширения (slug), например qwen.env → qwen."
+      >
+        <input
+          ref={presetFileImportRef}
+          type="file"
+          accept=".env,text/plain,application/octet-stream"
+          style={{ display: "none" }}
+          aria-hidden
+          onChange={(event) => {
+            void (async () => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (!file) return;
+              setError(null);
+              try {
+                await importPresetFile.mutateAsync({ file, overwrite: false });
+              } catch (e) {
+                if (e instanceof ApiError && e.status === 409) {
+                  const ok = window.confirm(
+                    "Пресет с таким именем уже есть в базе. Перезаписать данными из выбранного файла?",
+                  );
+                  if (!ok) return;
+                  try {
+                    await importPresetFile.mutateAsync({ file, overwrite: true });
+                  } catch (e2) {
+                    setError(e2 instanceof Error ? e2.message : String(e2));
+                  }
+                } else {
+                  setError(e instanceof Error ? e.message : String(e));
+                }
+              }
+            })();
+          }}
+        />
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className="btn btn--primary"
+            disabled={importPresetFile.isPending}
+            onClick={() => presetFileImportRef.current?.click()}
+          >
+            {importPresetFile.isPending ? "Загрузка…" : "Выбрать файл .env…"}
+          </button>
+          <span className="section__subtitle" style={{ margin: 0 }}>
+            UTF-8; при совпадении имени без галочки «перезапись» будет предупреждение.
+          </span>
+        </div>
+      </Section>
 
       <Section
         title="Создать пресет"
