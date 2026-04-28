@@ -2146,4 +2146,13 @@
 - **Файлы:** **`VERSION` 7.0.1**, **`web/backend/pyproject.toml`**, **`web/frontend/package.json`**, **`web/frontend/package-lock.json`**, **`README.md`**, **`web/README.md`**, **`docs/HISTORY.md`**.
 - **Решение:** PATCH; ссылки для браузера по-прежнему из **`public_access`** / **`server_host`**, не затронуты.
 
+## Фаза 7.0.2 (пример пресета Xiaomi MiMo-V2.5)
+
+### Что: `examples/presets/mimo-v2.5.env`
+
+- **Что:** Добавлен эталонный пресет для [**XiaomiMiMo/MiMo-V2.5**](https://huggingface.co/XiaomiMiMo/MiMo-V2.5): `MODEL_ID`, `SERVED_MODEL_NAME=mimo-v2.5`, `REASONING_PARSER=qwen3`, `TOOL_CALL_PARSER=mimo`, `SGLANG_MEM_FRACTION_STATIC=0.65` (как в примере SGLang на HF), `MAX_MODEL_LEN=262144`, TP8, комментарии про полный рецепт (DeepEP/DP/multimodal) вне текущего **`serve.sh`**.
+- **Почему:** Запрос пользователя — файл пресета в **`examples/presets`**.
+- **Файлы:** **`examples/presets/mimo-v2.5.env`**, **`examples/presets/README.md`** (таблица парсеров + ссылка у **`VLLM_DOCKER_IMAGE`**), **`VERSION` 7.0.2**, синхронизация версий web.
+- **Решение:** PATCH.
+
 
