@@ -233,6 +233,24 @@ def monitoring_configs_dir(root: Path, merged: dict[str, str] | None = None) -> 
     return (resolve_path_relative(root, wdd) / ".slgpu" / "monitoring").resolve()
 
 
+# Дефолтный file_sd для job `vllm-slots` (Prometheus): скрейп host.docker.internal:PORT для всех PORT
+# в диапазоне [min, max] включительно. Файл рядом с prometheus.yml задаётся вручную или создаётся
+# один раз при `render_monitoring_configs`, если файла ещё нет.
+VLLM_SLOTS_FILE_SD_HOST = "host.docker.internal"
+VLLM_SLOTS_FILE_SD_PORT_MIN = 8110
+VLLM_SLOTS_FILE_SD_PORT_MAX = 8130
+
+
+def _default_vllm_slots_file_sd_json_text() -> str:
+    """JSON для `vllm-slots.json` при первой генерации (мультислотный vLLM на хосте)."""
+    import json
+
+    lo, hi = VLLM_SLOTS_FILE_SD_PORT_MIN, VLLM_SLOTS_FILE_SD_PORT_MAX
+    targets = [f"{VLLM_SLOTS_FILE_SD_HOST}:{p}" for p in range(lo, hi + 1)]
+    payload = [{"targets": targets, "labels": {"engine": "vllm"}}]
+    return json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+
+
 def _render_template_strict(text: str, mapping: dict[str, str]) -> str:
     """Подставить ``${VAR}`` из ``mapping``; падать при пропусках (KeyError)."""
     from string import Template
@@ -261,10 +279,10 @@ def render_monitoring_configs(root: Path, merged: dict[str, str]) -> Path:
                 missing = exc.args[0] if exc.args else "?"
                 raise MissingStackParams([str(missing)], "monitoring_up") from exc
         (out_dir / dst_name).write_text(text, encoding="utf-8")
-    # file_sd для job vllm-slots: не перезаписываем, чтобы пользователь мог перечислить хост-порты всех слотов.
+    # file_sd для job vllm-slots: не перезаписываем существующий файл — порты можно сузить/расширить вручную.
     v_slots = out_dir / "vllm-slots.json"
     if not v_slots.is_file():
-        v_slots.write_text("[]\n", encoding="utf-8")
+        v_slots.write_text(_default_vllm_slots_file_sd_json_text(), encoding="utf-8")
     return out_dir
 
 

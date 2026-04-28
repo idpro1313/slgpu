@@ -1,10 +1,27 @@
 [
   {
     "targets": [
+      "host.docker.internal:8110",
+      "host.docker.internal:8111",
       "host.docker.internal:8112",
       "host.docker.internal:8113",
       "host.docker.internal:8114",
-      "host.docker.internal:8115"
+      "host.docker.internal:8115",
+      "host.docker.internal:8116",
+      "host.docker.internal:8117",
+      "host.docker.internal:8118",
+      "host.docker.internal:8119",
+      "host.docker.internal:8120",
+      "host.docker.internal:8121",
+      "host.docker.internal:8122",
+      "host.docker.internal:8123",
+      "host.docker.internal:8124",
+      "host.docker.internal:8125",
+      "host.docker.internal:8126",
+      "host.docker.internal:8127",
+      "host.docker.internal:8128",
+      "host.docker.internal:8129",
+      "host.docker.internal:8130"
     ],
     "labels": {
       "engine": "vllm"

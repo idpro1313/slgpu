@@ -141,7 +141,7 @@
       <annotations>
         <fn-sync_merged_flat PURPOSE="Read-only SQLite snapshot всех ключей стека" />
         <fn-write_compose_service_env_file PURPOSE="Снимок env для docker compose monitoring/proxy в ${WEB_DATA_DIR}/.slgpu/compose-service.env" />
-        <fn-render_monitoring_configs PURPOSE="string.Template подстановка из БД в *.tmpl → ${WEB_DATA_DIR}/.slgpu/monitoring/{prometheus.yml,loki-config.yaml,promtail-config.yml,datasource.yml}; если отсутствует — создаёт пустой vllm-slots.json [] для file_sd job vllm-slots (мультислот vLLM); существующий vllm-slots.json не перезаписывается; в шаблонах НЕ должно быть буквальных ${VAR} в комментариях (substitute не различает комментарий и тело — упадёт KeyError)" />
+        <fn-render_monitoring_configs PURPOSE="string.Template подстановка из БД в *.tmpl → ${WEB_DATA_DIR}/.slgpu/monitoring/{prometheus.yml,loki-config.yaml,promtail-config.yml,datasource.yml}; если отсутствует vllm-slots.json — создаёт его с host.docker.internal:8110..8130 (file_sd job vllm-slots, мультислот vLLM; константы VLLM_SLOTS_FILE_SD_PORT_* в stack_config.py); существующий vllm-slots.json не перезаписывается; в шаблонах НЕ должно быть буквальных ${VAR} в комментариях (substitute не различает комментарий и тело — упадёт KeyError)" />
         <fn-STACK_KEY_REGISTRY PURPOSE="Каноничный реестр ключей стека (group/required_for/allow_empty/is_secret/ui_hidden; subgroup monitoring/proxy — 6.0.5); scope fix_perms не входит в S_MON — только у ключей под _native_fix_perms и SLGPU_BENCH_CHOWN_IMAGE (6.1.3)" />
         <fn-validate_required PURPOSE="Возвращает missing keys для scope (web_up/monitoring_up/proxy_up/llm_slot/...)" />
         <fn-raise_if_missing PURPOSE="HTTP 409 missing_stack_params в API при недостающих ключах" />

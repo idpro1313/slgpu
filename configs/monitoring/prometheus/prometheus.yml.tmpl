@@ -32,7 +32,8 @@ scrape_configs:
 
   # Дополнительные хост-порты vLLM (мультислотный инференс из UI — у каждого слота свой порт на хосте).
   # Файл vllm-slots.json монтируется рядом с prometheus.yml и НЕ перезаписывается при render_monitoring_configs
-  # (генерируется пустым `[]`, пока вы не зададите targets). Эндпоинт тот же: /metrics .
+  # если уже есть; при первом создании backend подставляет диапазон портов 8110–8130 (см. stack_config).
+  # Эндпоинт тот же: /metrics . Неиспользуемые порты в Targets будут DOWN — это нормально.
   # В Grafana vLLM V2 по умолчанию job="vllm" — для слотов используйте job="vllm-slots" или объедините
   # в запросах: job=~"vllm|vllm-slots".
   - job_name: vllm-slots

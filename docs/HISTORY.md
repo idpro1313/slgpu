@@ -2209,6 +2209,15 @@
 - **Файлы:** **`configs/main.env`**, **`README.md`**, **`scripts/serve.sh`**, **`VERSION` 7.0.8**, **`web/*/package.json`/lock**, **`pyproject.toml`**, **`docs/HISTORY.md`**.
 - **Решение:** PATCH (док).
 
+## Фаза 8.1.7 (дефолт `vllm-slots.json`: хост-порты 8110–8130)
+
+### Что: при первой генерации `vllm-slots.json` заполняем диапазон вместо `[]`
+
+- **Что:** В `stack_config.py` введены константы **`VLLM_SLOTS_FILE_SD_HOST`** (по умолчанию `host.docker.internal`), **`VLLM_SLOTS_FILE_SD_PORT_MIN=8110`**, **`VLLM_SLOTS_FILE_SD_PORT_MAX=8130`**, функция **`_default_vllm_slots_file_sd_json_text()`** — один `targets`-лист под **Prometheus file_sd**. `render_monitoring_configs` при **отсутствии** `vllm-slots.json` пишет этот JSON вместо пустого массива `[]`. Существующий файл по-прежнему не перезаписывается. Обновлены **`vllm-slots.json.example`**, комментарий в **`prometheus.yml.tmpl`**, **`configs/monitoring/README.md`**, **`README.md`**, **`docs/AGENTS.md`**, **`grace/**/*.xml`**.
+- **Почему:** запрос пользователя — типовой диапазон портов **8110–8130**, чтобы слот на **8119** и соседние порты попадали в Prometheus без ручного дописывания каждой строки.
+- **Решение:** PATCH. Лишние порты дают **DOWN** в Targets (ожидаемо при свободных портах).
+- **Файлы:** `web/backend/app/services/stack_config.py`, `configs/monitoring/prometheus/vllm-slots.json.example`, `configs/monitoring/prometheus/prometheus.yml.tmpl`, `configs/monitoring/README.md`, `README.md`, `VERSION` 8.1.7, `web/*/package*.json`, `pyproject.toml`, `docs/AGENTS.md`, `docs/HISTORY.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/verification/verification-plan.xml`.
+
 ## Фаза 8.1.6 (Prometheus: file_sd `vllm-slots` для мультислота)
 
 ### Что: скрейп нескольких хост-портов vLLM без ручного патча `prometheus.yml` при каждом слоте
