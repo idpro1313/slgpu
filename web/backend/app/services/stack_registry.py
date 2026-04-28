@@ -507,9 +507,11 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
     "LITELLM_MASTER_KEY": _e(
         "LITELLM_MASTER_KEY",
         "proxy",
-        "Master-key прокси (Bearer); пусто = ключ не требуется (только доверенная сеть). Меняется в UI «Публичный доступ».",
+        "Master-key LiteLLM (Bearer). Задаётся в блоке «Внешний доступ» (не дублировать строкой в таблице). "
+        "В compose подставляется из `litellm_api_key`; пусто там — из секрета БД/импорта, если задано.",
         *S_MON,
         allow_empty=True,
+        ui_hidden=True,
         subgroup="litellm",
     ),
     "LITELLM_LOG": _e(

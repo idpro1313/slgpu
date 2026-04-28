@@ -323,7 +323,10 @@ function buildStackPatch(
   }
   const formSecretKeys = new Set(secretRows.map((r) => r.k));
   for (const k of existingSecretKeys) {
-    if (!formSecretKeys.has(k)) secrets[k] = null;
+    if (!formSecretKeys.has(k)) {
+      if (hiddenKeys.has(k)) continue;
+      secrets[k] = null;
+    }
   }
 
   const out: { stack?: Record<string, string | null>; secrets?: Record<string, string | null> } =
