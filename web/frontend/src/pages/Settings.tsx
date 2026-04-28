@@ -88,7 +88,7 @@ const STACK_GROUP_META: Record<StackGroupId, { title: string; subtitle: string }
   inference: {
     title: "5. Инференс — LLM API, движок, vLLM, SGLang, кеши",
     subtitle:
-      "Движок (vllm|sglang), модель/ревизия, LLM_API_BIND и хост-порты (vLLM / SGLang); listen внутри контейнеров подставляется из них автоматически — отдельные поля в UI скрыты. Далее авто-диапазоны слотов, параметры vLLM и SGLang.",
+      "Движок (vllm|sglang), модель/ревизия, LLM_API_BIND и порты LLM_API_PORT / LLM_API_PORT_SGLANG (listen в контейнере = эти же порты при типичном 1:1). Далее авто-диапазоны слотов, параметры vLLM и SGLang.",
   },
   monitoring: {
     title: "6. Мониторинг — Prometheus, Grafana, Loki, Promtail, DCGM, NodeExporter",
@@ -571,7 +571,7 @@ export function SettingsPage() {
               <span className="mono">{data?.effective_server_host ?? "загрузка..."}</span>.
             </p>
             <label>
-              <span className="label">API-ключ LiteLLM (LITELLM_MASTER_KEY / proxy key)</span>
+              <span className="label">API-ключ LiteLLM (Bearer; хранится как litellm_api_key)</span>
               <input
                 className="input"
                 type="password"

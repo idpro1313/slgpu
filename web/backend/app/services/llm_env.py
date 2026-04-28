@@ -79,13 +79,11 @@ def container_env_for_engine(merged: dict[str, str], engine: str) -> dict[str, s
     apply_vllm_aliases_to_merged(m)
     m["SLGPU_ENGINE"] = engine
     if engine == "vllm":
-        m["VLLM_PORT"] = coalesce_str(m, "VLLM_PORT", "SLGPU_VLLM_PORT", "LLM_API_PORT", default="")
-        if not str(m["VLLM_PORT"]).strip():
-            raise MissingStackParams(["VLLM_PORT", "LLM_API_PORT"], "llm_slot")
+        p = coalesce_str(m, "LLM_API_PORT", "SLGPU_VLLM_PORT", default="")
+        if not str(p).strip():
+            raise MissingStackParams(["LLM_API_PORT"], "llm_slot")
     else:
-        m["SGLANG_LISTEN_PORT"] = coalesce_str(
-            m, "SGLANG_LISTEN_PORT", "SGLANG_LISTEN", "LLM_API_PORT_SGLANG", default=""
-        )
-        if not str(m["SGLANG_LISTEN_PORT"]).strip():
-            raise MissingStackParams(["SGLANG_LISTEN_PORT", "LLM_API_PORT_SGLANG"], "llm_slot")
+        p = coalesce_str(m, "LLM_API_PORT_SGLANG", "SGLANG_LISTEN", default="")
+        if not str(p).strip():
+            raise MissingStackParams(["LLM_API_PORT_SGLANG"], "llm_slot")
     return {k: str(v) for k, v in m.items() if v is not None and str(v) != ""}

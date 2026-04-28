@@ -137,11 +137,7 @@ def _load_flat_from_stack_params(conn: sqlite3.Connection) -> dict[str, str] | N
 
 
 def _merge_public_access_litellm_master_key(conn: sqlite3.Connection, merged: dict[str, str]) -> None:
-    """Ключ из настроек «Публичный доступ» (``litellm_api_key``) = ``LITELLM_MASTER_KEY`` у прокси.
-
-    Без этой подстановки native-задания (``docker compose`` с temp env из ``sync_merged_flat``) поднимают
-    LiteLLM с пустым master key, хотя в UI ключ задан — отсюда ошибка Admin UI «Master Key not set».
-    """
+    """Подстановка ``LITELLM_MASTER_KEY`` только из ``public_access.litellm_api_key`` (не из stack_params)."""
     pa = _load_json_key(conn, _PUBLIC_ACCESS_KEY)
     if not isinstance(pa, dict):
         return
@@ -169,6 +165,10 @@ def sync_merged_flat() -> dict[str, str]:
                 merged.update({k: str(v) for k, v in secrets.items() if v is not None})
         if not merged:
             raise RuntimeError("stack_params is empty; run app-config install from configs/main.env")
+        from app.services.env_key_aliases import DEPRECATED_MERGED_DROP_KEYS
+
+        for k in DEPRECATED_MERGED_DROP_KEYS:
+            merged.pop(k, None)
         _merge_public_access_litellm_master_key(conn, merged)
     finally:
         conn.close()
@@ -519,10 +519,23 @@ async def migrate_stack_params_to_canonical_if_needed(session) -> None:
     Один проход при первом обращении к API после обновления 4.2.x; дальше legacy-строк нет.
     """
     from app.services.env_key_aliases import (
+        DEPRECATED_MERGED_DROP_KEYS,
         MONITORING_IMAGE_LEGACY_KEYS,
         STRIP_VLLM_LEGACY_STACK_KEYS,
         presentation_stack,
     )
+
+    stack, _, _ = await load_sections(session)
+    if not stack:
+        return
+    obsolete_removed = [k for k in DEPRECATED_MERGED_DROP_KEYS if k in stack]
+    for k in obsolete_removed:
+        await delete_stack_param(session, k)
+    if obsolete_removed:
+        logger.info(
+            "[stack_config][migrate_stack_params_to_canonical][BLOCK_removed_obsolete] keys=%s",
+            obsolete_removed,
+        )
 
     stack, _, _ = await load_sections(session)
     if not stack:
@@ -619,8 +632,6 @@ def write_llm_interp_env(path: Path, merged: dict[str, str]) -> None:
         f"LLM_API_PORT={_stack_val(m, 'LLM_API_PORT')}",
         f"SLGPU_MODEL_ROOT={_stack_val(m, 'SLGPU_MODEL_ROOT')}",
         f"SERVED_MODEL_NAME={_stack_val(m, 'SERVED_MODEL_NAME')}",
-        f"VLLM_HOST={_stack_val(m, 'VLLM_HOST')}",
-        f"VLLM_PORT={_stack_val(m, 'VLLM_PORT')}",
         f"TRUST_REMOTE_CODE={_stack_val(m, 'TRUST_REMOTE_CODE')}",
         f"ENABLE_CHUNKED_PREFILL={_stack_val(m, 'ENABLE_CHUNKED_PREFILL')}",
         f"ENABLE_AUTO_TOOL_CHOICE={_stack_val(m, 'ENABLE_AUTO_TOOL_CHOICE')}",

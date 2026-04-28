@@ -17,6 +17,7 @@ from app.services.job_log import append_job_log
 
 from app.services.compose_exec import ensure_slgpu_network
 from app.services.gpu_state import invalidate_gpu_state_cache
+from app.services.env_key_aliases import internal_llm_listen_port
 from app.services.llm_env import container_env_for_engine, merge_llm_stack_env
 from app.services.stack_config import sync_merged_flat
 from app.services.stack_errors import MissingStackParams
@@ -37,9 +38,7 @@ def slot_container_name(engine: str, slot_key: str) -> str:
 
 
 def internal_api_port_for(engine: str, merged: dict[str, str]) -> int:
-    if engine == "vllm":
-        return int(merged["VLLM_PORT"])
-    return int(merged["SGLANG_LISTEN_PORT"])
+    return internal_llm_listen_port(merged, engine)
 
 
 def resolve_image(engine: str, merged: dict[str, str]) -> str:

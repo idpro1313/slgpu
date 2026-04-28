@@ -1,15 +1,18 @@
 """Канонические имена переменных для vLLM/мониторинга; устаревшие SLGPU_* — алиасы.
 
 Читатели окружения подставляют сначала каноническое имя, затем legacy (см. serve.sh, stack_config).
+
+Listen HTTP внутри контейнеров LLM задаётся только **LLM_API_BIND**, **LLM_API_PORT**, **LLM_API_PORT_SGLANG**
+(типичное docker mapping 8111:8111 — один номер порта для хоста и процесса).
 """
 
 from __future__ import annotations
 
+from app.services.stack_errors import MissingStackParams
+
 # (canonical, legacy1, legacy2, …) — порядок при coalesce
 VLLM_STACK_ALIASES: tuple[tuple[str, ...], ...] = (
     ("SERVED_MODEL_NAME", "SLGPU_SERVED_MODEL_NAME"),
-    ("VLLM_HOST", "SLGPU_VLLM_HOST"),
-    ("VLLM_PORT", "SLGPU_VLLM_PORT", "LLM_API_PORT"),
     ("TRUST_REMOTE_CODE", "SLGPU_VLLM_TRUST_REMOTE_CODE"),
     ("ENABLE_CHUNKED_PREFILL", "SLGPU_VLLM_ENABLE_CHUNKED_PREFILL"),
     ("ENABLE_AUTO_TOOL_CHOICE", "SLGPU_VLLM_ENABLE_AUTO_TOOL_CHOICE"),
@@ -38,17 +41,7 @@ def _legacy_vllm_keys() -> frozenset[str]:
 
 LEGACY_VLLM_PARAM_KEYS: frozenset[str] = _legacy_vllm_keys()
 
-# Слушалки внутри контейнеров: не показываем отдельно в Settings (ред. LLM_API_BIND / порты хоста).
-LLM_UI_HIDDEN_LISTEN_KEYS: frozenset[str] = frozenset(
-    {
-        "VLLM_HOST",
-        "VLLM_PORT",
-        "SGLANG_LISTEN_HOST",
-        "SGLANG_LISTEN_PORT",
-    }
-)
 
-# Образы мониторинга: (каноническое, legacy)
 MONITORING_IMAGE_ALIASES: tuple[tuple[str, str], ...] = (
     ("DCGM_EXPORTER_IMAGE", "SLGPU_DCGM_EXPORTER_IMAGE"),
     ("NODE_EXPORTER_IMAGE", "SLGPU_NODE_EXPORTER_IMAGE"),
@@ -66,6 +59,19 @@ MONITORING_IMAGE_ALIASES: tuple[tuple[str, str], ...] = (
     ("LITELLM_IMAGE", "SLGPU_LITELLM_IMAGE"),
 )
 
+MONITORING_IMAGE_LEGACY_KEYS: frozenset[str] = frozenset(leg for _can, leg in MONITORING_IMAGE_ALIASES)
+
+# Убраны из реестра и шаблона main.env (7.0): listen LLM — только LLM_API_*; master-key LiteLLM — только public_access.
+DEPRECATED_MERGED_DROP_KEYS: frozenset[str] = frozenset(
+    {
+        "VLLM_HOST",
+        "VLLM_PORT",
+        "SGLANG_LISTEN_HOST",
+        "SGLANG_LISTEN_PORT",
+        "LITELLM_MASTER_KEY",
+    }
+)
+
 
 def coalesce_str(m: dict[str, str], *keys: str, default: str = "") -> str:
     for k in keys:
@@ -75,18 +81,19 @@ def coalesce_str(m: dict[str, str], *keys: str, default: str = "") -> str:
     return default
 
 
-def apply_llm_listen_derived_defaults(merged: dict[str, str]) -> None:
-    """Подставляет внутриконтейнерный listen/bind из LLM_API_* когда не задано явно (типичный 1:1 mapping)."""
-    bind = coalesce_str(merged, "LLM_API_BIND", default="").strip()
-    if bind:
-        if not coalesce_str(merged, "VLLM_HOST", default="").strip():
-            merged["VLLM_HOST"] = bind
-        if not coalesce_str(merged, "SGLANG_LISTEN_HOST", default="").strip():
-            merged["SGLANG_LISTEN_HOST"] = bind
-    if not coalesce_str(merged, "SGLANG_LISTEN_PORT", default="").strip():
-        sg = coalesce_str(merged, "SGLANG_LISTEN", "LLM_API_PORT_SGLANG", default="")
-        if sg:
-            merged["SGLANG_LISTEN_PORT"] = sg
+def internal_llm_listen_port(merged: dict[str, str], engine: str) -> int:
+    """Порт HTTP процесса vLLM/SGLang внутри контейнера слота (совпадает с LLM_API_* при типичном 1:1)."""
+    m = dict(merged)
+    apply_vllm_aliases_to_merged(m)
+    if engine == "vllm":
+        s = coalesce_str(m, "LLM_API_PORT", "SLGPU_VLLM_PORT", default="")
+        missing = ["LLM_API_PORT"]
+    else:
+        s = coalesce_str(m, "LLM_API_PORT_SGLANG", "SGLANG_LISTEN", default="")
+        missing = ["LLM_API_PORT_SGLANG"]
+    if not str(s).strip():
+        raise MissingStackParams(missing, "llm_slot")
+    return int(s)
 
 
 def apply_vllm_aliases_to_merged(merged: dict[str, str]) -> None:
@@ -97,12 +104,9 @@ def apply_vllm_aliases_to_merged(merged: dict[str, str]) -> None:
         val = coalesce_str(merged, canonical, *legacies)
         if val:
             merged[canonical] = val
-    apply_llm_listen_derived_defaults(merged)
 
 
 def monitoring_image(merged: dict[str, str], canonical: str) -> str:
-    from app.services.stack_errors import MissingStackParams
-
     for can, leg in MONITORING_IMAGE_ALIASES:
         if can == canonical:
             v = coalesce_str(merged, can, leg, default="")
@@ -116,10 +120,7 @@ def monitoring_image(merged: dict[str, str], canonical: str) -> str:
 
 
 # Ключи-алиасы vLLM, которые убираем из ответа API / из БД после миграции.
-# LLM_API_PORT — отдельный параметр (хост), не дублирует VLLM_PORT как строку в stack-only смысле.
-STRIP_VLLM_LEGACY_STACK_KEYS: frozenset[str] = frozenset(LEGACY_VLLM_PARAM_KEYS - {"LLM_API_PORT"})
-
-MONITORING_IMAGE_LEGACY_KEYS: frozenset[str] = frozenset(leg for _can, leg in MONITORING_IMAGE_ALIASES)
+STRIP_VLLM_LEGACY_STACK_KEYS: frozenset[str] = frozenset(LEGACY_VLLM_PARAM_KEYS)
 
 
 def presentation_stack(stack: dict[str, str]) -> dict[str, str]:
@@ -133,7 +134,4 @@ def presentation_stack(stack: dict[str, str]) -> dict[str, str]:
         m.pop(leg, None)
     for k in STRIP_VLLM_LEGACY_STACK_KEYS:
         m.pop(k, None)
-    for k in LLM_UI_HIDDEN_LISTEN_KEYS:
-        m.pop(k, None)
     return m
-

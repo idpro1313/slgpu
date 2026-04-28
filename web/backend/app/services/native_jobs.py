@@ -934,7 +934,7 @@ async def _native_bench_scenario(args: dict[str, Any], log: list[str], log_lock:
     out_dir = root / "data" / "bench" / "results" / engine / ts
     out_dir.mkdir(parents=True, exist_ok=True)
     host = "vllm" if engine == "vllm" else "sglang"
-    internal_port = m["VLLM_PORT"] if engine == "vllm" else m["SGLANG_LISTEN_PORT"]
+    internal_port = internal_api_port_for(engine, m)
     base_url = f"http://{host}:{internal_port}/v1"
     env = os.environ.copy()
     env["MAX_MODEL_LEN"] = m["MAX_MODEL_LEN"]
@@ -976,7 +976,7 @@ async def _native_bench_load(args: dict[str, Any], log: list[str], log_lock: thr
     out_dir = root / "data" / "bench" / "results" / engine / ts
     out_dir.mkdir(parents=True, exist_ok=True)
     host = "vllm" if engine == "vllm" else "sglang"
-    internal_port = m["VLLM_PORT"] if engine == "vllm" else m["SGLANG_LISTEN_PORT"]
+    internal_port = internal_api_port_for(engine, m)
     base_url = f"http://{host}:{internal_port}/v1"
     env = os.environ.copy()
     env["MAX_MODEL_LEN"] = m["MAX_MODEL_LEN"]
