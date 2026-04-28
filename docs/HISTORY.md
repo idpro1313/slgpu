@@ -2182,3 +2182,12 @@
 - **Файлы:** **`web/frontend/src/pages/Runtime.tsx`**, **`VERSION` 7.0.5**, синхронизация версий web, **`README.md`**, **`docs/HISTORY.md`**.
 - **Решение:** MINOR (UX страницы Inference).
 
+## Фаза 7.0.6 (документация: TP ↔ число GPU)
+
+### Что: комментарии к `TP` в шаблоне и пресете Qwen3.6-35B
+
+- **Что:** В **`configs/main.env`** и **`examples/presets/qwen3.6-35b-a3b.env`** уточнено: **`tensor-parallel-size` должен совпадать с числом GPU, видимых контейнеру**; эталон **TP=8** для 8×GPU; при меньшем числе карт — задать **TP** в пресете/стеке (например **TP=2** при двух GPU), упомянута возможная настройка **ENABLE_EXPERT_PARALLEL** для MoE на малом TP.
+- **Почему:** Пользователь видел повтор ошибки vLLM *World size (8) is larger than the number of available GPUs (2)* («опять 8»).
+- **Файлы:** **`configs/main.env`**, **`examples/presets/qwen3.6-35b-a3b.env`**, **`VERSION` 7.0.6**, **`web/*/package.json`/lock**, **`pyproject.toml`**, **`README.md`**.
+- **Решение:** PATCH (документация).
+
