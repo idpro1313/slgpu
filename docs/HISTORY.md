@@ -2036,6 +2036,14 @@
 - **Почему:** Сборка образа **`slgpu-web`** падала на строке с двумя обращениями к **`appStack.data`** без сужения типа между аргументами.
 - **Решение:** PATCH 6.0.6 — только типобезопасность и явная ветка «стек не загружен».
 
+## Фаза 6.1.1 (python-multipart для POST /presets/import-env)
+
+### Что: зависимость FastAPI для multipart
+
+- **Что:** В **`web/backend/pyproject.toml`** добавлен **`python-multipart>=0.0.9,<0.1`** — без него при старте uvicorn падал **`RuntimeError: Form data requires "python-multipart"`** из‑за **`Form`** + **`UploadFile`** на **`POST /api/v1/presets/import-env`**.
+- **Почему:** Ошибка в контейнере при деплое после 6.1.0.
+- **Файлы:** **`VERSION`** **6.1.1**, **`pyproject.toml`**, синхронизация **`web/frontend`** версий, **`README.md`**, **`grace/knowledge-graph/knowledge-graph.xml`**, **`docs/HISTORY.md`**.
+
 ## Фаза 6.1.0 (импорт пресета из файла в UI и API)
 
 ### Что: загрузка `.env` пресета в БД

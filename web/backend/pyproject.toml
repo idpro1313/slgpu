@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "slgpu-web"
-version = "6.1.0"
+version = "6.1.1"
 description = "Web control plane for the slgpu LLM inference benchmarking stand."
 requires-python = ">=3.11"
 readme = "../README.md"
@@ -12,6 +12,7 @@ license = { text = "Proprietary" }
 authors = [{ name = "slgpu-web" }]
 dependencies = [
   "fastapi>=0.115,<0.120",
+  "python-multipart>=0.0.9,<0.1",
   "uvicorn[standard]>=0.30,<0.35",
   "pydantic>=2.7,<3.0",
   "pydantic-settings>=2.4,<3.0",

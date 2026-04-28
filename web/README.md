@@ -30,7 +30,7 @@
 ## Стек
 
 - **Backend**: FastAPI + SQLAlchemy 2.0 (async) + aiosqlite + миграции схемы при старте (`init_db`) +
-  `docker` SDK + httpx.
+  `docker` SDK + httpx + **`python-multipart`** (нужен FastAPI для `Form` / загрузки файлов, например **`POST /api/v1/presets/import-env`**).
 - **Frontend**: React 18 + Vite + TypeScript + React Router + TanStack Query.
   Приложение называется **Develonica.LLM**. Стиль синхронизирован с live CSS
   [`develonica.ru`](https://develonica.ru/): `IBM Plex Sans` как основной
