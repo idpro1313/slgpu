@@ -261,6 +261,10 @@ def render_monitoring_configs(root: Path, merged: dict[str, str]) -> Path:
                 missing = exc.args[0] if exc.args else "?"
                 raise MissingStackParams([str(missing)], "monitoring_up") from exc
         (out_dir / dst_name).write_text(text, encoding="utf-8")
+    # file_sd для job vllm-slots: не перезаписываем, чтобы пользователь мог перечислить хост-порты всех слотов.
+    v_slots = out_dir / "vllm-slots.json"
+    if not v_slots.is_file():
+        v_slots.write_text("[]\n", encoding="utf-8")
     return out_dir
 
 

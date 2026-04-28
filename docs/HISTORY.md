@@ -2209,6 +2209,15 @@
 - **Файлы:** **`configs/main.env`**, **`README.md`**, **`scripts/serve.sh`**, **`VERSION` 7.0.8**, **`web/*/package.json`/lock**, **`pyproject.toml`**, **`docs/HISTORY.md`**.
 - **Решение:** PATCH (док).
 
+## Фаза 8.1.6 (Prometheus: file_sd `vllm-slots` для мультислота)
+
+### Что: скрейп нескольких хост-портов vLLM без ручного патча `prometheus.yml` при каждом слоте
+
+- **Что:** В `configs/monitoring/prometheus/prometheus.yml.tmpl` добавлен job **`vllm-slots`** (`file_sd_configs` → `/etc/prometheus/vllm-slots.json`, `refresh_interval: 30s`, `metrics_path: /metrics`), relabel **`instance=vllm:$1`** по порту из `__address__` (экранирование **`$$1`** для Python `string.Template`). В `render_monitoring_configs` если **`vllm-slots.json` отсутствует** — создаётся **`[]`**; файл **никогда не перезаписывается**, если уже есть (пользователь перечисляет хост-порты слотов как в [`vllm-slots.json.example`](../../configs/monitoring/prometheus/vllm-slots.json.example)). Документировано в **`configs/monitoring/README.md`** (промежуточный блок «Мультислотный vLLM»), **`README.md`**, **`docs/AGENTS.md`**.
+- **Почему:** вопрос пользователя «как в Prometheus добавить все слоты» — один job **`vllm`** скрейпил только **`LLM_API_PORT`** из стека; слоты на **8112+,…** игнорировались без ручного редактирования сгенерированного конфига (при этом он перегенерировался при monitoring up из шаблона).
+- **Решение:** PATCH. Grafana-дубли по `job` — дашборды с `job="vllm"` расширить до `job=~"vllm|vllm-slots"` или второй фильтр.
+- **Файлы:** `configs/monitoring/prometheus/prometheus.yml.tmpl`, `configs/monitoring/prometheus/vllm-slots.json.example`, `configs/monitoring/README.md`, `web/backend/app/services/stack_config.py`, `README.md`, `VERSION` 8.1.6, `web/*/package*.json`, `pyproject.toml`, `docs/AGENTS.md`, `docs/HISTORY.md`.
+
 ## Фаза 8.1.5 (имена контейнеров слотов из имени пресета)
 
 ### Что: дефолтный `slot_key` берётся из имени пресета

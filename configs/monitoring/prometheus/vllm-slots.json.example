@@ -1,0 +1,13 @@
+[
+  {
+    "targets": [
+      "host.docker.internal:8112",
+      "host.docker.internal:8113",
+      "host.docker.internal:8114",
+      "host.docker.internal:8115"
+    ],
+    "labels": {
+      "engine": "vllm"
+    }
+  }
+]

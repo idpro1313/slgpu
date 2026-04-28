@@ -30,6 +30,23 @@ scrape_configs:
         target_label: instance
         replacement: vllm:${LLM_API_PORT}
 
+  # Дополнительные хост-порты vLLM (мультислотный инференс из UI — у каждого слота свой порт на хосте).
+  # Файл vllm-slots.json монтируется рядом с prometheus.yml и НЕ перезаписывается при render_monitoring_configs
+  # (генерируется пустым `[]`, пока вы не зададите targets). Эндпоинт тот же: /metrics .
+  # В Grafana vLLM V2 по умолчанию job="vllm" — для слотов используйте job="vllm-slots" или объедините
+  # в запросах: job=~"vllm|vllm-slots".
+  - job_name: vllm-slots
+    metrics_path: /metrics
+    file_sd_configs:
+      - files:
+          - /etc/prometheus/vllm-slots.json
+        refresh_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        regex: ".*:(\\d+)"
+        target_label: instance
+        replacement: vllm:$$1
+
   - job_name: sglang
     metrics_path: /metrics
     static_configs:
