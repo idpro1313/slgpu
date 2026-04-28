@@ -2200,3 +2200,12 @@
 - **Файлы:** **`scripts/serve.sh`**, **`grace/knowledge-graph/knowledge-graph.xml`**, **`VERSION` 7.0.7**, **`web/*/package.json`/lock**, **`pyproject.toml`**, **`README.md`**, **`docs/HISTORY.md`**.
 - **Решение:** MINOR (поведение entrypoint).
 
+## Фаза 7.0.8 (документация: 8 GPU на хосте ≠ все в слоте)
+
+### Что: выбор подмножества GPU и комментарии маски
+
+- **Что:** В **`configs/main.env`** блоки **`TP`** и **`NVIDIA_VISIBLE_DEVICES`** переформулированы: формулировка «выбранные только для этого контейнера карты», ссылка на Inference/UI и на **`serve.sh` ≥7.0.7** для выравнивания TP по длине маски; в **`README.md`** §5 добавлен маркированный абзац и строка версии **7.0.8**; один абзац комментария в **`scripts/serve.sh`** у заголовка резолвера TP.
+- **Почему:** Запрос пользователя — на машине **8 GPU**, нужно явно запускаться **на выбранных** картах, без обязательного охвата всех восьми.
+- **Файлы:** **`configs/main.env`**, **`README.md`**, **`scripts/serve.sh`**, **`VERSION` 7.0.8**, **`web/*/package.json`/lock**, **`pyproject.toml`**, **`docs/HISTORY.md`**.
+- **Решение:** PATCH (док).
+

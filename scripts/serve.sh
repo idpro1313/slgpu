@@ -4,8 +4,8 @@
 # Имена vLLM-флагов — без префикса SLGPU_ (SERVED_MODEL_NAME, MAX_NUM_BATCHED_TOKENS, …); устаревший SLGPU_* читается как fallback.
 set -euo pipefail
 
-# Если задана маска GPU Docker, число записей (индексы или UUID через запятую) — источник истины для TP,
-# иначе пресетный TP=8 на узле с двумя GPU даёт ParallelConfig: world size > available GPUs.
+# Маска NVIDIA_VISIBLE_DEVICES задаёт, КАКИЕ карты видит контейнер (на хосте может быть 8+, а слот — только подмножество).
+# Число записей в маске (индексы или UUID через запятую) — источник истины для TP; иначе пресетный TP > видимых GPU даёт ParallelConfig.
 slgpu_resolve_tp_from_visible_gpus() {
   local tp_env nv_trim nv_clean want n oldifs
   tp_env="${1:-8}"

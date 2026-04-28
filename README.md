@@ -2,6 +2,8 @@
 
 Репозиторий **стенда для сравнения LLM-инференса** на Linux-сервере с GPU: два движка (**vLLM** и **SGLang**) в Docker, общий локальный кэш моделей, OpenAI-совместимый HTTP API, нагрузочный бенчмарк, **Prometheus + Grafana Loki (логи) + Promtail + Langfuse (трейсинг) + LiteLLM Proxy (шлюз) + NVIDIA DCGM Exporter** (см. [§3](#3-сервисы-и-порты), [`configs/monitoring/README.md`](configs/monitoring/README.md)).
 
+> **Версия 7.0.8:** в **`configs/main.env`** уточнено: на хосте может быть **8 GPU**, но инференс использует **только выбранные** (`NVIDIA_VISIBLE_DEVICES` / чекбоксы слота Inference); **`TP`** в пресете — ориентир под «полный слот», фактический **`tensor_parallel_size`** совпадает с **длиной маски** ([`serve.sh`](scripts/serve.sh) 7.0.7+).
+>
 > **Версия 7.0.7:** [`scripts/serve.sh`](scripts/serve.sh) — если задан **`NVIDIA_VISIBLE_DEVICES`**, **`--tensor-parallel-size`**/`--tp` насильно выравниваются по **числу записей в маске** (лог stderr: **`[BLOCK_TP_VISIBLE]`**), чтобы пресетный **TP=8** не падал ParallelConfig при двух GPU в слоте.
 >
 > **Версия 7.0.6:** в **`configs/main.env`** и примере **`examples/presets/qwen3.6-35b-a3b.env`** добавлены пояснения: **`TP` обязано совпадать с числом GPU, видимых контейнеру** (иначе vLLM: *world size … > available GPUs* при эталонном **TP=8** на узле с 1–4 GPU).
@@ -122,6 +124,7 @@
 - **`data/presets/<preset>.env`** (каталог **`PRESETS_DIR`**, обычно **`./data/presets`**) — модель, образ vLLM, `MAX_MODEL_LEN`, `TP`, парсеры, KV. Импорт в БД — через UI или `install` (см. [web/README.md](web/README.md)).
 - **Конфиги мониторинга** (`prometheus.yml`, `loki-config.yaml`, `promtail-config.yml`, `datasource.yml`) хранятся как **`*.tmpl`** и **рендерятся** из БД (`render_monitoring_configs()`) в **`${WEB_DATA_DIR}/.slgpu/monitoring/`** перед `monitoring up/restart` — никаких хардкод-DNS внутри YAML.
 - **Контейнеры vLLM/SGLang, мониторинг, proxy** поднимаются **из Develonica.LLM** (jobs `native.*`), не через host-команды. Снимок env для compose: **`${WEB_DATA_DIR}/.slgpu/compose-service.env`** (генерируется из БД, ключи — по **`STACK_KEY_REGISTRY`**, включая имена сервисов / контейнеров / сети — `*_SERVICE_NAME`, `*_CONTAINER_NAME`, `*_INTERNAL_PORT`, `SLGPU_NETWORK_NAME`, `WEB_DOCKER_IMAGE`). Внутри слотов: [`scripts/serve.sh`](scripts/serve.sh) → `/etc/slgpu/serve.sh`.
+- **Несколько GPU на хосте, запуск только на выбранных:** в слоте **Inference** чекбоксами задаётся подмножество карт (в контейнер уходит **`NVIDIA_VISIBLE_DEVICES`**); остальные GPU на машине этим процессом **не занимаются**. **`TP`** в пресете задаёт топологию модели под «полный слот», а **`--tensor-parallel-size`** в рантайме приводится к **числу выбранных** GPU ([`scripts/serve.sh`](scripts/serve.sh), с ≥7.0.7). Опционально в стеке: **`SLGPU_NVIDIA_VISIBLE_DEVICES`** / см. столбцы в §6).
 
 Справка по формату пресетов: [`configs/models/README.md`](configs/models/README.md).
 
