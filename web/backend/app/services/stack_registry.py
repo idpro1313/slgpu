@@ -208,10 +208,9 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
     "LITELLM_IMAGE": _e("LITELLM_IMAGE", "images", "Образ LiteLLM.", *S_MON),
 
     # ----- 5. Инференс — LLM API, движок, vLLM, SGLang, кеши -----
-    "SLGPU_ENGINE": _e("SLGPU_ENGINE", "inference", "Движок: vllm | sglang (используется serve.sh и ручным compose llm).", *S_LLM, *S_ALL_COMPOSE),
-    "SERVED_MODEL_NAME": _e("SERVED_MODEL_NAME", "inference", "Фиксированный идентификатор модели в OpenAI API (поле model в ответах).", *S_LLM, *S_ALL_COMPOSE),
-    "MODEL_ID": _e("MODEL_ID", "inference", "Базовый MODEL_ID (HuggingFace id) на случай отсутствия пресета.", *S_LLM, *S_ALL_COMPOSE),
-    "MODEL_REVISION": _e("MODEL_REVISION", "inference", "Ревизия модели (опционально); пусто — main.", *S_LLM, *S_ALL_COMPOSE, allow_empty=True),
+    # 8.0.0: SLGPU_ENGINE / SERVED_MODEL_NAME / MODEL_ID / MODEL_REVISION / MAX_MODEL_LEN / TP / GPU_MEM_UTIL
+    # удалены из реестра — берутся ТОЛЬКО из пресета (карточка модели в БД).
+    # Если пресет не задаёт обязательное поле, merge_llm_stack_env поднимает MissingStackParams("preset").
     "LLM_API_BIND": _e("LLM_API_BIND", "inference", "Bind-адрес опубликованного порта LLM API на хосте (0.0.0.0 / 127.0.0.1).", *S_LLM, *S_ALL_COMPOSE),
     "LLM_API_PORT": _e(
         "LLM_API_PORT",
@@ -233,9 +232,6 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
     "LLM_HOST_PORT_RANGE_VLLM_END": _e("LLM_HOST_PORT_RANGE_VLLM_END", "inference", "Последний хост-порт авто-диапазона для vLLM-слотов.", *S_LLM, "port_allocation"),
     "LLM_HOST_PORT_RANGE_SGLANG_START": _e("LLM_HOST_PORT_RANGE_SGLANG_START", "inference", "Первый хост-порт авто-диапазона для SGLang-слотов.", *S_LLM, "port_allocation"),
     "LLM_HOST_PORT_RANGE_SGLANG_END": _e("LLM_HOST_PORT_RANGE_SGLANG_END", "inference", "Последний хост-порт авто-диапазона для SGLang-слотов.", *S_LLM, "port_allocation"),
-    "MAX_MODEL_LEN": _e("MAX_MODEL_LEN", "inference", "vLLM/SGLang --max-model-len (контекст в токенах).", *S_LLM, *S_ALL_COMPOSE),
-    "TP": _e("TP", "inference", "Tensor-parallel size (число GPU в шарде модели; должно делить общее число GPU).", *S_LLM, *S_ALL_COMPOSE),
-    "GPU_MEM_UTIL": _e("GPU_MEM_UTIL", "inference", "vLLM --gpu-memory-utilization (доля VRAM под пул vLLM, 0.75–0.95).", *S_LLM, *S_ALL_COMPOSE),
     "KV_CACHE_DTYPE": _e("KV_CACHE_DTYPE", "inference", "Dtype KV cache (fp8_e4m3 / fp8 / auto / bfloat16).", *S_LLM, *S_ALL_COMPOSE),
     "MAX_NUM_BATCHED_TOKENS": _e("MAX_NUM_BATCHED_TOKENS", "inference", "vLLM --max-num-batched-tokens (chunked prefill).", *S_LLM, *S_ALL_COMPOSE),
     "MAX_NUM_SEQS": _e("MAX_NUM_SEQS", "inference", "vLLM --max-num-seqs (одновременных последовательностей); пусто = default.", *S_LLM, *S_ALL_COMPOSE, allow_empty=True),

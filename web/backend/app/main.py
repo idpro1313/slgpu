@@ -55,13 +55,23 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(MissingStackParams)
     async def _missing_stack_params_handler(_request: Request, exc: MissingStackParams) -> JSONResponse:
+        # 8.0.0: scope="preset" — поля задаются в карточке пресета, не в «Настройках»;
+        # ключи приходят с префиксом PRESET: (см. llm_env.merge_llm_stack_env).
+        if exc.scope == "preset":
+            keys_clean = [k.split(":", 1)[1] if k.startswith("PRESET:") else k for k in exc.keys]
+            detail = (
+                "Заполните обязательные поля карточки пресета: "
+                + ", ".join(keys_clean)
+            )
+        else:
+            detail = f"Задайте значения в Настройках → Стек: {', '.join(exc.keys)}"
         return JSONResponse(
             status_code=409,
             content={
                 "error": "missing_stack_params",
                 "scope": exc.scope,
                 "keys": exc.keys,
-                "detail": f"Задайте значения в Настройках → Стек: {', '.join(exc.keys)}",
+                "detail": detail,
             },
         )
 

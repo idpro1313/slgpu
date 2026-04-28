@@ -2209,6 +2209,16 @@
 - **Файлы:** **`configs/main.env`**, **`README.md`**, **`scripts/serve.sh`**, **`VERSION` 7.0.8**, **`web/*/package.json`/lock**, **`pyproject.toml`**, **`docs/HISTORY.md`**.
 - **Решение:** PATCH (док).
 
+## Фаза 8.0.0 (модельные ключи — только из пресета)
+
+### Что: удалили SLGPU_ENGINE / SERVED_MODEL_NAME / MODEL_ID / MODEL_REVISION / MAX_MODEL_LEN / TP / GPU_MEM_UTIL из «Настройки»
+
+- **Что:** `web/backend/app/services/stack_registry.py` — 7 ключей удалены из `_STACK_KEY_REGISTRY`. `web/backend/app/services/env_key_aliases.py` — введён `PRESET_ONLY_KEYS`; `presentation_stack` дополнительно вырезает их из ответа `/app-config/stack`. `web/backend/app/services/llm_env.py` — `merge_llm_stack_env` сначала **попит** эти ключи из стека и **только потом** мержит пресет; обязательные `MODEL_ID, MAX_MODEL_LEN, TP, GPU_MEM_UTIL` после merge проверяются явно — при отсутствии **`MissingStackParams(scope="preset")`** с ключами `PRESET:<KEY>`. `app/main.py` — handler рендерит понятный 409: «Заполните обязательные поля карточки пресета: …». `app/api/v1/runtime.py` — при отсутствии TP в пресете и в `payload.tp` API возвращает **400** с подсказкой. `app/services/native_jobs.py` — `_resolve_gpu_indices` больше не падает на отсутствующем `merged["TP"]`, читает `pr.tp`. `app/services/stack_config.py` — `sync_merged_flat` стирает PRESET_ONLY_KEYS из БД-ответа; `migrate_stack_params_to_canonical_if_needed` дополнительно удаляет их из `stack_params` при первом обращении к API; `_stack_val` мягкий для `meta is None`.
+- **Что в `configs/main.env`:** удалены блоки `SLGPU_ENGINE`, `SERVED_MODEL_NAME`, `MODEL_ID`, `MODEL_REVISION`, `MAX_MODEL_LEN`, `TP`, `GPU_MEM_UTIL`; в шапку §5 вставлен абзац «8.0.0: только из пресета».
+- **Почему:** Пользователь видел в UI «Настройки» поля **SLGPU_ENGINE / SERVED_MODEL_NAME / MODEL_ID / MODEL_REVISION** (и ниже **MAX_MODEL_LEN / TP / GPU_MEM_UTIL**) и значения вроде `Qwen/Qwen2.5-0.5B-Instruct`, `devllm`, `262144`, `8`, `0.92` могли перебивать актуальный пресет в merge. Запрос: «удали из «Настройки», бери только из пресета, иначе ошибка запуска инференса».
+- **Файлы:** **`web/backend/app/services/stack_registry.py`**, **`env_key_aliases.py`**, **`llm_env.py`**, **`stack_config.py`**, **`native_jobs.py`**, **`api/v1/runtime.py`**, **`main.py`**, **`configs/main.env`**, **`VERSION` 8.0.0**, **`web/*/package.json`/lock**, **`pyproject.toml`**, **`README.md`**, **`docs/HISTORY.md`**.
+- **Решение:** **MAJOR** — ломаем семантику BD: ключи реестра уехали в карточку пресета, install / migrate автоматически чистят `stack_params`.
+
 ## Фаза 7.1.0 (slot up: автовыбор свободных GPU + страховка `nvidia-smi`)
 
 ### Что: `_resolve_gpu_indices` через `compute_availability` и `serve.sh` ≤ `nvidia-smi -L`

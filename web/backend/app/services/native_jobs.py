@@ -39,7 +39,6 @@ from app.services.stack_config import (
     sync_merged_flat,
     write_compose_service_env_file,
     write_langfuse_litellm_env,
-    write_llm_interp_env,
 )
 from app.services.stack_errors import MissingStackParams
 from app.services.stack_registry import raise_if_missing
@@ -285,11 +284,16 @@ async def _resolve_gpu_indices(
     """
     from app.services.gpu_availability import compute_availability
 
-    t_default = int(merged["TP"])
     async with session_scope() as s:
         r = await s.execute(select(Preset).where(Preset.name == preset_name))
         pr = r.scalar_one_or_none()
-    tpi = int(tp_arg) if tp_arg is not None else (int(pr.tp) if pr and pr.tp is not None else t_default)
+    if tp_arg is not None:
+        tpi = int(tp_arg)
+    elif pr and pr.tp is not None:
+        tpi = int(pr.tp)
+    else:
+        # 8.0.0: TP — только из пресета (или явный аргумент API). Stack-fallback удалён.
+        raise MissingStackParams([f"PRESET:{preset_name}:TP"], "preset")
     if pr and pr.gpu_mask and str(pr.gpu_mask).strip():
         parsed = parse_gpu_mask(pr.gpu_mask)
         if parsed:

@@ -6,10 +6,19 @@ import re
 from pathlib import Path
 from typing import Any
 
-from app.services.env_key_aliases import apply_vllm_aliases_to_merged, coalesce_str
+from app.services.env_key_aliases import (
+    PRESET_ONLY_KEYS,
+    apply_vllm_aliases_to_merged,
+    coalesce_str,
+)
 from app.services.preset_db_sync import load_preset_flat_from_db_sync
 from app.services.stack_config import sync_merged_flat
 from app.services.stack_errors import MissingStackParams
+
+# Пресет ОБЯЗАН задать эти ключи — иначе слот стартовать нельзя:
+# vLLM/SGLang без них сваливаются в дефолты (TP=8 при двух GPU, MAX_MODEL_LEN, …) или вообще не стартуют.
+# SERVED_MODEL_NAME / MODEL_REVISION — опциональны (fallback на MODEL_ID / main ветку HF).
+PRESET_REQUIRED_KEYS: tuple[str, ...] = ("MODEL_ID", "MAX_MODEL_LEN", "TP", "GPU_MEM_UTIL")
 
 
 def parse_gpu_mask(value: str | None) -> list[int] | None:
@@ -48,7 +57,15 @@ def merge_llm_stack_env(
     pextra = load_preset_flat_from_db_sync(preset)
     if pextra is None:
         raise MissingStackParams([f"PRESET:{preset}"], "llm_slot")
+    # 8.0.0: значения «модель/инференс» берём ТОЛЬКО из пресета (см. PRESET_ONLY_KEYS).
+    # Стек больше не подсовывает старые SLGPU_ENGINE / MODEL_ID / TP / … из main.env,
+    # иначе вместо актуального пресета slot ушёл бы с дефолтами «Qwen2.5-0.5B-Instruct», TP=8 и т.п.
+    for k in PRESET_ONLY_KEYS:
+        m.pop(k, None)
     m.update(pextra)
+    missing_preset = [k for k in PRESET_REQUIRED_KEYS if not str(m.get(k, "")).strip()]
+    if missing_preset:
+        raise MissingStackParams([f"PRESET:{k}" for k in missing_preset], "preset")
     if tp is not None:
         m["TP"] = str(tp)
     if gpu_indices is not None and len(gpu_indices) > 0:

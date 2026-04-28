@@ -165,9 +165,15 @@ def sync_merged_flat() -> dict[str, str]:
                 merged.update({k: str(v) for k, v in secrets.items() if v is not None})
         if not merged:
             raise RuntimeError("stack_params is empty; run app-config install from configs/main.env")
-        from app.services.env_key_aliases import DEPRECATED_MERGED_DROP_KEYS
+        from app.services.env_key_aliases import (
+            DEPRECATED_MERGED_DROP_KEYS,
+            PRESET_ONLY_KEYS,
+        )
 
         for k in DEPRECATED_MERGED_DROP_KEYS:
+            merged.pop(k, None)
+        # 8.0.0: модельные ключи задаются ТОЛЬКО в карточке пресета — стек их не отдаёт.
+        for k in PRESET_ONLY_KEYS:
             merged.pop(k, None)
         _merge_public_access_litellm_master_key(conn, merged)
     finally:
@@ -521,6 +527,7 @@ async def migrate_stack_params_to_canonical_if_needed(session) -> None:
     from app.services.env_key_aliases import (
         DEPRECATED_MERGED_DROP_KEYS,
         MONITORING_IMAGE_LEGACY_KEYS,
+        PRESET_ONLY_KEYS,
         STRIP_VLLM_LEGACY_STACK_KEYS,
         presentation_stack,
     )
@@ -528,7 +535,8 @@ async def migrate_stack_params_to_canonical_if_needed(session) -> None:
     stack, _, _ = await load_sections(session)
     if not stack:
         return
-    obsolete_removed = [k for k in DEPRECATED_MERGED_DROP_KEYS if k in stack]
+    # 8.0.0: помимо устаревших алиасов уносим из stack_params ключи, перенесённые в карточку пресета.
+    obsolete_removed = [k for k in (DEPRECATED_MERGED_DROP_KEYS | PRESET_ONLY_KEYS) if k in stack]
     for k in obsolete_removed:
         await delete_stack_param(session, k)
     if obsolete_removed:
@@ -601,7 +609,10 @@ def write_langfuse_litellm_env(
 def _stack_val(m: dict[str, str], key: str) -> str:
     meta = STACK_KEY_REGISTRY.get(key)
     v = m.get(key)
-    if meta and meta.allow_empty:
+    # 8.0.0: ключ исключён из реестра (например, MODEL_ID/TP/...) — отдаём как есть, без падения.
+    if meta is None:
+        return "" if v is None else str(v)
+    if meta.allow_empty:
         return "" if v is None else str(v)
     if v is None or str(v).strip() == "":
         raise MissingStackParams([key], "llm_interp")

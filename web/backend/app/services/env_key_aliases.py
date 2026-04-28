@@ -72,6 +72,21 @@ DEPRECATED_MERGED_DROP_KEYS: frozenset[str] = frozenset(
     }
 )
 
+# 8.0.0: ключи берутся ТОЛЬКО из пресета (карточка модели в БД). Удалены из реестра «Настройки».
+# При merge стек не должен подменять отсутствующее в пресете значение из stack_params/legacy main.env —
+# иначе старые значения «Qwen2.5-0.5B-Instruct» / «devllm» перебивают актуальный пресет.
+PRESET_ONLY_KEYS: frozenset[str] = frozenset(
+    {
+        "SLGPU_ENGINE",
+        "SERVED_MODEL_NAME",
+        "MODEL_ID",
+        "MODEL_REVISION",
+        "MAX_MODEL_LEN",
+        "TP",
+        "GPU_MEM_UTIL",
+    }
+)
+
 
 def coalesce_str(m: dict[str, str], *keys: str, default: str = "") -> str:
     for k in keys:
@@ -133,5 +148,7 @@ def presentation_stack(stack: dict[str, str]) -> dict[str, str]:
             m[can] = val
         m.pop(leg, None)
     for k in STRIP_VLLM_LEGACY_STACK_KEYS:
+        m.pop(k, None)
+    for k in PRESET_ONLY_KEYS:
         m.pop(k, None)
     return m

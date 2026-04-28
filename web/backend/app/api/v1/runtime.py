@@ -119,11 +119,25 @@ async def create_engine_slot(
         raise HTTPException(status_code=404, detail="preset not found")
     stack_m = sync_merged_flat()
     raise_if_missing(stack_m, "port_allocation")
+    # 8.0.0: модельные параметры — только из пресета. Валидируем их синхронно перед созданием job,
+    # чтобы клиент получил понятный 409, а не «принято к выполнению» с фоновой ошибкой.
+    from app.services.llm_env import PRESET_REQUIRED_KEYS
+    from app.services.preset_db_sync import load_preset_flat_from_db_sync
+    from app.services.stack_errors import MissingStackParams
+
+    pextra_for_check = load_preset_flat_from_db_sync(preset_name) or {}
+    missing_preset_fields = [
+        k for k in PRESET_REQUIRED_KEYS if not str(pextra_for_check.get(k, "")).strip()
+    ]
+    if missing_preset_fields:
+        raise MissingStackParams(
+            [f"PRESET:{k}" for k in missing_preset_fields], "preset"
+        )
     tpi = payload.tp
     if tpi is None and p.tp is not None:
         tpi = int(p.tp)
     if tpi is None:
-        tpi = int(stack_m["TP"])
+        raise MissingStackParams([f"PRESET:{preset_name}:TP"], "preset")
     validate_tp(tpi)
     gidx = list(payload.gpu_indices) if payload.gpu_indices else None
     if gidx is None or len(gidx) == 0:
