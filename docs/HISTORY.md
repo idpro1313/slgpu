@@ -2191,3 +2191,12 @@
 - **Файлы:** **`configs/main.env`**, **`examples/presets/qwen3.6-35b-a3b.env`**, **`VERSION` 7.0.6**, **`web/*/package.json`/lock**, **`pyproject.toml`**, **`README.md`**.
 - **Решение:** PATCH (документация).
 
+## Фаза 7.0.7 (`serve.sh`: TP по маске `NVIDIA_VISIBLE_DEVICES`)
+
+### Что: функция `slgpu_resolve_tp_from_visible_gpus`
+
+- **Что:** В **[`scripts/serve.sh`](scripts/serve.sh)** добавлен расчёт **TP** из числа перечисленных в **`NVIDIA_VISIBLE_DEVICES`** записей (через запятую — индексы или UUID), если переменная задана и не является пустым «спец» значением (`all`, `none`, …). Иначе — прежний **`TP`** из env. При расхождении с пресетом выводится stderr **`[slgpu][serve.sh][BLOCK_TP_VISIBLE]`**. Для **vLLM** и **SGLang** после **`TP="${TP:-8}"`** вызывается подстановка результата.
+- **Почему:** Пользователь по-прежнему получал **`tensor_parallel_size: 8`** при двух выданных контейнеру GPU (**ParallelConfig**); маска уже корректна, а конфликтовал строковый **`TP`** из пресета/стека.
+- **Файлы:** **`scripts/serve.sh`**, **`grace/knowledge-graph/knowledge-graph.xml`**, **`VERSION` 7.0.7**, **`web/*/package.json`/lock**, **`pyproject.toml`**, **`README.md`**, **`docs/HISTORY.md`**.
+- **Решение:** MINOR (поведение entrypoint).
+

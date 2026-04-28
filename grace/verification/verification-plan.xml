@@ -138,6 +138,7 @@
         <scenario-1 kind="success">`docker compose config` валиден для vllm профиля.</scenario-1>
         <scenario-2 kind="success">`docker compose config` валиден для sglang профиля.</scenario-2>
         <scenario-3 kind="success">`serve.sh` формирует корректную CLI-команду.</scenario-3>
+        <scenario-4 kind="success">7.0.7: при заданном `NVIDIA_VISIBLE_DEVICES` (список через запятую) фактический TP в `serve.sh` равен числу записей маски; при расхождении с env в stderr — маркер `[BLOCK_TP_VISIBLE]`.</scenario-4>
       </scenarios>
     </V-M-DOCKER>
 

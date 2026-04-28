@@ -2,6 +2,8 @@
 
 Репозиторий **стенда для сравнения LLM-инференса** на Linux-сервере с GPU: два движка (**vLLM** и **SGLang**) в Docker, общий локальный кэш моделей, OpenAI-совместимый HTTP API, нагрузочный бенчмарк, **Prometheus + Grafana Loki (логи) + Promtail + Langfuse (трейсинг) + LiteLLM Proxy (шлюз) + NVIDIA DCGM Exporter** (см. [§3](#3-сервисы-и-порты), [`configs/monitoring/README.md`](configs/monitoring/README.md)).
 
+> **Версия 7.0.7:** [`scripts/serve.sh`](scripts/serve.sh) — если задан **`NVIDIA_VISIBLE_DEVICES`**, **`--tensor-parallel-size`**/`--tp` насильно выравниваются по **числу записей в маске** (лог stderr: **`[BLOCK_TP_VISIBLE]`**), чтобы пресетный **TP=8** не падал ParallelConfig при двух GPU в слоте.
+>
 > **Версия 7.0.6:** в **`configs/main.env`** и примере **`examples/presets/qwen3.6-35b-a3b.env`** добавлены пояснения: **`TP` обязано совпадать с числом GPU, видимых контейнеру** (иначе vLLM: *world size … > available GPUs* при эталонном **TP=8** на узле с 1–4 GPU).
 >
 > **Версия 7.0.5:** страница **Inference** / модалка «Запуск слота»: выбор GPU **чекбоксами** по свободным из **`/gpu/availability`**, не более **TP** штук; кнопки «Подставить подсказку» / «Сбросить выбор»; предупреждение при **TP** большем числа свободных GPU.

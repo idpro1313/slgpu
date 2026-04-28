@@ -54,6 +54,7 @@
       <annotations>
         <fn-cmd_up PURPOSE="Команда up: запуск выбранного движка" />
         <fn-cmd_restart PURPOSE="Команда restart: перезапуск с новым пресетом" />
+        <fn-serve_tp_resolve PURPOSE="serve.sh: при заданном NVIDIA_VISIBLE_DEVICES TP приводится к числу записей маски (stderr: [BLOCK_TP_VISIBLE] при переопределении пресетного TP)" />
       </annotations>
     </M-UP>
 

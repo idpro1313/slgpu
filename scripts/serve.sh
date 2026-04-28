@@ -4,6 +4,42 @@
 # Имена vLLM-флагов — без префикса SLGPU_ (SERVED_MODEL_NAME, MAX_NUM_BATCHED_TOKENS, …); устаревший SLGPU_* читается как fallback.
 set -euo pipefail
 
+# Если задана маска GPU Docker, число записей (индексы или UUID через запятую) — источник истины для TP,
+# иначе пресетный TP=8 на узле с двумя GPU даёт ParallelConfig: world size > available GPUs.
+slgpu_resolve_tp_from_visible_gpus() {
+  local tp_env nv_trim nv_clean want n oldifs
+  tp_env="${1:-8}"
+  if [[ -z "${NVIDIA_VISIBLE_DEVICES:-}" ]]; then
+    printf '%s' "${tp_env}"
+    return 0
+  fi
+  nv_trim="${NVIDIA_VISIBLE_DEVICES#"${NVIDIA_VISIBLE_DEVICES%%[![:space:]]*}"}"
+  nv_trim="${nv_trim%"${nv_trim##*[![:space:]]}"}"
+  case "${nv_trim}" in
+    '' | all | none | void)
+      printf '%s' "${tp_env}"
+      return 0
+      ;;
+  esac
+  nv_clean="${nv_trim// /}"
+  want=0
+  oldifs="${IFS}"
+  IFS=','
+  for n in ${nv_clean}; do
+    [[ -z "${n}" ]] && continue
+    ((want += 1))
+  done
+  IFS="${oldifs}"
+  if ((want < 1)); then
+    printf '%s' "${tp_env}"
+    return 0
+  fi
+  if [[ "${tp_env}" =~ ^[0-9]+$ ]] && ((10#tp_env != want)); then
+    echo "[slgpu][serve.sh][BLOCK_TP_VISIBLE] TP ${tp_env} → ${want} (NVIDIA_VISIBLE_DEVICES=${nv_trim})" >&2
+  fi
+  printf '%s' "${want}"
+}
+
 slgpu_run_vllm() {
   local MODEL_PATH SERVED_NAME HOST PORT TP GPU_MEM MAX_LEN KV BATCH TOOL REASON DISABLE_CAR PREFIX_CACHE \
     TRUST CR_PREFILL AUTO_TOOL BS MAXSEQ AB TM DPS cmd
@@ -13,6 +49,7 @@ slgpu_run_vllm() {
   HOST="${LLM_API_BIND:-${SLGPU_VLLM_HOST:-0.0.0.0}}"
   PORT="${LLM_API_PORT:-${SLGPU_VLLM_PORT:-8111}}"
   TP="${TP:-8}"
+  TP="$(slgpu_resolve_tp_from_visible_gpus "${TP}")"
   GPU_MEM="${GPU_MEM_UTIL:-0.92}"
   MAX_LEN="${MAX_MODEL_LEN:-32768}"
   KV="${KV_CACHE_DTYPE:-fp8_e4m3}"
@@ -105,6 +142,7 @@ slgpu_run_sglang() {
   HOST="${LLM_API_BIND:-0.0.0.0}"
   PORT="${LLM_API_PORT_SGLANG:-8222}"
   TP="${TP:-8}"
+  TP="$(slgpu_resolve_tp_from_visible_gpus "${TP}")"
   MEM_FRAC="${SGLANG_MEM_FRACTION_STATIC:-0.90}"
   MAX_LEN="${MAX_MODEL_LEN:-32768}"
   KV="${KV_CACHE_DTYPE:-fp8_e4m3}"
