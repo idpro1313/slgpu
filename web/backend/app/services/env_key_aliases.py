@@ -72,9 +72,12 @@ DEPRECATED_MERGED_DROP_KEYS: frozenset[str] = frozenset(
     }
 )
 
-# 8.0.0: ключи берутся ТОЛЬКО из пресета (карточка модели в БД). Удалены из реестра «Настройки».
+# 8.0.0 / 8.1.0: ключи берутся ТОЛЬКО из пресета (карточка модели в БД). Удалены из реестра «Настройки».
 # При merge стек не должен подменять отсутствующее в пресете значение из stack_params/legacy main.env —
-# иначе старые значения «Qwen2.5-0.5B-Instruct» / «devllm» перебивают актуальный пресет.
+# иначе старые значения «Qwen2.5-0.5B-Instruct» / «devllm» / `ENABLE_EXPERT_PARALLEL=0` перебивают актуальный пресет.
+# Из этого набора обязательны для запуска только PRESET_REQUIRED_KEYS (см. llm_env.py); остальные —
+# архитектурно-специфичные параметры конкретной модели (MoE, parser'ы, custom-code), без которых
+# vLLM/SGLang просто используют свои дефолты.
 PRESET_ONLY_KEYS: frozenset[str] = frozenset(
     {
         "SLGPU_ENGINE",
@@ -84,6 +87,15 @@ PRESET_ONLY_KEYS: frozenset[str] = frozenset(
         "MAX_MODEL_LEN",
         "TP",
         "GPU_MEM_UTIL",
+        # 8.1.0: параметры конкретной модели/архитектуры — задаются в карточке пресета.
+        "DISABLE_CUSTOM_ALL_REDUCE",
+        "ENABLE_PREFIX_CACHING",
+        "ENABLE_EXPERT_PARALLEL",
+        "ENABLE_CHUNKED_PREFILL",
+        "ENABLE_AUTO_TOOL_CHOICE",
+        "TRUST_REMOTE_CODE",
+        "TOOL_CALL_PARSER",
+        "REASONING_PARSER",
     }
 )
 

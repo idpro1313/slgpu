@@ -237,14 +237,11 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
     "MAX_NUM_SEQS": _e("MAX_NUM_SEQS", "inference", "vLLM --max-num-seqs (одновременных последовательностей); пусто = default.", *S_LLM, *S_ALL_COMPOSE, allow_empty=True),
     "BLOCK_SIZE": _e("BLOCK_SIZE", "inference", "vLLM --block-size (KV block size); пусто = default.", *S_LLM, *S_ALL_COMPOSE, allow_empty=True),
     "ENFORCE_EAGER": _e("ENFORCE_EAGER", "inference", "1 = vLLM --enforce-eager (без CUDA graphs); 0 — обычный режим.", *S_LLM, *S_ALL_COMPOSE),
-    "DISABLE_CUSTOM_ALL_REDUCE": _e("DISABLE_CUSTOM_ALL_REDUCE", "inference", "1 = vLLM --disable-custom-all-reduce (NCCL вместо custom AR).", *S_LLM, *S_ALL_COMPOSE),
-    "ENABLE_PREFIX_CACHING": _e("ENABLE_PREFIX_CACHING", "inference", "1 = vLLM --enable-prefix-caching.", *S_LLM, *S_ALL_COMPOSE),
-    "ENABLE_EXPERT_PARALLEL": _e("ENABLE_EXPERT_PARALLEL", "inference", "1 = vLLM --enable-expert-parallel (для MoE с EP на нескольких GPU).", *S_LLM, *S_ALL_COMPOSE),
-    "ENABLE_CHUNKED_PREFILL": _e("ENABLE_CHUNKED_PREFILL", "inference", "1 = vLLM --enable-chunked-prefill.", *S_LLM, *S_ALL_COMPOSE),
-    "ENABLE_AUTO_TOOL_CHOICE": _e("ENABLE_AUTO_TOOL_CHOICE", "inference", "1 = vLLM --enable-auto-tool-choice (auto tool routing).", *S_LLM, *S_ALL_COMPOSE),
-    "TRUST_REMOTE_CODE": _e("TRUST_REMOTE_CODE", "inference", "1 = vLLM --trust-remote-code (исполнение кода из репо модели).", *S_LLM, *S_ALL_COMPOSE),
-    "TOOL_CALL_PARSER": _e("TOOL_CALL_PARSER", "inference", "vLLM tool-call parser (hermes / qwen3_xml / qwen3_coder / pythonic / glm47 / openai). Пусто — без парсинга.", *S_LLM, *S_ALL_COMPOSE, allow_empty=True),
-    "REASONING_PARSER": _e("REASONING_PARSER", "inference", "vLLM reasoning parser (qwen3 / deepseek_r1 / glm45 / kimi_k2). Пусто — выкл.", *S_LLM, *S_ALL_COMPOSE, allow_empty=True),
+    # 8.1.0: DISABLE_CUSTOM_ALL_REDUCE / ENABLE_PREFIX_CACHING / ENABLE_EXPERT_PARALLEL /
+    # ENABLE_CHUNKED_PREFILL / ENABLE_AUTO_TOOL_CHOICE / TRUST_REMOTE_CODE / TOOL_CALL_PARSER /
+    # REASONING_PARSER — параметры конкретной модели/архитектуры. Перенесены в карточку пресета
+    # (см. PRESET_ONLY_KEYS в env_key_aliases.py); из «Настройки» удалены, в обязательные не идут
+    # (vLLM/SGLang используют разумные дефолты, если ключ не задан в пресете).
     "CHAT_TEMPLATE_CONTENT_FORMAT": _e("CHAT_TEMPLATE_CONTENT_FORMAT", "inference", "vLLM --chat-template-content-format (string / openai). Пусто — авто.", *S_LLM, *S_ALL_COMPOSE, allow_empty=True),
     "COMPILATION_CONFIG": _e("COMPILATION_CONFIG", "inference", "vLLM --compilation-config (JSON-объект). Пусто — выкл.", *S_LLM, *S_ALL_COMPOSE, allow_empty=True),
     "SPECULATIVE_CONFIG": _e("SPECULATIVE_CONFIG", "inference", "vLLM --speculative-config (опции спекулятивного декодинга).", *S_LLM, *S_ALL_COMPOSE, allow_empty=True),
