@@ -47,7 +47,7 @@ slgpu_resolve_tp_from_visible_gpus() {
     printf '%s' "${tp_env}"
     return 0
   fi
-  if [[ "${tp_env}" =~ ^[0-9]+$ ]] && ((10#tp_env != want)); then
+  if [[ "${tp_env}" =~ ^[0-9]+$ ]] && (( tp_env != want )); then
     echo "[slgpu][serve.sh][BLOCK_TP_VISIBLE] TP ${tp_env} → ${want} (NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-<unset>})" >&2
   fi
   printf '%s' "${want}"
