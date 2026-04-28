@@ -2101,3 +2101,12 @@
 - **Почему:** Запрос / контейнер Loki падал при старте после рендера конфигов из текущего шаблона.
 - **Решение:** PATCH 6.0.8 — только шаблон и док мониторинга; на VM: **`native.monitoring.up`** (или пересоздать только **loki** после попадания нового **`loki-config.yaml`** на диск).
 
+## Фаза 6.1.4 (Langfuse в «Настройки» — соседние сетевые ключи)
+
+### Что: порядок ключей Langfuse в реестре и main.env
+
+- **Что:** В [`web/backend/app/services/stack_registry.py`](web/backend/app/services/stack_registry.py) переставлен фрагмент **`_STACK_KEY_REGISTRY`** для прокси: **`LANGFUSE_WEB_*`** (имя → контейнер → внутренний порт → **`LANGFUSE_BIND`** / **`LANGFUSE_PORT`**), затем **`LANGFUSE_WORKER_*`** аналогично, затем **`NEXTAUTH_URL`**, далее как раньше (**`POSTGRES_*`** …). Дубликаты **`NEXTAUTH_URL`** / bind-портов Langfuse в конце блока LiteLLM удалены. В [`configs/main.env`](configs/main.env) §7 тот же порядок для шаблона импорта.
+- **Почему:** Запрос пользователя — связанные параметры Langfuse (внутренний порт и bind/хост-порт) отображались в «Настройки» не рядом.
+- **Файлы:** **`VERSION`** **6.1.4**, **`web/backend/pyproject.toml`**, **`web/frontend/package.json`**, **`web/frontend/package-lock.json`**, **`README.md`**, **`web/CONTRACT.md`**, **`docs/HISTORY.md`**.
+- **Решение:** PATCH (только порядок UI/шаблона, семантика ключей без изменений).
+

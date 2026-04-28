@@ -383,23 +383,41 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
     ),
 
     # ----- 7. Прокси — Langfuse + LiteLLM + Postgres + Redis + ClickHouse + MinIO -----
+    # Langfuse: блок строк без Postgres между собой — dns/name/container/internal/bind/host-port парами для UI («Настройки»).
     "LANGFUSE_WEB_SERVICE_NAME": _e(
         "LANGFUSE_WEB_SERVICE_NAME", "proxy", "DNS-имя langfuse-web в сети slgpu.", *S_MON, subgroup="langfuse"
-    ),
-    "LANGFUSE_WEB_INTERNAL_PORT": _e(
-        "LANGFUSE_WEB_INTERNAL_PORT", "proxy", "Внутренний порт langfuse-web в контейнере.", *S_MON, subgroup="langfuse"
     ),
     "LANGFUSE_WEB_CONTAINER_NAME": _e(
         "LANGFUSE_WEB_CONTAINER_NAME", "proxy", "Имя контейнера langfuse-web.", *S_MON, subgroup="langfuse"
     ),
+    "LANGFUSE_WEB_INTERNAL_PORT": _e(
+        "LANGFUSE_WEB_INTERNAL_PORT", "proxy", "Внутренний порт langfuse-web в контейнере.", *S_MON, subgroup="langfuse"
+    ),
+    "LANGFUSE_BIND": _e("LANGFUSE_BIND", "proxy", "Bind Langfuse Web (UI) на хосте.", *S_MON, subgroup="langfuse"),
+    "LANGFUSE_PORT": _e(
+        "LANGFUSE_PORT", "proxy", "Опубликованный порт Langfuse Web на хосте.", *S_MON, "probes", subgroup="langfuse"
+    ),
     "LANGFUSE_WORKER_SERVICE_NAME": _e(
         "LANGFUSE_WORKER_SERVICE_NAME", "proxy", "DNS-имя langfuse-worker в сети slgpu.", *S_MON, subgroup="langfuse"
+    ),
+    "LANGFUSE_WORKER_CONTAINER_NAME": _e(
+        "LANGFUSE_WORKER_CONTAINER_NAME", "proxy", "Имя контейнера langfuse-worker.", *S_MON, subgroup="langfuse"
     ),
     "LANGFUSE_WORKER_INTERNAL_PORT": _e(
         "LANGFUSE_WORKER_INTERNAL_PORT", "proxy", "Внутренний порт langfuse-worker.", *S_MON, subgroup="langfuse"
     ),
-    "LANGFUSE_WORKER_CONTAINER_NAME": _e(
-        "LANGFUSE_WORKER_CONTAINER_NAME", "proxy", "Имя контейнера langfuse-worker.", *S_MON, subgroup="langfuse"
+    "LANGFUSE_WORKER_BIND": _e(
+        "LANGFUSE_WORKER_BIND", "proxy", "Bind Langfuse Worker на хосте.", *S_MON, subgroup="langfuse"
+    ),
+    "LANGFUSE_WORKER_PORT": _e(
+        "LANGFUSE_WORKER_PORT", "proxy", "Опубликованный порт Langfuse Worker.", *S_MON, subgroup="langfuse"
+    ),
+    "NEXTAUTH_URL": _e(
+        "NEXTAUTH_URL",
+        "proxy",
+        "Канонический URL Langfuse в браузере (NextAuth, cookies, редиректы); должен совпадать с адресной строкой клиента.",
+        *S_MON,
+        subgroup="langfuse",
     ),
     "POSTGRES_SERVICE_NAME": _e("POSTGRES_SERVICE_NAME", "proxy", "DNS-имя Postgres в сети slgpu.", *S_MON, subgroup="postgresql"),
     "POSTGRES_INTERNAL_PORT": _e(
@@ -448,23 +466,6 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
         "Имя bootstrap-контейнера litellm-pg-init (создаёт ${LITELLM_POSTGRES_DB}).",
         *S_MON,
         subgroup="postgresql",
-    ),
-    "NEXTAUTH_URL": _e(
-        "NEXTAUTH_URL",
-        "proxy",
-        "Канонический URL Langfuse в браузере (NextAuth, cookies, редиректы); должен совпадать с адресной строкой клиента.",
-        *S_MON,
-        subgroup="langfuse",
-    ),
-    "LANGFUSE_BIND": _e("LANGFUSE_BIND", "proxy", "Bind Langfuse Web (UI) на хосте.", *S_MON, subgroup="langfuse"),
-    "LANGFUSE_PORT": _e(
-        "LANGFUSE_PORT", "proxy", "Опубликованный порт Langfuse Web на хосте.", *S_MON, "probes", subgroup="langfuse"
-    ),
-    "LANGFUSE_WORKER_BIND": _e(
-        "LANGFUSE_WORKER_BIND", "proxy", "Bind Langfuse Worker на хосте.", *S_MON, subgroup="langfuse"
-    ),
-    "LANGFUSE_WORKER_PORT": _e(
-        "LANGFUSE_WORKER_PORT", "proxy", "Опубликованный порт Langfuse Worker.", *S_MON, subgroup="langfuse"
     ),
     "LITELLM_BIND": _e(
         "LITELLM_BIND",
