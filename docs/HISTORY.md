@@ -2155,4 +2155,13 @@
 - **Файлы:** **`examples/presets/mimo-v2.5.env`**, **`examples/presets/README.md`** (таблица парсеров + ссылка у **`VLLM_DOCKER_IMAGE`**), **`VERSION` 7.0.2**, синхронизация версий web.
 - **Решение:** PATCH.
 
+## Фаза 7.0.3 (пример пресета Google Gemma 4 31B IT)
+
+### Что: `examples/presets/gemma-4-31b-it.env`
+
+- **Что:** Пресет под [**google/gemma-4-31B-it**](https://huggingface.co/google/gemma-4-31B-it): dense multimodal, `MAX_MODEL_LEN=262144`, **`REASONING_PARSER=gemma4`**, **`TOOL_CALL_PARSER=gemma4`**, **`ENABLE_AUTO_TOOL_CHOICE=1`**, **`MM_ENCODER_TP_MODE=data`**, ссылка на [vLLM Recipes — Gemma 4](https://docs.vllm.ai/projects/recipes/en/latest/Google/Gemma4.html); в комментариях — использовать слот **vLLM**, не SGLang.
+- **Почему:** Запрос пользователя и карточка HF.
+- **Файлы:** **`examples/presets/gemma-4-31b-it.env`**, **`examples/presets/README.md`**, **`VERSION` 7.0.3**, синхронизация версий web, **`README.md`**, **`docs/HISTORY.md`**.
+- **Решение:** PATCH.
+
 

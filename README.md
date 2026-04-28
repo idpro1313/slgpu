@@ -2,6 +2,8 @@
 
 Репозиторий **стенда для сравнения LLM-инференса** на Linux-сервере с GPU: два движка (**vLLM** и **SGLang**) в Docker, общий локальный кэш моделей, OpenAI-совместимый HTTP API, нагрузочный бенчмарк, **Prometheus + Grafana Loki (логи) + Promtail + Langfuse (трейсинг) + LiteLLM Proxy (шлюз) + NVIDIA DCGM Exporter** (см. [§3](#3-сервисы-и-порты), [`configs/monitoring/README.md`](configs/monitoring/README.md)).
 
+> **Версия 7.0.3:** эталонный пресет [`examples/presets/gemma-4-31b-it.env`](examples/presets/gemma-4-31b-it.env) для [google/gemma-4-31B-it](https://huggingface.co/google/gemma-4-31B-it): парсеры **`gemma4`**, ориентир **vLLM** ([рецепт Gemma 4](https://docs.vllm.ai/projects/recipes/en/latest/Google/Gemma4.html)).
+>
 > **Версия 7.0.2:** эталонный пресет [`examples/presets/mimo-v2.5.env`](examples/presets/mimo-v2.5.env) для [XiaomiMiMo/MiMo-V2.5](https://huggingface.co/XiaomiMiMo/MiMo-V2.5) (`qwen3` + `mimo`, ориентир SGLang; полный промышленный рецепт MoE — см. карточку HF / SGLang cookbook).
 >
 > **Версия 7.0.1:** пробы LiteLLM из **slgpu-web** к **`GET /v1/models`** и health используют **`http://${LITELLM_SERVICE_NAME}:${LITELLM_PORT}`** по сети Docker ``slgpu``, а не ``host.docker.internal`` + published port — иначе при ``LITELLM_BIND=127.0.0.1`` запросы из web к хостовому loopback не доходили (**`[litellm][list_models][BLOCK_HTTP_ERROR]`**).
