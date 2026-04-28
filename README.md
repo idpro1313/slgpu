@@ -2,6 +2,8 @@
 
 Репозиторий **стенда для сравнения LLM-инференса** на Linux-сервере с GPU: два движка (**vLLM** и **SGLang**) в Docker, общий локальный кэш моделей, OpenAI-совместимый HTTP API, нагрузочный бенчмарк, **Prometheus + Grafana Loki (логи) + Promtail + Langfuse (трейсинг) + LiteLLM Proxy (шлюз) + NVIDIA DCGM Exporter** (см. [§3](#3-сервисы-и-порты), [`configs/monitoring/README.md`](configs/monitoring/README.md)).
 
+> **Версия 7.1.0:** при **`POST /runtime/slots`** **без** **`gpu_indices`** backend больше не возвращает «наивные» `0..TP-1`: **`_resolve_gpu_indices`** идёт через **`gpu_availability.compute_availability`**, берёт **`suggested`** или сужает TP до числа реально свободных GPU (учёт занятых другими слотами и сторонними процессами). Дополнительно **`scripts/serve.sh`** при наличии **`nvidia-smi`** сверяет длину **`NVIDIA_VISIBLE_DEVICES`** с фактическим числом видимых карт (`nvidia-smi -L`), берёт **минимум** в `--tensor-parallel-size` (лог **`[BLOCK_TP_VISIBLE]`**).
+>
 > **Версия 7.0.8:** в **`configs/main.env`** уточнено: на хосте может быть **8 GPU**, но инференс использует **только выбранные** (`NVIDIA_VISIBLE_DEVICES` / чекбоксы слота Inference); **`TP`** в пресете — ориентир под «полный слот», фактический **`tensor_parallel_size`** совпадает с **длиной маски** ([`serve.sh`](scripts/serve.sh) 7.0.7+).
 >
 > **Версия 7.0.7:** [`scripts/serve.sh`](scripts/serve.sh) — если задан **`NVIDIA_VISIBLE_DEVICES`**, **`--tensor-parallel-size`**/`--tp` насильно выравниваются по **числу записей в маске** (лог stderr: **`[BLOCK_TP_VISIBLE]`**), чтобы пресетный **TP=8** не падал ParallelConfig при двух GPU в слоте.

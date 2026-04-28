@@ -277,6 +277,14 @@ async def _resolve_gpu_indices(
     log: list[str],
     log_lock: threading.Lock,
 ) -> list[int]:
+    """Возвращает индексы GPU для слота: пресет/аргумент TP → реально свободные карты узла.
+
+    Если ``gpu_indices`` не задан, выбираем из ``compute_availability`` (учитывая занятые
+    другими слотами и сторонними процессами); при нехватке свободных GPU TP сужается до
+    числа доступных, чтобы vLLM не падал ParallelConfig (world size > available GPUs).
+    """
+    from app.services.gpu_availability import compute_availability
+
     t_default = int(merged["TP"])
     async with session_scope() as s:
         r = await s.execute(select(Preset).where(Preset.name == preset_name))
@@ -290,9 +298,42 @@ async def _resolve_gpu_indices(
             append_job_log(
                 log,
                 log_lock,
-                f"[slot] gpu_mask len {len(parsed)} != tp {tpi}, using 0..{tpi-1}",
+                f"[slot] gpu_mask len {len(parsed)} != tp {tpi}, ignored",
             )
-    return list(range(tpi))
+    avail = await compute_availability(tp=tpi)
+    suggested = avail.get("suggested")
+    if isinstance(suggested, list) and len(suggested) == tpi:
+        chosen = [int(i) for i in suggested]
+        append_job_log(
+            log,
+            log_lock,
+            f"[slot] auto-pick GPUs {chosen} (TP={tpi}, available={avail.get('available')})",
+        )
+        return chosen
+    available = [int(i) for i in (avail.get("available") or [])]
+    if not available:
+        append_job_log(
+            log,
+            log_lock,
+            f"[slot] no free GPUs on host (busy={[b.get('index') for b in (avail.get('busy') or [])]});"
+            " falling back to 0..{tpi-1} — обязан задать gpu_indices в запросе",
+        )
+        return list(range(tpi))
+    if len(available) < tpi:
+        chosen = sorted(available)
+        append_job_log(
+            log,
+            log_lock,
+            f"[slot] only {len(available)} GPU free, narrowing TP {tpi} → {len(chosen)} on {chosen}",
+        )
+        return chosen
+    chosen = sorted(available)[:tpi]
+    append_job_log(
+        log,
+        log_lock,
+        f"[slot] auto-pick first {tpi} free GPUs {chosen}",
+    )
+    return chosen
 
 
 def _default_host_port(merged: dict[str, str], engine: str, port_arg: Any) -> int:

@@ -2209,3 +2209,13 @@
 - **Файлы:** **`configs/main.env`**, **`README.md`**, **`scripts/serve.sh`**, **`VERSION` 7.0.8**, **`web/*/package.json`/lock**, **`pyproject.toml`**, **`docs/HISTORY.md`**.
 - **Решение:** PATCH (док).
 
+## Фаза 7.1.0 (slot up: автовыбор свободных GPU + страховка `nvidia-smi`)
+
+### Что: `_resolve_gpu_indices` через `compute_availability` и `serve.sh` ≤ `nvidia-smi -L`
+
+- **Что:** В **[`web/backend/app/services/native_jobs.py`](web/backend/app/services/native_jobs.py)** `_resolve_gpu_indices` теперь не возвращает «наивные» **`0..TP-1`**: запрашивает **`compute_availability(tp=tpi)`** (учёт занятых другими активными слотами и процессами через nvidia-smi), берёт **`suggested`**; при нехватке свободных GPU **сужает TP** до числа доступных и логирует это в job-лог. Если pre-existing `gpu_mask` пресета не совпадает с TP — теперь игнорируется, а не подменяется на `0..tp-1`.
+- В **[`scripts/serve.sh`](scripts/serve.sh)** **`slgpu_resolve_tp_from_visible_gpus`** дополнен страховкой через **`nvidia-smi -L`**: если контейнеру реально подключено меньше карт, чем перечислено в **`NVIDIA_VISIBLE_DEVICES`** (бывает, когда docker-py запросил 8 device-ID, а часть занята), TP занижается до фактического числа (лог **`[BLOCK_TP_VISIBLE]`**).
+- **Почему:** Лог пользователя **«World size (8) is larger than the number of available GPUs (2) in this node»** при пустом `gpu_indices` — backend возвращал `[0..7]`, маска уходила полной, но реально контейнер видел 2 карты. Нужна согласованность TP с фактически доступными GPU.
+- **Файлы:** **`web/backend/app/services/native_jobs.py`**, **`scripts/serve.sh`**, **`VERSION` 7.1.0**, **`web/*/package.json`/lock**, **`pyproject.toml`**, **`README.md`**, **`docs/HISTORY.md`**.
+- **Решение:** MINOR (новое поведение API создания слота при отсутствии `gpu_indices`; страховка entrypoint).
+

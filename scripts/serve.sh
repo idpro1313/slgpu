@@ -6,36 +6,49 @@ set -euo pipefail
 
 # Маска NVIDIA_VISIBLE_DEVICES задаёт, КАКИЕ карты видит контейнер (на хосте может быть 8+, а слот — только подмножество).
 # Число записей в маске (индексы или UUID через запятую) — источник истины для TP; иначе пресетный TP > видимых GPU даёт ParallelConfig.
+# Дополнительно подстраховываемся через nvidia-smi -L: если контейнеру реально подключено меньше карт, чем
+# перечислено в маске (бывает при device_requests=[0..7] и часть карт уже занята/недоступна), берём минимум.
 slgpu_resolve_tp_from_visible_gpus() {
-  local tp_env nv_trim nv_clean want n oldifs
+  local tp_env nv_trim nv_clean want n oldifs smi smi_count
   tp_env="${1:-8}"
-  if [[ -z "${NVIDIA_VISIBLE_DEVICES:-}" ]]; then
-    printf '%s' "${tp_env}"
-    return 0
+  want=""
+  if [[ -n "${NVIDIA_VISIBLE_DEVICES:-}" ]]; then
+    nv_trim="${NVIDIA_VISIBLE_DEVICES#"${NVIDIA_VISIBLE_DEVICES%%[![:space:]]*}"}"
+    nv_trim="${nv_trim%"${nv_trim##*[![:space:]]}"}"
+    case "${nv_trim}" in
+      '' | all | none | void) ;;
+      *)
+        nv_clean="${nv_trim// /}"
+        want=0
+        oldifs="${IFS}"
+        IFS=','
+        for n in ${nv_clean}; do
+          [[ -z "${n}" ]] && continue
+          ((want += 1))
+        done
+        IFS="${oldifs}"
+        ((want < 1)) && want=""
+        ;;
+    esac
   fi
-  nv_trim="${NVIDIA_VISIBLE_DEVICES#"${NVIDIA_VISIBLE_DEVICES%%[![:space:]]*}"}"
-  nv_trim="${nv_trim%"${nv_trim##*[![:space:]]}"}"
-  case "${nv_trim}" in
-    '' | all | none | void)
-      printf '%s' "${tp_env}"
-      return 0
-      ;;
-  esac
-  nv_clean="${nv_trim// /}"
-  want=0
-  oldifs="${IFS}"
-  IFS=','
-  for n in ${nv_clean}; do
-    [[ -z "${n}" ]] && continue
-    ((want += 1))
-  done
-  IFS="${oldifs}"
-  if ((want < 1)); then
+  if command -v nvidia-smi >/dev/null 2>&1; then
+    smi="$(nvidia-smi -L 2>/dev/null | grep -c '^GPU ' || true)"
+    if [[ "${smi}" =~ ^[0-9]+$ ]] && ((smi >= 1)); then
+      smi_count="${smi}"
+      if [[ -z "${want}" ]] || ((smi_count < want)); then
+        if [[ -n "${want}" ]] && ((smi_count != want)); then
+          echo "[slgpu][serve.sh][BLOCK_TP_VISIBLE] mask=${want} but nvidia-smi sees ${smi_count} → using ${smi_count}" >&2
+        fi
+        want="${smi_count}"
+      fi
+    fi
+  fi
+  if [[ -z "${want}" ]]; then
     printf '%s' "${tp_env}"
     return 0
   fi
   if [[ "${tp_env}" =~ ^[0-9]+$ ]] && ((10#tp_env != want)); then
-    echo "[slgpu][serve.sh][BLOCK_TP_VISIBLE] TP ${tp_env} → ${want} (NVIDIA_VISIBLE_DEVICES=${nv_trim})" >&2
+    echo "[slgpu][serve.sh][BLOCK_TP_VISIBLE] TP ${tp_env} → ${want} (NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-<unset>})" >&2
   fi
   printf '%s' "${want}"
 }

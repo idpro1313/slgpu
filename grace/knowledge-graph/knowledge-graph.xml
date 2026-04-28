@@ -54,7 +54,8 @@
       <annotations>
         <fn-cmd_up PURPOSE="Команда up: запуск выбранного движка" />
         <fn-cmd_restart PURPOSE="Команда restart: перезапуск с новым пресетом" />
-        <fn-serve_tp_resolve PURPOSE="serve.sh: при заданном NVIDIA_VISIBLE_DEVICES TP приводится к числу записей маски (stderr: [BLOCK_TP_VISIBLE] при переопределении пресетного TP)" />
+        <fn-serve_tp_resolve PURPOSE="serve.sh: TP = min(длина NVIDIA_VISIBLE_DEVICES, nvidia-smi -L); stderr [BLOCK_TP_VISIBLE] при расхождении с env" />
+        <fn-resolve_gpu_indices PURPOSE="native_jobs._resolve_gpu_indices: подбор GPU через gpu_availability.compute_availability, сужение TP при нехватке свободных карт (без 0..TP-1 fallback)" />
       </annotations>
     </M-UP>
 
