@@ -55,8 +55,8 @@ def is_secret_key(name: str) -> bool:
     return any(name.endswith(s) for s in _SECRET_SUFFIXES)
 
 
-# Scopes used in compose / native jobs
-S_MON: tuple[str, ...] = ("monitoring_up", "proxy_up", "fix_perms")
+# Scopes used in compose / native jobs («monitorинг» стек без fix_perms; scope fix_perms вешаем точечно — см. _native_fix_perms).
+S_MON: tuple[str, ...] = ("monitoring_up", "proxy_up")
 S_LLM: tuple[str, ...] = ("llm_slot", "bench")
 S_ALL_COMPOSE: tuple[str, ...] = ("monitoring_up", "proxy_up")
 
@@ -119,7 +119,7 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
         "SLGPU_NETWORK_NAME",
         "network",
         "Имя внешней Docker-сети slgpu (общая для web + monitoring + proxy + LLM-слотов).",
-        "web_up", *S_LLM, *S_ALL_COMPOSE, "fix_perms",
+        "web_up", *S_LLM, *S_ALL_COMPOSE,
     ),
     "WEB_COMPOSE_PROJECT_INFER": _e(
         "WEB_COMPOSE_PROJECT_INFER",
@@ -128,23 +128,22 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
         *S_LLM,
         *S_ALL_COMPOSE,
         "probes",
-        "fix_perms",
     ),
-    "WEB_COMPOSE_PROJECT_MONITORING": _e("WEB_COMPOSE_PROJECT_MONITORING", "network", "Имя compose-проекта стека мониторинга (Prometheus/Grafana/Loki/Promtail/DCGM/NodeExporter).", *S_ALL_COMPOSE, "probes", "fix_perms"),
-    "WEB_COMPOSE_PROJECT_PROXY": _e("WEB_COMPOSE_PROJECT_PROXY", "network", "Имя compose-проекта стека прокси (Langfuse + LiteLLM + хранилища).", *S_ALL_COMPOSE, "probes", "fix_perms"),
+    "WEB_COMPOSE_PROJECT_MONITORING": _e("WEB_COMPOSE_PROJECT_MONITORING", "network", "Имя compose-проекта стека мониторинга (Prometheus/Grafana/Loki/Promtail/DCGM/NodeExporter).", *S_ALL_COMPOSE, "probes"),
+    "WEB_COMPOSE_PROJECT_PROXY": _e("WEB_COMPOSE_PROJECT_PROXY", "network", "Имя compose-проекта стека прокси (Langfuse + LiteLLM + хранилища).", *S_ALL_COMPOSE, "probes"),
 
     # ----- 2. Web UI (slgpu-web) -----
     "WEB_DOCKER_IMAGE": _e("WEB_DOCKER_IMAGE", "web", "Тег Docker-образа slgpu-web (сборка `./slgpu web build`).", "web_up"),
     "WEB_CONTAINER_NAME": _e("WEB_CONTAINER_NAME", "web", "Имя контейнера slgpu-web (по нему backend ищет себя для health/restart hooks).", "web_up"),
     "WEB_INTERNAL_PORT": _e("WEB_INTERNAL_PORT", "web", "Внутренний порт slgpu-web в контейнере (uvicorn). Правая часть mapping ${WEB_BIND}:${WEB_PORT}:${WEB_INTERNAL_PORT}.", "web_up"),
-    "WEB_BIND": _e("WEB_BIND", "web", "Bind-адрес опубликованного порта slgpu-web на хосте (0.0.0.0 / 127.0.0.1 / IP).", *S_ALL_COMPOSE, "fix_perms"),
-    "WEB_PORT": _e("WEB_PORT", "web", "Опубликованный порт slgpu-web на хосте (ссылка на UI).", *S_ALL_COMPOSE, "fix_perms"),
-    "WEB_LOG_LEVEL": _e("WEB_LOG_LEVEL", "web", "Уровень логов uvicorn (DEBUG/INFO/WARNING/ERROR/CRITICAL).", *S_ALL_COMPOSE, "fix_perms"),
+    "WEB_BIND": _e("WEB_BIND", "web", "Bind-адрес опубликованного порта slgpu-web на хосте (0.0.0.0 / 127.0.0.1 / IP).", *S_ALL_COMPOSE),
+    "WEB_PORT": _e("WEB_PORT", "web", "Опубликованный порт slgpu-web на хосте (ссылка на UI).", *S_ALL_COMPOSE),
+    "WEB_LOG_LEVEL": _e("WEB_LOG_LEVEL", "web", "Уровень логов uvicorn (DEBUG/INFO/WARNING/ERROR/CRITICAL).", *S_ALL_COMPOSE),
     "WEB_LOG_FILE_ENABLED": _e(
         "WEB_LOG_FILE_ENABLED",
         "web",
         "true/false: включить запись логов в файл ${WEB_DATA_DIR}/.slgpu/app.log (UI «Логи» работает и без файла).",
-        *S_ALL_COMPOSE, "fix_perms",
+        *S_ALL_COMPOSE,
         allow_empty=True,
     ),
     "WEB_PUBLIC_HOST": _e(
@@ -158,23 +157,23 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
         "WEB_MONITORING_HTTP_HOST",
         "web",
         "Hostname для health-проб мониторинга **из контейнера** slgpu-web (host.docker.internal на Linux compose).",
-        *S_ALL_COMPOSE, "probes", "fix_perms",
+        *S_ALL_COMPOSE, "probes",
         allow_empty=True,
     ),
     "WEB_LLM_HTTP_HOST": _e(
         "WEB_LLM_HTTP_HOST",
         "web",
         "Hostname для health-проб LLM (vllm/sglang) **из контейнера** slgpu-web.",
-        *S_ALL_COMPOSE, "probes", "fix_perms",
+        *S_ALL_COMPOSE, "probes",
         allow_empty=True,
     ),
 
     # ----- 3. Пути на хосте (bind mount) -----
-    "SLGPU_HOST_REPO": _e("SLGPU_HOST_REPO", "paths", "Абсолютный путь к репозиторию slgpu на хосте (bind для slgpu-web и подкоманд compose).", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
-    "MODELS_DIR": _e("MODELS_DIR", "paths", "Каталог хранилища весов моделей (bind в slgpu-web и в LLM-слот → /models; pull пишет сюда).", *S_LLM, *S_ALL_COMPOSE, "pull", "fix_perms"),
-    "PRESETS_DIR": _e("PRESETS_DIR", "paths", "Каталог пресетов *.env (рабочие копии на диске; источник правды — БД `presets`).", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
-    "WEB_DATA_DIR": _e("WEB_DATA_DIR", "paths", "Каталог данных Web UI (SQLite, секреты, снимки compose-service.env).", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
-    "SLGPU_MODEL_ROOT": _e("SLGPU_MODEL_ROOT", "paths", "Путь к корню весов **внутри** контейнера слота инференса (обычно /models).", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
+    "SLGPU_HOST_REPO": _e("SLGPU_HOST_REPO", "paths", "Абсолютный путь к репозиторию slgpu на хосте (bind для slgpu-web и подкоманд compose).", *S_LLM, *S_ALL_COMPOSE),
+    "MODELS_DIR": _e("MODELS_DIR", "paths", "Каталог хранилища весов моделей (bind в slgpu-web и в LLM-слот → /models; pull пишет сюда).", *S_LLM, *S_ALL_COMPOSE, "pull"),
+    "PRESETS_DIR": _e("PRESETS_DIR", "paths", "Каталог пресетов *.env (рабочие копии на диске; источник правды — БД `presets`).", *S_LLM, *S_ALL_COMPOSE),
+    "WEB_DATA_DIR": _e("WEB_DATA_DIR", "paths", "Каталог данных Web UI (SQLite, секреты, снимки compose-service.env).", *S_LLM, *S_ALL_COMPOSE),
+    "SLGPU_MODEL_ROOT": _e("SLGPU_MODEL_ROOT", "paths", "Путь к корню весов **внутри** контейнера слота инференса (обычно /models).", *S_LLM, *S_ALL_COMPOSE),
     "PROMETHEUS_DATA_DIR": _e("PROMETHEUS_DATA_DIR", "paths", "Каталог TSDB Prometheus на хосте.", *S_MON, "fix_perms"),
     "GRAFANA_DATA_DIR": _e("GRAFANA_DATA_DIR", "paths", "Каталог данных Grafana на хосте.", *S_MON, "fix_perms"),
     "LOKI_DATA_DIR": _e("LOKI_DATA_DIR", "paths", "Каталог данных Loki на хосте.", *S_MON, "fix_perms"),
@@ -192,66 +191,65 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
         "Образ для эфемерного chown в `monitoring fix-perms` и bench-job (alpine:3.21 / любой образ с chown).",
         "fix_perms",
     ),
-    "VLLM_DOCKER_IMAGE": _e("VLLM_DOCKER_IMAGE", "images", "Образ vLLM (OpenAI-совместимый сервер); пресет может перекрыть.", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
-    "SGLANG_DOCKER_IMAGE": _e("SGLANG_DOCKER_IMAGE", "images", "Образ SGLang.", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
-    "DCGM_EXPORTER_IMAGE": _e("DCGM_EXPORTER_IMAGE", "images", "Образ DCGM exporter (метрики GPU).", *S_MON, "fix_perms"),
-    "NODE_EXPORTER_IMAGE": _e("NODE_EXPORTER_IMAGE", "images", "Образ node-exporter.", *S_MON, "fix_perms"),
+    "VLLM_DOCKER_IMAGE": _e("VLLM_DOCKER_IMAGE", "images", "Образ vLLM (OpenAI-совместимый сервер); пресет может перекрыть.", *S_LLM, *S_ALL_COMPOSE),
+    "SGLANG_DOCKER_IMAGE": _e("SGLANG_DOCKER_IMAGE", "images", "Образ SGLang.", *S_LLM, *S_ALL_COMPOSE),
+    "DCGM_EXPORTER_IMAGE": _e("DCGM_EXPORTER_IMAGE", "images", "Образ DCGM exporter (метрики GPU).", *S_MON),
+    "NODE_EXPORTER_IMAGE": _e("NODE_EXPORTER_IMAGE", "images", "Образ node-exporter.", *S_MON),
     "LOKI_IMAGE": _e("LOKI_IMAGE", "images", "Образ Loki.", *S_MON, "fix_perms"),
-    "PROMTAIL_IMAGE": _e("PROMTAIL_IMAGE", "images", "Образ Promtail.", *S_MON, "fix_perms"),
+    "PROMTAIL_IMAGE": _e("PROMTAIL_IMAGE", "images", "Образ Promtail.", *S_MON),
     "PROMETHEUS_IMAGE": _e("PROMETHEUS_IMAGE", "images", "Образ Prometheus.", *S_MON, "fix_perms"),
     "GRAFANA_IMAGE": _e("GRAFANA_IMAGE", "images", "Образ Grafana.", *S_MON, "fix_perms"),
-    "LANGFUSE_IMAGE": _e("LANGFUSE_IMAGE", "images", "Образ Langfuse web.", *S_MON, "fix_perms"),
-    "LANGFUSE_WORKER_IMAGE": _e("LANGFUSE_WORKER_IMAGE", "images", "Образ Langfuse worker.", *S_MON, "fix_perms"),
+    "LANGFUSE_IMAGE": _e("LANGFUSE_IMAGE", "images", "Образ Langfuse web.", *S_MON),
+    "LANGFUSE_WORKER_IMAGE": _e("LANGFUSE_WORKER_IMAGE", "images", "Образ Langfuse worker.", *S_MON),
     "LANGFUSE_POSTGRES_IMAGE": _e("LANGFUSE_POSTGRES_IMAGE", "images", "Образ Postgres (Langfuse + LiteLLM).", *S_MON, "fix_perms"),
     "LANGFUSE_REDIS_IMAGE": _e("LANGFUSE_REDIS_IMAGE", "images", "Образ Redis (Langfuse).", *S_MON, "fix_perms"),
-    "LANGFUSE_CLICKHOUSE_IMAGE": _e("LANGFUSE_CLICKHOUSE_IMAGE", "images", "Образ ClickHouse (Langfuse).", *S_MON, "fix_perms"),
+    "LANGFUSE_CLICKHOUSE_IMAGE": _e("LANGFUSE_CLICKHOUSE_IMAGE", "images", "Образ ClickHouse (Langfuse).", *S_MON),
     "MINIO_IMAGE": _e("MINIO_IMAGE", "images", "Образ MinIO.", *S_MON, "fix_perms"),
-    "MINIO_MC_IMAGE": _e("MINIO_MC_IMAGE", "images", "Образ MinIO mc (bucket-init).", *S_MON, "fix_perms"),
-    "LITELLM_IMAGE": _e("LITELLM_IMAGE", "images", "Образ LiteLLM.", *S_MON, "fix_perms"),
+    "MINIO_MC_IMAGE": _e("MINIO_MC_IMAGE", "images", "Образ MinIO mc (bucket-init).", *S_MON),
+    "LITELLM_IMAGE": _e("LITELLM_IMAGE", "images", "Образ LiteLLM.", *S_MON),
 
     # ----- 5. Инференс — LLM API, движок, vLLM, SGLang, кеши -----
-    "SLGPU_ENGINE": _e("SLGPU_ENGINE", "inference", "Движок: vllm | sglang (используется serve.sh и ручным compose llm).", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
-    "SERVED_MODEL_NAME": _e("SERVED_MODEL_NAME", "inference", "Фиксированный идентификатор модели в OpenAI API (поле model в ответах).", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
-    "MODEL_ID": _e("MODEL_ID", "inference", "Базовый MODEL_ID (HuggingFace id) на случай отсутствия пресета.", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
-    "MODEL_REVISION": _e("MODEL_REVISION", "inference", "Ревизия модели (опционально); пусто — main.", *S_LLM, *S_ALL_COMPOSE, "fix_perms", allow_empty=True),
-    "LLM_API_BIND": _e("LLM_API_BIND", "inference", "Bind-адрес опубликованного порта LLM API на хосте (0.0.0.0 / 127.0.0.1).", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
-    "LLM_API_PORT": _e("LLM_API_PORT", "inference", "Хост-порт vLLM (legacy ручной запуск; mapping LLM_API_PORT:VLLM_PORT).", *S_LLM, *S_ALL_COMPOSE, "probes", "fix_perms"),
-    "LLM_API_PORT_SGLANG": _e("LLM_API_PORT_SGLANG", "inference", "Хост-порт SGLang (legacy ручной запуск).", *S_LLM, *S_ALL_COMPOSE, "probes", "fix_perms"),
+    "SLGPU_ENGINE": _e("SLGPU_ENGINE", "inference", "Движок: vllm | sglang (используется serve.sh и ручным compose llm).", *S_LLM, *S_ALL_COMPOSE),
+    "SERVED_MODEL_NAME": _e("SERVED_MODEL_NAME", "inference", "Фиксированный идентификатор модели в OpenAI API (поле model в ответах).", *S_LLM, *S_ALL_COMPOSE),
+    "MODEL_ID": _e("MODEL_ID", "inference", "Базовый MODEL_ID (HuggingFace id) на случай отсутствия пресета.", *S_LLM, *S_ALL_COMPOSE),
+    "MODEL_REVISION": _e("MODEL_REVISION", "inference", "Ревизия модели (опционально); пусто — main.", *S_LLM, *S_ALL_COMPOSE, allow_empty=True),
+    "LLM_API_BIND": _e("LLM_API_BIND", "inference", "Bind-адрес опубликованного порта LLM API на хосте (0.0.0.0 / 127.0.0.1).", *S_LLM, *S_ALL_COMPOSE),
+    "LLM_API_PORT": _e("LLM_API_PORT", "inference", "Хост-порт vLLM (legacy ручной запуск; mapping LLM_API_PORT:VLLM_PORT).", *S_LLM, *S_ALL_COMPOSE, "probes"),
+    "LLM_API_PORT_SGLANG": _e("LLM_API_PORT_SGLANG", "inference", "Хост-порт SGLang (legacy ручной запуск).", *S_LLM, *S_ALL_COMPOSE, "probes"),
     "LLM_HOST_PORT_RANGE_VLLM_START": _e("LLM_HOST_PORT_RANGE_VLLM_START", "inference", "Первый хост-порт авто-диапазона для vLLM-слотов.", *S_LLM, "port_allocation"),
     "LLM_HOST_PORT_RANGE_VLLM_END": _e("LLM_HOST_PORT_RANGE_VLLM_END", "inference", "Последний хост-порт авто-диапазона для vLLM-слотов.", *S_LLM, "port_allocation"),
     "LLM_HOST_PORT_RANGE_SGLANG_START": _e("LLM_HOST_PORT_RANGE_SGLANG_START", "inference", "Первый хост-порт авто-диапазона для SGLang-слотов.", *S_LLM, "port_allocation"),
     "LLM_HOST_PORT_RANGE_SGLANG_END": _e("LLM_HOST_PORT_RANGE_SGLANG_END", "inference", "Последний хост-порт авто-диапазона для SGLang-слотов.", *S_LLM, "port_allocation"),
-    "MAX_MODEL_LEN": _e("MAX_MODEL_LEN", "inference", "vLLM/SGLang --max-model-len (контекст в токенах).", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
-    "TP": _e("TP", "inference", "Tensor-parallel size (число GPU в шарде модели; должно делить общее число GPU).", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
-    "GPU_MEM_UTIL": _e("GPU_MEM_UTIL", "inference", "vLLM --gpu-memory-utilization (доля VRAM под пул vLLM, 0.75–0.95).", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
-    "KV_CACHE_DTYPE": _e("KV_CACHE_DTYPE", "inference", "Dtype KV cache (fp8_e4m3 / fp8 / auto / bfloat16).", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
-    "MAX_NUM_BATCHED_TOKENS": _e("MAX_NUM_BATCHED_TOKENS", "inference", "vLLM --max-num-batched-tokens (chunked prefill).", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
-    "MAX_NUM_SEQS": _e("MAX_NUM_SEQS", "inference", "vLLM --max-num-seqs (одновременных последовательностей); пусто = default.", *S_LLM, *S_ALL_COMPOSE, "fix_perms", allow_empty=True),
-    "BLOCK_SIZE": _e("BLOCK_SIZE", "inference", "vLLM --block-size (KV block size); пусто = default.", *S_LLM, *S_ALL_COMPOSE, "fix_perms", allow_empty=True),
-    "ENFORCE_EAGER": _e("ENFORCE_EAGER", "inference", "1 = vLLM --enforce-eager (без CUDA graphs); 0 — обычный режим.", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
-    "DISABLE_CUSTOM_ALL_REDUCE": _e("DISABLE_CUSTOM_ALL_REDUCE", "inference", "1 = vLLM --disable-custom-all-reduce (NCCL вместо custom AR).", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
-    "ENABLE_PREFIX_CACHING": _e("ENABLE_PREFIX_CACHING", "inference", "1 = vLLM --enable-prefix-caching.", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
-    "ENABLE_EXPERT_PARALLEL": _e("ENABLE_EXPERT_PARALLEL", "inference", "1 = vLLM --enable-expert-parallel (для MoE с EP на нескольких GPU).", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
-    "ENABLE_CHUNKED_PREFILL": _e("ENABLE_CHUNKED_PREFILL", "inference", "1 = vLLM --enable-chunked-prefill.", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
-    "ENABLE_AUTO_TOOL_CHOICE": _e("ENABLE_AUTO_TOOL_CHOICE", "inference", "1 = vLLM --enable-auto-tool-choice (auto tool routing).", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
-    "TRUST_REMOTE_CODE": _e("TRUST_REMOTE_CODE", "inference", "1 = vLLM --trust-remote-code (исполнение кода из репо модели).", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
-    "TOOL_CALL_PARSER": _e("TOOL_CALL_PARSER", "inference", "vLLM tool-call parser (hermes / qwen3_xml / qwen3_coder / pythonic / glm47 / openai). Пусто — без парсинга.", *S_LLM, *S_ALL_COMPOSE, "fix_perms", allow_empty=True),
-    "REASONING_PARSER": _e("REASONING_PARSER", "inference", "vLLM reasoning parser (qwen3 / deepseek_r1 / glm45 / kimi_k2). Пусто — выкл.", *S_LLM, *S_ALL_COMPOSE, "fix_perms", allow_empty=True),
-    "CHAT_TEMPLATE_CONTENT_FORMAT": _e("CHAT_TEMPLATE_CONTENT_FORMAT", "inference", "vLLM --chat-template-content-format (string / openai). Пусто — авто.", *S_LLM, *S_ALL_COMPOSE, "fix_perms", allow_empty=True),
-    "COMPILATION_CONFIG": _e("COMPILATION_CONFIG", "inference", "vLLM --compilation-config (JSON-объект). Пусто — выкл.", *S_LLM, *S_ALL_COMPOSE, "fix_perms", allow_empty=True),
-    "SPECULATIVE_CONFIG": _e("SPECULATIVE_CONFIG", "inference", "vLLM --speculative-config (опции спекулятивного декодинга).", *S_LLM, *S_ALL_COMPOSE, "fix_perms", allow_empty=True),
-    "DATA_PARALLEL_SIZE": _e("DATA_PARALLEL_SIZE", "inference", "vLLM --data-parallel-size; пусто — выкл.", *S_LLM, *S_ALL_COMPOSE, "fix_perms", allow_empty=True),
-    "MM_ENCODER_TP_MODE": _e("MM_ENCODER_TP_MODE", "inference", "vLLM --mm-encoder-tp-mode (data | tensor).", *S_LLM, *S_ALL_COMPOSE, "fix_perms", allow_empty=True),
-    "TOKENIZER_MODE": _e("TOKENIZER_MODE", "inference", "vLLM --tokenizer-mode (auto / slow / mistral).", *S_LLM, *S_ALL_COMPOSE, "fix_perms", allow_empty=True),
-    "ATTENTION_BACKEND": _e("ATTENTION_BACKEND", "inference", "vLLM --attention-backend (FLASHINFER_MLA_SPARSE и др.). Пусто — не передавать.", *S_LLM, *S_ALL_COMPOSE, "fix_perms", allow_empty=True),
-    "NVIDIA_VISIBLE_DEVICES": _e("NVIDIA_VISIBLE_DEVICES", "inference", "Маска видимых GPU контейнеру (0,1,2,3 / 0,1,…,7). Пусто — драйвер решает.", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
+    "MAX_MODEL_LEN": _e("MAX_MODEL_LEN", "inference", "vLLM/SGLang --max-model-len (контекст в токенах).", *S_LLM, *S_ALL_COMPOSE),
+    "TP": _e("TP", "inference", "Tensor-parallel size (число GPU в шарде модели; должно делить общее число GPU).", *S_LLM, *S_ALL_COMPOSE),
+    "GPU_MEM_UTIL": _e("GPU_MEM_UTIL", "inference", "vLLM --gpu-memory-utilization (доля VRAM под пул vLLM, 0.75–0.95).", *S_LLM, *S_ALL_COMPOSE),
+    "KV_CACHE_DTYPE": _e("KV_CACHE_DTYPE", "inference", "Dtype KV cache (fp8_e4m3 / fp8 / auto / bfloat16).", *S_LLM, *S_ALL_COMPOSE),
+    "MAX_NUM_BATCHED_TOKENS": _e("MAX_NUM_BATCHED_TOKENS", "inference", "vLLM --max-num-batched-tokens (chunked prefill).", *S_LLM, *S_ALL_COMPOSE),
+    "MAX_NUM_SEQS": _e("MAX_NUM_SEQS", "inference", "vLLM --max-num-seqs (одновременных последовательностей); пусто = default.", *S_LLM, *S_ALL_COMPOSE, allow_empty=True),
+    "BLOCK_SIZE": _e("BLOCK_SIZE", "inference", "vLLM --block-size (KV block size); пусто = default.", *S_LLM, *S_ALL_COMPOSE, allow_empty=True),
+    "ENFORCE_EAGER": _e("ENFORCE_EAGER", "inference", "1 = vLLM --enforce-eager (без CUDA graphs); 0 — обычный режим.", *S_LLM, *S_ALL_COMPOSE),
+    "DISABLE_CUSTOM_ALL_REDUCE": _e("DISABLE_CUSTOM_ALL_REDUCE", "inference", "1 = vLLM --disable-custom-all-reduce (NCCL вместо custom AR).", *S_LLM, *S_ALL_COMPOSE),
+    "ENABLE_PREFIX_CACHING": _e("ENABLE_PREFIX_CACHING", "inference", "1 = vLLM --enable-prefix-caching.", *S_LLM, *S_ALL_COMPOSE),
+    "ENABLE_EXPERT_PARALLEL": _e("ENABLE_EXPERT_PARALLEL", "inference", "1 = vLLM --enable-expert-parallel (для MoE с EP на нескольких GPU).", *S_LLM, *S_ALL_COMPOSE),
+    "ENABLE_CHUNKED_PREFILL": _e("ENABLE_CHUNKED_PREFILL", "inference", "1 = vLLM --enable-chunked-prefill.", *S_LLM, *S_ALL_COMPOSE),
+    "ENABLE_AUTO_TOOL_CHOICE": _e("ENABLE_AUTO_TOOL_CHOICE", "inference", "1 = vLLM --enable-auto-tool-choice (auto tool routing).", *S_LLM, *S_ALL_COMPOSE),
+    "TRUST_REMOTE_CODE": _e("TRUST_REMOTE_CODE", "inference", "1 = vLLM --trust-remote-code (исполнение кода из репо модели).", *S_LLM, *S_ALL_COMPOSE),
+    "TOOL_CALL_PARSER": _e("TOOL_CALL_PARSER", "inference", "vLLM tool-call parser (hermes / qwen3_xml / qwen3_coder / pythonic / glm47 / openai). Пусто — без парсинга.", *S_LLM, *S_ALL_COMPOSE, allow_empty=True),
+    "REASONING_PARSER": _e("REASONING_PARSER", "inference", "vLLM reasoning parser (qwen3 / deepseek_r1 / glm45 / kimi_k2). Пусто — выкл.", *S_LLM, *S_ALL_COMPOSE, allow_empty=True),
+    "CHAT_TEMPLATE_CONTENT_FORMAT": _e("CHAT_TEMPLATE_CONTENT_FORMAT", "inference", "vLLM --chat-template-content-format (string / openai). Пусто — авто.", *S_LLM, *S_ALL_COMPOSE, allow_empty=True),
+    "COMPILATION_CONFIG": _e("COMPILATION_CONFIG", "inference", "vLLM --compilation-config (JSON-объект). Пусто — выкл.", *S_LLM, *S_ALL_COMPOSE, allow_empty=True),
+    "SPECULATIVE_CONFIG": _e("SPECULATIVE_CONFIG", "inference", "vLLM --speculative-config (опции спекулятивного декодинга).", *S_LLM, *S_ALL_COMPOSE, allow_empty=True),
+    "DATA_PARALLEL_SIZE": _e("DATA_PARALLEL_SIZE", "inference", "vLLM --data-parallel-size; пусто — выкл.", *S_LLM, *S_ALL_COMPOSE, allow_empty=True),
+    "MM_ENCODER_TP_MODE": _e("MM_ENCODER_TP_MODE", "inference", "vLLM --mm-encoder-tp-mode (data | tensor).", *S_LLM, *S_ALL_COMPOSE, allow_empty=True),
+    "TOKENIZER_MODE": _e("TOKENIZER_MODE", "inference", "vLLM --tokenizer-mode (auto / slow / mistral).", *S_LLM, *S_ALL_COMPOSE, allow_empty=True),
+    "ATTENTION_BACKEND": _e("ATTENTION_BACKEND", "inference", "vLLM --attention-backend (FLASHINFER_MLA_SPARSE и др.). Пусто — не передавать.", *S_LLM, *S_ALL_COMPOSE, allow_empty=True),
+    "NVIDIA_VISIBLE_DEVICES": _e("NVIDIA_VISIBLE_DEVICES", "inference", "Маска видимых GPU контейнеру (0,1,2,3 / 0,1,…,7). Пусто — драйвер решает.", *S_LLM, *S_ALL_COMPOSE),
     "VLLM_HOST": _e(
         "VLLM_HOST",
         "inference",
         "Listen vLLM в контейнере; по умолчанию = LLM_API_BIND (дубль в UI скрыт).",
         *S_LLM,
         *S_ALL_COMPOSE,
-        "fix_perms",
         allow_empty=True,
         ui_hidden=True,
     ),
@@ -261,19 +259,17 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
         "Порт vLLM внутри контейнера (по умолчанию как LLM_API_PORT; типичный mapping 8111:8111). Дубль в UI скрыт.",
         *S_LLM,
         *S_ALL_COMPOSE,
-        "fix_perms",
         allow_empty=True,
         ui_hidden=True,
     ),
-    "VLLM_LOGGING_LEVEL": _e("VLLM_LOGGING_LEVEL", "inference", "Уровень логов Python в vLLM-контейнере (DEBUG / INFO / WARNING).", *S_LLM, *S_ALL_COMPOSE, "fix_perms", allow_empty=True),
-    "VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS": _e("VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS", "inference", "vLLM memory profiler — оценка CUDA graphs при старте (0/1).", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
+    "VLLM_LOGGING_LEVEL": _e("VLLM_LOGGING_LEVEL", "inference", "Уровень логов Python в vLLM-контейнере (DEBUG / INFO / WARNING).", *S_LLM, *S_ALL_COMPOSE, allow_empty=True),
+    "VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS": _e("VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS", "inference", "vLLM memory profiler — оценка CUDA graphs при старте (0/1).", *S_LLM, *S_ALL_COMPOSE),
     "SGLANG_LISTEN_HOST": _e(
         "SGLANG_LISTEN_HOST",
         "inference",
         "Listen SGLang в контейнере; по умолчанию = LLM_API_BIND (дубль в UI скрыт).",
         *S_LLM,
         *S_ALL_COMPOSE,
-        "fix_perms",
         allow_empty=True,
         ui_hidden=True,
     ),
@@ -283,18 +279,17 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
         "Порт SGLang внутри контейнере (по умолчанию как LLM_API_PORT_SGLANG). Дубль в UI скрыт.",
         *S_LLM,
         *S_ALL_COMPOSE,
-        "fix_perms",
         allow_empty=True,
         ui_hidden=True,
     ),
-    "SGLANG_TRUST_REMOTE_CODE": _e("SGLANG_TRUST_REMOTE_CODE", "inference", "1 = SGLang --trust-remote-code.", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
-    "SGLANG_MEM_FRACTION_STATIC": _e("SGLANG_MEM_FRACTION_STATIC", "inference", "SGLang --mem-fraction-static (0.7–0.95).", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
-    "SGLANG_CUDA_GRAPH_MAX_BS": _e("SGLANG_CUDA_GRAPH_MAX_BS", "inference", "SGLang --cuda-graph-max-bs (1 / 2 / 4 / 8 / 16 / 32).", *S_LLM, *S_ALL_COMPOSE, "fix_perms", allow_empty=True),
-    "SGLANG_ENABLE_TORCH_COMPILE": _e("SGLANG_ENABLE_TORCH_COMPILE", "inference", "0/1 — torch compile в SGLang.", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
-    "SGLANG_DISABLE_CUDA_GRAPH": _e("SGLANG_DISABLE_CUDA_GRAPH", "inference", "0/1 — отключить CUDA graph в SGLang.", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
-    "SGLANG_DISABLE_CUSTOM_ALL_REDUCE": _e("SGLANG_DISABLE_CUSTOM_ALL_REDUCE", "inference", "0/1 — SGLang --disable-custom-all-reduce.", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
-    "SGLANG_ENABLE_METRICS": _e("SGLANG_ENABLE_METRICS", "inference", "0/1 — HTTP-метрики SGLang (/metrics).", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
-    "SGLANG_ENABLE_MFU_METRICS": _e("SGLANG_ENABLE_MFU_METRICS", "inference", "0/1 — MFU-метрики SGLang.", *S_LLM, *S_ALL_COMPOSE, "fix_perms"),
+    "SGLANG_TRUST_REMOTE_CODE": _e("SGLANG_TRUST_REMOTE_CODE", "inference", "1 = SGLang --trust-remote-code.", *S_LLM, *S_ALL_COMPOSE),
+    "SGLANG_MEM_FRACTION_STATIC": _e("SGLANG_MEM_FRACTION_STATIC", "inference", "SGLang --mem-fraction-static (0.7–0.95).", *S_LLM, *S_ALL_COMPOSE),
+    "SGLANG_CUDA_GRAPH_MAX_BS": _e("SGLANG_CUDA_GRAPH_MAX_BS", "inference", "SGLang --cuda-graph-max-bs (1 / 2 / 4 / 8 / 16 / 32).", *S_LLM, *S_ALL_COMPOSE, allow_empty=True),
+    "SGLANG_ENABLE_TORCH_COMPILE": _e("SGLANG_ENABLE_TORCH_COMPILE", "inference", "0/1 — torch compile в SGLang.", *S_LLM, *S_ALL_COMPOSE),
+    "SGLANG_DISABLE_CUDA_GRAPH": _e("SGLANG_DISABLE_CUDA_GRAPH", "inference", "0/1 — отключить CUDA graph в SGLang.", *S_LLM, *S_ALL_COMPOSE),
+    "SGLANG_DISABLE_CUSTOM_ALL_REDUCE": _e("SGLANG_DISABLE_CUSTOM_ALL_REDUCE", "inference", "0/1 — SGLang --disable-custom-all-reduce.", *S_LLM, *S_ALL_COMPOSE),
+    "SGLANG_ENABLE_METRICS": _e("SGLANG_ENABLE_METRICS", "inference", "0/1 — HTTP-метрики SGLang (/metrics).", *S_LLM, *S_ALL_COMPOSE),
+    "SGLANG_ENABLE_MFU_METRICS": _e("SGLANG_ENABLE_MFU_METRICS", "inference", "0/1 — MFU-метрики SGLang.", *S_LLM, *S_ALL_COMPOSE),
 
     # ----- 6. Мониторинг — Prometheus, Grafana, Loki, Promtail, DCGM, NodeExporter -----
     "PROMETHEUS_SERVICE_NAME": _e(
@@ -344,15 +339,15 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
         subgroup="prometheus",
     ),
     "PROMETHEUS_PORT": _e(
-        "PROMETHEUS_PORT", "monitoring", "Опубликованный порт Prometheus на хосте.", *S_MON, "probes", "fix_perms", subgroup="prometheus"
+        "PROMETHEUS_PORT", "monitoring", "Опубликованный порт Prometheus на хосте.", *S_MON, "probes", subgroup="prometheus"
     ),
     "GRAFANA_BIND": _e("GRAFANA_BIND", "monitoring", "Bind Grafana на хосте.", *S_MON, subgroup="grafana"),
     "GRAFANA_PORT": _e(
-        "GRAFANA_PORT", "monitoring", "Опубликованный порт Grafana на хосте.", *S_MON, "probes", "fix_perms", subgroup="grafana"
+        "GRAFANA_PORT", "monitoring", "Опубликованный порт Grafana на хосте.", *S_MON, "probes", subgroup="grafana"
     ),
-    "LOKI_BIND": _e("LOKI_BIND", "monitoring", "Bind Loki HTTP push API на хосте.", *S_MON, "fix_perms", subgroup="loki"),
+    "LOKI_BIND": _e("LOKI_BIND", "monitoring", "Bind Loki HTTP push API на хосте.", *S_MON, subgroup="loki"),
     "LOKI_PORT": _e(
-        "LOKI_PORT", "monitoring", "Опубликованный порт Loki на хосте.", *S_MON, "probes", "fix_perms", subgroup="loki"
+        "LOKI_PORT", "monitoring", "Опубликованный порт Loki на хосте.", *S_MON, "probes", subgroup="loki"
     ),
     "DCGM_BIND": _e(
         "DCGM_BIND", "monitoring", "Bind DCGM exporter (метрики GPU) на хосте.", *S_MON, subgroup="dcgm_exporter"
@@ -365,7 +360,6 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
         "monitoring",
         "Срок хранения TSDB Prometheus (--storage.tsdb.retention.time): 7d / 30d / 1y / 100y.",
         *S_MON,
-        "fix_perms",
         subgroup="prometheus",
     ),
     "PROMETHEUS_RETENTION_SIZE": _e(
@@ -373,19 +367,17 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
         "monitoring",
         "Макс. размер TSDB Prometheus (0 = без лимита; 20GB / 100GB).",
         *S_MON,
-        "fix_perms",
         subgroup="prometheus",
     ),
-    "GRAFANA_ADMIN_USER": _e("GRAFANA_ADMIN_USER", "monitoring", "Логин администратора Grafana.", *S_MON, "fix_perms", subgroup="grafana"),
+    "GRAFANA_ADMIN_USER": _e("GRAFANA_ADMIN_USER", "monitoring", "Логин администратора Grafana.", *S_MON, subgroup="grafana"),
     "GRAFANA_ADMIN_PASSWORD": _e(
-        "GRAFANA_ADMIN_PASSWORD", "monitoring", "Пароль администратора Grafana (в проде сменить).", *S_MON, "fix_perms", subgroup="grafana"
+        "GRAFANA_ADMIN_PASSWORD", "monitoring", "Пароль администратора Grafana (в проде сменить).", *S_MON, subgroup="grafana"
     ),
     "GF_SERVER_ROOT_URL": _e(
         "GF_SERVER_ROOT_URL",
         "monitoring",
         "GF_SERVER_ROOT_URL (если Grafana за reverse proxy). Пусто — http://<host>:GRAFANA_PORT.",
         *S_MON,
-        "fix_perms",
         allow_empty=True,
         subgroup="grafana",
     ),
@@ -462,25 +454,23 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
         "proxy",
         "Канонический URL Langfuse в браузере (NextAuth, cookies, редиректы); должен совпадать с адресной строкой клиента.",
         *S_MON,
-        "fix_perms",
         subgroup="langfuse",
     ),
-    "LANGFUSE_BIND": _e("LANGFUSE_BIND", "proxy", "Bind Langfuse Web (UI) на хосте.", *S_MON, "fix_perms", subgroup="langfuse"),
+    "LANGFUSE_BIND": _e("LANGFUSE_BIND", "proxy", "Bind Langfuse Web (UI) на хосте.", *S_MON, subgroup="langfuse"),
     "LANGFUSE_PORT": _e(
-        "LANGFUSE_PORT", "proxy", "Опубликованный порт Langfuse Web на хосте.", *S_MON, "probes", "fix_perms", subgroup="langfuse"
+        "LANGFUSE_PORT", "proxy", "Опубликованный порт Langfuse Web на хосте.", *S_MON, "probes", subgroup="langfuse"
     ),
     "LANGFUSE_WORKER_BIND": _e(
-        "LANGFUSE_WORKER_BIND", "proxy", "Bind Langfuse Worker на хосте.", *S_MON, "fix_perms", subgroup="langfuse"
+        "LANGFUSE_WORKER_BIND", "proxy", "Bind Langfuse Worker на хосте.", *S_MON, subgroup="langfuse"
     ),
     "LANGFUSE_WORKER_PORT": _e(
-        "LANGFUSE_WORKER_PORT", "proxy", "Опубликованный порт Langfuse Worker.", *S_MON, "fix_perms", subgroup="langfuse"
+        "LANGFUSE_WORKER_PORT", "proxy", "Опубликованный порт Langfuse Worker.", *S_MON, subgroup="langfuse"
     ),
     "LITELLM_BIND": _e(
         "LITELLM_BIND",
         "proxy",
         "Bind LiteLLM proxy (OpenAI-совместимый шлюз) на хосте.",
         *S_MON,
-        "fix_perms",
         subgroup="litellm",
     ),
     "LITELLM_PORT": _e(
@@ -489,7 +479,6 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
         "Опубликованный порт LiteLLM на хосте.",
         *S_MON,
         "probes",
-        "fix_perms",
         subgroup="litellm",
     ),
     "LITELLM_POSTGRES_DB": _e(
@@ -497,7 +486,6 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
         "proxy",
         "Имя БД LiteLLM в общем Postgres (создаётся litellm-pg-init).",
         *S_MON,
-        "fix_perms",
         subgroup="postgresql",
     ),
     "LITELLM_MASTER_KEY": _e(
@@ -505,7 +493,6 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
         "proxy",
         "Master-key прокси (Bearer); пусто = ключ не требуется (только доверенная сеть). Меняется в UI «Публичный доступ».",
         *S_MON,
-        "fix_perms",
         allow_empty=True,
         subgroup="litellm",
     ),
@@ -525,7 +512,6 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
         "proxy",
         "True = хранить список моделей LiteLLM в Postgres (Admin UI редактирует).",
         *S_MON,
-        "fix_perms",
         subgroup="litellm",
     ),
     "UI_USERNAME": _e(
@@ -539,18 +525,16 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
         "proxy",
         "Учётка общего Postgres (Langfuse, LiteLLM); placeholder для dev.",
         *S_MON,
-        "fix_perms",
         subgroup="postgresql",
     ),
     "LANGFUSE_POSTGRES_PASSWORD": _e(
-        "LANGFUSE_POSTGRES_PASSWORD", "proxy", "Пароль общего Postgres.", *S_MON, "fix_perms", subgroup="postgresql"
+        "LANGFUSE_POSTGRES_PASSWORD", "proxy", "Пароль общего Postgres.", *S_MON, subgroup="postgresql"
     ),
     "LANGFUSE_POSTGRES_DB": _e(
         "LANGFUSE_POSTGRES_DB",
         "proxy",
         "Имя основной БД Postgres (Langfuse).",
         *S_MON,
-        "fix_perms",
         subgroup="postgresql",
     ),
     "LANGFUSE_REDIS_AUTH": _e(
@@ -558,33 +542,30 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
         "proxy",
         "Пароль Redis (используется Langfuse).",
         *S_MON,
-        "fix_perms",
         subgroup="redis",
     ),
     "LANGFUSE_CLICKHOUSE_USER": _e(
-        "LANGFUSE_CLICKHOUSE_USER", "proxy", "Учётка ClickHouse (Langfuse).", *S_MON, "fix_perms", subgroup="clickhouse"
+        "LANGFUSE_CLICKHOUSE_USER", "proxy", "Учётка ClickHouse (Langfuse).", *S_MON, subgroup="clickhouse"
     ),
     "LANGFUSE_CLICKHOUSE_PASSWORD": _e(
         "LANGFUSE_CLICKHOUSE_PASSWORD",
         "proxy",
         "Пароль ClickHouse (Langfuse).",
         *S_MON,
-        "fix_perms",
         subgroup="clickhouse",
     ),
-    "MINIO_ROOT_USER": _e("MINIO_ROOT_USER", "proxy", "MinIO root user.", *S_MON, "fix_perms", subgroup="minio"),
-    "MINIO_ROOT_PASSWORD": _e("MINIO_ROOT_PASSWORD", "proxy", "MinIO root password.", *S_MON, "fix_perms", subgroup="minio"),
-    "MINIO_API_BIND": _e("MINIO_API_BIND", "proxy", "Bind MinIO API на хосте.", *S_MON, "fix_perms", subgroup="minio"),
+    "MINIO_ROOT_USER": _e("MINIO_ROOT_USER", "proxy", "MinIO root user.", *S_MON, subgroup="minio"),
+    "MINIO_ROOT_PASSWORD": _e("MINIO_ROOT_PASSWORD", "proxy", "MinIO root password.", *S_MON, subgroup="minio"),
+    "MINIO_API_BIND": _e("MINIO_API_BIND", "proxy", "Bind MinIO API на хосте.", *S_MON, subgroup="minio"),
     "MINIO_API_HOST_PORT": _e(
-        "MINIO_API_HOST_PORT", "proxy", "Опубликованный порт MinIO API на хосте.", *S_MON, "fix_perms", subgroup="minio"
+        "MINIO_API_HOST_PORT", "proxy", "Опубликованный порт MinIO API на хосте.", *S_MON, subgroup="minio"
     ),
-    "MINIO_CONSOLE_BIND": _e("MINIO_CONSOLE_BIND", "proxy", "Bind консоли MinIO на хосте.", *S_MON, "fix_perms", subgroup="minio"),
+    "MINIO_CONSOLE_BIND": _e("MINIO_CONSOLE_BIND", "proxy", "Bind консоли MinIO на хосте.", *S_MON, subgroup="minio"),
     "MINIO_CONSOLE_HOST_PORT": _e(
         "MINIO_CONSOLE_HOST_PORT",
         "proxy",
         "Опубликованный порт консоли MinIO на хосте.",
         *S_MON,
-        "fix_perms",
         subgroup="minio",
     ),
     "LANGFUSE_SALT": _e(
@@ -592,7 +573,6 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
         "proxy",
         "Соль Langfuse (для хеширования). В проде — длинная случайная строка.",
         *S_MON,
-        "fix_perms",
         subgroup="langfuse",
     ),
     "LANGFUSE_ENCRYPTION_KEY": _e(
@@ -600,7 +580,6 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
         "proxy",
         "32-байтный ключ шифрования Langfuse (hex, 64 символа). `openssl rand -hex 32`.",
         *S_MON,
-        "fix_perms",
         subgroup="langfuse",
     ),
     "NEXTAUTH_SECRET": _e(
@@ -608,7 +587,6 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
         "proxy",
         "NEXTAUTH_SECRET (cookie session). `openssl rand -base64 32`.",
         *S_MON,
-        "fix_perms",
         subgroup="langfuse",
     ),
     "LANGFUSE_S3_EVENT_UPLOAD_BUCKET": _e(
@@ -616,7 +594,6 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
         "proxy",
         "Имя S3-бакета Langfuse для events в MinIO.",
         *S_MON,
-        "fix_perms",
         subgroup="langfuse",
     ),
     "LANGFUSE_S3_MEDIA_BUCKET": _e(
@@ -624,7 +601,6 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
         "proxy",
         "Имя S3-бакета Langfuse для media в MinIO.",
         *S_MON,
-        "fix_perms",
         subgroup="langfuse",
     ),
     "LANGFUSE_TELEMETRY": _e(
@@ -632,7 +608,6 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
         "proxy",
         "true/false — отправлять анонимную телеметрию Langfuse в их API.",
         *S_MON,
-        "fix_perms",
         subgroup="langfuse",
     ),
     "LANGFUSE_PUBLIC_KEY": _e(

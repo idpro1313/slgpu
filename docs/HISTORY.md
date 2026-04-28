@@ -2036,6 +2036,14 @@
 - **Почему:** Сборка образа **`slgpu-web`** падала на строке с двумя обращениями к **`appStack.data`** без сужения типа между аргументами.
 - **Решение:** PATCH 6.0.6 — только типобезопасность и явная ветка «стек не загружен».
 
+## Фаза 6.1.3 (узкий scope `fix_perms` в реестре стека)
+
+### Что: `required_for: fix_perms` только там, где нужно для `monitoring fix-perms`
+
+- **Что:** В **`stack_registry.py`** удалён **`fix_perms`** из **`S_MON`** и из массового дубля рядом с compose/LLM. Scope **`fix_perms`** добавлен точечно: каталоги данных под **`_native_fix_perms`** (Prometheus/Grafana/Loki/Promtail/Langfuse-Postgres-ClickHouse-logs-MinIO-Redis), образы **`GRAFANA_*`/`PROMETHEUS_*`/`LOKI_*`/`LANGFUSE_POSTGRES_*`/`LANGFUSE_REDIS_*`/`MINIO_*` как в **`native_jobs._native_fix_perms`**, плюс прежний **`SLGPU_BENCH_CHOWN_IMAGE`**. Валидация **`raise_if_missing(..., "fix_perms")`** и подпись «обязателен для: fix-perms» в UI больше не относятся к сотням нерелевантных ключей.
+- **Почему:** Вопрос пользователя и несоответствие UX коду (**`MODEL_ID`/TP не участвуют в chown**).
+- **Файлы:** **`stack_registry.py`**, **`VERSION`** **6.1.3**, синхронизация web-версий, **`README.md`**, **`web/CONTRACT.md`**, **`grace/knowledge-graph/knowledge-graph.xml`**, **`docs/HISTORY.md`**.
+
 ## Фаза 6.1.2 (подпись scope «мониторинг» в «Настройки»)
 
 ### Что: убрана сущность `&shy;` в подписи сценария
