@@ -2044,6 +2044,12 @@
 - **Почему:** Запрос пользователя на опциональный показ сохранённых секретов в явном виде в форме стека.
 - **Решение:** Режим включается явно чекбоксом и отдельным GET; авторизация на уровне доступа к тому же API, что и остальной UI (**без доп. пароля на бэкенде** при текущей модели).
 
+### Что: docker-py и `native.slot.down` — `closing(docker.from_env())`
+
+- **Что:** В [`slot_runtime.py`](web/backend/app/services/slot_runtime.py) все **`with docker.from_env() as client`** заменены на **`with closing(docker.from_env()) as client`** (`contextlib.closing`): при сборке образа может стоять **docker-py**, где **`DockerClient`** ещё **без `__enter__`/`__exit__`** (ошибка *does not support the context manager protocol* на **`native.slot.down`** / **`stop_*`**). **`VERSION 6.0.11`**, синхронизация версий web.
+- **Почему:** Сбой задачи **`native.slot.down`** во время остановки слота.
+- **Решение:** Стандартный **`closing`** вызывает **`client.close()`** при выходе — совместимо с разными версиями **docker**.
+
 ### Что: Grafana — убран провиженинг дашборда «slgpu overview»
 
 - **Что:** Удалён JSON [`configs/monitoring/grafana/provisioning/dashboards/json/slgpu-overview.json`](configs/monitoring/grafana/provisioning/dashboards/json/slgpu-overview.json) (dash «slgpu overview», UID `slgpu-overview`). Провайдер [`dashboards.yml`](configs/monitoring/grafana/provisioning/dashboards/dashboards.yml) по-прежнему подставляет всю папку `json/`. **README.md**, GRACE (**`knowledge-graph.xml`**, **`development-plan.xml`**, **`verification-plan.xml`**, **`requirements.xml`** UC-008, **`grace/README.md`**). **VERSION 6.0.10**, синхронизация версий web.

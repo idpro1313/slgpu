@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from contextlib import closing
 from pathlib import Path
 from typing import Any
 
@@ -185,7 +186,7 @@ def _run_slot_sync(
         }
     image = resolve_image(engine, merged)
     env = container_env_for_engine(merged, engine)
-    with docker.from_env() as client:
+    with closing(docker.from_env()) as client:
         try:
             client.ping()
         except docker.errors.DockerException as exc:
@@ -281,7 +282,7 @@ def _run_slot_sync(
 
 
 def stop_slot_sync(cname: str, log: list[str], log_lock: threading.Lock | None = None) -> int:
-    with docker.from_env() as client:
+    with closing(docker.from_env()) as client:
         _stop_container_by_name(client, cname, log, log_lock)
     invalidate_gpu_state_cache()
     from app.services.gpu_availability import invalidate_host_gpu_cache
@@ -294,7 +295,7 @@ def stop_containers_for_slot_key_sync(
     slot_key: str, log: list[str], log_lock: threading.Lock | None = None
 ) -> int:
     """Stop all containers with ``com.develonica.slgpu.slot`` label; fallback to name patterns."""
-    with docker.from_env() as client:
+    with closing(docker.from_env()) as client:
         if not _ping(client, log, log_lock):
             return 1
         label = f"{_LABEL_SLOT}={slot_key}"
