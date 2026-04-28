@@ -2164,4 +2164,12 @@
 - **Файлы:** **`examples/presets/gemma-4-31b-it.env`**, **`examples/presets/README.md`**, **`VERSION` 7.0.3**, синхронизация версий web, **`README.md`**, **`docs/HISTORY.md`**.
 - **Решение:** PATCH.
 
+## Фаза 7.0.4 (приоритет столбцов пресета над JSON parameters)
+
+### Что: `load_preset_flat_from_db_sync` — порядок merge
+
+- **Что:** В [`preset_db_sync.py`](web/backend/app/services/preset_db_sync.py): сначала разворачивается JSON **`parameters`** (ключи импорта `.env`), затем поверх задаются **`MODEL_ID`** из **`hf_id`**, **`TP`** из столбца **`tp`**, **`SERVED_MODEL_NAME`** из столбца, если они заданы. Раньше **`parameters`** шли вторыми и перезаписывали, напр., **`TP=8`** из эталона `qwen3.6-35b-a3b.env` поверх **`tp=2`** в UI → в контейнер уходил **`tensor_parallel_size=8`** при двух GPU и **ParallelConfig** в vLLM (*World size (8) is larger than the number of available GPUs (2)*).
+- **Почему:** Сообщение пользователя / рассинхрон UI и логов vLLM.
+- **Файлы:** **`VERSION` 7.0.4**, **`web/backend/pyproject.toml`**, **`web/frontend/package.json`**, **`web/frontend/package-lock.json`**, **`README.md`**, **`docs/HISTORY.md`**.
+- **Решение:** PATCH.
 

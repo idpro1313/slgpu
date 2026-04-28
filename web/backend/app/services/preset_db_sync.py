@@ -25,12 +25,6 @@ def load_preset_flat_from_db_sync(preset_name: str) -> dict[str, str] | None:
             return None
         hf_id, tp, served, parameters_raw = row
         out: dict[str, str] = {}
-        if hf_id:
-            out["MODEL_ID"] = str(hf_id)
-        if tp is not None:
-            out["TP"] = str(int(tp))
-        if served:
-            out["SERVED_MODEL_NAME"] = str(served)
         params: dict[str, Any] = {}
         if parameters_raw:
             if isinstance(parameters_raw, str):
@@ -40,10 +34,19 @@ def load_preset_flat_from_db_sync(preset_name: str) -> dict[str, str] | None:
                     params = {}
             elif isinstance(parameters_raw, dict):
                 params = parameters_raw
+        # Сначала импортированные ключи (.env → parameters), затем столбцы пресета в БД:
+        # иначе устаревший ``TP`` из файла-примера перезаписывал TP/tp/gpu_mask из UI
+        # (слот с TP=2 и двумя GPU получал tensor_parallel_size=8).
         for k, v in params.items():
             if v is None or str(v).strip() == "":
                 continue
             out[str(k)] = str(v)
+        if hf_id:
+            out["MODEL_ID"] = str(hf_id)
+        if tp is not None:
+            out["TP"] = str(int(tp))
+        if served:
+            out["SERVED_MODEL_NAME"] = str(served)
         return out
     finally:
         conn.close()
