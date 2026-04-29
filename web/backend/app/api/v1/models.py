@@ -216,3 +216,38 @@ async def pull_model(
         status=job.status.value,
         message=command.summary,
     )
+
+
+@router.post(
+    "/{model_id}/pull/force-stop",
+    response_model=JobAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def force_stop_model_pull(
+    model_id: int,
+    session: AsyncSession = Depends(db_session),
+    actor: str | None = Depends(actor_from_header),
+) -> JobAccepted:
+    model = await session.get(HFModel, model_id)
+    if model is None:
+        raise HTTPException(status_code=404, detail="model not found")
+
+    cancelled = await jobs_service.force_model_pull_halt(model.hf_id)
+    await hf_service.refresh_status(session, model)
+    await record_ui_action(
+        session,
+        action="model.pull.force_stop",
+        actor=actor,
+        target=model.hf_id,
+        note=f"cancelled={cancelled}",
+        payload={"model_id": model_id, "hf_id": model.hf_id, "cancelled_job_ids": cancelled},
+    )
+    return JobAccepted(
+        job_id=0,
+        correlation_id="00000000-0000-0000-0000-000000000000",
+        kind="native.model.pull",
+        status="forced",
+        message="Принудительная остановка загрузки: job отменена, lock снят.",
+        forced=True,
+        cancelled_job_ids=cancelled,
+    )

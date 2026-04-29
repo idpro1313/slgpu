@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -11,7 +12,7 @@ from app.db.session import init_db, session_scope
 from app.models.job import Job, JobStatus
 from app.services import jobs as jobs_service
 from app.services.jobs import JobConflictError, submit
-from app.services.slgpu_cli import cmd_monitoring, cmd_slot_up
+from app.services.slgpu_cli import cmd_pull, cmd_slot_up
 
 
 @pytest.fixture
@@ -85,3 +86,27 @@ async def test_non_native_job_fails_with_message(initialized_db: None) -> None:
                 assert "native.*" in (row.message or "")
                 return
     pytest.fail("job did not finish in time")
+
+
+@pytest.mark.asyncio
+async def test_force_model_pull_halt_cancels_job_and_releases_lock(initialized_db: None) -> None:
+    cmd = cmd_pull(Path("."), "XiaomiMiMo/MiMo-V2.5")
+
+    async def _slow_native_job(job_id: int, command, args: dict) -> None:  # noqa: ARG001
+        await asyncio.sleep(10)
+
+    with patch("app.services.jobs.handle_native_job", new=_slow_native_job):
+        job = await submit(cmd, actor="pytest")
+        cancelled = await jobs_service.force_model_pull_halt("XiaomiMiMo/MiMo-V2.5")
+        assert job.id in cancelled
+
+        retry = await submit(cmd, actor="pytest")
+        await jobs_service.force_model_pull_halt("XiaomiMiMo/MiMo-V2.5")
+
+    async with session_scope() as session:
+        row = await session.get(Job, job.id)
+        retry_row = await session.get(Job, retry.id)
+        assert row is not None
+        assert retry_row is not None
+        assert row.status == JobStatus.CANCELLED
+        assert retry_row.status == JobStatus.CANCELLED

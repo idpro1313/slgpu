@@ -142,7 +142,7 @@ daemon не нашёл бы файлы по `/slgpu/...` и создал бы п
 | GET/POST | `/api/v1/models` | список HF моделей по `MODELS_DIR/<org>/<repo>` и регистрация HF моделей |
 | POST | `/api/v1/models/sync` | явное сканирование `MODELS_DIR` и обновление реестра (сколько папок затронуто, всего записей) |
 | PATCH/DELETE | `/api/v1/models/{id}` | изменение revision/notes, удаление записи или локальных весов |
-| POST | `/api/v1/models/{id}/pull` | **`native.model.pull`** (hf download) |
+| POST | `/api/v1/models/{id}/pull`, `/api/v1/models/{id}/pull/force-stop` | **`native.model.pull`** (hf download) и принудительное снятие зависшего pull-lock без удаления partial-файлов |
 | GET/POST | `/api/v1/presets` | список и создание пресетов |
 | GET/PATCH/DELETE | `/api/v1/presets/{id}` | просмотр, параметрическое редактирование и удаление пресета |
 | POST | `/api/v1/presets/{id}/export` | выгрузка пресета в `.env` (кнопка в карточке пресета в UI) |

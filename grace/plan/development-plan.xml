@@ -277,7 +277,7 @@
         <export-frontend-settings PURPOSE="/settings — install, stack_params, группы стека" />
         <export-app-config PURPOSE="/api/v1/app-config/*" />
         <export-bench-ui PURPOSE="/benchmarks — прогоны data/bench, модалка summary.json, native.bench.*" />
-        <export-models-crud PURPOSE="/api/v1/models — sync, PATCH, DELETE" />
+        <export-models-crud PURPOSE="/api/v1/models — sync, PATCH, DELETE; 8.1.8: POST /models/{id}/pull/force-stop для отмены зависшего native.model.pull и снятия model-lock без удаления partial-файлов" />
         <export-presets-crud PURPOSE="/api/v1/presets — CRUD, clone, export `.env`, multipart `POST …/import-env` (upload .env → SQLite; 409 без overwrite)" />
       </interface>
       <depends>M-CLI, M-PULL, M-UP, M-DOWN, M-MONITOR, M-MODELS</depends>

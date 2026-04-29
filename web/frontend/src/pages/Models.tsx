@@ -11,6 +11,7 @@ import {
   IconActionButton,
   IconCloudArrowDown,
   IconEdit,
+  IconStopCircle,
   IconTrash,
 } from "@/components/TableActionIcons";
 
@@ -118,6 +119,17 @@ export function ModelsPage() {
   const pullModel = useMutation({
     mutationFn: ({ id, revision }: { id: number; revision: string | null }) =>
       api.post<JobAccepted>(`/models/${id}/pull`, { revision }),
+    onSuccess: () => {
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: ["models"] });
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["activity"] });
+    },
+    onError: (err: Error) => setError(err.message),
+  });
+
+  const forceStopPull = useMutation({
+    mutationFn: (id: number) => api.post<JobAccepted>(`/models/${id}/pull/force-stop`),
     onSuccess: () => {
       setError(null);
       queryClient.invalidateQueries({ queryKey: ["models"] });
@@ -406,6 +418,24 @@ export function ModelsPage() {
                         >
                           <IconCloudArrowDown />
                         </IconActionButton>
+                        {model.pull_progress ? (
+                          <IconActionButton
+                            label="Принудительно остановить зависшую загрузку и снять lock"
+                            variant="danger"
+                            disabled={forceStopPull.isPending}
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  `Остановить загрузку «${model.hf_id}»? Уже скачанные файлы останутся на диске, модель можно будет докачать повторным стартом.`,
+                                )
+                              ) {
+                                forceStopPull.mutate(model.id);
+                              }
+                            }}
+                          >
+                            <IconStopCircle />
+                          </IconActionButton>
+                        ) : null}
                         <IconActionButton
                           label="Удалить модель из web-реестра (веса на диске остаются)"
                           variant="danger"

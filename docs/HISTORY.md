@@ -2327,3 +2327,12 @@
 - **Файлы:** **`web/backend/app/services/native_jobs.py`**, **`scripts/serve.sh`**, **`VERSION` 7.1.0**, **`web/*/package.json`/lock**, **`pyproject.toml`**, **`README.md`**, **`docs/HISTORY.md`**.
 - **Решение:** MINOR (новое поведение API создания слота при отсутствии `gpu_indices`; страховка entrypoint).
 
+## Фаза 8.1.8 (force-stop зависшей загрузки модели)
+
+### Что: `POST /models/{id}/pull/force-stop` и кнопка stop в Models UI
+
+- **Что:** Добавлен backend-хелпер `force_model_pull_halt()` для `native.model.pull`: queued/running jobs по `hf_id` помечаются `cancelled`, снимается lock `("model", hf_id)`, активная asyncio-task отменяется best-effort. В `web/backend/app/api/v1/models.py` добавлен endpoint **`POST /api/v1/models/{id}/pull/force-stop`**. На странице **«Модели»** при наличии `pull_progress` рядом с download-кнопкой показывается красная stop-кнопка; после force-stop список моделей/задач/лента обновляются.
+- **Почему:** Запрос пользователя: загрузка **XiaomiMiMo/MiMo-V2.5** сутки висит в **`PARTIAL`**, UI не даёт ни старт, ни стоп. Причина — вечная активная `native.model.pull` в БД/lock без отдельного cancel-пути для моделей.
+- **Файлы:** `web/backend/app/services/jobs.py`, `web/backend/app/api/v1/models.py`, `web/backend/tests/test_jobs_runner.py`, `web/frontend/src/pages/Models.tsx`, `web/frontend/src/components/TableActionIcons.tsx`, `README.md`, `web/README.md`, `web/CONTRACT.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/plan/development-plan.xml`, `grace/verification/verification-plan.xml`, `VERSION`, `web/backend/pyproject.toml`, `web/frontend/package.json`, `web/frontend/package-lock.json`, `docs/HISTORY.md`.
+- **Решение:** PATCH. Частично скачанные файлы не удаляются автоматически: статус может остаться **`PARTIAL`**, но `pull_progress` исчезает и повторная докачка доступна сразу; полное удаление по-прежнему только через отдельное подтверждение «Удалить с диска».
+

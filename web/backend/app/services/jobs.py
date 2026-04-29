@@ -140,6 +140,8 @@ async def _run_job_body(job_id: int, command: CliCommand) -> None:
         job = await session.get(Job, job_id)
         if job is None:
             return
+        if job.status == JobStatus.CANCELLED:
+            return
         job.status = JobStatus.RUNNING
         job.started_at = datetime.now(timezone.utc)
         job_args: dict = dict(job.args or {})
@@ -228,6 +230,35 @@ async def force_engine_slot_halt(slot_key: str) -> list[int]:
         logger.info(
             "[jobs][force_engine_slot_halt][BLOCK_OK] slot_key=%s cancelled_ids=%s",
             slot_key,
+            cancelled,
+        )
+    return cancelled
+
+
+async def force_model_pull_halt(hf_id: str) -> list[int]:
+    """Mark model pull jobs cancelled and clear the in-process model lock."""
+
+    key = _lock_key("model", hf_id)
+    cancelled: list[int] = await mark_resource_jobs_cancelled(
+        hf_id, note="[cancelled: model pull force stop]"
+    )
+
+    async with _lock_guard:
+        t = _task_by_lock.get(key)
+    if t is not None and not t.done():
+        t.cancel()
+    # Снимаем lock сразу: зависший HF pull не должен блокировать повторную докачку из UI.
+    await _release_lock("model", hf_id)
+
+    if t is not None and not t.done():
+        try:
+            await asyncio.wait_for(t, timeout=1.0)
+        except (TimeoutError, asyncio.CancelledError):
+            pass
+    if cancelled:
+        logger.info(
+            "[jobs][force_model_pull_halt][BLOCK_OK] hf_id=%s cancelled_ids=%s",
+            hf_id,
             cancelled,
         )
     return cancelled

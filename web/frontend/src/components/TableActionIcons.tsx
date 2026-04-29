@@ -40,6 +40,27 @@ export function IconCloudArrowDown({ className }: { className?: string }) {
   );
 }
 
+/** Иконка «остановить текущую задачу». */
+export function IconStopCircle({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width={20}
+      height={20}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <circle cx="12" cy="12" r="9" />
+      <rect x="9" y="9" width="6" height="6" rx="1" />
+    </svg>
+  );
+}
+
 /** Иконка «экспорт в файл» (.env). */
 export function IconArrowUpTray({ className }: { className?: string }) {
   return (
