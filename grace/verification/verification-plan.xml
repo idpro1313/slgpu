@@ -1,4 +1,4 @@
-<VerificationPlan VERSION="2.6.4">
+<VerificationPlan VERSION="2.6.5">
   <GlobalPolicy>
     <log-format>[Module][function][BLOCK_NAME] message</log-format>
     <deterministic-first>true</deterministic-first>
@@ -204,6 +204,7 @@
 
     <V-M-WEB MODULE="M-WEB" PRIORITY="high">
       <test-files>
+        <file>web/backend/tests/test_log_report.py</file>
         <file>web/backend/tests/test_security.py</file>
         <file>web/backend/tests/test_env_files.py</file>
         <file>web/backend/tests/test_slgpu_cli.py</file>
@@ -227,7 +228,7 @@
       <scenarios>
         <scenario-1 kind="success">Whitelist в app.core.security принимает legitimate slug/HF id и отвергает строки с пробелами/`;`/`&amp;`.</scenario-1>
         <scenario-2 kind="success">Парсинг существующих `data/presets/*.env` (или импортированных из `examples/presets/`) возвращает MODEL_ID и набор runtime ключей.</scenario-2>
-        <scenario-3 kind="success">slgpu_cli: kind `native.*`, пустой `argv`; pull, `native.slot.up|down|restart`, monitoring проходят валидацию (4.0.0: без `native.llm.*`).</scenario-3>
+        <scenario-3 kind="success">slgpu_cli: kind `native.*` и **`web.log_report.generate`**, пустой `argv`; pull, `native.slot.up|down|restart`, monitoring, cmd_log_report проходят валидацию (4.0.0: без `native.llm.*`).</scenario-3>
         <scenario-4 kind="success">Job runner устанавливает advisory lock и вторая операция на тот же scope/resource падает с JobConflictError (HTTP 409).</scenario-4>
         <scenario-5 kind="success">FastAPI app стартует, /healthz возвращает 200 и версию из app.__version__.</scenario-5>
         <scenario-6 kind="failure">Невалидный action в /api/v1/monitoring/action возвращает 400.</scenario-6>
@@ -277,10 +278,30 @@
       </required-log-markers>
       <required-trace-assertions>
         <assertion-1>Каждый запрос на mutating-endpoint создаёт ровно одну запись в audit_events.</assertion-1>
-        <assertion-2>Стек: native.* через compose/subprocess bench без shell; унаследованный CLI-путь — subprocess_exec без shell.</assertion-2>
+        <assertion-2>Стек: native.* через compose/subprocess bench без shell; **`web.log_report.generate`** выполняется in-process в job-runner; унаследованный CLI-путь — subprocess_exec без shell.</assertion-2>
         <assertion-3>SQLite файл создаётся по пути из WEB_DATABASE_URL и тип всех таблиц совпадает с ORM.</assertion-3>
       </required-trace-assertions>
     </V-M-WEB>
+
+    <V-M-LOG-REPORT MODULE="M-LOG-REPORT" PRIORITY="medium">
+      <test-files>
+        <file>web/backend/tests/test_log_report.py</file>
+      </test-files>
+      <module-checks>
+        <check-1>pytest -q web/backend/tests/test_log_report.py</check-1>
+      </module-checks>
+      <scenarios>
+        <scenario-1 kind="success">`redact_line` маскирует типичные секретные паттерны; в пакете фактов нет необрезанного сырья сверх лимитов.</scenario-1>
+        <scenario-2 kind="success">`resolved_logql` для scope slgpu/all/custom; невалидный custom без фигурных скобок — ошибка.</scenario-2>
+        <scenario-3 kind="failure">Период &gt; 168 часов — `validate_period` бросает.</scenario-3>
+        <scenario-4 kind="success">Интеграционный тест с monkeypatch `loki_query_range` + `call_litellm_chat`: POST `/log-reports` → polling до `succeeded`, непустой `llm_markdown`, `facts` заполнены.</scenario-4>
+        <scenario-5 kind="failure">Loki недоступен или LiteLLM/key/model — запись отчёта в `failed` с `error_message` (см. pipeline лог-маркеры `BLOCK_FAIL` / `BLOCK_LOKI_HTTP` / `BLOCK_LLM_HTTP`).</scenario-5>
+      </scenarios>
+      <required-log-markers>
+        <marker-1>[log_report][pipeline][BLOCK_DONE]</marker-1>
+        <marker-2>[log_report][pipeline][BLOCK_FAIL]</marker-2>
+      </required-log-markers>
+    </V-M-LOG-REPORT>
   </ModuleVerification>
 
   <PhaseGates>

@@ -136,6 +136,7 @@ async def init_db() -> None:
         app_log_event,
         audit,
         job,
+        log_report,
         model,
         preset,
         service,

@@ -65,7 +65,7 @@ async def test_second_submit_same_slot_resource_raises_conflict(
 
 @pytest.mark.asyncio
 async def test_non_native_job_fails_with_message(initialized_db: None) -> None:
-    """Jobs that are not native.* are marked failed (v5 contract)."""
+    """Jobs neither native.* nor web.log_report.generate are marked failed."""
     from app.services.slgpu_cli import CliCommand
 
     cmd = CliCommand(
@@ -83,7 +83,7 @@ async def test_non_native_job_fails_with_message(initialized_db: None) -> None:
             assert row is not None
             if row.status in (JobStatus.SUCCEEDED, JobStatus.FAILED, JobStatus.CANCELLED):
                 assert row.status == JobStatus.FAILED
-                assert "native.*" in (row.message or "")
+                assert "unsupported job kind" in (row.message or "")
                 return
     pytest.fail("job did not finish in time")
 

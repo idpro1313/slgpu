@@ -1,6 +1,6 @@
-"""Фоновый runner заданий стека (только ``native.*`` → docker compose / docker-py).
+"""Фоновый runner заданий стека: ``native.*`` (docker compose / docker-py) и ``web.*`` (jobs без compose).
 
-`CliCommand` из `app.services.slgpu_cli` — дескриптор вида; web ставит `native.monitoring.*` и др.
+``CliCommand`` из ``app.services.slgpu_cli`` — дескриптор вида; web ставит ``native.*`` и ``web.log_report.generate``.
 Задача пишет `Job`, in-process lock на (scope, resource), asyncio task, лог
 (один процесс Uvicorn; не PostgreSQL advisory lock).
 """
@@ -150,6 +150,25 @@ async def _run_job_body(job_id: int, command: CliCommand) -> None:
         await handle_native_job(job_id, command, job_args)
         return
 
+    if command.kind == "web.log_report.generate":
+        from app.services.log_report import run_log_report_pipeline
+
+        try:
+            rid = int(job_args.get("report_id") or 0)
+        except (TypeError, ValueError):
+            rid = 0
+        if rid < 1:
+            async with session_scope() as session:
+                job_bad = await session.get(Job, job_id)
+                if job_bad and job_bad.status != JobStatus.CANCELLED:
+                    job_bad.exit_code = 1
+                    job_bad.finished_at = datetime.now(timezone.utc)
+                    job_bad.status = JobStatus.FAILED
+                    job_bad.message = "invalid report_id in job args"
+            return
+        await run_log_report_pipeline(job_id, rid)
+        return
+
     async with session_scope() as session:
         job2 = await session.get(Job, job_id)
         if job2 is None or job2.status == JobStatus.CANCELLED:
@@ -157,7 +176,7 @@ async def _run_job_body(job_id: int, command: CliCommand) -> None:
         job2.exit_code = 1
         job2.finished_at = datetime.now(timezone.utc)
         job2.status = JobStatus.FAILED
-        job2.message = "only native.* jobs are supported (slgpu-web 5.x)"
+        job2.message = "unsupported job kind (expected native.* or web.log_report.generate)"
 
 
 async def list_recent(limit: int = 50) -> list[Job]:

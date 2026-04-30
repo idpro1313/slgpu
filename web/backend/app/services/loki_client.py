@@ -1,0 +1,72 @@
+# GRACE[M-LOG-REPORT][loki_http][BLOCK_LOKI_HTTP]
+"""HTTP клиент к Loki query_range (из slgpu-web по Docker DNS).
+
+CONTRACT:
+  PURPOSE: Выполнить LogQL query_range против внутреннего ``LOKI_SERVICE_NAME:LOKI_INTERNAL_PORT``.
+  INPUTS: merged stack dict, query string, nano start/end, limit, direction (forward/backward).
+  OUTPUTS: JSON ответа Loki или исключение httpx.HTTPError / RuntimeError.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+import httpx
+
+from app.services.stack_config import sync_merged_flat
+
+logger = logging.getLogger(__name__)
+
+_DEFAULT_DIRECTION = "BACKWARD"
+
+
+def loki_http_base_from_merged(merged: dict[str, str]) -> str:
+    host = str(merged.get("LOKI_SERVICE_NAME") or "").strip()
+    if not host:
+        raise RuntimeError("missing stack param LOKI_SERVICE_NAME")
+    try:
+        port = int(merged["LOKI_INTERNAL_PORT"])
+    except KeyError as exc:
+        raise RuntimeError("missing stack param LOKI_INTERNAL_PORT") from exc
+    except ValueError as exc:
+        raise RuntimeError("invalid LOKI_INTERNAL_PORT") from exc
+    return f"http://{host}:{port}"
+
+
+def loki_base_url_sync() -> str:
+    merged = sync_merged_flat()
+    return loki_http_base_from_merged(merged)
+
+
+async def query_range(
+    *,
+    query: str,
+    start_ns: int,
+    end_ns: int,
+    limit: int,
+    merged: dict[str, str] | None = None,
+    timeout_sec: float = 120.0,
+) -> dict[str, Any]:
+    """GET /loki/api/v1/query_range — см. Grafana Loki API."""
+
+    base = loki_http_base_from_merged(merged or sync_merged_flat())
+    url = f"{base}/loki/api/v1/query_range"
+    lim = max(1, min(int(limit), 50_000))
+    params = {
+        "query": query,
+        "start": str(start_ns),
+        "end": str(end_ns),
+        "limit": str(lim),
+        "direction": _DEFAULT_DIRECTION,
+    }
+    async with httpx.AsyncClient(timeout=timeout_sec) as client:
+        response = await client.get(url, params=params)
+        if response.status_code != 200:
+            logger.warning(
+                "[log_report][loki][BLOCK_LOKI_HTTP] status=%s body=%s",
+                response.status_code,
+                (response.text or "")[:500],
+            )
+        response.raise_for_status()
+        return response.json()

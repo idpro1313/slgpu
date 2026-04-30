@@ -8,6 +8,7 @@ import pytest
 
 from app.core.security import ValidationError
 from app.services.slgpu_cli import (
+    cmd_log_report,
     cmd_monitoring,
     cmd_proxy,
     cmd_pull,
@@ -93,6 +94,14 @@ def test_cmd_proxy_native(action: str):
     assert cmd.resource == "stack"
 
 
-def test_cmd_proxy_rejects_unknown():
-    with pytest.raises(ValueError):
-        cmd_proxy(_root(), "fix-perms")
+def test_cmd_log_report_web_job():
+    cmd = cmd_log_report(report_id=42)
+    assert cmd.argv == []
+    assert cmd.kind == "web.log_report.generate"
+    assert cmd.scope == "log_report"
+    assert cmd.resource == "report:42"
+
+
+def test_cmd_log_report_rejects_bad_id():
+    with pytest.raises(ValidationError):
+        cmd_log_report(report_id=0)

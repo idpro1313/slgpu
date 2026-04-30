@@ -11,6 +11,7 @@ import { RuntimePage } from "@/pages/Runtime";
 import { BenchmarksPage } from "@/pages/Benchmarks";
 import { AppLogsPage } from "@/pages/AppLogs";
 import { DockerLogsPage } from "@/pages/DockerLogs";
+import { LogReportsPage } from "@/pages/LogReports";
 import { SettingsPage } from "@/pages/Settings";
 
 export function App() {
@@ -26,6 +27,7 @@ export function App() {
         <Route path="/litellm" element={<LiteLLMPage />} />
         <Route path="/jobs" element={<JobsPage />} />
         <Route path="/app-logs" element={<AppLogsPage />} />
+        <Route path="/log-reports" element={<LogReportsPage />} />
         <Route path="/docker-logs" element={<DockerLogsPage />} />
         <Route path="/benchmarks" element={<BenchmarksPage />} />
         <Route path="/settings" element={<SettingsPage />} />

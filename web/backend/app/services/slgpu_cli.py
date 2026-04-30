@@ -1,6 +1,6 @@
-"""Дескрипторы заданий стека: ``kind`` = ``native.*`` (docker compose / docker-py) или legacy ``argv`` → ``bash ./slgpu``.
+"""Дескрипторы заданий стека: ``kind`` = ``native.*`` (docker compose / docker-py) или ``web.log_report.generate`` (Loki+LiteLLM), либо legacy ``argv`` → ``bash ./slgpu``.
 
-Web UI ставит **только** ``native.*`` с пустым ``argv``; данные стека — из БД (см. ``stack_config`` / ``write_compose_service_env_file``).
+Web UI ставит **``native.*``** и **``web.log_report.generate``** с пустым ``argv``; данные стека — из БД (см. ``stack_config`` / ``write_compose_service_env_file``).
 """
 
 from __future__ import annotations
@@ -168,4 +168,18 @@ def cmd_bench_load(_slgpu_root: Path) -> CliCommand:
         scope="bench",
         resource="load",
         summary="bench load",
+    )
+
+
+def cmd_log_report(*, report_id: int) -> CliCommand:
+    """Фоновая генерация сводного отчёта по логам Loki + LiteLLM (web-only job)."""
+
+    if not isinstance(report_id, int) or report_id < 1:
+        raise ValidationError("report_id must be a positive integer")
+    return CliCommand(
+        kind="web.log_report.generate",
+        argv=[],
+        scope="log_report",
+        resource=f"report:{report_id}",
+        summary=f"log report #{report_id}",
     )

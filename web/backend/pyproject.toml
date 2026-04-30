@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "slgpu-web"
-version = "8.1.8"
+version = "8.2.0"
 description = "Web control plane for the slgpu LLM inference benchmarking stand."
 requires-python = ">=3.11"
 readme = "../README.md"

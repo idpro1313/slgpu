@@ -1,4 +1,4 @@
-<DevelopmentPlan VERSION="6.0.10">
+<DevelopmentPlan VERSION="8.2.0">
   <!--
     GRACE development plan — methodology: https://github.com/osovv/grace-marketplace
     Upstream ships Agent Skills + optional CLI (@osovv/grace-cli): grace lint | module find | module show | file show.
@@ -270,7 +270,7 @@
       </contract>
       <interface>
         <export-web-image PURPOSE="Docker image slgpu-web:dev" />
-        <export-api-v1 PURPOSE="REST /api/v1: dashboard, models, presets, runtime, monitoring, litellm, jobs, app-config, bench, settings, app-logs/events (app_log_event)" />
+        <export-api-v1 PURPOSE="REST /api/v1: dashboard, models, presets, runtime, monitoring, litellm, jobs, app-config, bench, settings, app-logs/events, **log-reports** (Loki+facts+LiteLLM)" />
         <export-spa PURPOSE="React SPA, статика встроена в образ" />
         <export-contract-md PURPOSE="web/CONTRACT.md — границы CLI/Docker API/SQLite" />
         <export-settings-public-access PURPOSE="/api/v1/settings/public-access — browser host + litellm_api_key в JSON (Bearer к LiteLLM)" />
@@ -292,6 +292,43 @@
       </observability>
       <verification-ref>V-M-WEB</verification-ref>
     </M-WEB>
+
+    <M-LOG-REPORT NAME="LogReports" TYPE="INTEGRATION" LAYER="3" ORDER="10" STATUS="implemented">
+      <contract>
+        <purpose>On-demand сводный отчёт по логам из **Loki** за интервал **`from`..`to`**: детерминированный JSON **фактов** (агрегации, топы, bounded samples с **redaction**) + обязательная **русская Markdown** через **LiteLLM** `POST /v1/chat/completions`. Сырой поток логов в LLM не отправляется. Персистенция: SQLite **`log_reports`**, асинхронность: **`web.log_report.generate`** + polling **`GET /log-reports/{id}`**.</purpose>
+        <inputs>
+          <param name="time_from" type="iso8601" />
+          <param name="time_to" type="iso8601" />
+          <param name="scope" type="slgpu|all|custom:LogQL" />
+          <param name="max_lines" type="int" />
+          <param name="llm_model" type="string" />
+        </inputs>
+        <outputs>
+          <param name="report_row" type="log_reports" />
+          <param name="job_id" type="int" />
+        </outputs>
+        <errors>
+          <error code="409">Мониторинг не поднят / missing Loki reachability guard</error>
+          <error code="422">Период &gt; 168h или невалидный custom LogQL</error>
+        </errors>
+      </contract>
+      <interface>
+        <export-api-log-reports PURPOSE="POST/GET /api/v1/log-reports, GET /log-reports/{id}" />
+        <export-service-loki PURPOSE="loki_client.query_range" />
+        <export-service-pipeline PURPOSE="log_report.run_log_report_pipeline" />
+      </interface>
+      <depends>M-WEB, M-MONITOR</depends>
+      <target>
+        <source>web/backend/app/api/v1/log_reports.py, web/backend/app/services/loki_client.py, web/backend/app/services/log_report.py, web/backend/app/models/log_report.py, web/frontend/src/pages/LogReports.tsx</source>
+        <tests>web/backend/tests/test_log_report.py</tests>
+      </target>
+      <observability>
+        <log-prefix>[log_report]</log-prefix>
+        <critical-block>BLOCK_DONE</critical-block>
+        <markers>[log_report][pipeline][BLOCK_DONE], [log_report][pipeline][BLOCK_FAIL], [log_report][loki][BLOCK_LOKI_HTTP], [log_report][litellm][BLOCK_LLM_HTTP]</markers>
+      </observability>
+      <verification-ref>V-M-LOG-REPORT</verification-ref>
+    </M-LOG-REPORT>
 
     <M-DOCKER NAME="DockerCompose" TYPE="INTEGRATION" LAYER="1" ORDER="10" STATUS="implemented">
       <contract>

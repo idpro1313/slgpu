@@ -417,3 +417,30 @@ export interface AppLogEventsList {
   items: AppLogEvent[];
   next_before_id: number | null;
 }
+
+/** POST /log-reports */
+export interface LogReportAccepted {
+  report_id: number;
+  job_id: number;
+  correlation_id: string;
+  status?: string;
+  message?: string | null;
+}
+
+/** GET /log-reports, /log-reports/{id} */
+export interface LogReportOut {
+  id: number;
+  status: string;
+  job_id: number | null;
+  time_from: string;
+  time_to: string;
+  scope: string;
+  logql: string | null;
+  llm_model: string;
+  max_lines: number;
+  facts: Record<string, unknown> | null;
+  llm_markdown: string | null;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+}

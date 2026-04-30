@@ -2327,6 +2327,15 @@
 - **Файлы:** **`web/backend/app/services/native_jobs.py`**, **`scripts/serve.sh`**, **`VERSION` 7.1.0**, **`web/*/package.json`/lock**, **`pyproject.toml`**, **`README.md`**, **`docs/HISTORY.md`**.
 - **Решение:** MINOR (новое поведение API создания слота при отсутствии `gpu_indices`; страховка entrypoint).
 
+## Фаза 8.2.0 (модуль «Отчёты логов»: Loki + LiteLLM)
+
+### Что: on-demand отчёт по контейнерным логам
+
+- **Что:** Backend: таблица **`log_reports`**, **`POST/GET /api/v1/log-reports`**, Loki **`query_range`**, сбор **`facts`** (агрегации + bounded samples), **redaction**, вызов **LiteLLM** для русской **Markdown**, job **`web.log_report.generate`** (in-process в `jobs` runner), lock **`("log_report", "report:{id}")`**. Frontend: **`/log-reports`**, типы **`LogReportOut`/`LogReportAccepted`**, пункт меню рядом с «Логи». Восстановлен маршрут **`/docker-logs`** в `App.tsx` (регрессия навигации). Документация и GRACE: **M-LOG-REPORT**, **V-M-LOG-REPORT**, **CONTRACT**, **README**, **docs/AGENTS.md**.
+- **Почему:** пользовательский план «Модуль анализа логов» — сводка за период без долгого HTTP на UI, единый источник **Loki**.
+- **Файлы:** `web/backend/app/api/v1/log_reports.py`, `services/loki_client.py`, `services/log_report.py`, `models/log_report.py`, `schemas/log_reports.py`, `services/jobs.py`, `services/slgpu_cli.py`, `tests/test_log_report.py`, `tests/test_slgpu_cli.py`, `web/frontend/src/pages/LogReports.tsx`, `api/types.ts`, `app/App.tsx`, `components/Layout.tsx`, `web/CONTRACT.md`, `README.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/plan/development-plan.xml`, `grace/verification/verification-plan.xml`, `VERSION`, `web/backend/pyproject.toml`, `web/frontend/package.json`, `web/frontend/package-lock.json`.
+- **Решение:** MINOR (новый API + UI + таблица БД). LLM обязателен для успешного отчёта; при сбое — `failed` + сообщение.
+
 ## Фаза 8.1.8 (force-stop зависшей загрузки модели)
 
 ### Что: `POST /models/{id}/pull/force-stop` и кнопка stop в Models UI

@@ -14,6 +14,12 @@ from app.services.stack_config import sync_merged_flat
 logger = logging.getLogger(__name__)
 
 
+def litellm_http_base_sync() -> str:
+    """Публичный базовый URL к LiteLLM внутри сети Docker (как probes)."""
+
+    return _litellm_http_probe_base()
+
+
 def _litellm_http_probe_base() -> str:
     """Базовый URL slgpu-web → LiteLLM по сети ``slgpu`` (Docker DNS alias ``LITELLM_SERVICE_NAME``).
 

@@ -2,6 +2,8 @@
 
 Репозиторий **стенда для сравнения LLM-инференса** на Linux-сервере с GPU: два движка (**vLLM** и **SGLang**) в Docker, общий локальный кэш моделей, OpenAI-совместимый HTTP API, нагрузочный бенчмарк, **Prometheus + Grafana Loki (логи) + Promtail + Langfuse (трейсинг) + LiteLLM Proxy (шлюз) + NVIDIA DCGM Exporter** (см. [§3](#3-сервисы-и-порты), [`configs/monitoring/README.md`](configs/monitoring/README.md)).
 
+> **Версия 8.2.0:** в **slgpu-web** добавлен модуль **«Отчёты логов»** (SPA **`/log-reports`**): **`POST /api/v1/log-reports`** ставит фоновую задачу **`web.log_report.generate`** — контейнерные логи за период читаются из **Loki** (`query_range`), строится **детерминированный JSON «фактов»** (агрегации, топ ошибок, ограниченные примеры строк с редактированием секретных паттернов), затем **обязательный** вызов **LiteLLM** `POST …/v1/chat/completions` для **русской Markdown-сводки**; результат в SQLite **`log_reports`**, статус через **`GET /api/v1/log-reports/{id}`** (**202** при создании). Требует поднятого стека мониторинга (**Loki** доступен из контейнера web по **`LOKI_SERVICE_NAME`** / **`LOKI_INTERNAL_PORT`**). Подробности — [**`web/CONTRACT.md`**](web/CONTRACT.md).
+>
 > **Версия 8.1.8:** на странице **«Модели»** добавлена принудительная остановка зависшей загрузки весов: **`POST /api/v1/models/{id}/pull/force-stop`** помечает активные `native.model.pull` для HF ID как `cancelled`, снимает model-lock и даёт сразу нажать «скачать/докачать» повторно. Это закрывает ситуацию, когда строка остаётся в **`PARTIAL`** с вечным `pull_progress` после зависшего `huggingface_hub.snapshot_download` или перезапуска web-процесса. Уже скачанные файлы не удаляются; для очистки папки по-прежнему используйте отдельное «Удалить с диска».
 >
 > **Версия 8.1.7:** при первом создании **`vllm-slots.json`** (см. **8.1.6**) backend больше не пишет пустой **`[]`**, а сразу **`host.docker.internal:8110` … `:8130`** (21 порт) — слот на **8119** и любой другой в диапазоне попадает в Prometheus **без ручного добавления** строки (лишние порты в Targets останутся **DOWN**). Константы диапазона: `web/backend/app/services/stack_config.py` — **`VLLM_SLOTS_FILE_SD_PORT_MIN`** / **`MAX`**. Уже существующий **`vllm-slots.json`** не перезаписывается; чтобы получить новый дефолт — удалите файл и снова поднимите мониторинг из UI или отредактируйте JSON по [`vllm-slots.json.example`](configs/monitoring/prometheus/vllm-slots.json.example).
@@ -103,6 +105,8 @@
 ```
 
 Логи контейнеров: **Grafana → Explore → Loki**; данные Loki на диске: `LOKI_DATA_DIR` (см. [configs/monitoring/LOGS.md](configs/monitoring/LOGS.md)).
+
+**Отчёт по логам (UI «Отчёты логов»):** on-demand сводка за выбранный интервал через **Loki + LiteLLM** — см. [**`web/CONTRACT.md`**](web/CONTRACT.md) (таблица `log_reports`, API `/api/v1/log-reports`); нужен поднятый мониторинг и настроенный доступ к прокси LiteLLM (модель и ключ, как для остального UI).
 
 Переменные для **слотов** передаёт **docker-py** + [`scripts/serve.sh`](scripts/serve.sh) в рантайме. Для **ручного** запуска LLM через `docker/docker-compose.llm.yml` (legacy) снимок env — с **`configs/main.env`** и пресетом. Корневой **`.env`** не дублируйте с пресетом по **`MAX_MODEL_LEN`**, **`GPU_MEM_UTIL`**, парсерам (см. [`docker/README.md`](docker/README.md)).
 

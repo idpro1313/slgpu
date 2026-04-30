@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { to: "/litellm", label: "LiteLLM" },
   { to: "/jobs", label: "Задачи" },
   { to: "/app-logs", label: "Логи" },
+  { to: "/log-reports", label: "Отчёты логов" },
   { to: "/docker-logs", label: "Docker" },
   { to: "/benchmarks", label: "Бенчмарки" },
   { to: "/settings", label: "Настройки" },

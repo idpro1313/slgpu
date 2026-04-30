@@ -152,6 +152,8 @@ daemon не нашёл бы файлы по `/slgpu/...` и создал бы п
 | GET | `/api/v1/monitoring/services` | состояние сервисов |
 | POST | `/api/v1/monitoring/action` | `docker compose` monitoring stack (up/down/restart/fix-perms) |
 | GET | `/api/v1/litellm/health\|info\|models` | LiteLLM proxy |
+| POST | `/api/v1/log-reports` | **8.2.0:** отчёт по логам Loki → факты → LiteLLM (**202** + `job_id`); требует поднятого мониторинга |
+| GET | `/api/v1/log-reports`, `/api/v1/log-reports/{id}` | список и статус/результат отчёта (`facts`, `llm_markdown`) |
 | GET | `/api/v1/jobs` | только CLI-задачи (лог, exit) |
 | GET | `/api/v1/activity` | **объединённая** лента: `jobs` + UI-действия (`audit_events` с `correlation_id IS NULL`); страница «Задачи» — по клику строки детали в модальном окне |
 | GET/PATCH | `/api/v1/settings/public-access` | публичный `server_host` для ссылок в браузере; **`litellm_api_key_set`** в GET; в PATCH опционально **`litellm_api_key`** (не возвращается; при смене ключа — audit с `[BLOCK_KEY_ROTATED]`) |
@@ -165,10 +167,12 @@ daemon не нашёл бы файлы по `/slgpu/...` и создал бы п
 - Любой аргумент, идущий в shell, проходит через
   [`app.core.security`](backend/app/core/security.py) с whitelist-регулярками.
 - Команды формируются ТОЛЬКО в [`app.services.slgpu_cli`](backend/app/services/slgpu_cli.py)
-  и для стека поддерживается только **`native.*`** (docker compose / docker-py), **без** вызова host `./slgpu`.
+  и для фоновых задач поддерживаются **`native.*`** (docker compose / docker-py)
+  и **`web.log_report.generate`** (без subprocess; пайплайн Loki→LLM — в `jobs` runner),
+  **без** вызова host `./slgpu`.
 - На каждый mutating job ставится **in-process lock** (asyncio) на
   `(scope, resource)` — слоты `("engine", "slot:{slot_key}")`,
-  monitoring — `("monitoring", "stack")`; повторный конфликтующий клик
+  monitoring — `("monitoring", "stack")`, **отчёты логов** — `("log_report", "report:{id}")`; повторный конфликтующий клик
   в UI блокируется, а прямой повторный запрос вернёт `409`.
 - Секреты HF/Grafana/LiteLLM/Langfuse в БД не пишутся; UI показывает
   лишь наличие/отсутствие.
