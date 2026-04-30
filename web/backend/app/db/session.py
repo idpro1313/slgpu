@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import (
 
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
+from sqlalchemy.engine.url import make_url
 
 from app.core.config import get_settings
 from app.db.base import Base
@@ -62,17 +63,32 @@ def _ensure_sqlite_parent_dir(database_url: str) -> None:
         )
 
 
+def _sqlite_connect_args(database_url: str) -> dict | None:
+    """Busy timeout so concurrent writes (request + jobs + DbLogHandler) retry instead of OperationalError."""
+
+    try:
+        u = make_url(database_url)
+    except Exception:  # noqa: BLE001
+        return None
+    if "sqlite" not in (u.drivername or ""):
+        return None
+    return {"timeout": 30.0}
+
+
 def get_engine() -> AsyncEngine:
     global _engine
     if _engine is None:
         settings = get_settings()
         _ensure_sqlite_parent_dir(settings.database_url)
-        _engine = create_async_engine(
-            settings.database_url,
-            future=True,
-            echo=False,
-            pool_pre_ping=True,
-        )
+        connect_args = _sqlite_connect_args(settings.database_url)
+        kw: dict = {
+            "future": True,
+            "echo": False,
+            "pool_pre_ping": True,
+        }
+        if connect_args is not None:
+            kw["connect_args"] = connect_args
+        _engine = create_async_engine(settings.database_url, **kw)
     return _engine
 
 

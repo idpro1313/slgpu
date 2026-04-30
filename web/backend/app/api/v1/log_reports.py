@@ -127,6 +127,11 @@ async def create_log_report(
     except CliValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    # Release SQLite write lock before `jobs.submit()`, which opens a second session
+    # (Job + audit_events INSERT). Holding the request tx here caused database is locked
+    # (same pattern as `POST /models/{id}/pull`).
+    await session.commit()
+
     try:
         job = await jobs_service.submit(
             command,
@@ -134,6 +139,8 @@ async def create_log_report(
             extra_args={"report_id": report.id},
         )
     except jobs_service.JobConflictError as exc:
+        await session.delete(report)
+        await session.commit()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(exc),

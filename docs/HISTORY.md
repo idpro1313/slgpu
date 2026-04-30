@@ -2327,6 +2327,13 @@
 - **Файлы:** **`web/backend/app/services/native_jobs.py`**, **`scripts/serve.sh`**, **`VERSION` 7.1.0**, **`web/*/package.json`/lock**, **`pyproject.toml`**, **`README.md`**, **`docs/HISTORY.md`**.
 - **Решение:** MINOR (новое поведение API создания слота при отсутствии `gpu_indices`; страховка entrypoint).
 
+### Что: `database is locked` при `POST /log-reports`
+
+- **Что:** Перед **`jobs.submit()`** добавлен **`await session.commit()`** для строки **`log_reports`** (как уже сделано для **`POST /models/{id}/pull`**): иначе HTTP-ран держит открытую SQLite-транзакцию, а **`submit`** открывает вторую сессию и делает **`INSERT`** в **`jobs`** / **`audit_events`** → **`sqlite3.OperationalError: database is locked`**. При **`JobConflictError (409)** после предварительного commit удаляется только что созданная запись отчёта. Для **`create_async_engine`** на SQLite добавлен **`connect_args={"timeout": 30}`** (busy handler).
+- **Почему:** отчёт пользователя с ошибкой **`BLOCK_API_ERROR`** на **`POST /api/v1/log-reports`**.
+- **Файлы:** **`web/backend/app/api/v1/log_reports.py`**, **`web/backend/app/db/session.py`**, **`VERSION` 8.2.1**, **`web/*/pyproject.toml|package*`**, **`docs/HISTORY.md`**.
+- **Решение:** PATCH.
+
 ## Фаза 8.2.0 (модуль «Отчёты логов»: Loki + LiteLLM)
 
 ### Что: on-demand отчёт по контейнерным логам
