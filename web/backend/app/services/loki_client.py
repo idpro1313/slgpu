@@ -18,10 +18,14 @@ from app.services.stack_config import sync_merged_flat
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_DIRECTION = "BACKWARD"
+# Loki HTTP API: только ``forward`` / ``backward`` (нижний регистр); ``BACKWARD`` даёт 400.
+_DEFAULT_DIRECTION = "backward"
 
 # Должен быть ≤ limits_config.max_entries_limit_per_query в loki-config (шаблон: 25000).
 _LOKI_QUERY_MAX_LINES = 25_000
+
+# Дефолт Loki до bump в шаблоне slgpu; при 400 повторяем запрос с этим limit.
+_LOKI_FALLBACK_LIMIT = 5000
 
 
 def loki_http_base_from_merged(merged: dict[str, str]) -> str:
@@ -65,11 +69,21 @@ async def query_range(
     }
     async with httpx.AsyncClient(timeout=timeout_sec) as client:
         response = await client.get(url, params=params)
+        if response.status_code == 400 and lim > _LOKI_FALLBACK_LIMIT:
+            logger.warning(
+                "[log_report][loki][BLOCK_LOKI_HTTP_RETRY] status=400 limit=%s→%s body=%s",
+                lim,
+                _LOKI_FALLBACK_LIMIT,
+                (response.text or "")[:500],
+            )
+            params_fb = dict(params)
+            params_fb["limit"] = str(_LOKI_FALLBACK_LIMIT)
+            response = await client.get(url, params=params_fb)
         if response.status_code != 200:
             logger.warning(
                 "[log_report][loki][BLOCK_LOKI_HTTP] status=%s body=%s",
                 response.status_code,
-                (response.text or "")[:500],
+                (response.text or "")[:800],
             )
         response.raise_for_status()
         return response.json()

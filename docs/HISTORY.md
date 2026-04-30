@@ -2327,6 +2327,15 @@
 - **Файлы:** **`web/backend/app/services/native_jobs.py`**, **`scripts/serve.sh`**, **`VERSION` 7.1.0**, **`web/*/package.json`/lock**, **`pyproject.toml`**, **`README.md`**, **`docs/HISTORY.md`**.
 - **Решение:** MINOR (новое поведение API создания слота при отсутствии `gpu_indices`; страховка entrypoint).
 
+## Фаза 8.2.3 (Loki 400: direction=BACKWARD и fallback limit)
+
+### Что: query_range — `backward` и повтор при превышении max_entries
+
+- **Что:** В **`loki_client`** параметр **`direction`** приведён к **`backward`** (нижний регистр; в [доке Loki](https://grafana.com/docs/loki/latest/reference/loki-http-api/) только `forward`/`backward` — значение **`BACKWARD`** могло давать **400**). При **400** и **`limit > 5000`** выполняется **один** повтор с **`limit=5000`** (старый Loki без bump в шаблоне). Лог **800** символов тела ответа при финальной ошибке. **VERSION 8.2.3**.
+- **Почему:** пользователь снова получил **400** на **`query_range`** с **`direction=BACKWARD`** и **`limit=8000`**.
+- **Файлы:** `web/backend/app/services/loki_client.py`, `web/CONTRACT.md`, `configs/monitoring/LOGS.md`, `VERSION`, `web/*/pyproject.toml|package*`, `docs/HISTORY.md`.
+- **Решение:** PATCH.
+
 ## Фаза 8.2.2 (Loki 400: limit > max_entries_limit_per_query)
 
 ### Что: отчёты логов и `query_range` с `limit=8000`
