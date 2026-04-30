@@ -2327,6 +2327,15 @@
 - **Файлы:** **`web/backend/app/services/native_jobs.py`**, **`scripts/serve.sh`**, **`VERSION` 7.1.0**, **`web/*/package.json`/lock**, **`pyproject.toml`**, **`README.md`**, **`docs/HISTORY.md`**.
 - **Решение:** MINOR (новое поведение API создания слота при отсутствии `gpu_indices`; страховка entrypoint).
 
+## Фаза 8.2.2 (Loki 400: limit > max_entries_limit_per_query)
+
+### Что: отчёты логов и `query_range` с `limit=8000`
+
+- **Что:** В **`configs/monitoring/loki/loki-config.yaml.tmpl`** добавлено **`max_entries_limit_per_query: 25000`** (дефолт Loki **5000** → **400** при **`limit=8000`**). **`loki_client`** режет запрос до **25 000**. **`log_report._ts_ns`** — целочисленный **`timedelta`** без float. **`configs/monitoring/LOGS.md`**, **`web/CONTRACT.md`**; **VERSION 8.2.2**.
+- **Почему:** **`Client error '400 Bad Request'`** на Loki **`query_range`**.
+- **Файлы:** `configs/monitoring/loki/loki-config.yaml.tmpl`, `web/backend/app/services/loki_client.py`, `web/backend/app/services/log_report.py`, `configs/monitoring/LOGS.md`, `web/CONTRACT.md`, `VERSION`, `web/*/pyproject.toml|package*`, `docs/HISTORY.md`.
+- **Решение:** PATCH. На стенде после обновления репо — **restart/up мониторинга** (перерендер `loki-config` в **`WEB_DATA_DIR`**), иначе Loki останется с лимитом 5000.
+
 ### Что: `database is locked` при `POST /log-reports`
 
 - **Что:** Перед **`jobs.submit()`** добавлен **`await session.commit()`** для строки **`log_reports`** (как уже сделано для **`POST /models/{id}/pull`**): иначе HTTP-ран держит открытую SQLite-транзакцию, а **`submit`** открывает вторую сессию и делает **`INSERT`** в **`jobs`** / **`audit_events`** → **`sqlite3.OperationalError: database is locked`**. При **`JobConflictError (409)** после предварительного commit удаляется только что созданная запись отчёта. Для **`create_async_engine`** на SQLite добавлен **`connect_args={"timeout": 30}`** (busy handler).

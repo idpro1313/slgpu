@@ -80,6 +80,13 @@ def test_validate_period_over_168h_raises():
         log_report_service.validate_period(a, b)
 
 
+def test_ts_ns_deterministic_from_timedelta():
+    dt = datetime(1970, 1, 2, tzinfo=timezone.utc)
+    assert log_report_service._ts_ns(dt) == 86_400 * 1_000_000_000
+    dt2 = datetime(1970, 1, 1, 0, 0, 0, 1, tzinfo=timezone.utc)
+    assert log_report_service._ts_ns(dt2) == 1000
+
+
 @pytest.mark.asyncio
 async def test_create_log_report_pipeline_mocked(monkeypatch: pytest.MonkeyPatch) -> None:
     await init_db()

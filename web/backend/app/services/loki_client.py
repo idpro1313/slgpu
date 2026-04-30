@@ -20,6 +20,9 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_DIRECTION = "BACKWARD"
 
+# Должен быть ≤ limits_config.max_entries_limit_per_query в loki-config (шаблон: 25000).
+_LOKI_QUERY_MAX_LINES = 25_000
+
 
 def loki_http_base_from_merged(merged: dict[str, str]) -> str:
     host = str(merged.get("LOKI_SERVICE_NAME") or "").strip()
@@ -52,7 +55,7 @@ async def query_range(
 
     base = loki_http_base_from_merged(merged or sync_merged_flat())
     url = f"{base}/loki/api/v1/query_range"
-    lim = max(1, min(int(limit), 50_000))
+    lim = max(1, min(int(limit), _LOKI_QUERY_MAX_LINES))
     params = {
         "query": query,
         "start": str(start_ns),

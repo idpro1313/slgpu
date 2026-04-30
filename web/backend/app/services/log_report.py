@@ -85,9 +85,15 @@ def validate_period(dt_from: datetime, dt_to: datetime) -> tuple[datetime, datet
 
 
 def _ts_ns(dt: datetime) -> int:
+    """Наносекунды UNIX UTC без float drift (важно для Loki query_range)."""
+
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
-    return int(dt.timestamp() * 1_000_000_000)
+    else:
+        dt = dt.astimezone(timezone.utc)
+    epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+    td = dt - epoch
+    return td.days * 86_400 * 1_000_000_000 + td.seconds * 1_000_000_000 + td.microseconds * 1_000
 
 
 def redact_line(line: str) -> str:
