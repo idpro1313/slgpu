@@ -29,6 +29,8 @@
 - **`MM_ENCODER_TP_MODE`** — только vLLM (`--mm-encoder-tp-mode`); для **moonshotai/Kimi-K2.6** в репозитории в пресете задано **`data`** (референс Moonshot).
 - **`TP`** — tensor parallel; согласуйте с числом GPU. В шаблонах репозитория по умолчанию **8**; на 4 GPU — **4** в пресете (в UI при создании слота).
 - **`BENCH_MODEL_NAME`** — поле `model` в бенче; пусто — первая модель из `/v1/models`.
+- **`TORCH_FLOAT32_MATMUL_PRECISION`** — env для PyTorch внутри vLLM-контейнера (`highest` / `high` / `medium`); если задано в пресете, передаётся контейнеру без превращения в CLI-флаг.
+- **`VLLM_USE_V1`** — env-переключатель движка vLLM (`1` / `0`); если задано в пресете, передаётся контейнеру до старта `vllm serve`.
 - **`VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS`** — `0` или `1` (в пресете для тяжёлых MoE при необходимости).
 
 ## Соответствие семейств и парсеров (vLLM)

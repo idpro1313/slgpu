@@ -118,6 +118,8 @@ def render_env_text(values: dict[str, str], header: str | None = None) -> str:
                 "TOOL_CALL_PARSER",
                 "REASONING_PARSER",
                 "CHAT_TEMPLATE_CONTENT_FORMAT",
+                "TORCH_FLOAT32_MATMUL_PRECISION",
+                "VLLM_USE_V1",
                 "VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS",
             ],
         ),

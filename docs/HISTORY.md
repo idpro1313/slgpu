@@ -2336,6 +2336,15 @@
 - **Файлы:** `web/backend/app/services/loki_client.py`, `web/CONTRACT.md`, `configs/monitoring/LOGS.md`, `VERSION`, `web/*/pyproject.toml|package*`, `docs/HISTORY.md`.
 - **Решение:** PATCH.
 
+## Фаза 8.2.4 (пресеты: env-параметры vLLM)
+
+### Что: `TORCH_FLOAT32_MATMUL_PRECISION` и `VLLM_USE_V1` разрешены в карточках пресетов
+
+- **Что:** В whitelist `presets.parameters` добавлены **`TORCH_FLOAT32_MATMUL_PRECISION`** и **`VLLM_USE_V1`**; рендер/экспорт `.env` группирует их в секции vLLM; UI «Пресеты» показывает ключи в datalist; `write_llm_interp_env` сохраняет их в env-снимке при наличии. Тесты импорта `.env` и рендера пресета закрепляют round-trip.
+- **Почему:** Запрос пользователя — задавать эти env-переменные vLLM на уровне конкретного пресета, а не глобального стека.
+- **Файлы:** `web/backend/app/services/presets.py`, `web/backend/app/services/env_files.py`, `web/backend/app/services/env_key_aliases.py`, `web/backend/app/services/stack_config.py`, `web/frontend/src/pages/Presets.tsx`, `web/backend/tests/test_preset_import_env.py`, `web/backend/tests/test_env_files.py`, `examples/presets/README.md`, `configs/monitoring/README.md`, `README.md`, `web/CONTRACT.md`, `docs/AGENTS.md`, `grace/**/*.xml`, `VERSION`, `web/*/package*.json`, `web/backend/pyproject.toml`, `docs/HISTORY.md`.
+- **Решение:** PATCH. Переменные передаются как env контейнера и не превращаются в CLI-флаги `vllm serve`; пустые значения по-прежнему не сохраняются в `parameters`.
+
 ## Фаза 8.2.2 (Loki 400: limit > max_entries_limit_per_query)
 
 ### Что: отчёты логов и `query_range` с `limit=8000`

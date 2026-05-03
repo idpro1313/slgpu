@@ -690,6 +690,8 @@ def write_llm_interp_env(path: Path, merged: dict[str, str]) -> None:
         f"MM_ENCODER_TP_MODE={_stack_val(m, 'MM_ENCODER_TP_MODE')}",
         f"ATTENTION_BACKEND={_stack_val(m, 'ATTENTION_BACKEND')}",
         f"TOKENIZER_MODE={_stack_val(m, 'TOKENIZER_MODE')}",
+        f"TORCH_FLOAT32_MATMUL_PRECISION={_stack_val(m, 'TORCH_FLOAT32_MATMUL_PRECISION')}",
+        f"VLLM_USE_V1={_stack_val(m, 'VLLM_USE_V1')}",
         f"VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS={_stack_val(m, 'VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS')}",
         f"NVIDIA_VISIBLE_DEVICES={_stack_val(m, 'NVIDIA_VISIBLE_DEVICES')}",
         f"MODELS_DIR={_stack_val(m, 'MODELS_DIR')}",

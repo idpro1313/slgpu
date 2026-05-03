@@ -96,6 +96,8 @@ PRESET_ONLY_KEYS: frozenset[str] = frozenset(
         "TRUST_REMOTE_CODE",
         "TOOL_CALL_PARSER",
         "REASONING_PARSER",
+        "TORCH_FLOAT32_MATMUL_PRECISION",
+        "VLLM_USE_V1",
     }
 )
 

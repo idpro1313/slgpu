@@ -12,6 +12,8 @@ from app.main import app
 
 _ENV_MINIMAL = """MODEL_ID=Qwen/Qwen3-7B
 TP=2
+TORCH_FLOAT32_MATMUL_PRECISION=high
+VLLM_USE_V1=1
 """
 
 
@@ -35,6 +37,8 @@ async def test_import_env_creates_preset(client: httpx.AsyncClient) -> None:
     assert body["name"] == "upload-me"
     assert body["hf_id"] == "Qwen/Qwen3-7B"
     assert body["tp"] == 2
+    assert body["parameters"]["TORCH_FLOAT32_MATMUL_PRECISION"] == "high"
+    assert body["parameters"]["VLLM_USE_V1"] == "1"
 
 
 @pytest.mark.asyncio

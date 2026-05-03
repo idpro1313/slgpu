@@ -39,6 +39,8 @@ def test_render_env_text_groups_keys():
             "MAX_MODEL_LEN": "262144",
             "TP": "8",
             "TOOL_CALL_PARSER": "qwen3_xml",
+            "TORCH_FLOAT32_MATMUL_PRECISION": "high",
+            "VLLM_USE_V1": "1",
             "EXTRA_FLAG": "1",
         },
         header="auto-generated",
@@ -46,6 +48,8 @@ def test_render_env_text_groups_keys():
     assert "# auto-generated" in rendered
     assert "MODEL_ID=Qwen/Qwen3.6-35B-A3B" in rendered
     assert "MAX_MODEL_LEN=262144" in rendered
+    assert "TORCH_FLOAT32_MATMUL_PRECISION=high" in rendered
+    assert "VLLM_USE_V1=1" in rendered
     assert rendered.endswith("\n")
 
 
