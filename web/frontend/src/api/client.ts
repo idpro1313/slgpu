@@ -82,6 +82,29 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
+function filenameFromContentDisposition(value: string | null): string | undefined {
+  if (!value) return undefined;
+  const utf8 = /filename\*=UTF-8''([^;]+)/i.exec(value);
+  if (utf8?.[1]) return decodeURIComponent(utf8[1].trim());
+  const plain = /filename="?([^";]+)"?/i.exec(value);
+  return plain?.[1]?.trim();
+}
+
+async function download(path: string, init?: RequestInit): Promise<{ blob: Blob; filename?: string }> {
+  const response = await fetch(`${API_PREFIX}${path}`, {
+    ...init,
+    method: init?.method ?? "GET",
+  });
+  if (!response.ok) {
+    const detail = await parseErrorResponse(response);
+    throwWithStackDetails(response.status, detail);
+  }
+  return {
+    blob: await response.blob(),
+    filename: filenameFromContentDisposition(response.headers.get("Content-Disposition")),
+  };
+}
+
 /** Корневые пути вне `/api/v1` (например `/healthz` для dev-proxy). */
 async function requestRoot<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, { ...init });
@@ -115,5 +138,6 @@ export const api = {
     }),
   delete: <T>(path: string, init?: RequestInit) =>
     request<T>(path, { ...init, method: "DELETE" }),
+  download,
   healthz: (init?: RequestInit) => requestRoot<Healthz>("/healthz", init),
 };

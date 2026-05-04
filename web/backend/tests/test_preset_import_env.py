@@ -77,3 +77,22 @@ async def test_import_env_without_model_id_400(client: httpx.AsyncClient) -> Non
             data={"overwrite": "false"},
         )
     assert r.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_download_env_returns_attachment(client: httpx.AsyncClient) -> None:
+    async with client:
+        created = await client.post(
+            "/api/v1/presets/import-env",
+            files={"file": ("download-me.env", _ENV_MINIMAL.encode("utf-8"), "text/plain")},
+            data={"overwrite": "true"},
+        )
+        assert created.status_code == 200
+        preset_id = created.json()["id"]
+
+        r = await client.get(f"/api/v1/presets/{preset_id}/download-env")
+
+    assert r.status_code == 200
+    assert r.headers["content-disposition"] == 'attachment; filename="download-me.env"'
+    assert "MODEL_ID=Qwen/Qwen3-7B" in r.text
+    assert "TORCH_FLOAT32_MATMUL_PRECISION=high" in r.text

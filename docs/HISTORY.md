@@ -2379,3 +2379,12 @@
 - **Файлы:** `web/backend/app/services/jobs.py`, `web/backend/app/api/v1/models.py`, `web/backend/tests/test_jobs_runner.py`, `web/frontend/src/pages/Models.tsx`, `web/frontend/src/components/TableActionIcons.tsx`, `README.md`, `web/README.md`, `web/CONTRACT.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/plan/development-plan.xml`, `grace/verification/verification-plan.xml`, `VERSION`, `web/backend/pyproject.toml`, `web/frontend/package.json`, `web/frontend/package-lock.json`, `docs/HISTORY.md`.
 - **Решение:** PATCH. Частично скачанные файлы не удаляются автоматически: статус может остаться **`PARTIAL`**, но `pull_progress` исчезает и повторная докачка доступна сразу; полное удаление по-прежнему только через отдельное подтверждение «Удалить с диска».
 
+## Фаза 8.2.5 (пресеты: скачивание `.env` на клиентский ПК)
+
+### Что: browser-download пресета без записи в `PRESETS_DIR`
+
+- **Что:** Добавлен read-only endpoint **`GET /api/v1/presets/{id}/download-env`**, который рендерит `.env` из записи БД и отдаёт `text/plain` с `Content-Disposition: attachment`. В UI «Пресеты» добавлены кнопки **«Скачать .env на ПК»** в карточке и иконка скачивания в таблице; прежний серверный экспорт переименован в **«Выгрузить в PRESETS_DIR»**. Общий рендер вынесен в `render_preset_env_text`, чтобы клиентская загрузка и серверный export использовали один формат.
+- **Почему:** Запрос пользователя — добавить в управление пресетами экспорт пресета в файл на клиентском ПК, а не только запись `.env` на серверный диск.
+- **Файлы:** `web/backend/app/services/presets.py`, `web/backend/app/api/v1/presets.py`, `web/backend/tests/test_preset_import_env.py`, `web/frontend/src/api/client.ts`, `web/frontend/src/pages/Presets.tsx`, `web/CONTRACT.md`, `README.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/plan/development-plan.xml`, `grace/verification/verification-plan.xml`, `VERSION`, `web/frontend/package.json`, `web/frontend/package-lock.json`, `web/backend/pyproject.toml`, `docs/HISTORY.md`.
+- **Решение:** PATCH — новое read-only API и UX-действие без изменения модели данных пресета; `POST /presets/{id}/export` сохранён для серверного `PRESETS_DIR`.
+

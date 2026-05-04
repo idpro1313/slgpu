@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -269,6 +269,28 @@ async def export_preset(
         payload={"preset_id": preset_id, "name": preset.name},
     )
     return preset
+
+
+@router.get("/{preset_id}/download-env")
+async def download_preset_env(
+    preset_id: int,
+    session: AsyncSession = Depends(db_session),
+) -> Response:
+    """Скачать `.env` пресета в браузер без записи файла на серверный диск."""
+    await preset_service.migrate_preset_parameters_to_canonical_if_needed(session)
+    preset = await session.get(Preset, preset_id)
+    if preset is None:
+        raise HTTPException(status_code=404, detail="preset not found")
+    try:
+        text = preset_service.render_preset_env_text(preset, client_download=True)
+    except ValidationError as exc:
+        raise HTTPException(status_code=500, detail=f"download failed: {exc}") from exc
+    filename = f"{preset.name}.env"
+    return Response(
+        content=text,
+        media_type="text/plain; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.delete("/{preset_id}")

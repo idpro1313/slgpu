@@ -9,6 +9,7 @@ import { Section } from "@/components/Section";
 import { StatusBadge } from "@/components/StatusBadge";
 import {
   IconActionButton,
+  IconCloudArrowDown,
   IconCopy,
   IconEdit,
   IconFileX,
@@ -102,6 +103,17 @@ function isPresetEditorDirty(editor: PresetEditorForm, preset: Preset): boolean 
 
 function newParameterRow(): ParameterRow {
   return { id: `${Date.now()}-${Math.random()}`, key: "", value: "" };
+}
+
+function saveBlobToClient(blob: Blob, filename: string) {
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => window.URL.revokeObjectURL(url), 0);
 }
 
 const COMMON_PARAMETERS = [
@@ -208,6 +220,18 @@ export function PresetsPage() {
     onError: (err: Error) => setError(err.message),
   });
 
+  const downloadPresetEnv = useMutation({
+    mutationFn: async (preset: Preset) => {
+      const result = await api.download(`/presets/${preset.id}/download-env`);
+      return { ...result, fallbackFilename: `${preset.name}.env` };
+    },
+    onSuccess: ({ blob, filename, fallbackFilename }) => {
+      saveBlobToClient(blob, filename ?? fallbackFilename);
+      setError(null);
+    },
+    onError: (err: Error) => setError(err.message),
+  });
+
   const clonePresetMut = useMutation({
     mutationFn: ({ id, body }: { id: number; body: PresetCloneRequest }) =>
       api.post<Preset>(`/presets/${id}/clone`, body),
@@ -263,7 +287,7 @@ export function PresetsPage() {
     <>
       <PageHeader
         title="Пресеты запуска"
-        subtitle="Реестр в БД для UI и Inference. Для `./slgpu` и файлов в PRESETS_DIR используйте «Выгрузить в .env» в карточке пресета. Импорт с диска и шаблоны — с хоста (CLI / `examples/presets`)."
+        subtitle="Реестр в БД для UI и Inference. «Скачать .env на ПК» сохраняет файл через браузер, а «Выгрузить в .env» пишет копию в PRESETS_DIR на сервере."
       />
 
       <Section
@@ -410,7 +434,7 @@ export function PresetsPage() {
 
       <Section
         title="Просмотр и редактирование"
-        subtitle="Сохранение в БД; для файла data/presets/(slug).env нажмите «Выгрузить в .env»."
+        subtitle="Сохранение в БД; клиентская загрузка скачивает .env в браузер, серверная выгрузка пишет data/presets/(slug).env."
       >
         {!selectedPreset || !editor ? (
           <div className="empty-state">Выберите пресет в таблице ниже.</div>
@@ -507,10 +531,18 @@ export function PresetsPage() {
               <button
                 type="button"
                 className="btn"
+                onClick={() => downloadPresetEnv.mutate(selectedPreset)}
+                disabled={downloadPresetEnv.isPending}
+              >
+                {downloadPresetEnv.isPending ? "Готовим…" : "Скачать .env на ПК"}
+              </button>
+              <button
+                type="button"
+                className="btn"
                 onClick={() => exportPreset.mutate(selectedPreset.id)}
                 disabled={exportPreset.isPending}
               >
-                {exportPreset.isPending ? "Выгружаем…" : "Выгрузить в .env"}
+                {exportPreset.isPending ? "Выгружаем…" : "Выгрузить в PRESETS_DIR"}
               </button>
               <button
                 type="button"
@@ -555,7 +587,7 @@ export function PresetsPage() {
 
       <Section
         title="Все пресеты"
-        subtitle="Выгрузка в .env — только в карточке выше (редактирование выбранного пресета)."
+        subtitle="Скачивание .env доступно прямо из таблицы; редактирование и серверная выгрузка — в карточке выше."
       >
         {presets.isLoading ? (
           <div className="empty-state">Загружаем…</div>
@@ -612,6 +644,14 @@ export function PresetsPage() {
                           }}
                         >
                           <IconCopy />
+                        </IconActionButton>
+                        <IconActionButton
+                          label="Скачать .env на клиентский ПК"
+                          variant="default"
+                          disabled={downloadPresetEnv.isPending}
+                          onClick={() => downloadPresetEnv.mutate(preset)}
+                        >
+                          <IconCloudArrowDown />
                         </IconActionButton>
                         <IconActionButton
                           label="Удалить пресет из БД (запись в web-реестре)"
