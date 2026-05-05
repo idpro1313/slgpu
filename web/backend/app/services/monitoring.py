@@ -35,7 +35,8 @@ def _settings_probes() -> list[ServiceProbe]:
     h = s.monitoring_http_host
     prom = int(p["prometheus_port"])
     graf = int(p["grafana_port"])
-    lf = int(p["langfuse_port"])
+    lf_host = int(p["langfuse_port"])
+    lf_internal = int(p["langfuse_web_internal_port"])
     llm = int(p["litellm_port"])
     mflat = sync_merged_flat()
     lf_svc = str(mflat.get("LANGFUSE_WEB_SERVICE_NAME") or "").strip()
@@ -102,11 +103,11 @@ def _settings_probes() -> list[ServiceProbe]:
             project=pxy,
             service="langfuse-web",
             health_url=(
-                f"http://{lf_svc}:{lf}/api/public/health"
+                f"http://{lf_svc}:{lf_internal}/api/public/health"
                 if lf_svc
-                else f"http://{h}:{lf}/api/public/health"
+                else f"http://{h}:{lf_host}/api/public/health"
             ),
-            web_url=f"http://{h}:{lf}",
+            web_url=f"http://{h}:{lf_host}",
         ),
         ServiceProbe(
             key="litellm",

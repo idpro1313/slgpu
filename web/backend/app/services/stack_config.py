@@ -344,6 +344,7 @@ def ports_for_probes_sync() -> dict[str, int | str]:
         "grafana_port": _i("GRAFANA_PORT"),
         "prometheus_port": _i("PROMETHEUS_PORT"),
         "langfuse_port": _i("LANGFUSE_PORT"),
+        "langfuse_web_internal_port": _i("LANGFUSE_WEB_INTERNAL_PORT"),
         "litellm_port": _i("LITELLM_PORT"),
         "loki_port": _i("LOKI_PORT"),
         "compose_project_infer": m["WEB_COMPOSE_PROJECT_INFER"],

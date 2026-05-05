@@ -334,6 +334,7 @@ curl -s http://127.0.0.1:8111/v1/chat/completions \
 | **OOM MoE при загрузке весов** | Часто не спасает только снижение контекста; **TP=8**, другой чекпоинт HF или квант |
 | **vLLM:** `WorkerProc initialization failed` | Ищите `CUDA OOM` выше в логе; см. [`scripts/serve.sh`](scripts/serve.sh), [`main.env`](main.env) |
 | **vLLM:** `custom_all_reduce.cuh` / `invalid argument` при старте | Дефолт **`SLGPU_DISABLE_CUSTOM_ALL_REDUCE=1`** (NCCL). Не задавайте `0` в пресете, пока custom all-reduce стабилен на вашем образе/модели. |
+| **Langfuse (Dashboard / LiteLLM):** статус **degraded**, `probe failed: ConnectError` | Проба из контейнера `slgpu-web` по DNS **`LANGFUSE_WEB_SERVICE_NAME`** должна ходить на **внутренний** порт **`LANGFUSE_WEB_INTERNAL_PORT`** (в контейнере обычно **3000**), а не на опубликованный на хосте **`LANGFUSE_PORT`** (маппинг `host:LANGFUSE_PORT→container:internal`). Это исправлено в **8.2.14** (`monitoring._settings_probes`). Убедитесь, что прокси-поднят (**`native.proxy.up`**), контейнер **`langfuse-web`** в **`running`**, сеть общая (**`SLGPU_NETWORK_NAME`**). Если ошибка сохраняется — логи: `docker logs …langfuse-web` (миграции БД / MinIO). |
 | **404 model `gpt-oss-120b`** | Используйте **`openai/gpt-oss-120b`** как в `/v1/models` |
 | **Hermes2ProToolParser / `token_ids` (gpt-oss)** | `TOOL_CALL_PARSER=openai` в пресете |
 
