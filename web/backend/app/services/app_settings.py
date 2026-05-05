@@ -75,6 +75,14 @@ async def get_litellm_api_key(session: AsyncSession) -> str | None:
     return s if s else None
 
 
+async def get_litellm_master_key(session: AsyncSession) -> str | None:
+    raw = (await get_public_access_value(session)).get("litellm_master_key")
+    if not isinstance(raw, str):
+        return None
+    s = raw.strip()
+    return s if s else None
+
+
 async def set_public_server_host(session: AsyncSession, server_host: str | None) -> str | None:
     normalized = normalize_server_host(server_host)
     d = await get_public_access_value(session)

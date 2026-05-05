@@ -39,7 +39,7 @@ def test_non_sqlite(url: str) -> None:
     assert sqlite_path_from_database_url(url) is None
 
 
-def test_compose_env_keeps_litellm_master_key_from_public_access(tmp_path: Path) -> None:
+def test_compose_env_keeps_derived_litellm_master_key(tmp_path: Path) -> None:
     out = write_compose_service_env_file(
         tmp_path,
         {

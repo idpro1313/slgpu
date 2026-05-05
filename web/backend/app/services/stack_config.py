@@ -138,11 +138,11 @@ def _load_flat_from_stack_params(conn: sqlite3.Connection) -> dict[str, str] | N
 
 
 def _merge_public_access_litellm_master_key(conn: sqlite3.Connection, merged: dict[str, str]) -> None:
-    """Подстановка ``LITELLM_MASTER_KEY`` только из ``public_access.litellm_api_key`` (не из stack_params)."""
+    """Подстановка ``LITELLM_MASTER_KEY`` только из ``public_access.litellm_master_key`` (не из stack_params)."""
     pa = _load_json_key(conn, _PUBLIC_ACCESS_KEY)
     if not isinstance(pa, dict):
         return
-    raw = pa.get("litellm_api_key")
+    raw = pa.get("litellm_master_key")
     if isinstance(raw, str) and raw.strip():
         merged["LITELLM_MASTER_KEY"] = raw.strip()
 

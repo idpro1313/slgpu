@@ -2,7 +2,9 @@
 
 Репозиторий **стенда для сравнения LLM-инференса** на Linux-сервере с GPU: два движка (**vLLM** и **SGLang**) в Docker, общий локальный кэш моделей, OpenAI-совместимый HTTP API, нагрузочный бенчмарк, **Prometheus + Grafana Loki (логи) + Promtail + Langfuse (трейсинг) + LiteLLM Proxy (шлюз) + NVIDIA DCGM Exporter** (см. [§3](#3-сервисы-и-порты), [`configs/monitoring/README.md`](configs/monitoring/README.md)).
 
-> **Версия 8.2.9:** исправлена передача ключа **LiteLLM Admin UI**: значение **`litellm_api_key`** из **«Настройки → Внешний доступ»** по-прежнему не отображается в таблице стека, но теперь попадает в `${WEB_DATA_DIR}/.slgpu/compose-service.env` как **`LITELLM_MASTER_KEY`** при запуске/рестарте proxy-стека. Это закрывает экран LiteLLM **“Master Key not set for Proxy”** после пересоздания контейнера.
+> **Версия 8.2.10:** в **«Настройки → Внешний доступ»** ключи LiteLLM разделены: **Master key LiteLLM Proxy** хранится как `litellm_master_key` и передаётся в proxy-контейнер как **`LITELLM_MASTER_KEY`**, а **API-ключ LiteLLM для анализа логов** хранится как `litellm_api_key` и используется только backend-запросами `/v1/chat/completions`.
+>
+> **Версия 8.2.9:** исправлена передача ключа **LiteLLM Admin UI**: значение **`litellm_master_key`** из **«Настройки → Внешний доступ»** не отображается в таблице стека, но попадает в `${WEB_DATA_DIR}/.slgpu/compose-service.env` как **`LITELLM_MASTER_KEY`** при запуске/рестарте proxy-стека. Это закрывает экран LiteLLM **“Master Key not set for Proxy”** после пересоздания контейнера.
 >
 > **Версия 8.2.8:** в **«Отчётах логов»** уточнена классификация `errorish`/`warningish`/`oom`: OOM теперь ищется по словарным границам (`oom`, `out of memory`, `cuda out of memory`), чтобы служебные строки Loki с `bloom` и похожими словами не попадали в OOM; добавлены тесты на шумовые `info`-строки.
 >

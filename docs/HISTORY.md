@@ -2424,3 +2424,12 @@
 - **Файлы:** `web/backend/app/services/stack_config.py`, `web/backend/tests/test_stack_config_sqlite_path.py`, `web/frontend/src/pages/Settings.tsx`, `web/CONTRACT.md`, `README.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/verification/verification-plan.xml`, `VERSION`, `web/frontend/package.json`, `web/frontend/package-lock.json`, `web/backend/pyproject.toml`, `docs/HISTORY.md`.
 - **Решение:** PATCH — ключ остаётся невыводимым секретом public-access, но становится доступен Docker Compose как env для LiteLLM Proxy.
 
+## Фаза 8.2.10 (LiteLLM: master key и API key разделены)
+
+### Что: два разных секрета во «Внешнем доступе»
+
+- **Что:** В `settings.public_access` разделены **`litellm_master_key`** (для запуска LiteLLM Proxy/Admin UI как `LITELLM_MASTER_KEY`) и **`litellm_api_key`** (Bearer для backend-запросов `/v1/chat/completions`, включая анализ логов). UI «Настройки → Внешний доступ» показывает два отдельных password-поля и две отдельные кнопки сброса. Backend `sync_merged_flat` берёт `LITELLM_MASTER_KEY` только из `litellm_master_key`; `log_report.call_litellm_chat` продолжает использовать `litellm_api_key`. API `GET /settings/public-access` отдаёт флаги `litellm_master_key_set` и `litellm_api_key_set`.
+- **Почему:** Пользователь указал, что это разные ключи: `LITELLM_MASTER_KEY` нужен LiteLLM Proxy, а API-ключ LiteLLM нужен анализу логов для доступа к моделям.
+- **Файлы:** `web/backend/app/schemas/settings.py`, `web/backend/app/services/app_settings.py`, `web/backend/app/api/v1/settings.py`, `web/backend/app/services/stack_config.py`, `web/backend/tests/test_api_smoke.py`, `web/backend/tests/test_stack_config_sqlite_path.py`, `web/frontend/src/api/types.ts`, `web/frontend/src/pages/Settings.tsx`, `web/CONTRACT.md`, `README.md`, `docs/AGENTS.md`, `.cursor/rules/git-version-commit.mdc`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/verification/verification-plan.xml`, `VERSION`, `web/frontend/package.json`, `web/frontend/package-lock.json`, `web/backend/pyproject.toml`, `docs/HISTORY.md`.
+- **Решение:** PATCH — убрали смешение ролей, сохранив оба значения как непоказываемые секреты public-access.
+

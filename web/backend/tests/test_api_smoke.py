@@ -279,12 +279,32 @@ async def test_public_access_settings_drive_external_ui_links(client: httpx.Asyn
     uj = updated.json()
     assert uj["effective_server_host"] == "llm.example.local"
     assert uj.get("litellm_api_key_set") is False
+    assert uj.get("litellm_master_key_set") is False
     assert services.status_code == 200
     by_key = {item["key"]: item for item in services.json()}
     assert by_key["grafana"]["url"] == "http://llm.example.local:3000"
     assert by_key["litellm"]["url"] == "http://llm.example.local:4000/ui"
     assert litellm.status_code == 200
     assert litellm.json()["ui_url"] == "http://llm.example.local:4000/ui"
+
+
+@pytest.mark.asyncio
+async def test_public_access_settings_store_separate_litellm_keys(
+    client: httpx.AsyncClient,
+) -> None:
+    async with client:
+        updated = await client.patch(
+            "/api/v1/settings/public-access",
+            json={
+                "litellm_master_key": "sk-master",
+                "litellm_api_key": "sk-model-api",
+            },
+        )
+
+    assert updated.status_code == 200
+    body = updated.json()
+    assert body["litellm_master_key_set"] is True
+    assert body["litellm_api_key_set"] is True
 
 
 @pytest.mark.asyncio

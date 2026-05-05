@@ -18,7 +18,11 @@ class PublicAccessSettings(BaseModel):
     litellm_api_url: str
     litellm_api_key_set: bool = Field(
         default=False,
-        description="Whether a LiteLLM master / API key is stored for server-side /v1 calls.",
+        description="Whether a LiteLLM API key is stored for server-side /v1 calls.",
+    )
+    litellm_master_key_set: bool = Field(
+        default=False,
+        description="Whether a LiteLLM proxy master key is stored for LITELLM_MASTER_KEY.",
     )
 
 
@@ -27,5 +31,10 @@ class PublicAccessSettingsUpdate(BaseModel):
     litellm_api_key: str | None = Field(
         default=None,
         max_length=2000,
-        description="sk-... / master key; omit to leave unchanged, null or empty to clear.",
+        description="sk-... API key for server-side /v1 model calls; omit to leave unchanged, null or empty to clear.",
+    )
+    litellm_master_key: str | None = Field(
+        default=None,
+        max_length=2000,
+        description="sk-... master key for LiteLLM Proxy/Admin UI; omit to leave unchanged, null or empty to clear.",
     )

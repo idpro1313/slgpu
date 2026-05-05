@@ -337,6 +337,8 @@ export interface PublicAccessSettings {
   litellm_api_url: string;
   /** Ключ в БД есть (значение никогда не отдаётся). */
   litellm_api_key_set: boolean;
+  /** Master key для LITELLM_MASTER_KEY задан (значение никогда не отдаётся). */
+  litellm_master_key_set: boolean;
 }
 
 export interface Healthz {

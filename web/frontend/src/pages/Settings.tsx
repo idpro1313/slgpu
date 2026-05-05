@@ -352,8 +352,9 @@ export function SettingsPage() {
 
   const queryClient = useQueryClient();
   const [serverHost, setServerHost] = useState("");
-  /** Пусто = не менять; ввод = новый ключ; сброс — отдельная кнопка. */
+  /** Пусто = не менять; ввод = новый ключ; сброс — отдельные кнопки. */
   const [litellmKey, setLiteLLMKey] = useState("");
+  const [litellmMasterKey, setLiteLLMMasterKey] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [jobError, setJobError] = useState<string | null>(null);
@@ -483,19 +484,43 @@ export function SettingsPage() {
     },
   });
 
+  const clearLiteLLMMasterKey = useMutation({
+    mutationFn: () =>
+      api.patch<PublicAccessSettings>("/settings/public-access", { litellm_master_key: null }),
+    onSuccess: () => {
+      setError(null);
+      setMessage("Master key LiteLLM Proxy сброшен в БД.");
+      setLiteLLMMasterKey("");
+      queryClient.invalidateQueries({ queryKey: ["settings", "public-access"] });
+      queryClient.invalidateQueries({ queryKey: ["monitoring", "services"] });
+      queryClient.invalidateQueries({ queryKey: ["litellm", "info"] });
+    },
+    onError: (err: Error) => {
+      setMessage(null);
+      setError(err.message);
+    },
+  });
+
   const save = useMutation({
     mutationFn: () => {
-      const body: { server_host: string | null; litellm_api_key?: string } = {
+      const body: {
+        server_host: string | null;
+        litellm_api_key?: string;
+        litellm_master_key?: string;
+      } = {
         server_host: serverHost.trim() || null,
       };
       const k = litellmKey.trim();
       if (k) body.litellm_api_key = k;
+      const mk = litellmMasterKey.trim();
+      if (mk) body.litellm_master_key = mk;
       return api.patch<PublicAccessSettings>("/settings/public-access", body);
     },
     onSuccess: () => {
       setError(null);
       setMessage("Настройки сохранены. Ссылки на других страницах обновятся после перезагрузки данных.");
       setLiteLLMKey("");
+      setLiteLLMMasterKey("");
       queryClient.invalidateQueries({ queryKey: ["settings", "public-access"] });
       queryClient.invalidateQueries({ queryKey: ["monitoring", "services"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
@@ -572,30 +597,64 @@ export function SettingsPage() {
             </p>
             <label>
               <span className="label">
-                API-ключ LiteLLM (Bearer; хранится как litellm_api_key)
+                Master key LiteLLM Proxy (для Admin UI; хранится как litellm_master_key)
               </span>
               <input
                 className="input"
                 type="password"
                 autoComplete="off"
                 placeholder="оставьте пустым, чтобы не менять; новый ключ станет LITELLM_MASTER_KEY для proxy"
-                value={litellmKey}
-                onChange={(e) => setLiteLLMKey(e.target.value)}
+                value={litellmMasterKey}
+                onChange={(e) => setLiteLLMMasterKey(e.target.value)}
               />
             </label>
             <p className="section__subtitle" style={{ margin: 0 }}>
-              Ключ в базе:{" "}
+              Master key в базе:{" "}
               {publicAccess.isLoading
                 ? "…"
-                : data?.litellm_api_key_set
+                : data?.litellm_master_key_set
                   ? "задан (значение не показывается)"
                   : "не задан — LiteLLM Admin UI покажет ошибку Master Key not set."}
               {" "}В таблице стека этот ключ не отображается: при запуске proxy он передаётся как{" "}
               <span className="mono">LITELLM_MASTER_KEY</span>.
             </p>
+            <label>
+              <span className="label">
+                API-ключ LiteLLM для анализа логов и backend-запросов /v1
+              </span>
+              <input
+                className="input"
+                type="password"
+                autoComplete="off"
+                placeholder="оставьте пустым, чтобы не менять; Bearer для /v1/chat/completions"
+                value={litellmKey}
+                onChange={(e) => setLiteLLMKey(e.target.value)}
+              />
+            </label>
+            <p className="section__subtitle" style={{ margin: 0 }}>
+              API-ключ в базе:{" "}
+              {publicAccess.isLoading
+                ? "…"
+                : data?.litellm_api_key_set
+                  ? "задан (значение не показывается)"
+                  : "не задан — отчёты логов не смогут вызвать LiteLLM, если proxy требует авторизацию."}
+            </p>
             <div className="flex flex--gap-sm flex--wrap">
               <button type="submit" className="btn btn--primary" disabled={save.isPending}>
                 {save.isPending ? "Сохраняем..." : "Сохранить"}
+              </button>
+              <button
+                type="button"
+                className="btn btn--ghost"
+                disabled={clearLiteLLMMasterKey.isPending || publicAccess.isLoading}
+                onClick={() => {
+                  if (!data?.litellm_master_key_set) return;
+                  if (!globalThis.confirm("Удалить сохранённый Master key LiteLLM Proxy?")) return;
+                  clearLiteLLMMasterKey.mutate();
+                }}
+                title="Очистить master key в настройках"
+              >
+                {clearLiteLLMMasterKey.isPending ? "…" : "Сбросить Master key"}
               </button>
               <button
                 type="button"
@@ -608,7 +667,7 @@ export function SettingsPage() {
                 }}
                 title="Очистить ключ в настройках"
               >
-                {clearLiteLLMKey.isPending ? "…" : "Сбросить API-ключ"}
+                {clearLiteLLMKey.isPending ? "…" : "Сбросить API-ключ /v1"}
               </button>
               <button
                 type="button"

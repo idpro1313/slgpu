@@ -30,6 +30,7 @@ async def get_public_access(
     )
     urls = app_settings.public_urls(effective_host)
     key_set = (await app_settings.get_litellm_api_key(session)) is not None
+    master_key_set = (await app_settings.get_litellm_master_key(session)) is not None
     return PublicAccessSettings(
         server_host=configured_host,
         effective_server_host=effective_host,
@@ -39,6 +40,7 @@ async def get_public_access(
         litellm_ui_url=urls["litellm"],
         litellm_api_url=urls["litellm_api"],
         litellm_api_key_set=key_set,
+        litellm_master_key_set=master_key_set,
     )
 
 
@@ -65,19 +67,30 @@ async def update_public_access(
             d["litellm_api_key"] = str(lk).strip()[:2000]
         await app_settings.set_public_access_value(session, d)
         key_updated = True
+    master_key_updated = False
+    if "litellm_master_key" in body:
+        d = await app_settings.get_public_access_value(session)
+        mk = body["litellm_master_key"]
+        if mk is None or (isinstance(mk, str) and not str(mk).strip()):
+            d.pop("litellm_master_key", None)
+        else:
+            d["litellm_master_key"] = str(mk).strip()[:2000]
+        await app_settings.set_public_access_value(session, d)
+        master_key_updated = True
     await record_ui_action(
         session,
         action="settings.public_access",
         actor=actor,
         target="public_access",
         note=(
-            "[settings][update_public_access][BLOCK_KEY_ROTATED] litellm_api_key"
-            if key_updated
+            "[settings][update_public_access][BLOCK_KEY_ROTATED] litellm keys"
+            if key_updated or master_key_updated
             else "public links / LiteLLM API settings"
         ),
         payload={
             "server_host": body.get("server_host") if "server_host" in body else None,
             "litellm_api_key_updated": key_updated,
+            "litellm_master_key_updated": master_key_updated,
         },
     )
     return await get_public_access(request=request, session=session)
