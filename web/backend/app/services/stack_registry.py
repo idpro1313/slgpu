@@ -22,6 +22,8 @@ StackScope = Literal[
 _SECRET_EXACT = frozenset(
     {
         "HF_TOKEN",
+        "LITELLM_MASTER_KEY",
+        "LITELLM_API_KEY",
         "LANGFUSE_PUBLIC_KEY",
         "LANGFUSE_SECRET_KEY",
         "LANGFUSE_SALT",
@@ -593,6 +595,19 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
 
     # ----- 8. Секреты приложения -----
     "HF_TOKEN": _e("HF_TOKEN", "secrets", "HuggingFace токен для приватных или gated моделей. Пусто = без аутентификации.", "pull", allow_empty=True),
+    "LITELLM_MASTER_KEY": _e(
+        "LITELLM_MASTER_KEY",
+        "secrets",
+        "Master key LiteLLM Proxy: передаётся в контейнер как LITELLM_MASTER_KEY и нужен Admin UI / proxy-авторизации.",
+        "proxy_up",
+        allow_empty=True,
+    ),
+    "LITELLM_API_KEY": _e(
+        "LITELLM_API_KEY",
+        "secrets",
+        "Bearer/API key, которым slgpu-web вызывает LiteLLM /v1 для анализа логов и внутренних backend-запросов к моделям.",
+        allow_empty=True,
+    ),
 }
 
 CANONICAL_STACK_KEYS: frozenset[str] = frozenset(_STACK_KEY_REGISTRY.keys())

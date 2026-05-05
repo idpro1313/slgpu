@@ -61,14 +61,13 @@ MONITORING_IMAGE_ALIASES: tuple[tuple[str, str], ...] = (
 
 MONITORING_IMAGE_LEGACY_KEYS: frozenset[str] = frozenset(leg for _can, leg in MONITORING_IMAGE_ALIASES)
 
-# Убраны из реестра и шаблона main.env (7.0): listen LLM — только LLM_API_*; master-key LiteLLM — только public_access.
+# Убраны из реестра и шаблона main.env (7.0): listen LLM — только LLM_API_*.
 DEPRECATED_MERGED_DROP_KEYS: frozenset[str] = frozenset(
     {
         "VLLM_HOST",
         "VLLM_PORT",
         "SGLANG_LISTEN_HOST",
         "SGLANG_LISTEN_PORT",
-        "LITELLM_MASTER_KEY",
     }
 )
 

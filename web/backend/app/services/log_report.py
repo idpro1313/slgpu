@@ -367,7 +367,7 @@ async def call_litellm_chat(
 ) -> str:
     key = await app_settings.get_litellm_api_key(session)
     if not key:
-        raise RuntimeError("не задан litellm_api_key в настройках «Внешний доступ»")
+        raise RuntimeError("не задан LITELLM_API_KEY в настройках «8. Секреты приложения»")
 
     base = litellm_http_base_sync()
     url = f"{base}/v1/chat/completions"

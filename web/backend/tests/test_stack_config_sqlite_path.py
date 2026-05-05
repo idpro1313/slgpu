@@ -39,13 +39,14 @@ def test_non_sqlite(url: str) -> None:
     assert sqlite_path_from_database_url(url) is None
 
 
-def test_compose_env_keeps_derived_litellm_master_key(tmp_path: Path) -> None:
+def test_compose_env_keeps_litellm_master_key_secret(tmp_path: Path) -> None:
     out = write_compose_service_env_file(
         tmp_path,
         {
             "WEB_DATA_DIR": "data/web",
             "SLGPU_NETWORK_NAME": "slgpu",
             "LITELLM_MASTER_KEY": "sk-test-master",
+            "LITELLM_API_KEY": "sk-model-api",
             "MODEL_ID": "must-not-leak-preset-only",
         },
     )
@@ -53,5 +54,6 @@ def test_compose_env_keeps_derived_litellm_master_key(tmp_path: Path) -> None:
     text = out.read_text(encoding="utf-8")
 
     assert "LITELLM_MASTER_KEY=sk-test-master" in text
+    assert "LITELLM_API_KEY=" not in text
     assert "SLGPU_NETWORK_NAME=slgpu" in text
     assert "MODEL_ID=" not in text

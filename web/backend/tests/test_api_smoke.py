@@ -278,8 +278,6 @@ async def test_public_access_settings_drive_external_ui_links(client: httpx.Asyn
     assert updated.status_code == 200
     uj = updated.json()
     assert uj["effective_server_host"] == "llm.example.local"
-    assert uj.get("litellm_api_key_set") is False
-    assert uj.get("litellm_master_key_set") is False
     assert services.status_code == 200
     by_key = {item["key"]: item for item in services.json()}
     assert by_key["grafana"]["url"] == "http://llm.example.local:3000"
@@ -289,22 +287,32 @@ async def test_public_access_settings_drive_external_ui_links(client: httpx.Asyn
 
 
 @pytest.mark.asyncio
-async def test_public_access_settings_store_separate_litellm_keys(
+async def test_app_config_stack_stores_separate_litellm_secrets(
     client: httpx.AsyncClient,
 ) -> None:
     async with client:
         updated = await client.patch(
-            "/api/v1/settings/public-access",
+            "/api/v1/app-config/stack",
             json={
-                "litellm_master_key": "sk-master",
-                "litellm_api_key": "sk-model-api",
+                "secrets": {
+                    "LITELLM_MASTER_KEY": "sk-master",
+                    "LITELLM_API_KEY": "sk-model-api",
+                }
             },
         )
+        masked = await client.get("/api/v1/app-config/stack")
+        revealed = await client.get("/api/v1/app-config/stack?reveal_secrets=true")
 
     assert updated.status_code == 200
-    body = updated.json()
-    assert body["litellm_master_key_set"] is True
-    assert body["litellm_api_key_set"] is True
+    assert masked.status_code == 200
+    assert revealed.status_code == 200
+    assert masked.json()["secrets"]["LITELLM_MASTER_KEY"] == "***"
+    assert masked.json()["secrets"]["LITELLM_API_KEY"] == "***"
+    assert revealed.json()["secrets"]["LITELLM_MASTER_KEY"] == "sk-master"
+    assert revealed.json()["secrets"]["LITELLM_API_KEY"] == "sk-model-api"
+    registry = {item["key"]: item for item in revealed.json()["registry"]}
+    assert registry["LITELLM_MASTER_KEY"]["group"] == "secrets"
+    assert registry["LITELLM_API_KEY"]["group"] == "secrets"
 
 
 @pytest.mark.asyncio

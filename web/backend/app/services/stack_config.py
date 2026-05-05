@@ -35,6 +35,7 @@ META_KEY = "cfg.meta"
 # См. ``app_settings.PUBLIC_ACCESS_KEY`` — дублируем строку, чтобы не импортировать app_settings (циклы).
 _PUBLIC_ACCESS_KEY = "public_access"
 _DERIVED_COMPOSE_ENV_KEYS = {"LITELLM_MASTER_KEY"}
+_NON_COMPOSE_ENV_KEYS = {"LITELLM_API_KEY"}
 
 # Secret detection for upserts: ``stack_registry.is_secret_key`` (single source of truth).
 
@@ -137,14 +138,18 @@ def _load_flat_from_stack_params(conn: sqlite3.Connection) -> dict[str, str] | N
     return {str(k): str(v) if v is not None else "" for k, v in rows}
 
 
-def _merge_public_access_litellm_master_key(conn: sqlite3.Connection, merged: dict[str, str]) -> None:
-    """Подстановка ``LITELLM_MASTER_KEY`` только из ``public_access.litellm_master_key`` (не из stack_params)."""
+def _merge_legacy_public_access_litellm_keys(conn: sqlite3.Connection, merged: dict[str, str]) -> None:
+    """Backward-compatible fallback for LiteLLM keys saved before they moved to stack secrets."""
     pa = _load_json_key(conn, _PUBLIC_ACCESS_KEY)
     if not isinstance(pa, dict):
         return
-    raw = pa.get("litellm_master_key")
-    if isinstance(raw, str) and raw.strip():
-        merged["LITELLM_MASTER_KEY"] = raw.strip()
+    legacy = {
+        "LITELLM_MASTER_KEY": pa.get("litellm_master_key"),
+        "LITELLM_API_KEY": pa.get("litellm_api_key"),
+    }
+    for key, raw in legacy.items():
+        if key not in merged and isinstance(raw, str) and raw.strip():
+            merged[key] = raw.strip()
 
 
 def sync_merged_flat() -> dict[str, str]:
@@ -176,7 +181,7 @@ def sync_merged_flat() -> dict[str, str]:
         # 8.0.0: модельные ключи задаются ТОЛЬКО в карточке пресета — стек их не отдаёт.
         for k in PRESET_ONLY_KEYS:
             merged.pop(k, None)
-        _merge_public_access_litellm_master_key(conn, merged)
+        _merge_legacy_public_access_litellm_keys(conn, merged)
     finally:
         conn.close()
     apply_vllm_aliases_to_merged(merged)
@@ -206,7 +211,9 @@ def write_compose_service_env_file(root: Path, merged: dict[str, str]) -> Path:
         "\n".join(
             f"{k}={v}"
             for k, v in sorted(merged.items())
-            if v is not None and (k in CANONICAL_STACK_KEYS or k in _DERIVED_COMPOSE_ENV_KEYS)
+            if v is not None
+            and k not in _NON_COMPOSE_ENV_KEYS
+            and (k in CANONICAL_STACK_KEYS or k in _DERIVED_COMPOSE_ENV_KEYS)
         )
         + "\n"
     )
@@ -542,6 +549,38 @@ async def delete_stack_param(session, key: str) -> None:
     await session.execute(delete(StackParam).where(StackParam.param_key == key))
 
 
+async def _migrate_public_access_litellm_keys_to_stack_secrets(session) -> None:
+    """Move LiteLLM secrets from legacy public_access JSON into stack_params secrets."""
+    from app.models.setting import Setting
+
+    r = await session.execute(select(Setting).where(Setting.key == _PUBLIC_ACCESS_KEY))
+    row = r.scalar_one_or_none()
+    if row is None or not isinstance(row.value, dict):
+        return
+
+    value = dict(row.value)
+    _, secrets, _ = await load_sections(session)
+    moved = False
+    for legacy_key, stack_key in (
+        ("litellm_master_key", "LITELLM_MASTER_KEY"),
+        ("litellm_api_key", "LITELLM_API_KEY"),
+    ):
+        raw = value.get(legacy_key)
+        if isinstance(raw, str) and raw.strip() and not str(secrets.get(stack_key, "")).strip():
+            await upsert_stack_param(session, stack_key, raw.strip())
+            moved = True
+        if legacy_key in value and (stack_key in secrets or isinstance(raw, str)):
+            value.pop(legacy_key, None)
+            moved = True
+
+    if moved:
+        row.value = value
+        logger.info(
+            "[stack_config][migrate_public_access_litellm_keys][BLOCK_MIGRATED] "
+            "moved legacy LiteLLM keys to stack secrets"
+        )
+
+
 async def migrate_stack_params_to_canonical_if_needed(session) -> None:
     """Переписать stack_params: убрать устаревшие SLGPU_*-алиасы, оставить канонические имена.
 
@@ -555,9 +594,9 @@ async def migrate_stack_params_to_canonical_if_needed(session) -> None:
         presentation_stack,
     )
 
+    await _migrate_public_access_litellm_keys_to_stack_secrets(session)
+
     stack, _, _ = await load_sections(session)
-    if not stack:
-        return
     # 8.0.0: помимо устаревших алиасов уносим из stack_params ключи, перенесённые в карточку пресета.
     obsolete_removed = [k for k in (DEPRECATED_MERGED_DROP_KEYS | PRESET_ONLY_KEYS) if k in stack]
     for k in obsolete_removed:

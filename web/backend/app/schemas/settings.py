@@ -16,25 +16,7 @@ class PublicAccessSettings(BaseModel):
     langfuse_url: str
     litellm_ui_url: str
     litellm_api_url: str
-    litellm_api_key_set: bool = Field(
-        default=False,
-        description="Whether a LiteLLM API key is stored for server-side /v1 calls.",
-    )
-    litellm_master_key_set: bool = Field(
-        default=False,
-        description="Whether a LiteLLM proxy master key is stored for LITELLM_MASTER_KEY.",
-    )
 
 
 class PublicAccessSettingsUpdate(BaseModel):
     server_host: str | None = Field(default=None, max_length=253)
-    litellm_api_key: str | None = Field(
-        default=None,
-        max_length=2000,
-        description="sk-... API key for server-side /v1 model calls; omit to leave unchanged, null or empty to clear.",
-    )
-    litellm_master_key: str | None = Field(
-        default=None,
-        max_length=2000,
-        description="sk-... master key for LiteLLM Proxy/Admin UI; omit to leave unchanged, null or empty to clear.",
-    )

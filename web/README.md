@@ -156,7 +156,7 @@ daemon не нашёл бы файлы по `/slgpu/...` и создал бы п
 | GET | `/api/v1/log-reports`, `/api/v1/log-reports/{id}` | список и статус/результат отчёта (`facts`, `llm_markdown`) |
 | GET | `/api/v1/jobs` | только CLI-задачи (лог, exit) |
 | GET | `/api/v1/activity` | **объединённая** лента: `jobs` + UI-действия (`audit_events` с `correlation_id IS NULL`); страница «Задачи» — по клику строки детали в модальном окне |
-| GET/PATCH | `/api/v1/settings/public-access` | публичный `server_host` для ссылок в браузере; **`litellm_api_key_set`** в GET; в PATCH опционально **`litellm_api_key`** (не возвращается; при смене ключа — audit с `[BLOCK_KEY_ROTATED]`) |
+| GET/PATCH | `/api/v1/settings/public-access` | публичный `server_host` для ссылок в браузере; секреты LiteLLM задаются отдельно в `/api/v1/app-config/stack` (`LITELLM_MASTER_KEY`, `LITELLM_API_KEY`) |
 
 Импорт `data/presets/*.env` в таблицу пресетов — только в составе **`POST /app-config/install`** (v5.0.0; отдельные `POST /presets/sync` и `import-templates` удалены).
 

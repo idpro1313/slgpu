@@ -68,7 +68,12 @@ async def get_public_server_host(session: AsyncSession) -> str | None:
 
 
 async def get_litellm_api_key(session: AsyncSession) -> str | None:
-    raw = (await get_public_access_value(session)).get("litellm_api_key")
+    from app.services.stack_config import load_sections
+
+    _, secrets, _ = await load_sections(session)
+    raw = secrets.get("LITELLM_API_KEY")
+    if not isinstance(raw, str) or not raw.strip():
+        raw = (await get_public_access_value(session)).get("litellm_api_key")
     if not isinstance(raw, str):
         return None
     s = raw.strip()
@@ -76,7 +81,12 @@ async def get_litellm_api_key(session: AsyncSession) -> str | None:
 
 
 async def get_litellm_master_key(session: AsyncSession) -> str | None:
-    raw = (await get_public_access_value(session)).get("litellm_master_key")
+    from app.services.stack_config import load_sections
+
+    _, secrets, _ = await load_sections(session)
+    raw = secrets.get("LITELLM_MASTER_KEY")
+    if not isinstance(raw, str) or not raw.strip():
+        raw = (await get_public_access_value(session)).get("litellm_master_key")
     if not isinstance(raw, str):
         return None
     s = raw.strip()

@@ -2433,3 +2433,12 @@
 - **Файлы:** `web/backend/app/schemas/settings.py`, `web/backend/app/services/app_settings.py`, `web/backend/app/api/v1/settings.py`, `web/backend/app/services/stack_config.py`, `web/backend/tests/test_api_smoke.py`, `web/backend/tests/test_stack_config_sqlite_path.py`, `web/frontend/src/api/types.ts`, `web/frontend/src/pages/Settings.tsx`, `web/CONTRACT.md`, `README.md`, `docs/AGENTS.md`, `.cursor/rules/git-version-commit.mdc`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/verification/verification-plan.xml`, `VERSION`, `web/frontend/package.json`, `web/frontend/package-lock.json`, `web/backend/pyproject.toml`, `docs/HISTORY.md`.
 - **Решение:** PATCH — убрали смешение ролей, сохранив оба значения как непоказываемые секреты public-access.
 
+## Фаза 8.2.11 (LiteLLM-секреты в блоке 8)
+
+### Что: ключи LiteLLM перенесены в «8. Секреты приложения»
+
+- **Что:** `LITELLM_MASTER_KEY` и `LITELLM_API_KEY` добавлены в реестр `stack_params` как секреты группы `secrets`; UI больше не показывает отдельные поля LiteLLM во «Внешнем доступе», а отображает оба ключа в блоке **8. Секреты приложения**. Общий чекбокс **«Показывать секреты в явном виде»** раскрывает их через `GET /app-config/stack?reveal_secrets=true`. `LITELLM_MASTER_KEY` остаётся в compose-env для proxy, `LITELLM_API_KEY` используется только backend-вызовами `/v1` и не пишется в compose-env. Legacy `settings.public_access.litellm_*` автоматически мигрируются в новые секреты.
+- **Почему:** Запрос пользователя — перенести оба LiteLLM-ключа в блок секретов приложения и подчинить их общему режиму показа секретов.
+- **Файлы:** `web/frontend/src/pages/Settings.tsx`, `web/frontend/src/api/types.ts`, `web/backend/app/services/stack_registry.py`, `web/backend/app/services/stack_config.py`, `web/backend/app/services/app_settings.py`, `web/backend/app/api/v1/settings.py`, `web/backend/app/schemas/settings.py`, `web/backend/app/services/env_key_aliases.py`, `web/backend/app/services/log_report.py`, `web/backend/tests/test_api_smoke.py`, `web/backend/tests/test_stack_config_sqlite_path.py`, `README.md`, `web/CONTRACT.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/verification/verification-plan.xml`, `VERSION`, `web/backend/pyproject.toml`, `web/frontend/package.json`, `web/frontend/package-lock.json`, `docs/HISTORY.md`.
+- **Решение:** PATCH — сделали ключи обычными stack-секретами, сохранив обратную совместимость чтения старых public-access значений до миграции.
+
