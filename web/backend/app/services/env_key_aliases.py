@@ -25,7 +25,7 @@ VLLM_STACK_ALIASES: tuple[tuple[str, ...], ...] = (
     ("COMPILATION_CONFIG", "SLGPU_VLLM_COMPILATION_CONFIG"),
     ("ENFORCE_EAGER", "SLGPU_VLLM_ENFORCE_EAGER"),
     ("SPECULATIVE_CONFIG", "SLGPU_VLLM_SPECULATIVE_CONFIG"),
-    ("DATA_PARALLEL_SIZE", "SLGPU_VLLM_DATA_PARALLEL_SIZE"),
+    ("DATA_PARALLEL_SIZE", "SLGPU_VLLM_DATA_PARALLEL_SIZE", "VLLM_DATA_PARALLEL_SIZE"),
     ("ATTENTION_BACKEND", "SLGPU_VLLM_ATTENTION_BACKEND"),
     ("TOKENIZER_MODE", "SLGPU_VLLM_TOKENIZER_MODE"),
 )
@@ -97,6 +97,8 @@ PRESET_ONLY_KEYS: frozenset[str] = frozenset(
         "REASONING_PARSER",
         "TORCH_FLOAT32_MATMUL_PRECISION",
         "VLLM_USE_V1",
+        # Topology vLLM: tensor / expert / data parallel — как и EP, задаётся в пресете, не подмешивается из стека.
+        "DATA_PARALLEL_SIZE",
     }
 )
 

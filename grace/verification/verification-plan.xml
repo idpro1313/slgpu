@@ -1,4 +1,4 @@
-<VerificationPlan VERSION="8.2.14">
+<VerificationPlan VERSION="8.2.15">
   <GlobalPolicy>
     <log-format>[Module][function][BLOCK_NAME] message</log-format>
     <deterministic-first>true</deterministic-first>
@@ -216,6 +216,7 @@
         <file>web/backend/tests/test_preset_clone.py</file>
         <file>web/backend/tests/test_preset_import_env.py</file>
         <file>web/backend/tests/test_preset_parameter_schema.py</file>
+        <file>web/backend/tests/test_vllm_data_parallel_alias.py</file>
         <file>web/backend/tests/test_4_0_concurrency.py</file>
         <file>web/backend/tests/test_main_env.py</file>
       </test-files>

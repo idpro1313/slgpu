@@ -30,7 +30,7 @@
 - **`CHAT_TEMPLATE_CONTENT_FORMAT`** — только vLLM (`--chat-template-content-format`); у **GLM-5.1-FP8** в пресете [`glm-5.1-fp8.env`](../../examples/presets/glm-5.1-fp8.env) задано **`string`**, как в [рецепте vLLM GLM5](https://github.com/vllm-project/recipes/blob/main/GLM/GLM5.md).
 - **`SPECULATIVE_CONFIG`** — только vLLM: JSON для **`--speculative-config`**; у **GLM-5.1-FP8** в [`glm-5.1-fp8.env`](../../examples/presets/glm-5.1-fp8.env) задано **MTP** (`method` + `num_speculative_tokens`) по [GLM/GLM5.md](https://github.com/vllm-project/recipes/blob/main/GLM/GLM5.md). Старое: `SLGPU_VLLM_SPECULATIVE_CONFIG`.
 - **`ENABLE_EXPERT_PARALLEL`** — только vLLM: **`1`** → **`--enable-expert-parallel`** (типично 8×GPU при **TP=4** для M2.7). Старое: `SLGPU_ENABLE_EXPERT_PARALLEL`.
-- **`DATA_PARALLEL_SIZE`** — только vLLM: при необходимости **`--data-parallel-size`** (сценарий **DP8+EP** в рецепте MiniMax). Старое: `SLGPU_VLLM_DATA_PARALLEL_SIZE`.
+- **`DATA_PARALLEL_SIZE`** — только vLLM: при необходимости **`--data-parallel-size`** (сценарий **DP8+EP** в рецепте MiniMax и др.). Алиасы при импорте `.env`: `VLLM_DATA_PARALLEL_SIZE`, `SLGPU_VLLM_DATA_PARALLEL_SIZE`. **8.2.15+:** значение для слота берётся **только из карточки пресета** (глобальный стек не подмешивается), как для `ENABLE_EXPERT_PARALLEL`.
 - **`MM_ENCODER_TP_MODE`** — только vLLM (`--mm-encoder-tp-mode`); для **moonshotai/Kimi-K2.6** в репозитории в пресете задано **`data`** (референс Moonshot).
 - **`TP`** — tensor parallel; согласуйте с числом GPU. В шаблонах репозитория по умолчанию **8**; на 4 GPU — **4** в пресете (в UI при создании слота).
 - **`BENCH_MODEL_NAME`** — поле `model` в бенче; пусто — первая модель из `/v1/models`.
