@@ -2,7 +2,7 @@
 """Сбор фактов из Loki и генерация Markdown через LiteLLM.
 
 CONTRACT:
-  PURPOSE: Построить детерминированный JSON фактов и (обязательно) LLM-сводку для LogReport.
+  PURPOSE: Построить детерминированный JSON фактов и LLM/fallback-сводку для LogReport.
   INPUTS: report row id, job id; ключи LiteLLM из настроек.
   OUTPUTS: обновление LogReport и Job статусов.
 """
@@ -48,9 +48,11 @@ _REDACT_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"(?i)(LITELLM_MASTER_KEY\s*[=:]\s*)(\S+)"), r"\1***"),
 ]
 
-_ERROR_NEEDLES = ("error", "exception", "traceback", "fatal", "panic")
-_WARN_NEEDLES = ("warn", "warning")
-_OOM_NEEDLES = ("oom", "out of memory", "cuda out of memory")
+_ERROR_RE = re.compile(
+    r"(?i)(\blevel=\"?error\"?\b|\berror(s|ed)?\b|\bexception\b|\btraceback\b|\bfatal\b|\bpanic\b|\bfailed\b)"
+)
+_WARN_RE = re.compile(r"(?i)(\blevel=\"?warn(ing)?\"?\b|\bwarn(ing)?\b)")
+_OOM_RE = re.compile(r"(?i)(\boom\b|\bout of memory\b|\bcuda out of memory\b)")
 _CUDA_NEEDLES = ("cuda error", "cudaGetDevice", "nvidia")
 
 _BLOCK_MARKER_RE = re.compile(r"\[(BLOCK_[A-Z0-9_]+)\]")
@@ -126,6 +128,18 @@ def parse_loki_streams(data: dict[str, Any]) -> list[tuple[int, dict[str, str], 
     return out
 
 
+def _has_errorish(line: str) -> bool:
+    return bool(_ERROR_RE.search(line))
+
+
+def _has_warningish(line: str) -> bool:
+    return bool(_WARN_RE.search(line))
+
+
+def _has_oom(line: str) -> bool:
+    return bool(_OOM_RE.search(line))
+
+
 def _bucket_5m(ts_ns: int) -> int:
     return ts_ns // (5 * 60 * 1_000_000_000)
 
@@ -169,13 +183,11 @@ def build_facts_bundle(
                 samples["block_markers"].append(redact_line(raw))
 
         oom_hit = False
-        for n in _OOM_NEEDLES:
-            if n in line_l:
-                severity_hits["oom"][cname] += 1
-                if len(samples["oom"]) < _SAMPLE_PER_CAT:
-                    samples["oom"].append(redact_line(raw))
-                oom_hit = True
-                break
+        if _has_oom(raw):
+            severity_hits["oom"][cname] += 1
+            if len(samples["oom"]) < _SAMPLE_PER_CAT:
+                samples["oom"].append(redact_line(raw))
+            oom_hit = True
 
         cuda_hit = False
         if not oom_hit:
@@ -187,13 +199,13 @@ def build_facts_bundle(
                     cuda_hit = True
                     break
 
-        err_hit = any(x in line_l for x in _ERROR_NEEDLES) or " error" in line_l
+        err_hit = _has_errorish(raw)
         if err_hit and not cuda_hit:
             severity_hits["errorish"][cname] += 1
             if len(samples["errorish"]) < _SAMPLE_PER_CAT:
                 samples["errorish"].append(redact_line(raw))
 
-        warn_hit = any(x in line_l for x in _WARN_NEEDLES)
+        warn_hit = _has_warningish(raw)
         if warn_hit and not err_hit:
             severity_hits["warningish"][cname] += 1
             if len(samples["warningish"]) < _SAMPLE_PER_CAT:
@@ -243,6 +255,97 @@ def build_facts_bundle(
 
 def facts_json_for_prompt(facts: dict[str, Any]) -> str:
     return json.dumps(facts, ensure_ascii=False, indent=2)
+
+
+def _top_items(d: dict[str, Any], *, limit: int = 8) -> list[tuple[str, int]]:
+    items: list[tuple[str, int]] = []
+    for key, value in d.items():
+        try:
+            count = int(value)
+        except (TypeError, ValueError):
+            continue
+        items.append((str(key), count))
+    return sorted(items, key=lambda x: (-x[1], x[0]))[:limit]
+
+
+def render_fallback_markdown(facts: dict[str, Any], *, reason: str | None = None) -> str:
+    """Локальная Markdown-сводка, когда LiteLLM недоступен или вернул 5xx."""
+
+    meta = facts.get("meta") if isinstance(facts.get("meta"), dict) else {}
+    containers = facts.get("by_container_total")
+    if not isinstance(containers, dict):
+        containers = {}
+    severity = facts.get("severity_by_container")
+    if not isinstance(severity, dict):
+        severity = {}
+    block_markers = facts.get("block_marker_counts")
+    if not isinstance(block_markers, dict):
+        block_markers = {}
+
+    lines_used = meta.get("lines_used", 0)
+    max_requested = meta.get("max_lines_requested", 0)
+    truncated = "да" if meta.get("loki_response_truncated") else "нет"
+
+    out = [
+        "# Отчёт по логам",
+        "",
+        "> LiteLLM-сводка недоступна; показан локальный отчёт по детерминированным фактам.",
+    ]
+    if reason:
+        out.extend(["", f"Причина: `{reason[:500]}`"])
+
+    out.extend(
+        [
+            "",
+            "## Краткое резюме",
+            f"- Интервал: `{meta.get('time_from', '?')}` → `{meta.get('time_to', '?')}`.",
+            f"- Использовано строк: `{lines_used}` из лимита `{max_requested}`; усечение Loki: `{truncated}`.",
+            f"- LogQL: `{meta.get('logql', '?')}`.",
+        ]
+    )
+
+    out.extend(["", "## Контейнеры с наибольшим числом строк"])
+    top_containers = _top_items(containers)
+    if top_containers:
+        out.extend([f"- `{name}`: {count}" for name, count in top_containers])
+    else:
+        out.append("- Нет данных по контейнерам.")
+
+    out.extend(["", "## Что требует внимания"])
+    attention: list[str] = []
+    for bucket_name, title in (
+        ("oom", "OOM"),
+        ("cuda", "CUDA/NVIDIA"),
+        ("errorish", "ошибки/исключения"),
+        ("warningish", "предупреждения"),
+    ):
+        bucket = severity.get(bucket_name)
+        if not isinstance(bucket, dict):
+            continue
+        for container, count in _top_items(bucket, limit=5):
+            attention.append(f"- `{container}`: {title} — {count}")
+    if attention:
+        out.extend(attention)
+    else:
+        out.append("- Явных error/warning/OOM/CUDA-срабатываний в выбранной выборке не найдено.")
+
+    out.extend(["", "## GRACE/BLOCK-маркеры"])
+    top_blocks = _top_items(block_markers)
+    if top_blocks:
+        out.extend([f"- `{name}`: {count}" for name, count in top_blocks])
+    else:
+        out.append("- BLOCK-маркеры в выборке не найдены.")
+
+    out.extend(
+        [
+            "",
+            "## Рекомендованные шаги",
+            "- Откройте JSON фактов ниже и проверьте примеры строк в `samples_redacted`.",
+            "- Если нужен LLM-анализ, проверьте LiteLLM Proxy, выбранную модель и маршрут `/v1/chat/completions`.",
+            "- При большом числе CUDA/OOM-событий сопоставьте контейнеры со слотами инференса и их GPU-масками.",
+        ]
+    )
+    return "\n".join(out)
 
 
 def _system_prompt_ru() -> str:
@@ -369,12 +472,22 @@ async def run_log_report_pipeline(job_id: int, report_id: int) -> None:
         )
         user_blob = facts_json_for_prompt(facts)
 
-        async with session_scope() as sess:
-            markdown = await call_litellm_chat(
-                session=sess,
-                llm_model=llm_model,
-                user_content=user_blob,
+        llm_warning: str | None = None
+        try:
+            async with session_scope() as sess:
+                markdown = await call_litellm_chat(
+                    session=sess,
+                    llm_model=llm_model,
+                    user_content=user_blob,
+                )
+        except Exception as exc:
+            llm_warning = str(exc)[:8000]
+            logger.warning(
+                "[log_report][pipeline][BLOCK_LLM_FALLBACK] report_id=%s error=%s",
+                report_id,
+                llm_warning[:800],
             )
+            markdown = render_fallback_markdown(facts, reason=llm_warning)
 
         async with session_scope() as sess:
             r2 = await sess.get(LogReport, report_id)
@@ -383,9 +496,21 @@ async def run_log_report_pipeline(job_id: int, report_id: int) -> None:
             r2.facts = facts
             r2.llm_markdown = markdown
             r2.status = LogReportStatus.SUCCEEDED
-            r2.error_message = None
+            r2.error_message = (
+                f"LiteLLM недоступен, показана локальная сводка: {llm_warning}"
+                if llm_warning
+                else None
+            )
 
-        await _finalize_job(job_id, exit_code=0, message="log report succeeded")
+        await _finalize_job(
+            job_id,
+            exit_code=0,
+            message=(
+                "log report succeeded with local fallback"
+                if llm_warning
+                else "log report succeeded"
+            ),
+        )
         logger.info(
             "[log_report][pipeline][BLOCK_DONE] report_id=%s lines=%s",
             report_id,

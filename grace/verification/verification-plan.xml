@@ -296,11 +296,14 @@
         <scenario-2 kind="success">`resolved_logql` для scope slgpu/all/custom; невалидный custom без фигурных скобок — ошибка.</scenario-2>
         <scenario-3 kind="failure">Период &gt; 168 часов — `validate_period` бросает.</scenario-3>
         <scenario-4 kind="success">Интеграционный тест с monkeypatch `loki_query_range` + `call_litellm_chat`: POST `/log-reports` → polling до `succeeded`, непустой `llm_markdown`, `facts` заполнены.</scenario-4>
-        <scenario-5 kind="failure">Loki недоступен или LiteLLM/key/model — запись отчёта в `failed` с `error_message` (см. pipeline лог-маркеры `BLOCK_FAIL` / `BLOCK_LOKI_HTTP` / `BLOCK_LLM_HTTP`).</scenario-5>
+        <scenario-5 kind="success">LiteLLM/key/model недоступен или возвращает 500 — запись отчёта завершается `succeeded` с локальным `render_fallback_markdown(facts)`, предупреждением в `error_message` и лог-маркером `BLOCK_LLM_FALLBACK`.</scenario-5>
+        <scenario-6 kind="failure">Loki недоступен или период/LogQL некорректны — запись отчёта в `failed` с `error_message` (см. pipeline лог-маркеры `BLOCK_FAIL` / `BLOCK_LOKI_HTTP`).</scenario-6>
+        <scenario-7 kind="success">Классификатор severity не относит Loki info-строки с `bloom` к `oom` и Grafana `flag evaluation succeeded` к `errorish`; реальные `CUDA out of memory` и `level=error ... failed` остаются срабатываниями.</scenario-7>
       </scenarios>
       <required-log-markers>
         <marker-1>[log_report][pipeline][BLOCK_DONE]</marker-1>
         <marker-2>[log_report][pipeline][BLOCK_FAIL]</marker-2>
+        <marker-3>[log_report][pipeline][BLOCK_LLM_FALLBACK]</marker-3>
       </required-log-markers>
     </V-M-LOG-REPORT>
   </ModuleVerification>

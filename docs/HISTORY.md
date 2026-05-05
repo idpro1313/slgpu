@@ -2388,3 +2388,30 @@
 - **Файлы:** `web/backend/app/services/presets.py`, `web/backend/app/api/v1/presets.py`, `web/backend/tests/test_preset_import_env.py`, `web/frontend/src/api/client.ts`, `web/frontend/src/pages/Presets.tsx`, `web/CONTRACT.md`, `README.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/plan/development-plan.xml`, `grace/verification/verification-plan.xml`, `VERSION`, `web/frontend/package.json`, `web/frontend/package-lock.json`, `web/backend/pyproject.toml`, `docs/HISTORY.md`.
 - **Решение:** PATCH — новое read-only API и UX-действие без изменения модели данных пресета; `POST /presets/{id}/export` сохранён для серверного `PRESETS_DIR`.
 
+## Фаза 8.2.6 (отчёты логов: fallback при 500 LiteLLM)
+
+### Что: отчёт сохраняется при ошибке `/v1/chat/completions`
+
+- **Что:** В `web/backend/app/services/log_report.py` добавлен `render_fallback_markdown(facts)`: если Loki-факты собраны, но LiteLLM возвращает 500/недоступен/ошибается, `web.log_report.generate` завершает отчёт как `succeeded`, сохраняет `facts`, кладёт локальную Markdown-сводку в `llm_markdown`, а причину LLM-сбоя оставляет в `error_message`; добавлен лог-маркер `[log_report][pipeline][BLOCK_LLM_FALLBACK]`. UI-текст страницы «Отчёты логов» обновлён с обязательной LLM-сводки на best-effort. Добавлены тесты fallback-сводки и pipeline-сценария с ошибкой LiteLLM.
+- **Почему:** Пользователь показал отчёт со статусом `failed` из-за `500 Internal Server Error` от `http://litellm:4000/v1/chat/completions`; полезные Loki-факты не должны теряться из-за сбоя LLM-сводки.
+- **Файлы:** `web/backend/app/services/log_report.py`, `web/backend/tests/test_log_report.py`, `web/frontend/src/pages/LogReports.tsx`, `web/CONTRACT.md`, `README.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/verification/verification-plan.xml`, `VERSION`, `web/frontend/package.json`, `web/frontend/package-lock.json`, `web/backend/pyproject.toml`, `docs/HISTORY.md`.
+- **Решение:** PATCH — Loki остаётся обязательным источником отчёта, LiteLLM становится best-effort; при его сбое пользователь получает детерминированный отчёт и явное предупреждение.
+
+## Фаза 8.2.7 (отчёты логов: удобный выбор дат)
+
+### Что: `datetime-local` для своего интервала
+
+- **Что:** В `web/frontend/src/pages/LogReports.tsx` поля «Начало» и «Конец» в режиме **«Свой интервал»** заменены на `type="datetime-local"`, при первом выборе режима автозаполняется последний час, добавлены быстрые кнопки **«Последний час»** и **«Последние 24 ч»**.
+- **Почему:** Пользователь показал, что ручной ввод дат в двух текстовых полях неудобен.
+- **Файлы:** `web/frontend/src/pages/LogReports.tsx`, `README.md`, `VERSION`, `web/frontend/package.json`, `web/frontend/package-lock.json`, `web/backend/pyproject.toml`, `docs/HISTORY.md`.
+- **Решение:** PATCH — API не менялся; frontend по-прежнему отправляет ISO UTC в `POST /api/v1/log-reports`.
+
+## Фаза 8.2.8 (отчёты логов: меньше ложных severity)
+
+### Что: regex-классификация OOM/error/warn
+
+- **Что:** В `web/backend/app/services/log_report.py` заменены substring-проверки `error`/`warn`/`oom` на regex с границами слов и явными `level=error|warn`; добавлены тесты, что `bloom` в Loki info-строках не считается OOM, а `flag evaluation succeeded` не считается errorish.
+- **Почему:** Реальный отчёт за сутки показал ложные OOM у Loki и возможные ложные errorish у Grafana из-за слишком широких строковых совпадений.
+- **Файлы:** `web/backend/app/services/log_report.py`, `web/backend/tests/test_log_report.py`, `README.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/verification/verification-plan.xml`, `VERSION`, `web/frontend/package.json`, `web/frontend/package-lock.json`, `web/backend/pyproject.toml`, `docs/HISTORY.md`.
+- **Решение:** PATCH — реальные `CUDA out of memory`, `oom`, `level=error` и `failed` остаются срабатываниями, но шумовые служебные строки меньше искажают отчёт.
+

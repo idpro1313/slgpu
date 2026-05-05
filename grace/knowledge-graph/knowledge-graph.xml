@@ -234,14 +234,15 @@
     </M-WEB>
 
     <M-LOG-REPORT NAME="LogReports" TYPE="INTEGRATION" STATUS="implemented">
-      <purpose>8.2.0: on-demand отчёт по контейнерным логам из Loki за период: детерминированный пакет фактов + обязательная русскоязычная Markdown-сводка через LiteLLM; хранение в SQLite `log_reports`; job kind `web.log_report.generate` (in-process).</purpose>
+      <purpose>8.2.0/8.2.6: on-demand отчёт по контейнерным логам из Loki за период: детерминированный пакет фактов + русскоязычная Markdown-сводка через LiteLLM или локальный fallback при 500/недоступности LiteLLM; хранение в SQLite `log_reports`; job kind `web.log_report.generate` (in-process).</purpose>
       <path>web/backend/app/api/v1/log_reports.py, web/backend/app/services/loki_client.py, web/backend/app/services/log_report.py, web/backend/app/models/log_report.py, web/backend/app/schemas/log_reports.py, web/frontend/src/pages/LogReports.tsx</path>
       <depends>M-WEB, M-MONITOR</depends>
       <verification-ref>V-M-LOG-REPORT</verification-ref>
       <annotations>
         <fn-query_range PURPOSE="HTTP GET …/loki/api/v1/query_range по LOKI_* из sync_merged_flat" />
-        <fn-build_facts PURPOSE="parse_loki_streams, build_facts_bundle, redact_line перед LLM" />
-        <fn-pipeline PURPOSE="run_log_report_pipeline(job_id, report_id): Loki → facts → POST LiteLLM /v1/chat/completions → log_reports.llm_markdown" />
+        <fn-build_facts PURPOSE="parse_loki_streams, build_facts_bundle, redact_line перед LLM; 8.2.8 — errorish/warningish/oom через regex с границами слов, чтобы `bloom`/info-шум Loki не считался OOM/error" />
+        <fn-render_fallback_markdown PURPOSE="Локальная Markdown-сводка по facts при ошибке LiteLLM, чтобы отчёт не падал после успешного Loki-запроса" />
+        <fn-pipeline PURPOSE="run_log_report_pipeline(job_id, report_id): Loki → facts → POST LiteLLM /v1/chat/completions; при ошибке LiteLLM — render_fallback_markdown(facts); запись log_reports.llm_markdown" />
         <fn-api-crud PURPOSE="POST/GET /api/v1/log-reports[/{id}]" />
       </annotations>
     </M-LOG-REPORT>

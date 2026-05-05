@@ -66,6 +66,13 @@ def test_build_facts_contains_meta_and_counters() -> None:
     assert "severity_by_container" in bundle
 
 
+def test_classifier_avoids_bloom_and_info_noise() -> None:
+    assert not log_report_service._has_oom("level=info msg=\"bloom gateway query stats\"")
+    assert log_report_service._has_oom("CUDA out of memory while allocating tensor")
+    assert not log_report_service._has_errorish("level=info msg=\"flag evaluation succeeded\"")
+    assert log_report_service._has_errorish("level=error msg=\"failed to run compaction\"")
+
+
 def test_resolved_logql_custom_requires_brace() -> None:
     q = '{job="docker-logs"} |= "test"'
     assert log_report_service.resolved_logql("custom", q).startswith("{")
@@ -85,6 +92,27 @@ def test_ts_ns_deterministic_from_timedelta():
     assert log_report_service._ts_ns(dt) == 86_400 * 1_000_000_000
     dt2 = datetime(1970, 1, 1, 0, 0, 0, 1, tzinfo=timezone.utc)
     assert log_report_service._ts_ns(dt2) == 1000
+
+
+def test_render_fallback_markdown_mentions_litellm_and_facts() -> None:
+    tuples = log_report_service.parse_loki_streams(LOKI_STUB)
+    dt0 = datetime(2023, 11, 15, tzinfo=timezone.utc)
+    dt1 = dt0 + timedelta(hours=1)
+    facts = log_report_service.build_facts_bundle(
+        tuples,
+        time_from=dt0,
+        time_to=dt1,
+        logql='{job="docker-logs"}',
+        max_lines=8000,
+        loki_truncated_hint=False,
+    )
+
+    md = log_report_service.render_fallback_markdown(facts, reason="500 Internal Server Error")
+
+    assert "LiteLLM-сводка недоступна" in md
+    assert "500 Internal Server Error" in md
+    assert "slgpu-vllm-qwen" in md
+    assert "BLOCK_TP_VISIBLE" in md
 
 
 @pytest.mark.asyncio
@@ -141,5 +169,65 @@ async def test_create_log_report_pipeline_mocked(monkeypatch: pytest.MonkeyPatch
                 await asyncio.sleep(0.06)
                 last_err = js.get("status")
             pytest.fail(f"timeout last={last_err}")
+    finally:
+        await stop_writer()
+
+
+@pytest.mark.asyncio
+async def test_create_log_report_pipeline_falls_back_when_litellm_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await init_db()
+    await start_writer(get_engine())
+    monkeypatch.setattr(
+        log_report_service,
+        "loki_query_range",
+        AsyncMock(return_value=LOKI_STUB),
+    )
+    monkeypatch.setattr(
+        log_report_service,
+        "call_litellm_chat",
+        AsyncMock(side_effect=RuntimeError("500 Internal Server Error")),
+    )
+
+    transport = ASGITransport(app=app)
+    try:
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://test"
+        ) as client:
+            inst = await client.post(
+                "/api/v1/app-config/install", json={"force": True}
+            )
+            assert inst.status_code == 200
+
+            resp = await client.post(
+                "/api/v1/log-reports",
+                json={
+                    "time_from": "2024-06-01T10:00:00+00:00",
+                    "time_to": "2024-06-01T10:30:00+00:00",
+                    "scope": "slgpu",
+                    "llm_model": "fake-model",
+                    "max_lines": 8000,
+                },
+            )
+            assert resp.status_code == 202, resp.text
+            rid = resp.json()["report_id"]
+
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + 8.0
+            last_status = None
+            while loop.time() < deadline:
+                g = await client.get(f"/api/v1/log-reports/{rid}")
+                js = g.json()
+                if js["status"] == "succeeded":
+                    assert js["facts"] is not None
+                    assert "LiteLLM-сводка недоступна" in js["llm_markdown"]
+                    assert "показана локальная сводка" in js["error_message"]
+                    return
+                if js["status"] == "failed":
+                    pytest.fail(js.get("error_message") or "report failed")
+                await asyncio.sleep(0.06)
+                last_status = js.get("status")
+            pytest.fail(f"timeout last={last_status}")
     finally:
         await stop_writer()

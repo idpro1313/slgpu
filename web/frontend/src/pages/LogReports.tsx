@@ -11,6 +11,16 @@ function toIsoUtc(d: Date): string {
   return d.toISOString();
 }
 
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+function toDatetimeLocalValue(d: Date): string {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(
+    d.getHours(),
+  )}:${pad2(d.getMinutes())}`;
+}
+
 function presetRange(preset: "15m" | "1h" | "24h"): [Date, Date] {
   const to = new Date();
   const from = new Date(to);
@@ -56,6 +66,19 @@ export function LogReportsPage() {
       if (first) setLlmModel(first);
     }
   }, [llmModel, modelOptions]);
+
+  const fillCustomRangeFromPreset = (rangePreset: "15m" | "1h" | "24h" = "1h") => {
+    const [from, to] = presetRange(rangePreset);
+    setRangeFromCustom(toDatetimeLocalValue(from));
+    setRangeToCustom(toDatetimeLocalValue(to));
+  };
+
+  const handlePresetChange = (next: "15m" | "1h" | "24h" | "custom") => {
+    setPreset(next);
+    if (next === "custom" && (!rangeFromCustom || !rangeToCustom)) {
+      fillCustomRangeFromPreset("1h");
+    }
+  };
 
   const listQ = useQuery({
     queryKey: ["log-reports", "list"],
@@ -123,7 +146,7 @@ export function LogReportsPage() {
     <div>
       <PageHeader
         title="Отчёты логов"
-        subtitle="Сбор docker-логов из Loki за период, агрегация и обязательная сводка через LiteLLM (/v1/chat/completions). Нужны поднятый стек мониторинга (Loki) и ключ litellm_api_key в «Внешний доступ»."
+        subtitle="Сбор docker-логов из Loki за период, агрегация и best-effort сводка через LiteLLM (/v1/chat/completions). Если LiteLLM недоступен, отчёт покажет локальную сводку по фактам."
       />
 
       <Section
@@ -141,7 +164,7 @@ export function LogReportsPage() {
               className="select"
               value={preset}
               onChange={(e) =>
-                setPreset(e.target.value as "15m" | "1h" | "24h" | "custom")
+                handlePresetChange(e.target.value as "15m" | "1h" | "24h" | "custom")
               }
             >
               <option value="15m">15 мин</option>
@@ -188,21 +211,46 @@ export function LogReportsPage() {
         }
       >
         {preset === "custom" ? (
-          <div className="flex flex--gap-sm flex--wrap" style={{ marginBottom: 12 }}>
-            <input
-              className="input"
-              placeholder="Начало (ISO или datetime-local)"
-              value={rangeFromCustom}
-              onChange={(e) => setRangeFromCustom(e.target.value)}
-              style={{ minWidth: 240 }}
-            />
-            <input
-              className="input"
-              placeholder="Конец"
-              value={rangeToCustom}
-              onChange={(e) => setRangeToCustom(e.target.value)}
-              style={{ minWidth: 240 }}
-            />
+          <div
+            className="flex flex--gap-sm flex--wrap"
+            style={{ alignItems: "flex-end", marginBottom: 12 }}
+          >
+            <label className="label" style={{ display: "grid", gap: 4, margin: 0 }}>
+              Начало
+              <input
+                className="input"
+                type="datetime-local"
+                value={rangeFromCustom}
+                onChange={(e) => setRangeFromCustom(e.target.value)}
+                style={{ minWidth: 230 }}
+              />
+            </label>
+            <label className="label" style={{ display: "grid", gap: 4, margin: 0 }}>
+              Конец
+              <input
+                className="input"
+                type="datetime-local"
+                value={rangeToCustom}
+                onChange={(e) => setRangeToCustom(e.target.value)}
+                style={{ minWidth: 230 }}
+              />
+            </label>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => fillCustomRangeFromPreset("1h")}
+              style={{ padding: "4px 10px" }}
+            >
+              Последний час
+            </button>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => fillCustomRangeFromPreset("24h")}
+              style={{ padding: "4px 10px" }}
+            >
+              Последние 24 ч
+            </button>
           </div>
         ) : null}
 
@@ -290,7 +338,7 @@ export function LogReportsPage() {
               {!rep?.llm_markdown &&
               rep?.status !== "failed" &&
               (rep?.status === "pending" || rep?.status === "running") ? (
-                <p className="section__subtitle">Ждём Loki + LiteLLM…</p>
+                <p className="section__subtitle">Ждём Loki + LiteLLM/fallback…</p>
               ) : null}
               {rep?.facts ? (
                 <>
