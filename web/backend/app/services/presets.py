@@ -24,6 +24,7 @@ from app.services.env_files import (
     render_env_text,
     write_preset_file,
 )
+from app.services.stack_registry import STACK_KEY_REGISTRY
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +98,127 @@ _RUNTIME_KEYS: frozenset[str] = frozenset(
         "BENCH_MODEL_NAME",
     }
 )
+
+# Публичный алиас для тестов и контракта (канонический whitelist `presets.parameters`).
+PRESET_RUNTIME_KEYS: frozenset[str] = _RUNTIME_KEYS
+
+# Порядок групп совпадает с `env_files.render_env_text` (без шапочных MODEL_ID/TP/SERVED_MODEL_NAME).
+_PRESET_SCHEMA_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("Identity", ("VLLM_DOCKER_IMAGE", "SGLANG_DOCKER_IMAGE", "MODEL_REVISION")),
+    ("Runtime", ("MAX_MODEL_LEN", "NVIDIA_VISIBLE_DEVICES", "KV_CACHE_DTYPE", "GPU_MEM_UTIL")),
+    (
+        "vLLM",
+        (
+            "MAX_NUM_BATCHED_TOKENS",
+            "MAX_NUM_SEQS",
+            "BLOCK_SIZE",
+            "DISABLE_CUSTOM_ALL_REDUCE",
+            "ENABLE_PREFIX_CACHING",
+            "ENABLE_EXPERT_PARALLEL",
+            "ENABLE_CHUNKED_PREFILL",
+            "ENABLE_AUTO_TOOL_CHOICE",
+            "TRUST_REMOTE_CODE",
+            "DATA_PARALLEL_SIZE",
+            "ATTENTION_BACKEND",
+            "TOKENIZER_MODE",
+            "COMPILATION_CONFIG",
+            "ENFORCE_EAGER",
+            "SPECULATIVE_CONFIG",
+            "MM_ENCODER_TP_MODE",
+            "TOOL_CALL_PARSER",
+            "REASONING_PARSER",
+            "CHAT_TEMPLATE_CONTENT_FORMAT",
+            "TORCH_FLOAT32_MATMUL_PRECISION",
+            "VLLM_USE_V1",
+            "VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS",
+        ),
+    ),
+    (
+        "SGLang",
+        (
+            "SGLANG_MEM_FRACTION_STATIC",
+            "SGLANG_ENABLE_SPEC_V2",
+            "SGLANG_TRUST_REMOTE_CODE",
+            "SGLANG_ENABLE_METRICS",
+            "SGLANG_ENABLE_MFU_METRICS",
+            "SGLANG_DP_SIZE",
+            "SGLANG_ENABLE_DP_ATTENTION",
+            "SGLANG_ENABLE_DP_LM_HEAD",
+            "SGLANG_MM_ENABLE_DP_ENCODER",
+            "SGLANG_CHUNKED_PREFILL_SIZE",
+            "SGLANG_SPECULATIVE_ALGORITHM",
+            "SGLANG_SPECULATIVE_NUM_STEPS",
+            "SGLANG_SPECULATIVE_EAGLE_TOPK",
+            "SGLANG_SPECULATIVE_NUM_DRAFT_TOKENS",
+            "SGLANG_ENABLE_MULTI_LAYER_EAGLE",
+            "SGLANG_CUDA_GRAPH_MAX_BS",
+            "SGLANG_ENABLE_TORCH_COMPILE",
+            "SGLANG_DISABLE_CUDA_GRAPH",
+            "SGLANG_DISABLE_CUSTOM_ALL_REDUCE",
+        ),
+    ),
+    ("Bench", ("BENCH_MODEL_NAME",)),
+)
+
+# Подсказки UI: значения по умолчанию из `scripts/serve.sh` (`${VAR:-…}`), иначе пустая строка.
+_PRESET_PARAMETER_DEFAULTS: dict[str, str] = {
+    "MAX_MODEL_LEN": "32768",
+    "KV_CACHE_DTYPE": "fp8_e4m3",
+    "GPU_MEM_UTIL": "0.92",
+    "MAX_NUM_BATCHED_TOKENS": "8192",
+    "DISABLE_CUSTOM_ALL_REDUCE": "1",
+    "ENABLE_PREFIX_CACHING": "1",
+    "ENABLE_EXPERT_PARALLEL": "0",
+    "ENABLE_CHUNKED_PREFILL": "1",
+    "ENABLE_AUTO_TOOL_CHOICE": "1",
+    "TRUST_REMOTE_CODE": "1",
+    "ENFORCE_EAGER": "0",
+    "TOOL_CALL_PARSER": "hermes",
+    "REASONING_PARSER": "qwen3",
+    "SGLANG_MEM_FRACTION_STATIC": "0.90",
+    "SGLANG_ENABLE_TORCH_COMPILE": "1",
+    "SGLANG_DISABLE_CUDA_GRAPH": "0",
+    "SGLANG_DISABLE_CUSTOM_ALL_REDUCE": "0",
+    "SGLANG_ENABLE_METRICS": "1",
+    "SGLANG_ENABLE_MFU_METRICS": "0",
+    "SGLANG_TRUST_REMOTE_CODE": "1",
+    "SGLANG_ENABLE_DP_ATTENTION": "0",
+    "SGLANG_ENABLE_DP_LM_HEAD": "0",
+    "SGLANG_MM_ENABLE_DP_ENCODER": "0",
+    "SGLANG_ENABLE_MULTI_LAYER_EAGLE": "0",
+}
+
+
+def preset_runtime_schema_rows() -> list[dict[str, str]]:
+    """Схема параметров пресета для UI: все ключи из `_RUNTIME_KEYS`, порядок и группы как в экспорте .env."""
+
+    rows: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for group, keys in _PRESET_SCHEMA_GROUPS:
+        for key in keys:
+            if key not in _RUNTIME_KEYS:
+                continue
+            seen.add(key)
+            meta = STACK_KEY_REGISTRY.get(key)
+            rows.append(
+                {
+                    "key": key,
+                    "group": group,
+                    "default_value": _PRESET_PARAMETER_DEFAULTS.get(key, ""),
+                    "description": meta.description if meta else "",
+                }
+            )
+    for key in sorted(_RUNTIME_KEYS - seen):
+        meta = STACK_KEY_REGISTRY.get(key)
+        rows.append(
+            {
+                "key": key,
+                "group": "Other",
+                "default_value": _PRESET_PARAMETER_DEFAULTS.get(key, ""),
+                "description": meta.description if meta else "",
+            }
+        )
+    return rows
 
 
 def _normalize_preset_param_dict(raw: dict[str, str]) -> dict[str, str]:

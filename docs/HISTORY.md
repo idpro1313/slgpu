@@ -2442,6 +2442,15 @@
 - **Файлы:** `web/frontend/src/pages/Settings.tsx`, `web/frontend/src/api/types.ts`, `web/backend/app/services/stack_registry.py`, `web/backend/app/services/stack_config.py`, `web/backend/app/services/app_settings.py`, `web/backend/app/api/v1/settings.py`, `web/backend/app/schemas/settings.py`, `web/backend/app/services/env_key_aliases.py`, `web/backend/app/services/log_report.py`, `web/backend/tests/test_api_smoke.py`, `web/backend/tests/test_stack_config_sqlite_path.py`, `README.md`, `web/CONTRACT.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/verification/verification-plan.xml`, `VERSION`, `web/backend/pyproject.toml`, `web/frontend/package.json`, `web/frontend/package-lock.json`, `docs/HISTORY.md`.
 - **Решение:** PATCH — сделали ключи обычными stack-секретами, сохранив обратную совместимость чтения старых public-access значений до миграции.
 
+## Фаза 8.2.13 (Пресеты: полная таблица параметров и дефолты в UI)
+
+### Что: схема параметров пресета с бэкенда и таблица на «Пресеты»
+
+- **Что:** В **`presets.py`**: функция **`preset_runtime_schema_rows()`**, константы **`PRESET_RUNTIME_KEYS`**, порядок групп **`_PRESET_SCHEMA_GROUPS`**, **`_PRESET_PARAMETER_DEFAULTS`** (значения из **`scripts/serve.sh`** с **`${VAR:-…}`**). Endpoint **`GET /api/v1/presets/parameter-schema`** возвращает `rows[]` (`key`, `group`, `default_value`, `description` из **`STACK_KEY_REGISTRY`**). Frontend **«Пресеты»**: `useQuery` на схему, таблица всех ключей с колонками значение и дефолт, кнопка «Подставить дефолты в пустые поля», при ошибке загрузки схемы — упрощённый ручной ввод (**`ParameterRowsLegacy`**). Тесты **`test_preset_parameter_schema.py`**. Обновлены **`web/CONTRACT.md`**, **`docs/AGENTS.md`**, **GRACE**, **VERSION**.
+- **Почему:** запрос пользователя — отображать **все** поддерживаемые ключи пресета и их **дефолты**, не только datalist (**8.2.12**).
+- **Файлы:** `web/backend/app/services/presets.py`, `web/backend/app/schemas/presets.py`, `web/backend/app/api/v1/presets.py`, `web/backend/tests/test_preset_parameter_schema.py`, `web/frontend/src/pages/Presets.tsx`, `web/frontend/src/api/types.ts`, `web/CONTRACT.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/plan/development-plan.xml`, `VERSION`, `web/*/pyproject.toml|package*.json`, `docs/HISTORY.md`.
+- **Решение:** PATCH — новый read-only API; источник списка ключей остаётся **`_RUNTIME_KEYS`** на бэкенде, чтобы UI не расходился с сохранением/импортом.
+
 ## Фаза 8.2.12 (SGLang-параметры пресета: подсказки UI + канонизация в БД)
 
 ### Что: сохранение DP/EAGLE-ключей MiMo и подсказки в «Пресеты»

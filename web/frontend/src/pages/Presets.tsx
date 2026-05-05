@@ -1,8 +1,8 @@
-import { useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ApiError, api } from "@/api/client";
-import type { Preset, PresetCloneRequest } from "@/api/types";
+import type { Preset, PresetCloneRequest, PresetParameterSchemaOut, PresetParameterSchemaRow } from "@/api/types";
 import { Modal } from "@/components/Modal";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
@@ -52,16 +52,50 @@ const EMPTY: NewPresetForm = {
   parameters: [],
 };
 
-function editorFromPreset(preset: Preset): PresetEditorForm {
+function editorFromPreset(
+  preset: Preset,
+  schema?: PresetParameterSchemaRow[],
+): PresetEditorForm {
+  const saved = preset.parameters ?? {};
+  const parameters =
+    schema?.length && schema.length > 0
+      ? mergeSchemaIntoRows(schema, saved)
+      : parameterRowsFromRecord(saved);
   return {
     hf_id: preset.hf_id,
     tp: preset.tp == null ? "" : String(preset.tp),
     served_model_name: preset.served_model_name ?? "",
     gpu_mask: preset.gpu_mask ?? "",
     description: preset.description ?? "",
-    parameters: parameterRowsFromRecord(preset.parameters ?? {}),
+    parameters,
     is_active: preset.is_active,
   };
+}
+
+function mergeSchemaIntoRows(
+  schema: PresetParameterSchemaRow[],
+  saved: Record<string, unknown>,
+): ParameterRow[] {
+  return schema.map((row) => ({
+    id: row.key,
+    key: row.key,
+    value:
+      saved[row.key] == null || String(saved[row.key]).trim() === ""
+        ? ""
+        : String(saved[row.key]),
+  }));
+}
+
+function applyDefaultsToEmptyFields(
+  rows: ParameterRow[],
+  schema: PresetParameterSchemaRow[],
+): ParameterRow[] {
+  const defaults = new Map(schema.map((r) => [r.key, r.default_value]));
+  return rows.map((r) => {
+    const d = defaults.get(r.key);
+    if (!d || r.value.trim() !== "") return r;
+    return { ...r, value: d };
+  });
 }
 
 function parameterRowsFromRecord(parameters: Record<string, unknown>): ParameterRow[] {
@@ -116,46 +150,6 @@ function saveBlobToClient(blob: Blob, filename: string) {
   window.setTimeout(() => window.URL.revokeObjectURL(url), 0);
 }
 
-const COMMON_PARAMETERS = [
-  "MAX_MODEL_LEN",
-  "MODEL_REVISION",
-  "KV_CACHE_DTYPE",
-  "GPU_MEM_UTIL",
-  "VLLM_DOCKER_IMAGE",
-  "SGLANG_DOCKER_IMAGE",
-  "SGLANG_ENABLE_SPEC_V2",
-  "MAX_NUM_BATCHED_TOKENS",
-  "MAX_NUM_SEQS",
-  "BLOCK_SIZE",
-  "ENABLE_PREFIX_CACHING",
-  "ENABLE_EXPERT_PARALLEL",
-  "ENABLE_CHUNKED_PREFILL",
-  "ENABLE_AUTO_TOOL_CHOICE",
-  "TRUST_REMOTE_CODE",
-  "DISABLE_CUSTOM_ALL_REDUCE",
-  "SGLANG_MEM_FRACTION_STATIC",
-  "SGLANG_TRUST_REMOTE_CODE",
-  "SGLANG_ENABLE_METRICS",
-  "SGLANG_ENABLE_MFU_METRICS",
-  "SGLANG_DP_SIZE",
-  "SGLANG_ENABLE_DP_ATTENTION",
-  "SGLANG_ENABLE_DP_LM_HEAD",
-  "SGLANG_MM_ENABLE_DP_ENCODER",
-  "SGLANG_CHUNKED_PREFILL_SIZE",
-  "SGLANG_SPECULATIVE_ALGORITHM",
-  "SGLANG_SPECULATIVE_NUM_STEPS",
-  "SGLANG_SPECULATIVE_EAGLE_TOPK",
-  "SGLANG_SPECULATIVE_NUM_DRAFT_TOKENS",
-  "SGLANG_ENABLE_MULTI_LAYER_EAGLE",
-  "SGLANG_CUDA_GRAPH_MAX_BS",
-  "TOOL_CALL_PARSER",
-  "REASONING_PARSER",
-  "CHAT_TEMPLATE_CONTENT_FORMAT",
-  "TORCH_FLOAT32_MATMUL_PRECISION",
-  "VLLM_USE_V1",
-  "BENCH_MODEL_NAME",
-];
-
 export function PresetsPage() {
   const queryClient = useQueryClient();
   const presetFileImportRef = useRef<HTMLInputElement>(null);
@@ -175,6 +169,41 @@ export function PresetsPage() {
   });
 
   const selectedPreset = presets.data?.find((preset) => preset.id === selectedId) ?? null;
+
+  const presetParamSchema = useQuery({
+    queryKey: ["presets", "parameter-schema"],
+    queryFn: () => api.get<PresetParameterSchemaOut>("/presets/parameter-schema"),
+    staleTime: 60 * 60 * 1000,
+  });
+
+  const schemaRows = presetParamSchema.data?.rows;
+
+  useEffect(() => {
+    const rows = presetParamSchema.data?.rows;
+    if (!rows?.length) return;
+    setForm((f) => {
+      if (f.parameters.length > 0) return f;
+      return { ...f, parameters: mergeSchemaIntoRows(rows, {}) };
+    });
+  }, [presetParamSchema.data]);
+
+  useEffect(() => {
+    const rows = presetParamSchema.data?.rows;
+    if (!rows?.length || selectedId == null) return;
+    setEditor((e) => {
+      if (!e) return e;
+      const preset = presets.data?.find((p) => p.id === selectedId);
+      if (!preset) return e;
+      if (e.parameters.length >= rows.length) return e;
+      return {
+        ...e,
+        parameters: mergeSchemaIntoRows(rows, {
+          ...(preset.parameters ?? {}),
+          ...parametersFromRows(e.parameters),
+        }),
+      };
+    });
+  }, [presetParamSchema.data, selectedId, presets.data]);
 
   const cancelPresetEdit = () => {
     if (!selectedPreset || !editor) return;
@@ -217,7 +246,14 @@ export function PresetsPage() {
         parameters: parametersFromRows(payload.parameters),
       }),
     onSuccess: () => {
-      setForm(EMPTY);
+      const rows = queryClient.getQueryData<PresetParameterSchemaOut>([
+        "presets",
+        "parameter-schema",
+      ])?.rows;
+      setForm({
+        ...EMPTY,
+        parameters: rows?.length ? mergeSchemaIntoRows(rows, {}) : [],
+      });
       setError(null);
       queryClient.invalidateQueries({ queryKey: ["presets"] });
       queryClient.invalidateQueries({ queryKey: ["activity"] });
@@ -278,7 +314,11 @@ export function PresetsPage() {
     onSuccess: (preset) => {
       setError(null);
       setSelectedId(preset.id);
-      setEditor(editorFromPreset(preset));
+      const rows = queryClient.getQueryData<PresetParameterSchemaOut>([
+        "presets",
+        "parameter-schema",
+      ])?.rows;
+      setEditor(editorFromPreset(preset, rows));
       queryClient.invalidateQueries({ queryKey: ["presets"] });
       queryClient.invalidateQueries({ queryKey: ["activity"] });
     },
@@ -358,7 +398,7 @@ export function PresetsPage() {
 
       <Section
         title="Создать пресет"
-        subtitle="Минимальный пресет: имя, HF id и опционально TP. Движок (vLLM/SGLang) выбирается при запуске на странице Inference. Параметры можно расширить позже."
+        subtitle="Минимальный пресет: имя, HF id и опционально TP. Таблица ниже содержит все поддерживаемые ключи параметров (как при экспорте .env); подсказка «дефолт» — значение из scripts/serve.sh, пустая ячейка не сохраняется в БД."
       >
         <form
           className="form-grid"
@@ -431,6 +471,13 @@ export function PresetsPage() {
             <label className="label">Параметры запуска</label>
             <ParameterRows
               rows={form.parameters}
+              schemaRows={schemaRows}
+              isLoadingSchema={presetParamSchema.isLoading}
+              loadSchemaError={
+                presetParamSchema.isError
+                  ? (presetParamSchema.error as Error)?.message ?? "ошибка запроса"
+                  : undefined
+              }
               onChange={(parameters) => setForm({ ...form, parameters })}
             />
           </div>
@@ -527,6 +574,13 @@ export function PresetsPage() {
               <label className="label">Параметры запуска</label>
               <ParameterRows
                 rows={editor.parameters}
+                schemaRows={schemaRows}
+                isLoadingSchema={presetParamSchema.isLoading}
+                loadSchemaError={
+                  presetParamSchema.isError
+                    ? (presetParamSchema.error as Error)?.message ?? "ошибка запроса"
+                    : undefined
+                }
                 onChange={(parameters) => setEditor({ ...editor, parameters })}
               />
             </div>
@@ -562,7 +616,7 @@ export function PresetsPage() {
               <button
                 type="button"
                 className="btn btn--ghost"
-                onClick={() => setEditor(editorFromPreset(selectedPreset))}
+                onClick={() => setEditor(editorFromPreset(selectedPreset, schemaRows))}
               >
                 Сбросить форму
               </button>
@@ -645,7 +699,7 @@ export function PresetsPage() {
                           variant="ghost"
                           onClick={() => {
                             setSelectedId(preset.id);
-                            setEditor(editorFromPreset(preset));
+                            setEditor(editorFromPreset(preset, schemaRows));
                           }}
                         >
                           <IconEdit />
@@ -788,7 +842,7 @@ export function PresetsPage() {
   );
 }
 
-function ParameterRows({
+function ParameterRowsLegacy({
   rows,
   onChange,
 }: {
@@ -807,7 +861,7 @@ function ParameterRows({
     <div className="flex flex--col flex--gap-sm">
       {rows.length === 0 ? (
         <div className="empty-state" style={{ padding: 16 }}>
-          Дополнительных параметров нет.
+          Дополнительных параметров нет — добавьте пары ключ/значение.
         </div>
       ) : (
         rows.map((row) => (
@@ -816,7 +870,6 @@ function ParameterRows({
               <label className="label">Ключ</label>
               <input
                 className="input mono"
-                list="preset-parameter-keys"
                 value={row.key}
                 onChange={(event) => updateRow(row.id, { key: event.target.value })}
                 autoComplete="off"
@@ -839,11 +892,6 @@ function ParameterRows({
           </div>
         ))
       )}
-      <datalist id="preset-parameter-keys">
-        {COMMON_PARAMETERS.map((key) => (
-          <option value={key} key={key} />
-        ))}
-      </datalist>
       <div>
         <button type="button" className="btn" onClick={() => onChange([...rows, newParameterRow()])}>
           Добавить параметр
@@ -851,4 +899,115 @@ function ParameterRows({
       </div>
     </div>
   );
+}
+
+function ParameterRows({
+  rows,
+  schemaRows,
+  isLoadingSchema,
+  loadSchemaError,
+  onChange,
+}: {
+  rows: ParameterRow[];
+  schemaRows: PresetParameterSchemaRow[] | undefined;
+  isLoadingSchema?: boolean;
+  loadSchemaError?: string;
+  onChange: (rows: ParameterRow[]) => void;
+}) {
+  function updateRow(id: string, patch: Partial<ParameterRow>) {
+    onChange(rows.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+  }
+
+  if (isLoadingSchema) {
+    return <div className="empty-state">Загружаем список поддерживаемых параметров…</div>;
+  }
+
+  if (loadSchemaError && !schemaRows?.length) {
+    return (
+      <div className="flex flex--col flex--gap-sm">
+        <p className="section__subtitle" style={{ color: "var(--color-danger)" }}>
+          Схема параметров не загружена ({loadSchemaError}). Добавляйте ключи вручную — только канонические ключи сохранятся в БД после сохранения карточки.
+        </p>
+        <ParameterRowsLegacy rows={rows} onChange={onChange} />
+      </div>
+    );
+  }
+
+  /**
+   * Полный режим по API: группы как в экспорте .env, дефолт и описание колонкой.
+   */
+  if (schemaRows?.length) {
+    let prevGroup = "";
+    return (
+      <div className="flex flex--col flex--gap-sm">
+        <div style={{ overflowX: "auto", width: "100%" }}>
+          <table className="table table--registry" style={{ fontSize: "0.9rem" }}>
+            <thead>
+              <tr>
+                <th>Параметр</th>
+                <th>Значение</th>
+                <th>Дефолт (serve.sh)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {schemaRows.map((meta) => {
+                const row = rows.find((r) => r.key === meta.key);
+                if (!row) return null;
+                const showGroup = meta.group !== prevGroup;
+                prevGroup = meta.group;
+                return (
+                  <Fragment key={meta.key}>
+                    {showGroup ? (
+                      <tr>
+                        <td
+                          colSpan={3}
+                          style={{ background: "var(--color-muted-bg, rgba(10,58,138,0.06))" }}
+                        >
+                          <strong>{meta.group}</strong>
+                        </td>
+                      </tr>
+                    ) : null}
+                    <tr>
+                      <td className="mono" title={meta.description}>
+                        <span>{row.key}</span>
+                        {meta.description ? (
+                          <div className="section__subtitle" style={{ margin: "4px 0 0", maxWidth: 360 }}>
+                            {meta.description}
+                          </div>
+                        ) : null}
+                      </td>
+                      <td>
+                        <input
+                          className="input mono"
+                          value={row.value}
+                          placeholder={meta.default_value !== "" ? meta.default_value : "—"}
+                          onChange={(event) => updateRow(row.id, { value: event.target.value })}
+                          autoComplete="off"
+                          aria-label={`Значение ${row.key}`}
+                        />
+                      </td>
+                      <td className="mono section__subtitle" style={{ whiteSpace: "nowrap" }}>
+                        {meta.default_value !== "" ? meta.default_value : "—"}
+                      </td>
+                    </tr>
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => onChange(applyDefaultsToEmptyFields(rows, schemaRows))}
+          >
+            Подставить дефолты в пустые поля
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return <ParameterRowsLegacy rows={rows} onChange={onChange} />;
 }

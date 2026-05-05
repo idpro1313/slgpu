@@ -20,6 +20,8 @@ from app.schemas.presets import (
     PresetCloneRequest,
     PresetCreate,
     PresetOut,
+    PresetParameterSchemaOut,
+    PresetParameterSchemaRow,
     PresetUpdate,
 )
 from app.services import presets as preset_service
@@ -34,6 +36,16 @@ async def list_presets(session: AsyncSession = Depends(db_session)) -> list[Pres
     await preset_service.migrate_preset_parameters_to_canonical_if_needed(session)
     result = await session.execute(select(Preset).order_by(Preset.name))
     return list(result.scalars().all())
+
+
+@router.get("/parameter-schema", response_model=PresetParameterSchemaOut)
+async def preset_parameter_schema() -> PresetParameterSchemaOut:
+    """Все канонические ключи параметров пресета, группы и подсказки дефолтов для UI."""
+
+    rows = [
+        PresetParameterSchemaRow(**item) for item in preset_service.preset_runtime_schema_rows()
+    ]
+    return PresetParameterSchemaOut(rows=rows)
 
 
 @router.post("", response_model=PresetOut, status_code=status.HTTP_201_CREATED)

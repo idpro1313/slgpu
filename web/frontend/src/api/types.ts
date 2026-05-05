@@ -124,6 +124,18 @@ export interface Preset {
   updated_at: string;
 }
 
+/** Схема всех поддерживаемых ключей `presets.parameters` (GET /presets/parameter-schema). */
+export interface PresetParameterSchemaRow {
+  key: string;
+  group: string;
+  default_value: string;
+  description: string;
+}
+
+export interface PresetParameterSchemaOut {
+  rows: PresetParameterSchemaRow[];
+}
+
 export interface RuntimeSlotView {
   slot_key: string;
   engine: string;

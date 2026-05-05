@@ -55,3 +55,16 @@ class PresetCloneRequest(BaseModel):
     gpu_mask: str | None = None
     served_model_name: str | None = None
     parameters: dict[str, Any] | None = None
+
+
+class PresetParameterSchemaRow(BaseModel):
+    """Один поддерживаемый ключ `presets.parameters` для UI (значение по умолчанию — подсказка из serve.sh)."""
+
+    key: str
+    group: str
+    default_value: str = ""
+    description: str = ""
+
+
+class PresetParameterSchemaOut(BaseModel):
+    rows: list[PresetParameterSchemaRow]
