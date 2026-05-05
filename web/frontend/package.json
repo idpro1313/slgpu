@@ -1,7 +1,7 @@
 {
   "name": "slgpu-web-frontend",
   "private": true,
-  "version": "8.2.15",
+  "version": "8.2.16",
   "type": "module",
   "scripts": {
     "dev": "vite",

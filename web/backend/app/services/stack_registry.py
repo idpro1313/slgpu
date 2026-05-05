@@ -275,9 +275,30 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
     "SGLANG_DP_SIZE": _e(
         "SGLANG_DP_SIZE", "inference", "SGLang --dp (размер data-parallel; MiMo-V2.5 на 8GPU обычно 2 при TP 8).", *S_LLM, *S_ALL_COMPOSE, allow_empty=True
     ),
-    "SGLANG_ENABLE_DP_ATTENTION": _e("SGLANG_ENABLE_DP_ATTENTION", "inference", "1 = SGLang --enable-dp-attention.", *S_LLM, *S_ALL_COMPOSE),
-    "SGLANG_ENABLE_DP_LM_HEAD": _e("SGLANG_ENABLE_DP_LM_HEAD", "inference", "1 = SGLang --enable-dp-lm-head.", *S_LLM, *S_ALL_COMPOSE),
-    "SGLANG_MM_ENABLE_DP_ENCODER": _e("SGLANG_MM_ENABLE_DP_ENCODER", "inference", "1 = SGLang --mm-enable-dp-encoder.", *S_LLM, *S_ALL_COMPOSE),
+    "SGLANG_ENABLE_DP_ATTENTION": _e(
+        "SGLANG_ENABLE_DP_ATTENTION",
+        "inference",
+        "1 = SGLang --enable-dp-attention; пусто — пресет или 0 по умолчанию в scripts/serve.sh.",
+        *S_LLM,
+        *S_ALL_COMPOSE,
+        allow_empty=True,
+    ),
+    "SGLANG_ENABLE_DP_LM_HEAD": _e(
+        "SGLANG_ENABLE_DP_LM_HEAD",
+        "inference",
+        "1 = SGLang --enable-dp-lm-head; пусто — пресет или 0 по умолчанию в scripts/serve.sh.",
+        *S_LLM,
+        *S_ALL_COMPOSE,
+        allow_empty=True,
+    ),
+    "SGLANG_MM_ENABLE_DP_ENCODER": _e(
+        "SGLANG_MM_ENABLE_DP_ENCODER",
+        "inference",
+        "1 = SGLang --mm-enable-dp-encoder; пусто — пресет или 0 по умолчанию в scripts/serve.sh.",
+        *S_LLM,
+        *S_ALL_COMPOSE,
+        allow_empty=True,
+    ),
     "SGLANG_CHUNKED_PREFILL_SIZE": _e(
         "SGLANG_CHUNKED_PREFILL_SIZE", "inference", "SGLang --chunked-prefill-size (положительный int).", *S_LLM, *S_ALL_COMPOSE, allow_empty=True
     ),
@@ -293,7 +314,14 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
     "SGLANG_SPECULATIVE_NUM_DRAFT_TOKENS": _e(
         "SGLANG_SPECULATIVE_NUM_DRAFT_TOKENS", "inference", "SGLang --speculative-num-draft-tokens.", *S_LLM, *S_ALL_COMPOSE, allow_empty=True
     ),
-    "SGLANG_ENABLE_MULTI_LAYER_EAGLE": _e("SGLANG_ENABLE_MULTI_LAYER_EAGLE", "inference", "1 = SGLang --enable-multi-layer-eagle.", *S_LLM, *S_ALL_COMPOSE),
+    "SGLANG_ENABLE_MULTI_LAYER_EAGLE": _e(
+        "SGLANG_ENABLE_MULTI_LAYER_EAGLE",
+        "inference",
+        "1 = SGLang --enable-multi-layer-eagle; пусто — пресет или 0 по умолчанию в scripts/serve.sh.",
+        *S_LLM,
+        *S_ALL_COMPOSE,
+        allow_empty=True,
+    ),
 
     # ----- 6. Мониторинг — Prometheus, Grafana, Loki, Promtail, DCGM, NodeExporter -----
     "PROMETHEUS_SERVICE_NAME": _e(

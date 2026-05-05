@@ -2451,6 +2451,33 @@
 - **Файлы:** `web/backend/app/services/presets.py`, `web/backend/app/schemas/presets.py`, `web/backend/app/api/v1/presets.py`, `web/backend/tests/test_preset_parameter_schema.py`, `web/frontend/src/pages/Presets.tsx`, `web/frontend/src/api/types.ts`, `web/CONTRACT.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/plan/development-plan.xml`, `VERSION`, `web/*/pyproject.toml|package*.json`, `docs/HISTORY.md`.
 - **Решение:** PATCH — новый read-only API; источник списка ключей остаётся **`_RUNTIME_KEYS`** на бэкенде, чтобы UI не расходился с сохранением/импортом.
 
+## Фаза 8.2.16 (опциональные MiMo DP / multi-layer EAGLE в реестре стека)
+
+### Что: четыре SGLANG_*-флага не блокируют подъём слота при пустом глобальном стеке
+
+- **Что:** У **`SGLANG_ENABLE_DP_ATTENTION`**, **`SGLANG_ENABLE_DP_LM_HEAD`**, **`SGLANG_MM_ENABLE_DP_ENCODER`**, **`SGLANG_ENABLE_MULTI_LAYER_EAGLE`** в **`stack_registry`** включён **`allow_empty=True`** (уточнены описания: пресет или **`0`** из **`scripts/serve.sh`** при пустом env). Тест **`test_sgl_mi_mo_dp_flags_are_allow_empty_for_stack_registry`**.
+- **Почему:** Они попали в реестр с **`required_for` ∋ `llm_slot`**, но без **`allow_empty`** — **`validate_required` / UI** требовали заполнить «Настройки», хотя флаги модельные/опциональные и уже имеют дефолты в **`serve.sh`**.
+- **Файлы:** `web/backend/app/services/stack_registry.py`, `web/backend/tests/test_stack_registry_sgl_optional.py`, `VERSION`, `web/backend/pyproject.toml`, `web/frontend/package.json`, `web/frontend/package-lock.json`, `docs/AGENTS.md`, `docs/HISTORY.md`.
+- **Решение:** PATCH контракт реестра; значения по-прежнему задаются в карточке пресета **или** в глобальном стеке **или** остаются пустыми (эквивалент **`0`** в скрипте).
+
+## Фаза 8.2.15 (vLLM `--data-parallel-size`: только пресет + алиас `VLLM_DATA_PARALLEL_SIZE`)
+
+### Что: data-parallel как остальная топология vLLM из карточки пресета
+
+- **Что:** В **`PRESET_ONLY_KEYS`** добавлен **`DATA_PARALLEL_SIZE`** — **`merge_llm_stack_env`** / **`sync_merged_flat`** не подмешивают значение из **`stack_params`** (как **`ENABLE_EXPERT_PARALLEL`**). В **`VLLM_STACK_ALIASES`** цепочка **`DATA_PARALLEL_SIZE`** ← **`SLGPU_VLLM_DATA_PARALLEL_SIZE`**, **`VLLM_DATA_PARALLEL_SIZE`**. Реестр: уточнено описание **`DATA_PARALLEL_SIZE`**. **`configs/main.env`**, **`examples/presets/README.md`**, **`README` §14**, **`docs/AGENTS.md`**. Тесты **`test_vllm_data_parallel_alias.py`**. **serve.sh** уже передаёт **`--data-parallel-size`** при непустом env — без изменений.
+- **Почему:** запрос пользователя на явную поддержку **data-parallel-size** для vLLM; часть сценариев раньше могла расходиться между глобальным стеком и пресетом.
+- **Файлы:** `web/backend/app/services/env_key_aliases.py`, `web/backend/app/services/stack_registry.py`, `configs/main.env`, `examples/presets/README.md`, `README.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/plan/development-plan.xml`, `grace/verification/verification-plan.xml`, `web/backend/tests/test_vllm_data_parallel_alias.py`, `VERSION`, `web/backend/pyproject.toml`, `web/frontend/package.json`, `web/frontend/package-lock.json`, `docs/HISTORY.md`.
+- **Решение:** PATCH; **ломающее поведение:** если ранее задавали **`DATA_PARALLEL_SIZE` только в «Настройки»** — перенесите значение в карточку пресета или в `.env` пресета.
+
+## Фаза 8.2.14 (Langfuse probe: внутренний порт в Docker DNS)
+
+### Что: исправлен ConnectError на health Langfuse из slgpu-web
+
+- **Что:** В **`monitoring._settings_probes`**: при **`LANGFUSE_WEB_SERVICE_NAME`** URL пробы — **`http://{service}:{LANGFUSE_WEB_INTERNAL_PORT}/api/public/health`**, а не **`LANGFUSE_PORT`** (опубликованный порт хоста); путь через **`WEB_MONITORING_HTTP_HOST:LANGFUSE_PORT`** без изменений. В **`ports_for_probes_sync`** добавлен ключ **`langfuse_web_internal_port`**. README §14 — строка в таблице устранения неполадок. **VERSION** 8.2.14.
+- **Почему:** симптом пользователя — Langfuse **degraded**, **`probe failed: ConnectError`**: внутри overlay-сети контейнер слушает **3000** (`LANGFUSE_WEB_INTERNAL_PORT`), а проба стучалась в **8121** (`LANGFUSE_PORT` с хоста).
+- **Файлы:** `web/backend/app/services/monitoring.py`, `web/backend/app/services/stack_config.py`, `README.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/plan/development-plan.xml`, `grace/verification/verification-plan.xml`, `VERSION`, `web/backend/pyproject.toml`, `web/frontend/package.json`, `web/frontend/package-lock.json`, `docs/HISTORY.md`.
+- **Решение:** PATCH (логика проб; LiteLLM уже использует один порт в маппинге).
+
 ## Фаза 8.2.12 (SGLang-параметры пресета: подсказки UI + канонизация в БД)
 
 ### Что: сохранение DP/EAGLE-ключей MiMo и подсказки в «Пресеты»
