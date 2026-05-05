@@ -2415,3 +2415,12 @@
 - **Файлы:** `web/backend/app/services/log_report.py`, `web/backend/tests/test_log_report.py`, `README.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/verification/verification-plan.xml`, `VERSION`, `web/frontend/package.json`, `web/frontend/package-lock.json`, `web/backend/pyproject.toml`, `docs/HISTORY.md`.
 - **Решение:** PATCH — реальные `CUDA out of memory`, `oom`, `level=error` и `failed` остаются срабатываниями, но шумовые служебные строки меньше искажают отчёт.
 
+## Фаза 8.2.9 (LiteLLM master key в compose-env)
+
+### Что: `litellm_api_key` снова доходит до контейнера LiteLLM
+
+- **Что:** В `web/backend/app/services/stack_config.py` `write_compose_service_env_file` теперь сохраняет derived-ключ **`LITELLM_MASTER_KEY`** в `${WEB_DATA_DIR}/.slgpu/compose-service.env`, хотя он не входит в `CANONICAL_STACK_KEYS`; источник остаётся **`settings.public_access.litellm_api_key`**. Добавлен тест, что `LITELLM_MASTER_KEY` пишется в compose-env, а `PRESET_ONLY_KEYS` по-прежнему не попадают. В UI «Настройки → Внешний доступ» уточнено, что ключ не отображается в таблице стека и передаётся как `LITELLM_MASTER_KEY` при запуске proxy.
+- **Почему:** После рестарта `slgpu-proxy-litellm` Admin UI показывал **“Master Key not set for Proxy”**: `sync_merged_flat()` добавлял ключ, но запись compose-env фильтровала всё, чего нет в stack registry; с v7 `LITELLM_MASTER_KEY` специально убран из registry.
+- **Файлы:** `web/backend/app/services/stack_config.py`, `web/backend/tests/test_stack_config_sqlite_path.py`, `web/frontend/src/pages/Settings.tsx`, `web/CONTRACT.md`, `README.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/verification/verification-plan.xml`, `VERSION`, `web/frontend/package.json`, `web/frontend/package-lock.json`, `web/backend/pyproject.toml`, `docs/HISTORY.md`.
+- **Решение:** PATCH — ключ остаётся невыводимым секретом public-access, но становится доступен Docker Compose как env для LiteLLM Proxy.
+

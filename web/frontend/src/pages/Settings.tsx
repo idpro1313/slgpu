@@ -571,12 +571,14 @@ export function SettingsPage() {
               <span className="mono">{data?.effective_server_host ?? "загрузка..."}</span>.
             </p>
             <label>
-              <span className="label">API-ключ LiteLLM (Bearer; хранится как litellm_api_key)</span>
+              <span className="label">
+                API-ключ LiteLLM (Bearer; хранится как litellm_api_key)
+              </span>
               <input
                 className="input"
                 type="password"
                 autoComplete="off"
-                placeholder="оставьте пустым, чтобы не менять; новый ключ — для запросов /v1 из backend"
+                placeholder="оставьте пустым, чтобы не менять; новый ключ станет LITELLM_MASTER_KEY для proxy"
                 value={litellmKey}
                 onChange={(e) => setLiteLLMKey(e.target.value)}
               />
@@ -587,7 +589,9 @@ export function SettingsPage() {
                 ? "…"
                 : data?.litellm_api_key_set
                   ? "задан (значение не показывается)"
-                  : "не задан — при необходимости заполните, если у LiteLLM включена авторизация."}
+                  : "не задан — LiteLLM Admin UI покажет ошибку Master Key not set."}
+              {" "}В таблице стека этот ключ не отображается: при запуске proxy он передаётся как{" "}
+              <span className="mono">LITELLM_MASTER_KEY</span>.
             </p>
             <div className="flex flex--gap-sm flex--wrap">
               <button type="submit" className="btn btn--primary" disabled={save.isPending}>

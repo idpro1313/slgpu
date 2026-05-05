@@ -34,6 +34,7 @@ SECRETS_KEY = "cfg.secrets"
 META_KEY = "cfg.meta"
 # См. ``app_settings.PUBLIC_ACCESS_KEY`` — дублируем строку, чтобы не импортировать app_settings (циклы).
 _PUBLIC_ACCESS_KEY = "public_access"
+_DERIVED_COMPOSE_ENV_KEYS = {"LITELLM_MASTER_KEY"}
 
 # Secret detection for upserts: ``stack_registry.is_secret_key`` (single source of truth).
 
@@ -205,7 +206,7 @@ def write_compose_service_env_file(root: Path, merged: dict[str, str]) -> Path:
         "\n".join(
             f"{k}={v}"
             for k, v in sorted(merged.items())
-            if v is not None and k in CANONICAL_STACK_KEYS
+            if v is not None and (k in CANONICAL_STACK_KEYS or k in _DERIVED_COMPOSE_ENV_KEYS)
         )
         + "\n"
     )

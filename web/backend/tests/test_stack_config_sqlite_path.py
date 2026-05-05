@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from app.services.stack_config import sqlite_path_from_database_url
+from app.services.stack_config import sqlite_path_from_database_url, write_compose_service_env_file
 
 
 def test_sqlite_url_four_slashes_unix_absolute() -> None:
@@ -37,3 +37,21 @@ def test_in_memory_not_a_path() -> None:
 )
 def test_non_sqlite(url: str) -> None:
     assert sqlite_path_from_database_url(url) is None
+
+
+def test_compose_env_keeps_litellm_master_key_from_public_access(tmp_path: Path) -> None:
+    out = write_compose_service_env_file(
+        tmp_path,
+        {
+            "WEB_DATA_DIR": "data/web",
+            "SLGPU_NETWORK_NAME": "slgpu",
+            "LITELLM_MASTER_KEY": "sk-test-master",
+            "MODEL_ID": "must-not-leak-preset-only",
+        },
+    )
+
+    text = out.read_text(encoding="utf-8")
+
+    assert "LITELLM_MASTER_KEY=sk-test-master" in text
+    assert "SLGPU_NETWORK_NAME=slgpu" in text
+    assert "MODEL_ID=" not in text
