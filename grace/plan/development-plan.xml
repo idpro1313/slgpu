@@ -278,7 +278,7 @@
         <export-app-config PURPOSE="/api/v1/app-config/*" />
         <export-bench-ui PURPOSE="/benchmarks — прогоны data/bench, модалка summary.json, native.bench.*" />
         <export-models-crud PURPOSE="/api/v1/models — sync, PATCH, DELETE; 8.1.8: POST /models/{id}/pull/force-stop для отмены зависшего native.model.pull и снятия model-lock без удаления partial-файлов" />
-        <export-presets-crud PURPOSE="/api/v1/presets — CRUD, clone, server export `.env` в PRESETS_DIR, client download `.env` через GET /presets/{id}/download-env, multipart `POST …/import-env` (upload .env → SQLite; 409 без overwrite); 8.2.4: параметры TORCH_FLOAT32_MATMUL_PRECISION и VLLM_USE_V1 живут в presets.parameters и передаются как env vLLM-контейнера" />
+        <export-presets-crud PURPOSE="/api/v1/presets — CRUD, clone, server export `.env` в PRESETS_DIR, client download `.env` через GET /presets/{id}/download-env, multipart `POST …/import-env` (upload .env → SQLite; 409 без overwrite); 8.2.4: параметры TORCH_FLOAT32_MATMUL_PRECISION и VLLM_USE_V1 живут в presets.parameters и передаются как env vLLM-контейнера; 8.2.12: расширенные SGLang-ключи в presets.parameters (_RUNTIME_KEYS) + подсказки COMMON_PARAMETERS в UI «Пресеты»" />
       </interface>
       <depends>M-CLI, M-PULL, M-UP, M-DOWN, M-MONITOR, M-MODELS</depends>
       <target>

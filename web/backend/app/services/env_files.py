@@ -94,8 +94,11 @@ def render_env_text(values: dict[str, str], header: str | None = None) -> str:
         lines.append("")
 
     groups: list[tuple[str, list[str]]] = [
-        ("Identity", ["VLLM_DOCKER_IMAGE", "MODEL_ID", "MODEL_REVISION", "SERVED_MODEL_NAME"]),
-        ("Runtime", ["MAX_MODEL_LEN", "TP", "KV_CACHE_DTYPE", "GPU_MEM_UTIL"]),
+        (
+            "Identity",
+            ["VLLM_DOCKER_IMAGE", "SGLANG_DOCKER_IMAGE", "MODEL_ID", "MODEL_REVISION", "SERVED_MODEL_NAME"],
+        ),
+        ("Runtime", ["MAX_MODEL_LEN", "TP", "NVIDIA_VISIBLE_DEVICES", "KV_CACHE_DTYPE", "GPU_MEM_UTIL"]),
         (
             "vLLM",
             [
@@ -127,6 +130,20 @@ def render_env_text(values: dict[str, str], header: str | None = None) -> str:
             "SGLang",
             [
                 "SGLANG_MEM_FRACTION_STATIC",
+                "SGLANG_ENABLE_SPEC_V2",
+                "SGLANG_TRUST_REMOTE_CODE",
+                "SGLANG_ENABLE_METRICS",
+                "SGLANG_ENABLE_MFU_METRICS",
+                "SGLANG_DP_SIZE",
+                "SGLANG_ENABLE_DP_ATTENTION",
+                "SGLANG_ENABLE_DP_LM_HEAD",
+                "SGLANG_MM_ENABLE_DP_ENCODER",
+                "SGLANG_CHUNKED_PREFILL_SIZE",
+                "SGLANG_SPECULATIVE_ALGORITHM",
+                "SGLANG_SPECULATIVE_NUM_STEPS",
+                "SGLANG_SPECULATIVE_EAGLE_TOPK",
+                "SGLANG_SPECULATIVE_NUM_DRAFT_TOKENS",
+                "SGLANG_ENABLE_MULTI_LAYER_EAGLE",
                 "SGLANG_CUDA_GRAPH_MAX_BS",
                 "SGLANG_ENABLE_TORCH_COMPILE",
                 "SGLANG_DISABLE_CUDA_GRAPH",

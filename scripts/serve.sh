@@ -149,7 +149,8 @@ slgpu_run_vllm() {
 }
 
 slgpu_run_sglang() {
-  local MODEL_PATH SERVED_NAME HOST PORT TP MEM_FRAC MAX_LEN KV REASON TOOL SGL_TORCH SGL_NO_CG SGL_NO_CAR SGL_METRICS SGL_MFU cmd
+  local MODEL_PATH SERVED_NAME HOST PORT TP MEM_FRAC MAX_LEN KV REASON TOOL SGL_TORCH SGL_NO_CG SGL_NO_CAR SGL_METRICS SGL_MFU \
+    SGL_TRUST SGL_DP SGL_DP_ATTN SGL_DP_LMHEAD SGL_MM_DP_ENC SGL_CPS SGL_SPEC_ALGO SGL_SPEC_STEPS SGL_SPEC_TOPK SGL_SPEC_DRAFT SGL_MLE cmd
   MODEL_PATH="${SLGPU_MODEL_ROOT:-/models}/${MODEL_ID}"
   SERVED_NAME="${SERVED_MODEL_NAME:-${SLGPU_SERVED_MODEL_NAME:-$MODEL_ID}}"
   HOST="${LLM_API_BIND:-0.0.0.0}"
@@ -167,6 +168,16 @@ slgpu_run_sglang() {
   SGL_METRICS="${SGLANG_ENABLE_METRICS:-1}"
   SGL_MFU="${SGLANG_ENABLE_MFU_METRICS:-0}"
   SGL_TRUST="${SGLANG_TRUST_REMOTE_CODE:-1}"
+  SGL_DP="${SGLANG_DP_SIZE:-}"
+  SGL_DP_ATTN="${SGLANG_ENABLE_DP_ATTENTION:-0}"
+  SGL_DP_LMHEAD="${SGLANG_ENABLE_DP_LM_HEAD:-0}"
+  SGL_MM_DP_ENC="${SGLANG_MM_ENABLE_DP_ENCODER:-0}"
+  SGL_CPS="${SGLANG_CHUNKED_PREFILL_SIZE:-}"
+  SGL_SPEC_ALGO="${SGLANG_SPECULATIVE_ALGORITHM:-}"
+  SGL_SPEC_STEPS="${SGLANG_SPECULATIVE_NUM_STEPS:-}"
+  SGL_SPEC_TOPK="${SGLANG_SPECULATIVE_EAGLE_TOPK:-}"
+  SGL_SPEC_DRAFT="${SGLANG_SPECULATIVE_NUM_DRAFT_TOKENS:-}"
+  SGL_MLE="${SGLANG_ENABLE_MULTI_LAYER_EAGLE:-0}"
 
   cmd=(
     python3 -m sglang.launch_server
@@ -202,6 +213,16 @@ slgpu_run_sglang() {
     0|no|NO|false|False) ;;
     *) cmd+=(--enable-torch-compile) ;;
   esac
+  [[ -n "${SGL_DP}" ]] && [[ "${SGL_DP}" =~ ^[1-9][0-9]*$ ]] && cmd+=(--dp "${SGL_DP}")
+  [[ "${SGL_DP_ATTN}" == "1" ]] && cmd+=(--enable-dp-attention)
+  [[ "${SGL_DP_LMHEAD}" == "1" ]] && cmd+=(--enable-dp-lm-head)
+  [[ "${SGL_MM_DP_ENC}" == "1" ]] && cmd+=(--mm-enable-dp-encoder)
+  [[ -n "${SGL_CPS}" ]] && [[ "${SGL_CPS}" =~ ^[1-9][0-9]*$ ]] && cmd+=(--chunked-prefill-size "${SGL_CPS}")
+  [[ -n "${SGL_SPEC_ALGO}" ]] && cmd+=(--speculative-algorithm "${SGL_SPEC_ALGO}")
+  [[ -n "${SGL_SPEC_STEPS}" ]] && [[ "${SGL_SPEC_STEPS}" =~ ^[0-9]+$ ]] && cmd+=(--speculative-num-steps "${SGL_SPEC_STEPS}")
+  [[ -n "${SGL_SPEC_TOPK}" ]] && [[ "${SGL_SPEC_TOPK}" =~ ^[0-9]+$ ]] && cmd+=(--speculative-eagle-topk "${SGL_SPEC_TOPK}")
+  [[ -n "${SGL_SPEC_DRAFT}" ]] && [[ "${SGL_SPEC_DRAFT}" =~ ^[0-9]+$ ]] && cmd+=(--speculative-num-draft-tokens "${SGL_SPEC_DRAFT}")
+  [[ "${SGL_MLE}" == "1" ]] && cmd+=(--enable-multi-layer-eagle)
   if [[ -n "${TOOL}" ]]; then
     cmd+=(--tool-call-parser "${TOOL}")
   fi

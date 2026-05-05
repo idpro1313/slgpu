@@ -20,6 +20,11 @@
 - **`ENFORCE_EAGER`** — только vLLM: **`1`** → **`--enforce-eager`**, обход `torch._inductor` при **InductorError** / `profile_run` (см. README §14). В [deepseek-v4-flash.env](../../examples/presets/deepseek-v4-flash.env) по умолчанию **`1`**. Старое: `SLGPU_VLLM_ENFORCE_EAGER`.
 - **`DISABLE_CUSTOM_ALL_REDUCE`** — только vLLM: `1` (дефолт) — `--disable-custom-all-reduce` (NCCL); `0` — custom all-reduce (иногда быстрее, но на части моделей/образов vLLM — `custom_all_reduce.cuh` / `invalid argument` при graph capture; тогда оставьте `1`) (см. `serve.sh`, `docker-compose`). Старое: `SLGPU_DISABLE_CUSTOM_ALL_REDUCE`.
 - **`SGLANG_MEM_FRACTION_STATIC`** — только SGLang.
+- **`SGLANG_DOCKER_IMAGE`** — если задан в пресете, подменяет образ контейнера SGLang (по умолчанию см. **`SGLANG_DOCKER_IMAGE`** в [`main.env`](../main.env)). Для **XiaomiMiMo/MiMo-V2.5** (не Pro) на Hopper нужен билд **`lmsysorg/sglang:dev-mimo-v2.5`** — см. [SGLang cookbook MiMo-V2.5](https://docs.sglang.io/cookbook/autoregressive/Xiaomi/MiMo-V2.5) и эталон [`mimo-v2.5-8.env`](../../examples/presets/mimo-v2.5-8.env).
+- **`SGLANG_DP_SIZE`** — только SGLang: положительный int → **`--dp`** (вместе с **`SGLANG_ENABLE_DP_ATTENTION=1`** и др. — для non-Pro MiMo-V2.5 на 8×GPU; см. пресет выше).
+- **`SGLANG_ENABLE_DP_ATTENTION`**, **`SGLANG_ENABLE_DP_LM_HEAD`**, **`SGLANG_MM_ENABLE_DP_ENCODER`** — только SGLang: **`1`** → **`--enable-dp-attention`**, **`--enable-dp-lm-head`**, **`--mm-enable-dp-encoder`** (см. `scripts/serve.sh`, cookbook MiMo-V2.5).
+- **`SGLANG_CHUNKED_PREFILL_SIZE`** — только SGLang: **`--chunked-prefill-size`** (положительный int).
+- **`SGLANG_SPECULATIVE_ALGORITHM`**, **`SGLANG_SPECULATIVE_NUM_STEPS`**, **`SGLANG_SPECULATIVE_EAGLE_TOPK`**, **`SGLANG_SPECULATIVE_NUM_DRAFT_TOKENS`**, **`SGLANG_ENABLE_MULTI_LAYER_EAGLE`** — только SGLang: speculative decoding (**EAGLE** MTP по cookbook часто с env **`SGLANG_ENABLE_SPEC_V2=1`**).
 - **`SGLANG_CUDA_GRAPH_MAX_BS`**, **`SGLANG_ENABLE_TORCH_COMPILE`**, **`SGLANG_DISABLE_CUDA_GRAPH`**, **`SGLANG_DISABLE_CUSTOM_ALL_REDUCE`** — только SGLang: обход OOM/ошибок **CUDA graph capture** и сбоев **custom all-reduce** (см. `main.env`, `scripts/serve.sh`); при «Capture cuda graph failed» SGLang подсказывает понижать mem / max-bs, отключать torch compile, в крайнем случае граф; при ошибках в `custom_all_reduce` — `SGLANG_DISABLE_CUSTOM_ALL_REDUCE=1` (откат на NCCL).
 - **`REASONING_PARSER`**, **`TOOL_CALL_PARSER`** — vLLM и SGLang (`launch_server`); см. таблицу ниже.
 - **`CHAT_TEMPLATE_CONTENT_FORMAT`** — только vLLM (`--chat-template-content-format`); у **GLM-5.1-FP8** в пресете [`glm-5.1-fp8.env`](../../examples/presets/glm-5.1-fp8.env) задано **`string`**, как в [рецепте vLLM GLM5](https://github.com/vllm-project/recipes/blob/main/GLM/GLM5.md).
@@ -47,7 +52,7 @@
 | zai-org/GLM*FP8         | `glm45`            | `glm47`            |
 | MiniMaxAI/MiniMax-*      | `minimax_m2`       | `minimax_m2`       |
 | moonshotai/Kimi-K2*      | `kimi_k2`          | `kimi_k2`          |
-| XiaomiMiMo/MiMo-V2.5*     | `qwen3`            | `mimo` (ориентир SGLang [карточка HF](https://huggingface.co/XiaomiMiMo/MiMo-V2.5); пример [`mimo-v2.5.env`](../../examples/presets/mimo-v2.5.env)) |
+| XiaomiMiMo/MiMo-V2.5*     | `qwen3` или **`mimo`** ([SGLang cookbook](https://docs.sglang.io/cookbook/autoregressive/Xiaomi/MiMo-V2.5): **`mimo`**) | `mimo`; ориентир SGLang [карточка HF](https://huggingface.co/XiaomiMiMo/MiMo-V2.5); пример [`mimo-v2.5.env`](../../examples/presets/mimo-v2.5.env); 8×H200 + DP-attention — [`mimo-v2.5-8.env`](../../examples/presets/mimo-v2.5-8.env) |
 | google/gemma-4-*          | `gemma4`           | `gemma4` ([рецепт vLLM Gemma 4](https://docs.vllm.ai/projects/recipes/en/latest/Google/Gemma4.html); пример [`gemma-4-31b-it.env`](../../examples/presets/gemma-4-31b-it.env), слот **vLLM**) |
 | Llama 3.x                | (пусто)            | `llama3_json`                      |
 
