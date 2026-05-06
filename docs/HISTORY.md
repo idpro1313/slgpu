@@ -2544,6 +2544,14 @@
 - **Файлы:** `configs/monitoring/loki/loki-config.yaml.tmpl`, `configs/monitoring/README.md`, `configs/monitoring/LOGS.md`, `web/backend/app/services/log_report.py`, `README.md`, `web/CONTRACT.md`, `docs/AGENTS.md`, `grace/**/*.xml`, `VERSION`, `web/backend/pyproject.toml`, `web/frontend/package.json`, `web/frontend/package-lock.json`, `docs/HISTORY.md`.
 - **Решение:** PATCH. На стенде после обновления нужен перезапуск мониторинга из UI (`native.monitoring.restart/up`), чтобы backend перерендерил `${WEB_DATA_DIR}/.slgpu/monitoring/loki-config.yaml`.
 
+## Фаза 8.6.0 (выгрузка логов Loki в файл)
+
+### Полный экспорт ndjson.gz + UI на «Отчёты логов»
+- **Что:** API **`/api/v1/log-exports`** (список, создание, статус, скачивание gzip); пайплайн **`run_log_export_pipeline`** — постраничный Loki `query_range` **forward**, рекурсия по времени при лимите страницы **25 000**; **`EXPORT_MAX_PERIOD_HOURS = 2880`** согласовано с Loki в шаблоне; таблица **`log_exports`**, job **`web.log_export.generate`**, **`cmd_log_export`**. UI: форма выгрузки, опрос, скачивание, таблица последних выгрузок на **`LogReports.tsx`**. Promtail/слоты: метки **`slgpu_*`**, **`run_id`** (уже в репо). Тесты **`test_log_export.py`**, расширен **`test_slgpu_cli`**. Обновлены **CONTRACT**, **AGENTS**, **LOGS.md**, GRACE (**M-LOG-EXPORT**, **V-M-LOG-EXPORT**), версии **8.6.0**.
+- **Почему:** план «Ревизия и План Выгрузки Логов» — единый источник Loki, файл без бизнес-лимита строк.
+- **Файлы:** `web/backend/app/services/log_export.py`, `app/api/v1/log_exports.py`, `models/log_export.py`, `schemas/log_exports.py`, `services/jobs.py`, `services/slgpu_cli.py`, `tests/test_log_export.py`, `tests/test_slgpu_cli.py`, `web/frontend/src/pages/LogReports.tsx`, `web/frontend/src/api/types.ts`, `configs/monitoring/LOGS.md`, `web/CONTRACT.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/plan/development-plan.xml`, `grace/verification/verification-plan.xml`, `VERSION`, `web/backend/pyproject.toml`, `web/frontend/package.json`, `web/frontend/package-lock.json`, `docs/HISTORY.md`.
+- **Решение:** MINOR. Интерактивный tail по-прежнему через Docker API/UI «Docker».
+
 ## Фаза 8.5.2 (правило push во все remote)
 
 ### Git workflow: все репозитории

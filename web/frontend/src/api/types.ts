@@ -459,3 +459,30 @@ export interface LogReportOut {
   created_at: string;
   updated_at: string;
 }
+
+/** POST /log-exports */
+export interface LogExportAccepted {
+  export_id: number;
+  job_id: number;
+  correlation_id: string;
+  message?: string | null;
+}
+
+/** GET /log-exports, /log-exports/{id} */
+export interface LogExportOut {
+  id: number;
+  status: string;
+  job_id: number | null;
+  time_from: string;
+  time_to: string;
+  scope: string;
+  logql: string | null;
+  redact_secrets: boolean;
+  artifact_relpath: string | null;
+  line_count: number | null;
+  byte_size: number | null;
+  retention_note: string | null;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+}

@@ -1,4 +1,4 @@
-<DevelopmentPlan VERSION="8.5.1">
+<DevelopmentPlan VERSION="8.6.0">
   <!--
     GRACE development plan — methodology: https://github.com/osovv/grace-marketplace
     Upstream ships Agent Skills + optional CLI (@osovv/grace-cli): grace lint | module find | module show | file show.
@@ -421,6 +421,29 @@
       </observability>
       <verification-ref>V-M-MODELS</verification-ref>
     </M-MODELS>
+
+    <M-LOG-EXPORT NAME="LogExportLoki" TYPE="INTEGRATION" LAYER="2" ORDER="99" STATUS="implemented">
+      <contract>
+        <purpose>Полная выгрузка строк из Loki в файл ndjson.gz за период до retention; UI и API под `/log-exports`; job `web.log_export.generate`.</purpose>
+        <inputs>
+          <param name="time_from_to" type="ISO-8601 range" />
+          <param name="logql" type="string" />
+        </inputs>
+        <outputs>
+          <param name="artifact_path" type="path relative WEB_DATA_DIR" />
+        </outputs>
+      </contract>
+      <interface>
+        <export-log_exports_api PURPOSE="FastAPI /api/v1/log-exports" />
+        <export-run_log_export_pipeline PURPOSE="services/log_export.py" />
+      </interface>
+      <depends>M-WEB, M-MONITOR</depends>
+      <target>
+        <source>web/backend/app/services/log_export.py</source>
+        <tests>web/backend/tests/test_log_export.py</tests>
+      </target>
+      <verification-ref>V-M-LOG-EXPORT</verification-ref>
+    </M-LOG-EXPORT>
 
   </Modules>
 

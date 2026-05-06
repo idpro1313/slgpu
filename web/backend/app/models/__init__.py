@@ -3,6 +3,7 @@
 from app.models.app_log_event import AppLogEvent
 from app.models.audit import AuditEvent
 from app.models.job import Job, JobStatus
+from app.models.log_export import LogExport, LogExportStatus
 from app.models.log_report import LogReport, LogReportStatus
 from app.models.model import HFModel, ModelDownloadStatus
 from app.models.preset import Preset
@@ -18,6 +19,8 @@ __all__ = [
     "HFModel",
     "Job",
     "JobStatus",
+    "LogExport",
+    "LogExportStatus",
     "LogReport",
     "LogReportStatus",
     "ModelDownloadStatus",

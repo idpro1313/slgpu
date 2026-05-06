@@ -8,6 +8,7 @@ import pytest
 
 from app.core.security import ValidationError
 from app.services.slgpu_cli import (
+    cmd_log_export,
     cmd_log_report,
     cmd_monitoring,
     cmd_proxy,
@@ -105,3 +106,16 @@ def test_cmd_log_report_web_job():
 def test_cmd_log_report_rejects_bad_id():
     with pytest.raises(ValidationError):
         cmd_log_report(report_id=0)
+
+
+def test_cmd_log_export_web_job():
+    cmd = cmd_log_export(export_id=7)
+    assert cmd.argv == []
+    assert cmd.kind == "web.log_export.generate"
+    assert cmd.scope == "log_export"
+    assert cmd.resource == "export:7"
+
+
+def test_cmd_log_export_rejects_bad_id():
+    with pytest.raises(ValidationError):
+        cmd_log_export(export_id=0)

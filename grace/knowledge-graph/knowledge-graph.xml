@@ -1,5 +1,5 @@
 <KnowledgeGraph>
-  <Project NAME="slgpu" VERSION="8.5.1">
+  <Project NAME="slgpu" VERSION="8.6.0">
     <keywords>slgpu, vllm, sglang, llm-inference, benchmark, docker-compose, gpu, prometheus, grafana, sglang-dashboard-slgpu, sglangdash2-slgpu</keywords>
     <annotation>Стенд для сравнения движков LLM-инференса vLLM и SGLang на Linux-сервере с NVIDIA GPU.</annotation>
 
@@ -102,7 +102,7 @@
         <export-monitoring_compose PURPOSE="полностью параметризованный compose: container_name/hostname/image/internal+external ports/network.name из stack_params snapshot" />
         <export-prometheus_tmpl PURPOSE="prometheus.yml.tmpl: scrape targets через ${SERVICE_NAME}:${INTERNAL_PORT}" />
         <export-loki_tmpl PURPOSE="loki-config.yaml.tmpl: http_listen_port=${LOKI_INTERNAL_PORT}; retention_period и max_query_lookback 120 дней (2880h, 8.5.1)" />
-        <export-promtail_tmpl PURPOSE="promtail-config.yml.tmpl: clients[].url=http://${LOKI_SERVICE_NAME}:${LOKI_INTERNAL_PORT}" />
+        <export-promtail_tmpl PURPOSE="promtail-config.yml.tmpl: clients[].url=http://${LOKI_SERVICE_NAME}:${LOKI_INTERNAL_PORT}; relabel: container_id, docker_image, slgpu_slot|engine|preset|run_id из Docker labels (8.6.0)" />
         <export-grafana_datasource_tmpl PURPOSE="datasource.yml.tmpl: prometheus/loki URLs из stack_params" />
         <export-grafana-sglang-dashboard-slgpu PURPOSE="sglang-dashboard-slgpu.json (оф. SGLang, slgpu-адаптация)" />
         <export-grafana-sglangdash2-slgpu PURPOSE="sglangdash2-slgpu.json — расширенный; генератор _build_sglangdash2.py от vllmdash2" />
@@ -191,7 +191,7 @@
     </M-LOAD>
 
     <M-WEB NAME="WebControlPlane" TYPE="ENTRY_POINT" STATUS="implemented">
-      <purpose>Single-container web control plane: FastAPI + React/Vite, SQLite; стек LLM: native jobs с docker-py (мультислот vLLM/SGLang) + **`web.log_report.generate`** (Loki → факты → OpenAI-compatible LLM HTTP, по умолчанию LiteLLM, in-process); live GPU; monitoring — native compose; бенч — subprocess; stack_params + cfg.meta; install из main.env.</purpose>
+      <purpose>Single-container web control plane: FastAPI + React/Vite, SQLite; стек LLM: native jobs с docker-py (мультислот vLLM/SGLang) + **`web.log_report.generate`** (Loki → факты → OpenAI-compatible LLM HTTP, по умолчанию LiteLLM, in-process) + **`web.log_export.generate`** (Loki → ndjson.gz, in-process); live GPU; monitoring — native compose; бенч — subprocess; stack_params + cfg.meta; install из main.env.</purpose>
       <path>web/</path>
       <depends>M-CLI, M-PULL, M-UP, M-DOWN, M-MONITOR</depends>
       <verification-ref>V-M-WEB</verification-ref>
@@ -210,9 +210,9 @@
         <fn-services_slot_runtime PURPOSE="app.services.slot_runtime: run_slot_docker, stream docker pull (decode) перед run, контейнер slgpu-{engine} или slgpu-{engine}-{slot_key}, сеть slgpu" />
         <fn-services_host_info PURPOSE="Снимок ОС/CPU/RAM/диска/NVIDIA для дашборда: docker run с bind /proc,/etc хоста (busybox) и при HOST_GPU_DOCKER_PROBE≠off — nvidia-smi в GPU-контейнере (образ из стека); fallback — локальный /proc и nvidia-smi в namespace web" />
         <fn-services_compose_exec PURPOSE="async docker compose для LLM и monitoring стеков, subprocess logged" />
-        <fn-services_native_jobs PURPOSE="handle_native_job: native.slot.up|down|restart (docker-py); lock resource slot:{key}; native.model.pull, monitoring, native.proxy.*, bench; native.monitoring.up|restart передаёт docker compose --profile gpu только при monitoring_dcgm_wanted (dcgm-exporter в compose в profile gpu); job runner также вызывает run_log_report_pipeline для kind web.log_report.generate (in-process, без subprocess); периодический flush stdout_tail/message во время RUNNING для native.*. Удалено в 4.0.0: native.llm.*" />
+        <fn-services_native_jobs PURPOSE="handle_native_job: native.slot.up|down|restart (docker-py); lock resource slot:{key}; native.model.pull, monitoring, native.proxy.*, bench; native.monitoring.up|restart передаёт docker compose --profile gpu только при monitoring_dcgm_wanted (dcgm-exporter в compose в profile gpu); job runner также вызывает run_log_report_pipeline и run_log_export_pipeline для web.log_report.generate / web.log_export.generate (in-process, без subprocess); периодический flush stdout_tail/message во время RUNNING для native.*. Удалено в 4.0.0: native.llm.*" />
         <fn-job_log PURPOSE="append_job_log: thread-safe строки лога native job; обновление UI по GET /jobs/{id}" />
-        <fn-services_slgpu_cli PURPOSE="CliCommand kind=native.* или web.log_report.generate с пустым argv; resource slot:* / report:*; lock log_report/report:{id}; валидация slot_key/slug/engine/port/tp" />
+        <fn-services_slgpu_cli PURPOSE="CliCommand kind=native.* или web.log_report.generate | web.log_export.generate с пустым argv; resource slot:* / report:* / export:*; lock log_report/report:{id} и log_export/export:{id}; валидация slot_key/slug/engine/port/tp" />
         <fn-services_jobs PURPOSE="Job runner: native.* → native_jobs; lock по ключу (set discard); task registry; force_engine_slot_halt + POST /runtime/slots/{k}/down?force=1; force_model_pull_halt + POST /models/{id}/pull/force-stop для зависших native.model.pull; CancelledError → mark job cancelled" />
         <fn-services_docker_client PURPOSE="get_docker_inspector(): get_by_service — label filter, fallback: нормализованные лейблы и имена Compose v1/v2 из стека (5.2.0: убраны хардкод-имена slgpu-*)" />
         <fn-services_env_files PURPOSE="Парсер и рендер data/presets/<slug>.env, совместимые с serve.sh; 8.2.4 — рендерит env-поля vLLM TORCH_FLOAT32_MATMUL_PRECISION и VLLM_USE_V1; 8.2.12 — группировка SGLANG_DOCKER_IMAGE / расширенный блок SGLang / NVIDIA_VISIBLE_DEVICES в Runtime" />
@@ -230,7 +230,7 @@
         <fn-services_app_log_sink PURPOSE="app.services.app_log_sink: classify_record, батч INSERT в app_log_event, start_writer/stop_writer" />
         <fn-api_app_logs PURPOSE="GET /app-logs/events — фильтры, курсор before_id, из SQLite" />
         <fn-middleware_request_log PURPOSE="AppHttpRequestLogMiddleware: X-Request-ID, extra, [app][http][BLOCK_API_*], пропуск /app-logs/events, /assets, /healthz" />
-        <fn-frontend_app PURPOSE="React SPA (globals.css — компактный макет): Dashboard, Presets, Inference (слоты), Логи (app-logs), **Отчёты логов** (`/log-reports`), Docker, Models, Monitoring, Jobs, Benchmarks, Settings (5.2.1: registry-driven форма со столбцом «Описание / для чего», красная подсветка незаполненных required; 5.2.2: порядок и группы строк строго совпадают с разделами configs/main.env 1..8 — network/web/paths/images/inference/monitoring/proxy/secrets — порядок ключей в группе = порядок _STACK_KEY_REGISTRY, без алфавитной сортировки; чекбокс «секрет» больше не вырывает строку в отдельную группу secrets; 8.3.2: подзаголовок в группе web для registry.subgroup gpu_docker_probe; 8.4.0: подзаголовок log_reports_llm для LOG_REPORT_LLM_*; 8.5.0: AppLogs.tsx / Jobs.tsx — выгрузка JSON в файл на ПК (без новых API)" />
+        <fn-frontend_app PURPOSE="React SPA (globals.css — компактный макет): Dashboard, Presets, Inference (слоты), Логи (app-logs), **Отчёты логов** (`/log-reports` — LLM-отчёт + выгрузка ndjson.gz), Docker, Models, Monitoring, Jobs, Benchmarks, Settings (5.2.1: registry-driven форма со столбцом «Описание / для чего», красная подсветка незаполненных required; 5.2.2: порядок и группы строк строго совпадают с разделами configs/main.env 1..8 — network/web/paths/images/inference/monitoring/proxy/secrets — порядок ключей в группе = порядок _STACK_KEY_REGISTRY, без алфавитной сортировки; чекбокс «секрет» больше не вырывает строку в отдельную группу secrets; 8.3.2: подзаголовок в группе web для registry.subgroup gpu_docker_probe; 8.4.0: подзаголовок log_reports_llm для LOG_REPORT_LLM_*; 8.5.0: AppLogs.tsx / Jobs.tsx — выгрузка JSON в файл на ПК (без новых API)" />
         <export-web-image PURPOSE="slgpu-web:dev, подъём: ./slgpu web up; тома: repo root по тому же абсолютному хост-пути (SLGPU_HOST_REPO=$(pwd) в scripts/cmd_web.sh), ./data/web, ./data/models, docker.sock; entrypoint chown'ит /data и ${WEB_SLGPU_ROOT}/data/{models,presets,bench} под uid 10001 (bench — native.bench.* → data/bench/results); working_dir из compose НЕ задаётся (uvicorn стартует из WORKDIR /srv/app в Dockerfile.web); huggingface_hub[cli] + hf_transfer установлены для slgpu pull, HF_HOME=/data/huggingface и /home/slgpuweb writable; критично для команд из web → docker compose monitoring/llm с корректными bind-маунтами" />
         <export-contract PURPOSE="web/CONTRACT.md — границы CLI/Docker API/SQLite" />
       </annotations>
@@ -249,6 +249,18 @@
         <fn-api-crud PURPOSE="POST/GET /api/v1/log-reports[/{id}], GET …/llm-catalog-source (use_litellm_model_catalog)" />
       </annotations>
     </M-LOG-REPORT>
+
+    <M-LOG-EXPORT NAME="LogExportFile" TYPE="INTEGRATION" STATUS="implemented">
+      <purpose>8.6.0: полная выгрузка контейнерных логов из Loki в gzip JSONL (ndjson) без бизнес-лимита строк: постраничный query_range forward, рекурсия по времени при насыщении страницы; артефакт в `${WEB_DATA_DIR}/.slgpu/log-exports/`; SQLite `log_exports`; job `web.log_export.generate`.</purpose>
+      <path>web/backend/app/api/v1/log_exports.py, web/backend/app/services/log_export.py, web/backend/app/models/log_export.py, web/backend/app/schemas/log_exports.py, web/backend/tests/test_log_export.py, configs/monitoring/promtail/promtail-config.yml.tmpl (метки slgpu_*), web/backend/app/services/slot_runtime.py (com.develonica.slgpu.run_id)</path>
+      <depends>M-WEB, M-MONITOR, M-LOG-REPORT</depends>
+      <verification-ref>V-M-LOG-EXPORT</verification-ref>
+      <annotations>
+        <fn-build_export_logql PURPOSE="scope + опциональные селекторы container/compose/slgpu_* в первый блок {…} LogQL" />
+        <fn-pipeline PURPOSE="run_log_export_pipeline: Loki query_range → ndjson.gz, redact_line_full, retention_note" />
+        <fn-api PURPOSE="POST/GET /api/v1/log-exports, GET …/download (FileResponse gzip)" />
+      </annotations>
+    </M-LOG-EXPORT>
 
     <M-STACK-REGISTRY NAME="StackKeyRegistry" TYPE="CORE_LOGIC" STATUS="implemented">
       <purpose>Реестр метаданных переменных стека, валидация по сценарию, 409 missing_stack_params.</purpose>
@@ -288,6 +300,9 @@
     <CrossLink from="M-WEB" to="M-MONITOR" relation="Docker read + compose up monitoring из web" />
     <CrossLink from="M-LOG-REPORT" to="M-WEB" relation="API, jobs, SQLite log_reports, httpx к OpenAI-compatible LLM" />
     <CrossLink from="M-LOG-REPORT" to="M-MONITOR" relation="источник логов — Loki (monitoring compose)" />
+    <CrossLink from="M-LOG-EXPORT" to="M-WEB" relation="API, jobs, SQLite log_exports, Loki HTTP" />
+    <CrossLink from="M-LOG-EXPORT" to="M-MONITOR" relation="источник и метки — Loki/Promtail" />
+    <CrossLink from="M-LOG-EXPORT" to="M-LOG-REPORT" relation="общие validate_period/parse_loki_streams/redact patterns" />
     <CrossLink from="M-WEB" to="M-PULL" relation="native.model.pull (HF snapshot) как job" />
     <CrossLink from="M-WEB" to="M-UP" relation="v5: только native.slot.* (docker-py); хост — без up" />
     <CrossLink from="M-WEB" to="M-DOWN" relation="v5: native.slot.down; хост — без down" />

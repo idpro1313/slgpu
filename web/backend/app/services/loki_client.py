@@ -54,18 +54,21 @@ async def query_range(
     limit: int,
     merged: dict[str, str] | None = None,
     timeout_sec: float = 120.0,
+    direction: str | None = None,
 ) -> dict[str, Any]:
     """GET /loki/api/v1/query_range — см. Grafana Loki API."""
 
     base = loki_http_base_from_merged(merged or sync_merged_flat())
     url = f"{base}/loki/api/v1/query_range"
     lim = max(1, min(int(limit), _LOKI_QUERY_MAX_LINES))
+    dir_raw = (direction or _DEFAULT_DIRECTION).strip().lower()
+    dir_eff = dir_raw if dir_raw in ("forward", "backward") else _DEFAULT_DIRECTION
     params = {
         "query": query,
         "start": str(start_ns),
         "end": str(end_ns),
         "limit": str(lim),
-        "direction": _DEFAULT_DIRECTION,
+        "direction": dir_eff,
     }
     async with httpx.AsyncClient(timeout=timeout_sec) as client:
         response = await client.get(url, params=params)

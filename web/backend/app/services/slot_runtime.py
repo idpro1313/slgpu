@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import uuid
 from contextlib import closing
 from pathlib import Path
 from typing import Any
@@ -27,6 +28,7 @@ logger = logging.getLogger(__name__)
 _LABEL_SLOT = "com.develonica.slgpu.slot"
 _LABEL_ENGINE = "com.develonica.slgpu.engine"
 _LABEL_PRESET = "com.develonica.slgpu.preset"
+_LABEL_RUN_ID = "com.develonica.slgpu.run_id"
 
 SGLANG_KERNEL_VOLUME = "slgpu-sglang-kernel-cache-web"
 
@@ -234,6 +236,7 @@ def _run_slot_sync(
             _LABEL_SLOT: slot_key,
             _LABEL_ENGINE: engine,
             _LABEL_PRESET: preset,
+            _LABEL_RUN_ID: str(uuid.uuid4()),
         }
         if slot_key == "default":
             aliases = [engine]

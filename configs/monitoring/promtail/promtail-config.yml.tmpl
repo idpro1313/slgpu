@@ -26,10 +26,23 @@ scrape_configs:
       - source_labels: [__meta_docker_container_name]
         regex: /(.*)
         target_label: container
+      - source_labels: [__meta_docker_container_id]
+        regex: (.+)
+        target_label: container_id
+      - source_labels: [__meta_docker_container_image]
+        target_label: docker_image
       - source_labels: [__meta_docker_container_label_com_docker_compose_service]
         target_label: compose_service
       - source_labels: [__meta_docker_container_label_com_docker_compose_project]
         target_label: compose_project
+      - source_labels: [__meta_docker_container_label_com_develonica_slgpu_slot]
+        target_label: slgpu_slot
+      - source_labels: [__meta_docker_container_label_com_develonica_slgpu_engine]
+        target_label: slgpu_engine
+      - source_labels: [__meta_docker_container_label_com_develonica_slgpu_preset]
+        target_label: slgpu_preset
+      - source_labels: [__meta_docker_container_label_com_develonica_slgpu_run_id]
+        target_label: slgpu_run_id
       - target_label: job
         replacement: docker-logs
     pipeline_stages:

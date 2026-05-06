@@ -98,14 +98,20 @@ def resolved_logql(scope: str, custom: str | None) -> str:
     return _LOGQL_SLGPU
 
 
-def validate_period(dt_from: datetime, dt_to: datetime) -> tuple[datetime, datetime]:
+def validate_period(
+    dt_from: datetime,
+    dt_to: datetime,
+    *,
+    max_hours: int | None = None,
+) -> tuple[datetime, datetime]:
     if dt_to <= dt_from:
         raise ValueError("time_to должно быть больше time_from")
     a = dt_from if dt_from.tzinfo else dt_from.replace(tzinfo=timezone.utc)
     b = dt_to if dt_to.tzinfo else dt_to.replace(tzinfo=timezone.utc)
     delta_h = (b - a).total_seconds() / 3600
-    if delta_h > _MAX_PERIOD_HOURS:
-        raise ValueError(f"интервал отчёта не более {_MAX_PERIOD_HOURS} ч")
+    cap = _MAX_PERIOD_HOURS if max_hours is None else max_hours
+    if delta_h > cap:
+        raise ValueError(f"интервал не более {cap} ч")
     return a, b
 
 
@@ -126,6 +132,15 @@ def redact_line(line: str) -> str:
     for rx, repl in _REDACT_PATTERNS:
         s = rx.sub(repl, s)
     return s[:_MAX_SAMPLE_CHARS]
+
+
+def redact_line_full(line: str) -> str:
+    """Редактирование секретов без усечения длины (для файлового экспорта)."""
+
+    s = line
+    for rx, repl in _REDACT_PATTERNS:
+        s = rx.sub(repl, s)
+    return s
 
 
 def parse_loki_streams(data: dict[str, Any]) -> list[tuple[int, dict[str, str], str]]:

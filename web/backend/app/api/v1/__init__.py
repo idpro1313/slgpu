@@ -12,6 +12,7 @@ from app.api.v1 import (
     gpu,
     jobs,
     litellm,
+    log_exports,
     log_reports,
     models,
     monitoring,
@@ -38,6 +39,9 @@ api_router.include_router(
 )
 api_router.include_router(
     app_logs.router, prefix="/app-logs", tags=["app-logs"]
+)
+api_router.include_router(
+    log_exports.router, prefix="/log-exports", tags=["log-exports"]
 )
 api_router.include_router(
     log_reports.router, prefix="/log-reports", tags=["log-reports"]

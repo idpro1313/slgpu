@@ -1,6 +1,6 @@
-"""Дескрипторы заданий стека: ``kind`` = ``native.*`` (docker compose / docker-py) или ``web.log_report.generate`` (Loki + LLM HTTP для сводки), либо legacy ``argv`` → ``bash ./slgpu``.
+"""Дескрипторы заданий стека: ``kind`` = ``native.*`` (docker compose / docker-py) или ``web.log_report.generate`` / ``web.log_export.generate`` (Loki в web), либо legacy ``argv`` → ``bash ./slgpu``.
 
-Web UI ставит **``native.*``** и **``web.log_report.generate``** с пустым ``argv``; данные стека — из БД (см. ``stack_config`` / ``write_compose_service_env_file``).
+Web UI ставит **``native.*``** и **``web.log_report.generate``** / **``web.log_export.generate``** с пустым ``argv``; данные стека — из БД (см. ``stack_config`` / ``write_compose_service_env_file``).
 """
 
 from __future__ import annotations
@@ -182,4 +182,18 @@ def cmd_log_report(*, report_id: int) -> CliCommand:
         scope="log_report",
         resource=f"report:{report_id}",
         summary=f"log report #{report_id}",
+    )
+
+
+def cmd_log_export(*, export_id: int) -> CliCommand:
+    """Фоновая полная выгрузка логов Loki в файл (web-only job)."""
+
+    if not isinstance(export_id, int) or export_id < 1:
+        raise ValidationError("export_id must be a positive integer")
+    return CliCommand(
+        kind="web.log_export.generate",
+        argv=[],
+        scope="log_export",
+        resource=f"export:{export_id}",
+        summary=f"log export #{export_id}",
     )

@@ -1,4 +1,4 @@
-<VerificationPlan VERSION="8.5.1">
+<VerificationPlan VERSION="8.6.0">
   <GlobalPolicy>
     <log-format>[Module][function][BLOCK_NAME] message</log-format>
     <deterministic-first>true</deterministic-first>
@@ -289,7 +289,7 @@
       </required-log-markers>
       <required-trace-assertions>
         <assertion-1>Каждый запрос на mutating-endpoint создаёт ровно одну запись в audit_events.</assertion-1>
-        <assertion-2>Стек: native.* через compose/subprocess bench без shell; **`web.log_report.generate`** выполняется in-process в job-runner; унаследованный CLI-путь — subprocess_exec без shell.</assertion-2>
+        <assertion-2>Стек: native.* через compose/subprocess bench без shell; **`web.log_report.generate`** и **`web.log_export.generate`** выполняются in-process в job-runner; унаследованный CLI-путь — subprocess_exec без shell.</assertion-2>
         <assertion-3>SQLite файл создаётся по пути из WEB_DATABASE_URL и тип всех таблиц совпадает с ORM.</assertion-3>
       </required-trace-assertions>
     </V-M-WEB>
@@ -317,6 +317,24 @@
         <marker-3>[log_report][pipeline][BLOCK_LLM_FALLBACK]</marker-3>
       </required-log-markers>
     </V-M-LOG-REPORT>
+
+    <V-M-LOG-EXPORT MODULE="M-LOG-EXPORT" PRIORITY="medium">
+      <test-files>
+        <file>web/backend/tests/test_log_export.py</file>
+      </test-files>
+      <module-checks>
+        <check-1>pytest -q web/backend/tests/test_log_export.py</check-1>
+      </module-checks>
+      <scenarios>
+        <scenario-1 kind="success">`build_export_logql` встраивает метки container/compose/slgpu_* в селектор; кавычки экранируются.</scenario-1>
+        <scenario-2 kind="success">При насыщении страницы Loki (25k) `_export_partition` делит интервал по времени; итоговое число записанных строк — сумма подзапросов (без «потери» из-за split).</scenario-2>
+        <scenario-3 kind="success">POST `/api/v1/log-exports` после install → polling до `succeeded` → GET download возвращает gzip ndjson с ожидаемым числом строк; `Content-Disposition` — attachment.</scenario-3>
+      </scenarios>
+      <required-log-markers>
+        <marker-1>[log_export][pipeline][BLOCK_DONE]</marker-1>
+        <marker-2>[log_exports][create][BLOCK_ENQUEUED]</marker-2>
+      </required-log-markers>
+    </V-M-LOG-EXPORT>
   </ModuleVerification>
 
   <PhaseGates>

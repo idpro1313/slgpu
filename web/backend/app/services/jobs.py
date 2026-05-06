@@ -1,6 +1,6 @@
 """Фоновый runner заданий стека: ``native.*`` (docker compose / docker-py) и ``web.*`` (jobs без compose).
 
-``CliCommand`` из ``app.services.slgpu_cli`` — дескриптор вида; web ставит ``native.*`` и ``web.log_report.generate``.
+``CliCommand`` из ``app.services.slgpu_cli`` — дескриптор вида; web ставит ``native.*``, ``web.log_report.generate`` и ``web.log_export.generate``.
 Задача пишет `Job`, in-process lock на (scope, resource), asyncio task, лог
 (один процесс Uvicorn; не PostgreSQL advisory lock).
 """
@@ -150,6 +150,25 @@ async def _run_job_body(job_id: int, command: CliCommand) -> None:
         await handle_native_job(job_id, command, job_args)
         return
 
+    if command.kind == "web.log_export.generate":
+        from app.services.log_export import run_log_export_pipeline
+
+        try:
+            eid = int(job_args.get("export_id") or 0)
+        except (TypeError, ValueError):
+            eid = 0
+        if eid < 1:
+            async with session_scope() as session:
+                job_bad = await session.get(Job, job_id)
+                if job_bad and job_bad.status != JobStatus.CANCELLED:
+                    job_bad.exit_code = 1
+                    job_bad.finished_at = datetime.now(timezone.utc)
+                    job_bad.status = JobStatus.FAILED
+                    job_bad.message = "invalid export_id in job args"
+            return
+        await run_log_export_pipeline(job_id, eid)
+        return
+
     if command.kind == "web.log_report.generate":
         from app.services.log_report import run_log_report_pipeline
 
@@ -176,7 +195,7 @@ async def _run_job_body(job_id: int, command: CliCommand) -> None:
         job2.exit_code = 1
         job2.finished_at = datetime.now(timezone.utc)
         job2.status = JobStatus.FAILED
-        job2.message = "unsupported job kind (expected native.* or web.log_report.generate)"
+        job2.message = "unsupported job kind (expected native.*, web.log_report.generate, or web.log_export.generate)"
 
 
 async def list_recent(limit: int = 50) -> list[Job]:
