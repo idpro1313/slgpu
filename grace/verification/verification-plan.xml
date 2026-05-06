@@ -1,4 +1,4 @@
-<VerificationPlan VERSION="8.3.0">
+<VerificationPlan VERSION="8.3.1">
   <GlobalPolicy>
     <log-format>[Module][function][BLOCK_NAME] message</log-format>
     <deterministic-first>true</deterministic-first>
@@ -279,6 +279,7 @@
         <scenario-45 kind="success">8.1.6–8.1.7: `render_monitoring_configs` при отсутствии `${WEB_DATA_DIR}/.slgpu/monitoring/vllm-slots.json` создаёт его с **дефолтом** `host.docker.internal:8110..8130` (включительно, `VLLM_SLOTS_FILE_SD_PORT_MIN/MAX` в `stack_config.py`); при существующем файле — не трогает. В отрендеренном `prometheus.yml` есть job `vllm-slots` (`file_sd_configs` → `/etc/prometheus/vllm-slots.json`). Эталон содержимого — `configs/monitoring/prometheus/vllm-slots.json.example`. Основной job `vllm` по-прежнему только `LLM_API_PORT` из стека.</scenario-45>
         <scenario-46 kind="success">8.2.10: `public_access.litellm_master_key` остаётся вне stack registry/table, но `sync_merged_flat` добавляет derived `LITELLM_MASTER_KEY`, а `write_compose_service_env_file` сохраняет его в `${WEB_DATA_DIR}/.slgpu/compose-service.env`; отдельный `public_access.litellm_api_key` используется backend Bearer-вызовами /v1 и не становится master key; `PRESET_ONLY_KEYS` не попадают в compose-env.</scenario-46>
         <scenario-47 kind="success">8.3.0: `MONITORING_DCGM` в реестре стека (`auto`|`on`|`off`, allow_empty — пусто трактуется как auto); `monitoring_dcgm_wanted()` согласует подъём `dcgm-exporter` (compose `--profile gpu`), job `dcgm` в отрендеренном `prometheus.yml` и пробу `dcgm-exporter` в `GET /monitoring/services`. Без GPU при `auto`/`off` стек метрик (Prometheus, Grafana, Loki, …) поднимается без DCGM. Юнит-тесты: `web/backend/tests/test_monitoring_dcgm.py`.</scenario-47>
+        <scenario-48 kind="success">8.3.1: ключи **`HOST_GPU_DOCKER_PROBE`** и **`NVIDIA_SMI_DOCKER_IMAGE`** в реестре стека; при **`off`** эфемерный **`docker run`** с GPU для **`nvidia-smi`** не выполняется в **`collect_host_info`** и **`gpu_state`** (остаётся локальный smi в web при наличии); образ пробы — из стека или **`WEB_NVIDIA_SMI_DOCKER_IMAGE`** (дефолт **`nvidia/cuda:12.4.1-base-ubuntu22.04`**). Юнит-тесты: **`web/backend/tests/test_monitoring_dcgm.py`** (helpers + fallback образа).</scenario-48>
       </scenarios>
       <required-log-markers>
         <marker-1>[WEB][jobs][BLOCK_RUN_JOB]</marker-1>

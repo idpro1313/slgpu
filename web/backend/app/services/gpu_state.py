@@ -10,8 +10,6 @@ from typing import Any
 import docker
 from docker.types import DeviceRequest
 
-from app.core.config import get_settings
-
 logger = logging.getLogger(__name__)
 
 _TTL_S = 3.0
@@ -26,7 +24,20 @@ def invalidate_gpu_state_cache() -> None:
 
 def _run_nvidia_smi_probes() -> dict[str, Any]:
     """Sync: single ephemeral container, CSV for gpu + compute processes."""
-    settings = get_settings()
+    try:
+        from app.services.stack_config import (
+            host_gpu_docker_probe_enabled,
+            nvidia_smi_docker_image_for_stack,
+            sync_merged_flat,
+        )
+
+        merged = sync_merged_flat()
+    except Exception:  # noqa: BLE001
+        merged = {}
+    if not host_gpu_docker_probe_enabled(merged):
+        logger.info("[gpu_state][run_nvidia_smi_probes][BLOCK_DISABLED] HOST_GPU_DOCKER_PROBE=off")
+        return {"available": False, "error": "host_gpu_docker_probe_disabled", "gpus": []}
+
     try:
         client = docker.from_env()
         client.ping()
@@ -34,7 +45,7 @@ def _run_nvidia_smi_probes() -> dict[str, Any]:
         logger.info("[gpu_state][run_nvidia_smi_probes][BLOCK_DOCKER] %s", exc)
         return {"available": False, "error": "docker_unavailable", "gpus": []}
 
-    image = settings.nvidia_smi_docker_image
+    image = nvidia_smi_docker_image_for_stack(merged)
     device_requests = [DeviceRequest(count=-1, capabilities=[["gpu"]])]
     script = r"""
 set -e
@@ -223,11 +234,23 @@ def _driver_cuda() -> tuple[str | None, str | None]:
     import re
 
     try:
+        from app.services.stack_config import (
+            host_gpu_docker_probe_enabled,
+            nvidia_smi_docker_image_for_stack,
+            sync_merged_flat,
+        )
+
+        merged = sync_merged_flat()
+    except Exception:  # noqa: BLE001
+        merged = {}
+    if not host_gpu_docker_probe_enabled(merged):
+        return None, None
+    try:
         client = docker.from_env()
     except docker.errors.DockerException:
         return None, None
     device_requests = [DeviceRequest(count=-1, capabilities=[["gpu"]])]
-    image = get_settings().nvidia_smi_docker_image
+    image = nvidia_smi_docker_image_for_stack(merged)
     try:
         out = client.containers.run(
             image,

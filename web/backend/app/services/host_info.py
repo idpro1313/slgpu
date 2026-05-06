@@ -385,11 +385,22 @@ def collect_host_info(slgpu_root: Path) -> dict[str, Any]:
     except OSError:
         disk_total = disk_used = disk_free = 0
 
-    docker_nv = (
-        _nvidia_smi_via_docker(client, settings.nvidia_smi_docker_image)
-        if client is not None
-        else None
-    )
+    docker_nv = None
+    if client is not None:
+        try:
+            from app.services.stack_config import (
+                host_gpu_docker_probe_enabled,
+                nvidia_smi_docker_image_for_stack,
+                sync_merged_flat,
+            )
+
+            _merged = sync_merged_flat()
+        except Exception:  # noqa: BLE001
+            _merged = {}
+        if host_gpu_docker_probe_enabled(_merged):
+            docker_nv = _nvidia_smi_via_docker(
+                client, nvidia_smi_docker_image_for_stack(_merged)
+            )
     local_nv = _nvidia_smi_snapshot_local()
 
     if docker_nv and docker_nv.get("smi_available"):

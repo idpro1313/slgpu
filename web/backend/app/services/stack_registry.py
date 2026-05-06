@@ -168,6 +168,20 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
         *S_ALL_COMPOSE, "probes",
         allow_empty=True,
     ),
+    "HOST_GPU_DOCKER_PROBE": _e(
+        "HOST_GPU_DOCKER_PROBE",
+        "web",
+        "Эфемерный docker run с GPU для nvidia-smi на **хосте** (дашборд «Сервер», /gpu/state, MONITORING_DCGM=auto): on — включено; off — не запускать контейнер (только локальный nvidia-smi в slgpu-web, если есть).",
+        *S_ALL_COMPOSE, "probes",
+        allow_empty=True,
+    ),
+    "NVIDIA_SMI_DOCKER_IMAGE": _e(
+        "NVIDIA_SMI_DOCKER_IMAGE",
+        "web",
+        "Образ для опроса GPU через Docker (должен содержать nvidia-smi; нужен NVIDIA Container Toolkit). Пусто — значение WEB_NVIDIA_SMI_DOCKER_IMAGE в окружении контейнера web.",
+        *S_ALL_COMPOSE, "probes",
+        allow_empty=True,
+    ),
 
     # ----- 3. Пути на хосте (bind mount) -----
     "SLGPU_HOST_REPO": _e("SLGPU_HOST_REPO", "paths", "Абсолютный путь к репозиторию slgpu на хосте (bind для slgpu-web и подкоманд compose).", *S_LLM, *S_ALL_COMPOSE),

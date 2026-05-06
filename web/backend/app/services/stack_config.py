@@ -40,6 +40,24 @@ _NON_COMPOSE_ENV_KEYS = {"LITELLM_API_KEY"}
 # Secret detection for upserts: ``stack_registry.is_secret_key`` (single source of truth).
 
 
+def host_gpu_docker_probe_enabled(merged: dict[str, str]) -> bool:
+    """Эфемерный ``docker run`` с GPU для ``nvidia-smi`` (дашборд, gpu/state, DCGM=auto)."""
+
+    raw = (merged.get("HOST_GPU_DOCKER_PROBE") or "on").strip().lower()
+    return raw not in ("off", "false", "0", "no", "disabled")
+
+
+def nvidia_smi_docker_image_for_stack(merged: dict[str, str]) -> str:
+    """Образ с ``nvidia-smi`` из стека БД или ``Settings.nvidia_smi_docker_image``."""
+
+    from app.core.config import get_settings
+
+    v = (merged.get("NVIDIA_SMI_DOCKER_IMAGE") or "").strip()
+    if v:
+        return v
+    return get_settings().nvidia_smi_docker_image
+
+
 def monitoring_dcgm_wanted(merged: dict[str, str], slgpu_root: Path) -> bool:
     """Включить DCGM exporter (compose profile ``gpu``), scrape Prometheus, пробу в UI.
 
