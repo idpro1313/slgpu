@@ -76,7 +76,7 @@ class KeyMeta:
     required_for: frozenset[StackScope]
     # Не показывать отдельной строкой в «Настройки» — значение подставляется из LLM_API_* см. env_key_aliases
     ui_hidden: bool = False
-    # Подгруппа внутри monitoring / proxy (.slug для UI-сортировки и подписи)
+    # Подгруппа внутри monitoring / proxy / web (slug для UI-сортировки и подписи в «Настройки»)
     subgroup: str | None = None
 
 
@@ -174,6 +174,7 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
         "Эфемерный docker run с GPU для nvidia-smi на **хосте** (дашборд «Сервер», /gpu/state, MONITORING_DCGM=auto): on — включено; off — не запускать контейнер (только локальный nvidia-smi в slgpu-web, если есть).",
         *S_ALL_COMPOSE, "probes",
         allow_empty=True,
+        subgroup="gpu_docker_probe",
     ),
     "NVIDIA_SMI_DOCKER_IMAGE": _e(
         "NVIDIA_SMI_DOCKER_IMAGE",
@@ -181,6 +182,7 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
         "Образ для опроса GPU через Docker (должен содержать nvidia-smi; нужен NVIDIA Container Toolkit). Пусто — значение WEB_NVIDIA_SMI_DOCKER_IMAGE в окружении контейнера web.",
         *S_ALL_COMPOSE, "probes",
         allow_empty=True,
+        subgroup="gpu_docker_probe",
     ),
 
     # ----- 3. Пути на хосте (bind mount) -----

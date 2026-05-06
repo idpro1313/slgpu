@@ -73,7 +73,7 @@ const STACK_GROUP_META: Record<StackGroupId, { title: string; subtitle: string }
   web: {
     title: "2. Web UI (slgpu-web)",
     subtitle:
-      "Образ, контейнер, внутренний и опубликованный порт slgpu-web; уровень логов uvicorn; запасной host для публичных ссылок и host-проб мониторинга/LLM из контейнера web.",
+      "Образ, контейнер, внутренний и опубликованный порт slgpu-web; уровень логов uvicorn; запасной host для публичных ссылок и host-проб мониторинга/LLM из контейнера web. Блок «Опрос GPU на хосте через Docker» — эфемерный контейнер с nvidia-smi (можно отключить через HOST_GPU_DOCKER_PROBE).",
   },
   paths: {
     title: "3. Пути на хосте (bind mount)",
@@ -147,7 +147,15 @@ const PROXY_SUBGROUP_TITLE: Record<string, string> = {
   litellm: "LiteLLM",
 };
 
+const WEB_SUBGROUP_TITLE: Record<string, string> = {
+  gpu_docker_probe: "Опрос GPU на хосте через Docker",
+};
+
 function subgroupSortRank(gid: StackGroupId, slug: string | undefined | null): number {
+  if (gid === "web") {
+    if (!slug) return 0;
+    return slug === "gpu_docker_probe" ? 1 : 999;
+  }
   if (!slug || (gid !== "monitoring" && gid !== "proxy")) return 0;
   const mon = ["prometheus", "grafana", "loki", "promtail", "dcgm_exporter", "node_exporter"];
   const px = ["langfuse", "postgresql", "redis", "clickhouse", "minio", "litellm"];
@@ -160,7 +168,7 @@ function orderRowsWithSubgroupSort(
   rows: StackRow[],
   regByKey: Map<string, RegistryEntry>,
 ): StackRow[] {
-  if (gid !== "monitoring" && gid !== "proxy") return rows;
+  if (gid !== "monitoring" && gid !== "proxy" && gid !== "web") return rows;
   const indexed = rows.map((r, i) => ({ r, i }));
   indexed.sort((a, b) => {
     const sa = regByKey.get(a.r.key.trim())?.subgroup;
@@ -175,6 +183,7 @@ function orderRowsWithSubgroupSort(
 
 function serviceSubgroupHeading(gid: StackGroupId, slug: string): string {
   if (gid === "monitoring") return MONITORING_SUBGROUP_TITLE[slug] ?? slug;
+  if (gid === "web") return WEB_SUBGROUP_TITLE[slug] ?? slug;
   return PROXY_SUBGROUP_TITLE[slug] ?? slug;
 }
 
@@ -648,7 +657,7 @@ export function SettingsPage() {
               {STACK_GROUP_ORDER.map((gid) => {
                 const rowsInGroup = stackRows.filter((r) => stackGroupId(r, regByKey) === gid);
                 const rowsDisplayed =
-                  gid === "monitoring" || gid === "proxy"
+                  gid === "monitoring" || gid === "proxy" || gid === "web"
                     ? orderRowsWithSubgroupSort(gid, rowsInGroup, regByKey)
                     : rowsInGroup;
                 const meta = STACK_GROUP_META[gid];
@@ -726,7 +735,7 @@ export function SettingsPage() {
                               const km = regByKey.get(row.key.trim());
                               const sub = km?.subgroup ?? undefined;
                               if (
-                                (gid === "monitoring" || gid === "proxy") &&
+                                (gid === "monitoring" || gid === "proxy" || gid === "web") &&
                                 typeof sub === "string" &&
                                 sub.length > 0 &&
                                 sub !== lastSubgroupSlug
