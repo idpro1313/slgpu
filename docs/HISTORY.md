@@ -2544,3 +2544,12 @@
 - **Файлы:** `configs/monitoring/loki/loki-config.yaml.tmpl`, `configs/monitoring/README.md`, `configs/monitoring/LOGS.md`, `web/backend/app/services/log_report.py`, `README.md`, `web/CONTRACT.md`, `docs/AGENTS.md`, `grace/**/*.xml`, `VERSION`, `web/backend/pyproject.toml`, `web/frontend/package.json`, `web/frontend/package-lock.json`, `docs/HISTORY.md`.
 - **Решение:** PATCH. На стенде после обновления нужен перезапуск мониторинга из UI (`native.monitoring.restart/up`), чтобы backend перерендерил `${WEB_DATA_DIR}/.slgpu/monitoring/loki-config.yaml`.
 
+## Фаза 8.5.2 (правило push во все remote)
+
+### Git workflow: все репозитории
+
+- **Что:** В `.cursor/rules/git-version-commit.mdc` уточнено, что после коммита push выполняется во все настроенные remote-репозитории (`git remote`) отдельными командами, а не только в основной remote. Версии синхронизированы с **VERSION 8.5.2**.
+- **Почему:** Запрос пользователя — всегда пушить изменения во все репозитории/зеркала проекта.
+- **Файлы:** `.cursor/rules/git-version-commit.mdc`, `VERSION`, `web/backend/pyproject.toml`, `web/frontend/package.json`, `web/frontend/package-lock.json`, `docs/HISTORY.md`.
+- **Решение:** Always-apply правило обновлено без создания отдельного дублирующего правила.
+
