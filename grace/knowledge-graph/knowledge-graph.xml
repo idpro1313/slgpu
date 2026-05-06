@@ -1,5 +1,5 @@
 <KnowledgeGraph>
-  <Project NAME="slgpu" VERSION="8.3.1">
+  <Project NAME="slgpu" VERSION="8.4.0">
     <keywords>slgpu, vllm, sglang, llm-inference, benchmark, docker-compose, gpu, prometheus, grafana, sglang-dashboard-slgpu, sglangdash2-slgpu</keywords>
     <annotation>Стенд для сравнения движков LLM-инференса vLLM и SGLang на Linux-сервере с NVIDIA GPU.</annotation>
 
@@ -145,7 +145,7 @@
         <fn-host_gpu_docker_probe_enabled PURPOSE="8.3.1: HOST_GPU_DOCKER_PROBE on|off — запускать ли эфемерный docker run с GPU для nvidia-smi (дашборд, /gpu/state, auto DCGM опирается на collect_host_info)" />
         <fn-nvidia_smi_docker_image_for_stack PURPOSE="8.3.1: NVIDIA_SMI_DOCKER_IMAGE из stack_params или WEB_NVIDIA_SMI_DOCKER_IMAGE (Settings.nvidia_smi_docker_image), дефолт nvidia/cuda:12.4.1-base-ubuntu22.04" />
         <fn-render_monitoring_configs PURPOSE="string.Template подстановка из БД в *.tmpl → ${WEB_DATA_DIR}/.slgpu/monitoring/{prometheus.yml,loki-config.yaml,promtail-config.yml,datasource.yml}; prometheus.yml.tmpl: плейсхолдер DCGM_SCRAPE_YAML (фрагмент job dcgm или пусто) по monitoring_dcgm_wanted; если отсутствует vllm-slots.json — создаёт его с host.docker.internal:8110..8130 (file_sd job vllm-slots, мультислот vLLM; константы VLLM_SLOTS_FILE_SD_PORT_* в stack_config.py); существующий vllm-slots.json не перезаписывается; в шаблонах НЕ должно быть буквальных ${VAR} в комментариях кроме явно подставляемых из mapping (substitute не различает комментарий и тело — упадёт KeyError)" />
-        <fn-STACK_KEY_REGISTRY PURPOSE="Каноничный реестр ключей стека (group/required_for/allow_empty/is_secret/ui_hidden; subgroup monitoring/proxy — 6.0.5); scope fix_perms не входит в S_MON — только у ключей под _native_fix_perms и SLGPU_BENCH_CHOWN_IMAGE (6.1.3)" />
+        <fn-STACK_KEY_REGISTRY PURPOSE="Каноничный реестр ключей стека (group/required_for/allow_empty/is_secret/ui_hidden; subgroup monitoring/proxy — 6.0.5; 8.3.2: subgroup gpu_docker_probe в group web для HOST_GPU_DOCKER_PROBE / NVIDIA_SMI_DOCKER_IMAGE); scope fix_perms не входит в S_MON — только у ключей под _native_fix_perms и SLGPU_BENCH_CHOWN_IMAGE (6.1.3)" />
         <fn-validate_required PURPOSE="Возвращает missing keys для scope (web_up/monitoring_up/proxy_up/llm_slot/...)" />
         <fn-raise_if_missing PURPOSE="HTTP 409 missing_stack_params в API при недостающих ключах" />
         <export-app_config_install PURPOSE="POST /api/v1/app-config/install: импорт configs/main.env + пресетов с диска в БД" />
@@ -191,7 +191,7 @@
     </M-LOAD>
 
     <M-WEB NAME="WebControlPlane" TYPE="ENTRY_POINT" STATUS="implemented">
-      <purpose>Single-container web control plane: FastAPI + React/Vite, SQLite; стек LLM: native jobs с docker-py (мультислот vLLM/SGLang) + **`web.log_report.generate`** (Loki → факты → LiteLLM, in-process); live GPU; monitoring — native compose; бенч — subprocess; stack_params + cfg.meta; install из main.env.</purpose>
+      <purpose>Single-container web control plane: FastAPI + React/Vite, SQLite; стек LLM: native jobs с docker-py (мультислот vLLM/SGLang) + **`web.log_report.generate`** (Loki → факты → OpenAI-compatible LLM HTTP, по умолчанию LiteLLM, in-process); live GPU; monitoring — native compose; бенч — subprocess; stack_params + cfg.meta; install из main.env.</purpose>
       <path>web/</path>
       <depends>M-CLI, M-PULL, M-UP, M-DOWN, M-MONITOR</depends>
       <verification-ref>V-M-WEB</verification-ref>
@@ -230,23 +230,23 @@
         <fn-services_app_log_sink PURPOSE="app.services.app_log_sink: classify_record, батч INSERT в app_log_event, start_writer/stop_writer" />
         <fn-api_app_logs PURPOSE="GET /app-logs/events — фильтры, курсор before_id, из SQLite" />
         <fn-middleware_request_log PURPOSE="AppHttpRequestLogMiddleware: X-Request-ID, extra, [app][http][BLOCK_API_*], пропуск /app-logs/events, /assets, /healthz" />
-        <fn-frontend_app PURPOSE="React SPA (globals.css — компактный макет): Dashboard, Presets, Inference (слоты), Логи (app-logs), **Отчёты логов** (`/log-reports`), Docker, Models, Monitoring, Jobs, Benchmarks, Settings (5.2.1: registry-driven форма со столбцом «Описание / для чего», красная подсветка незаполненных required; 5.2.2: порядок и группы строк строго совпадают с разделами configs/main.env 1..8 — network/web/paths/images/inference/monitoring/proxy/secrets — порядок ключей в группе = порядок _STACK_KEY_REGISTRY, без алфавитной сортировки; чекбокс «секрет» больше не вырывает строку в отдельную группу secrets)" />
+        <fn-frontend_app PURPOSE="React SPA (globals.css — компактный макет): Dashboard, Presets, Inference (слоты), Логи (app-logs), **Отчёты логов** (`/log-reports`), Docker, Models, Monitoring, Jobs, Benchmarks, Settings (5.2.1: registry-driven форма со столбцом «Описание / для чего», красная подсветка незаполненных required; 5.2.2: порядок и группы строк строго совпадают с разделами configs/main.env 1..8 — network/web/paths/images/inference/monitoring/proxy/secrets — порядок ключей в группе = порядок _STACK_KEY_REGISTRY, без алфавитной сортировки; чекбокс «секрет» больше не вырывает строку в отдельную группу secrets; 8.3.2: подзаголовок в группе web для registry.subgroup gpu_docker_probe; 8.4.0: подзаголовок log_reports_llm для LOG_REPORT_LLM_*)" />
         <export-web-image PURPOSE="slgpu-web:dev, подъём: ./slgpu web up; тома: repo root по тому же абсолютному хост-пути (SLGPU_HOST_REPO=$(pwd) в scripts/cmd_web.sh), ./data/web, ./data/models, docker.sock; entrypoint chown'ит /data и ${WEB_SLGPU_ROOT}/data/{models,presets,bench} под uid 10001 (bench — native.bench.* → data/bench/results); working_dir из compose НЕ задаётся (uvicorn стартует из WORKDIR /srv/app в Dockerfile.web); huggingface_hub[cli] + hf_transfer установлены для slgpu pull, HF_HOME=/data/huggingface и /home/slgpuweb writable; критично для команд из web → docker compose monitoring/llm с корректными bind-маунтами" />
         <export-contract PURPOSE="web/CONTRACT.md — границы CLI/Docker API/SQLite" />
       </annotations>
     </M-WEB>
 
     <M-LOG-REPORT NAME="LogReports" TYPE="INTEGRATION" STATUS="implemented">
-      <purpose>8.2.0/8.2.6: on-demand отчёт по контейнерным логам из Loki за период: детерминированный пакет фактов + русскоязычная Markdown-сводка через LiteLLM или локальный fallback при 500/недоступности LiteLLM; хранение в SQLite `log_reports`; job kind `web.log_report.generate` (in-process).</purpose>
+      <purpose>8.2.0/8.2.6/8.4.0: on-demand отчёт по контейнерным логам из Loki за период: детерминированный пакет фактов + русскоязычная Markdown-сводка через `POST …/v1/chat/completions` (по умолчанию внутренний LiteLLM; опционально `LOG_REPORT_LLM_API_BASE` / ключ с fallback на `LITELLM_API_KEY`) или локальный fallback при ошибке LLM; хранение в SQLite `log_reports`; job kind `web.log_report.generate` (in-process).</purpose>
       <path>web/backend/app/api/v1/log_reports.py, web/backend/app/services/loki_client.py, web/backend/app/services/log_report.py, web/backend/app/models/log_report.py, web/backend/app/schemas/log_reports.py, web/frontend/src/pages/LogReports.tsx</path>
       <depends>M-WEB, M-MONITOR</depends>
       <verification-ref>V-M-LOG-REPORT</verification-ref>
       <annotations>
         <fn-query_range PURPOSE="HTTP GET …/loki/api/v1/query_range по LOKI_* из sync_merged_flat" />
         <fn-build_facts PURPOSE="parse_loki_streams, build_facts_bundle, redact_line перед LLM; 8.2.8 — errorish/warningish/oom через regex с границами слов, чтобы `bloom`/info-шум Loki не считался OOM/error" />
-        <fn-render_fallback_markdown PURPOSE="Локальная Markdown-сводка по facts при ошибке LiteLLM, чтобы отчёт не падал после успешного Loki-запроса" />
-        <fn-pipeline PURPOSE="run_log_report_pipeline(job_id, report_id): Loki → facts → POST LiteLLM /v1/chat/completions; при ошибке LiteLLM — render_fallback_markdown(facts); запись log_reports.llm_markdown" />
-        <fn-api-crud PURPOSE="POST/GET /api/v1/log-reports[/{id}]" />
+        <fn-render_fallback_markdown PURPOSE="Локальная Markdown-сводка по facts при ошибке LLM HTTP, чтобы отчёт не падал после успешного Loki-запроса" />
+        <fn-pipeline PURPOSE="run_log_report_pipeline(job_id, report_id): Loki → facts → POST …/v1/chat/completions (база из LOG_REPORT_LLM_API_BASE или litellm_http_base_sync; ключ get_log_report_llm_api_key или get_litellm_api_key); при ошибке — render_fallback_markdown(facts); запись log_reports.llm_markdown" />
+        <fn-api-crud PURPOSE="POST/GET /api/v1/log-reports[/{id}], GET …/llm-catalog-source (use_litellm_model_catalog)" />
       </annotations>
     </M-LOG-REPORT>
 
@@ -286,7 +286,7 @@
     <CrossLink from="M-WEB" to="M-CLI" relation="хостовый ./slgpu для ручных сценариев; web jobs — native compose/API" />
     <CrossLink from="M-WEB" to="M-MODELS" relation="presets в SQLite; выгрузка .env из UI; модели — отдельно" />
     <CrossLink from="M-WEB" to="M-MONITOR" relation="Docker read + compose up monitoring из web" />
-    <CrossLink from="M-LOG-REPORT" to="M-WEB" relation="API, jobs, SQLite log_reports, Litellm клиент" />
+    <CrossLink from="M-LOG-REPORT" to="M-WEB" relation="API, jobs, SQLite log_reports, httpx к OpenAI-compatible LLM" />
     <CrossLink from="M-LOG-REPORT" to="M-MONITOR" relation="источник логов — Loki (monitoring compose)" />
     <CrossLink from="M-WEB" to="M-PULL" relation="native.model.pull (HF snapshot) как job" />
     <CrossLink from="M-WEB" to="M-UP" relation="v5: только native.slot.* (docker-py); хост — без up" />

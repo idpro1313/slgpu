@@ -1,4 +1,4 @@
-"""Тесты агрегатора отчётов по логам и POST /log-reports (mock Loki/LiteLLM)."""
+"""Тесты агрегатора отчётов по логам и POST /log-reports (mock Loki/LLM HTTP)."""
 
 from __future__ import annotations
 
@@ -14,6 +14,102 @@ from app.db.session import get_engine, init_db
 from app.main import app
 from app.services import log_report as log_report_service
 from app.services.app_log_sink import start_writer, stop_writer
+
+
+def test_use_litellm_model_catalog_when_base_empty_or_set() -> None:
+    assert log_report_service.use_litellm_model_catalog({}) is True
+    assert log_report_service.use_litellm_model_catalog({"LOG_REPORT_LLM_API_BASE": ""}) is True
+    assert log_report_service.use_litellm_model_catalog({"LOG_REPORT_LLM_API_BASE": "  "}) is True
+    assert (
+        log_report_service.use_litellm_model_catalog(
+            {"LOG_REPORT_LLM_API_BASE": "https://api.example.com"}
+        )
+        is False
+    )
+
+
+@pytest.mark.asyncio
+async def test_call_litellm_chat_posts_to_custom_base(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, str] = {}
+
+    class FakeResponse:
+        status_code = 200
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {"choices": [{"message": {"content": " ok "}}]}
+
+    class FakeClient:
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return None
+
+        async def post(self, url, json=None):
+            captured["url"] = url
+            return FakeResponse()
+
+    monkeypatch.setattr(
+        log_report_service,
+        "sync_merged_flat",
+        lambda: {"LOG_REPORT_LLM_API_BASE": "https://api.example.com/"},
+    )
+    monkeypatch.setattr(log_report_service.httpx, "AsyncClient", FakeClient)
+    monkeypatch.setattr(
+        log_report_service.app_settings,
+        "get_log_report_llm_api_key",
+        AsyncMock(return_value="secret-key"),
+    )
+
+    class _DummySession:
+        pass
+
+    out = await log_report_service.call_litellm_chat(
+        session=_DummySession(),  # type: ignore[arg-type]
+        llm_model="m",
+        user_content="{}",
+    )
+    assert out == "ok"
+    assert captured["url"] == "https://api.example.com/v1/chat/completions"
+
+
+@pytest.mark.asyncio
+async def test_get_log_reports_llm_catalog_source(monkeypatch: pytest.MonkeyPatch) -> None:
+    await init_db()
+    await start_writer(get_engine())
+    import app.api.v1.log_reports as log_reports_api
+
+    transport = ASGITransport(app=app)
+    try:
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            inst = await client.post("/api/v1/app-config/install", json={"force": True})
+            assert inst.status_code == 200
+
+            monkeypatch.setattr(
+                log_reports_api,
+                "sync_merged_flat",
+                lambda: {"LOG_REPORT_LLM_API_BASE": ""},
+            )
+            r1 = await client.get("/api/v1/log-reports/llm-catalog-source")
+            assert r1.status_code == 200, r1.text
+            assert r1.json() == {"use_litellm_model_catalog": True}
+
+            monkeypatch.setattr(
+                log_reports_api,
+                "sync_merged_flat",
+                lambda: {"LOG_REPORT_LLM_API_BASE": "http://host:11434"},
+            )
+            r2 = await client.get("/api/v1/log-reports/llm-catalog-source")
+            assert r2.status_code == 200, r2.text
+            assert r2.json() == {"use_litellm_model_catalog": False}
+    finally:
+        await stop_writer()
 
 LOKI_STUB = {
     "data": {
@@ -94,7 +190,7 @@ def test_ts_ns_deterministic_from_timedelta():
     assert log_report_service._ts_ns(dt2) == 1000
 
 
-def test_render_fallback_markdown_mentions_litellm_and_facts() -> None:
+def test_render_fallback_markdown_mentions_llm_and_facts() -> None:
     tuples = log_report_service.parse_loki_streams(LOKI_STUB)
     dt0 = datetime(2023, 11, 15, tzinfo=timezone.utc)
     dt1 = dt0 + timedelta(hours=1)
@@ -109,7 +205,7 @@ def test_render_fallback_markdown_mentions_litellm_and_facts() -> None:
 
     md = log_report_service.render_fallback_markdown(facts, reason="500 Internal Server Error")
 
-    assert "LiteLLM-сводка недоступна" in md
+    assert "LLM-сводка недоступна" in md
     assert "500 Internal Server Error" in md
     assert "slgpu-vllm-qwen" in md
     assert "BLOCK_TP_VISIBLE" in md
@@ -221,7 +317,7 @@ async def test_create_log_report_pipeline_falls_back_when_litellm_fails(
                 js = g.json()
                 if js["status"] == "succeeded":
                     assert js["facts"] is not None
-                    assert "LiteLLM-сводка недоступна" in js["llm_markdown"]
+                    assert "LLM-сводка недоступна" in js["llm_markdown"]
                     assert "показана локальная сводка" in js["error_message"]
                     return
                 if js["status"] == "failed":

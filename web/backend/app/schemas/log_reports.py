@@ -26,7 +26,10 @@ class LogReportCreate(BaseModel):
         ...,
         min_length=1,
         max_length=512,
-        description="Имя модели в LiteLLM (как в /v1/chat/completions).",
+        description=(
+            "Имя модели для `POST …/v1/chat/completions` (OpenAI-совместимый API). "
+            "При внутреннем LiteLLM можно взять из `/litellm/models`; иначе — вручную под ваш URL в Настройках."
+        ),
     )
     max_lines: int = Field(
         default=8000,
@@ -65,3 +68,9 @@ class LogReportOut(BaseModel):
 
 class LogReportsListOut(BaseModel):
     items: list[LogReportOut]
+
+
+class LogReportLlmCatalogSourceOut(BaseModel):
+    """Источник подсказок моделей на странице «Отчёты логов» (без секретов)."""
+
+    use_litellm_model_catalog: bool

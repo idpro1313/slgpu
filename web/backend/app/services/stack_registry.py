@@ -24,6 +24,7 @@ _SECRET_EXACT = frozenset(
         "HF_TOKEN",
         "LITELLM_MASTER_KEY",
         "LITELLM_API_KEY",
+        "LOG_REPORT_LLM_API_KEY",
         "LANGFUSE_PUBLIC_KEY",
         "LANGFUSE_SECRET_KEY",
         "LANGFUSE_SALT",
@@ -183,6 +184,14 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
         *S_ALL_COMPOSE, "probes",
         allow_empty=True,
         subgroup="gpu_docker_probe",
+    ),
+    "LOG_REPORT_LLM_API_BASE": _e(
+        "LOG_REPORT_LLM_API_BASE",
+        "web",
+        "Базовый URL (**без** завершающего `/`) для LLM-сводки «Отчёты логов» (OpenAI-совместимый `POST /v1/chat/completions`). Пусто — запрос идёт во внутренний LiteLLM (`LITELLM_SERVICE_NAME`:`LITELLM_PORT`). Пример: `https://api.openai.com` или прокси/vLLM с OpenAI API.",
+        *S_ALL_COMPOSE,
+        allow_empty=True,
+        subgroup="log_reports_llm",
     ),
 
     # ----- 3. Пути на хосте (bind mount) -----
@@ -689,7 +698,13 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
     "LITELLM_API_KEY": _e(
         "LITELLM_API_KEY",
         "secrets",
-        "Bearer/API key, которым slgpu-web вызывает LiteLLM /v1 для анализа логов и внутренних backend-запросов к моделям.",
+        "Bearer/API key для вызовов внутреннего LiteLLM `/v1` (страница LiteLLM, пробы) и для «Отчётов логов», пока не задан отдельный `LOG_REPORT_LLM_API_BASE`.",
+        allow_empty=True,
+    ),
+    "LOG_REPORT_LLM_API_KEY": _e(
+        "LOG_REPORT_LLM_API_KEY",
+        "secrets",
+        "Bearer для «Отчётов логов», когда задан `LOG_REPORT_LLM_API_BASE` (внешний OpenAI-совместимый API). Пусто — используется `LITELLM_API_KEY`.",
         allow_empty=True,
     ),
 }

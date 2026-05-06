@@ -3,7 +3,11 @@ import { useEffect, useMemo, useState } from "react";
 
 import { ApiError } from "@/api/client";
 import { api } from "@/api/client";
-import type { LogReportAccepted, LogReportOut } from "@/api/types";
+import type {
+  LogReportAccepted,
+  LogReportLlmCatalogSource,
+  LogReportOut,
+} from "@/api/types";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
 
@@ -45,11 +49,24 @@ export function LogReportsPage() {
   const [rangeFromCustom, setRangeFromCustom] = useState("");
   const [rangeToCustom, setRangeToCustom] = useState("");
 
+  const catalogSourceQ = useQuery({
+    queryKey: ["log-reports", "llm-catalog-source"],
+    queryFn: ({ signal }) =>
+      api.get<LogReportLlmCatalogSource>("/log-reports/llm-catalog-source", {
+        signal,
+      }),
+    staleTime: 60_000,
+  });
+
+  const useLitellmModelCatalog =
+    catalogSourceQ.data?.use_litellm_model_catalog ?? true;
+
   const modelsQ = useQuery({
     queryKey: ["litellm", "models"],
     queryFn: ({ signal }) =>
       api.get<Array<{ id?: string }>>("/litellm/models", { signal }),
     refetchInterval: 60_000,
+    enabled: useLitellmModelCatalog,
   });
 
   const modelOptions = useMemo(() => {
@@ -61,11 +78,12 @@ export function LogReportsPage() {
   }, [modelsQ.data]);
 
   useEffect(() => {
+    if (!useLitellmModelCatalog) return;
     if (!llmModel && modelOptions.length) {
       const first = modelOptions[0];
       if (first) setLlmModel(first);
     }
-  }, [llmModel, modelOptions]);
+  }, [useLitellmModelCatalog, llmModel, modelOptions]);
 
   const fillCustomRangeFromPreset = (rangePreset: "15m" | "1h" | "24h" = "1h") => {
     const [from, to] = presetRange(rangePreset);
@@ -146,7 +164,7 @@ export function LogReportsPage() {
     <div>
       <PageHeader
         title="Отчёты логов"
-        subtitle="Сбор docker-логов из Loki за период, агрегация и best-effort сводка через LiteLLM (/v1/chat/completions). Если LiteLLM недоступен, отчёт покажет локальную сводку по фактам."
+        subtitle="Сбор docker-логов из Loki за период, детерминированные факты и LLM-сводка через OpenAI-совместимый POST /v1/chat/completions (по умолчанию — внутренний LiteLLM; иначе URL из Настроек). При ошибке API сводки отчёт остаётся успешным с локальной Markdown по фактам."
       />
 
       <Section
@@ -269,22 +287,37 @@ export function LogReportsPage() {
 
         <div className="flex flex--gap-sm flex--wrap" style={{ alignItems: "center" }}>
           <label className="label" style={{ margin: 0 }}>
-            Модель LiteLLM
+            Модель для сводки
           </label>
           <input
             className="input"
-            list="logreport-model-suggestions"
+            list={
+              useLitellmModelCatalog ? "logreport-model-suggestions" : undefined
+            }
             value={llmModel}
             onChange={(e) => setLlmModel(e.target.value)}
-            placeholder="имя модели как в LiteLLM /ui"
+            placeholder={
+              useLitellmModelCatalog
+                ? "как в каталоге LiteLLM (/litellm/models)"
+                : "вручную под ваш API (Настройки → Отчёты логов, LLM)"
+            }
             style={{ minWidth: 220 }}
           />
-          <datalist id="logreport-model-suggestions">
-            {modelOptions.map((m) => (
-              <option key={m} value={m} />
-            ))}
-          </datalist>
-          {modelsQ.isError ? (
+          {useLitellmModelCatalog ? (
+            <datalist id="logreport-model-suggestions">
+              {modelOptions.map((m) => (
+                <option key={m} value={m} />
+              ))}
+            </datalist>
+          ) : (
+            <span className="section__subtitle">
+              Указан свой базовый URL для отчётов — подсказки из LiteLLM не
+              запрашиваются; модель введите вручную (
+              <a href="/settings">Настройки</a>
+              ).
+            </span>
+          )}
+          {useLitellmModelCatalog && modelsQ.isError ? (
             <span className="section__subtitle">
               список /litellm/models недоступен — введите модель вручную
             </span>
@@ -338,7 +371,7 @@ export function LogReportsPage() {
               {!rep?.llm_markdown &&
               rep?.status !== "failed" &&
               (rep?.status === "pending" || rep?.status === "running") ? (
-                <p className="section__subtitle">Ждём Loki + LiteLLM/fallback…</p>
+                <p className="section__subtitle">Ждём Loki и LLM-сводку (или локальный fallback)…</p>
               ) : null}
               {rep?.facts ? (
                 <>

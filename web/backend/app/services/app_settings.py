@@ -80,6 +80,18 @@ async def get_litellm_api_key(session: AsyncSession) -> str | None:
     return s if s else None
 
 
+async def get_log_report_llm_api_key(session: AsyncSession) -> str | None:
+    """Bearer для «Отчётов логов» при внешнем `LOG_REPORT_LLM_API_BASE`; иначе пусто → fallback `get_litellm_api_key`."""
+
+    from app.services.stack_config import load_sections
+
+    _, secrets, _ = await load_sections(session)
+    raw = secrets.get("LOG_REPORT_LLM_API_KEY")
+    if isinstance(raw, str) and raw.strip():
+        return raw.strip()
+    return await get_litellm_api_key(session)
+
+
 async def get_litellm_master_key(session: AsyncSession) -> str | None:
     from app.services.stack_config import load_sections
 

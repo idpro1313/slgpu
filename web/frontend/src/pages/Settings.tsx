@@ -73,7 +73,7 @@ const STACK_GROUP_META: Record<StackGroupId, { title: string; subtitle: string }
   web: {
     title: "2. Web UI (slgpu-web)",
     subtitle:
-      "Образ, контейнер, внутренний и опубликованный порт slgpu-web; уровень логов uvicorn; запасной host для публичных ссылок и host-проб мониторинга/LLM из контейнера web. Блок «Опрос GPU на хосте через Docker» — эфемерный контейнер с nvidia-smi (можно отключить через HOST_GPU_DOCKER_PROBE).",
+      "Образ, контейнер, внутренний и опубликованный порт slgpu-web; уровень логов uvicorn; запасной host для публичных ссылок и host-проб мониторинга/LLM из контейнера web. Блок «Опрос GPU на хосте через Docker» — эфемерный контейнер с nvidia-smi (можно отключить через HOST_GPU_DOCKER_PROBE). Блок «Отчёты логов (LLM)» — внешний OpenAI-совместимый API для сводок (иначе LiteLLM).",
   },
   paths: {
     title: "3. Пути на хосте (bind mount)",
@@ -103,7 +103,7 @@ const STACK_GROUP_META: Record<StackGroupId, { title: string; subtitle: string }
   secrets: {
     title: "8. Секреты приложения",
     subtitle:
-      "Отдельные секреты приложения: HF_TOKEN, LITELLM_MASTER_KEY для запуска LiteLLM Proxy и LITELLM_API_KEY для backend-запросов /v1. Значения скрыты, пока не включён режим раскрытия секретов; пустое поле — оставить как есть.",
+      "Отдельные секреты приложения: HF_TOKEN; LITELLM_* для LiteLLM Proxy и вызовов /v1; LOG_REPORT_LLM_API_KEY при внешнем API для отчётов логов. Значения скрыты, пока не включён режим раскрытия секретов; пустое поле — оставить как есть.",
   },
   other: {
     title: "Прочие параметры",
@@ -149,12 +149,15 @@ const PROXY_SUBGROUP_TITLE: Record<string, string> = {
 
 const WEB_SUBGROUP_TITLE: Record<string, string> = {
   gpu_docker_probe: "Опрос GPU на хосте через Docker",
+  log_reports_llm: "Отчёты логов (LLM)",
 };
 
 function subgroupSortRank(gid: StackGroupId, slug: string | undefined | null): number {
   if (gid === "web") {
     if (!slug) return 0;
-    return slug === "gpu_docker_probe" ? 1 : 999;
+    if (slug === "gpu_docker_probe") return 1;
+    if (slug === "log_reports_llm") return 2;
+    return 999;
   }
   if (!slug || (gid !== "monitoring" && gid !== "proxy")) return 0;
   const mon = ["prometheus", "grafana", "loki", "promtail", "dcgm_exporter", "node_exporter"];

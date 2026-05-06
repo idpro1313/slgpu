@@ -428,6 +428,11 @@ export interface AppLogEventsList {
   next_before_id: number | null;
 }
 
+/** GET /log-reports/llm-catalog-source */
+export interface LogReportLlmCatalogSource {
+  use_litellm_model_catalog: boolean;
+}
+
 /** POST /log-reports */
 export interface LogReportAccepted {
   report_id: number;

@@ -1,4 +1,4 @@
-<VerificationPlan VERSION="8.3.1">
+<VerificationPlan VERSION="8.4.0">
   <GlobalPolicy>
     <log-format>[Module][function][BLOCK_NAME] message</log-format>
     <deterministic-first>true</deterministic-first>
@@ -280,6 +280,7 @@
         <scenario-46 kind="success">8.2.10: `public_access.litellm_master_key` остаётся вне stack registry/table, но `sync_merged_flat` добавляет derived `LITELLM_MASTER_KEY`, а `write_compose_service_env_file` сохраняет его в `${WEB_DATA_DIR}/.slgpu/compose-service.env`; отдельный `public_access.litellm_api_key` используется backend Bearer-вызовами /v1 и не становится master key; `PRESET_ONLY_KEYS` не попадают в compose-env.</scenario-46>
         <scenario-47 kind="success">8.3.0: `MONITORING_DCGM` в реестре стека (`auto`|`on`|`off`, allow_empty — пусто трактуется как auto); `monitoring_dcgm_wanted()` согласует подъём `dcgm-exporter` (compose `--profile gpu`), job `dcgm` в отрендеренном `prometheus.yml` и пробу `dcgm-exporter` в `GET /monitoring/services`. Без GPU при `auto`/`off` стек метрик (Prometheus, Grafana, Loki, …) поднимается без DCGM. Юнит-тесты: `web/backend/tests/test_monitoring_dcgm.py`.</scenario-47>
         <scenario-48 kind="success">8.3.1: ключи **`HOST_GPU_DOCKER_PROBE`** и **`NVIDIA_SMI_DOCKER_IMAGE`** в реестре стека; при **`off`** эфемерный **`docker run`** с GPU для **`nvidia-smi`** не выполняется в **`collect_host_info`** и **`gpu_state`** (остаётся локальный smi в web при наличии); образ пробы — из стека или **`WEB_NVIDIA_SMI_DOCKER_IMAGE`** (дефолт **`nvidia/cuda:12.4.1-base-ubuntu22.04`**). Юнит-тесты: **`web/backend/tests/test_monitoring_dcgm.py`** (helpers + fallback образа).</scenario-48>
+        <scenario-49 kind="success">8.3.2: UI «Настройки» — группа **`web`**: для **`registry[].subgroup`** **`gpu_docker_probe`** отображается подзаголовок «Опрос GPU на хосте через Docker» перед строками **`HOST_GPU_DOCKER_PROBE`** и **`NVIDIA_SMI_DOCKER_IMAGE`** (`Settings.tsx`, сортировка как у monitoring/proxy).</scenario-49>
       </scenarios>
       <required-log-markers>
         <marker-1>[WEB][jobs][BLOCK_RUN_JOB]</marker-1>
@@ -304,6 +305,7 @@
         <scenario-3 kind="failure">Период &gt; 168 часов — `validate_period` бросает.</scenario-3>
         <scenario-4 kind="success">Интеграционный тест с monkeypatch `loki_query_range` + `call_litellm_chat`: POST `/log-reports` → polling до `succeeded`, непустой `llm_markdown`, `facts` заполнены.</scenario-4>
         <scenario-5 kind="success">LiteLLM/key/model недоступен или возвращает 500 — запись отчёта завершается `succeeded` с локальным `render_fallback_markdown(facts)`, предупреждением в `error_message` и лог-маркером `BLOCK_LLM_FALLBACK`.</scenario-5>
+        <scenario-5a kind="success">8.4.0: при непустом `LOG_REPORT_LLM_API_BASE` `call_litellm_chat` шлёт `POST` на `{normalized_base}/v1/chat/completions`; ключ — `LOG_REPORT_LLM_API_KEY` или fallback `LITELLM_API_KEY`. `GET /api/v1/log-reports/llm-catalog-source` возвращает `use_litellm_model_catalog: false` и не требует секретов.</scenario-5a>
         <scenario-6 kind="failure">Loki недоступен или период/LogQL некорректны — запись отчёта в `failed` с `error_message` (см. pipeline лог-маркеры `BLOCK_FAIL` / `BLOCK_LOKI_HTTP`).</scenario-6>
         <scenario-7 kind="success">Классификатор severity не относит Loki info-строки с `bloom` к `oom` и Grafana `flag evaluation succeeded` к `errorish`; реальные `CUDA out of memory` и `level=error ... failed` остаются срабатываниями.</scenario-7>
       </scenarios>

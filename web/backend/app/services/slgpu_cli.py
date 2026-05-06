@@ -1,4 +1,4 @@
-"""Дескрипторы заданий стека: ``kind`` = ``native.*`` (docker compose / docker-py) или ``web.log_report.generate`` (Loki+LiteLLM), либо legacy ``argv`` → ``bash ./slgpu``.
+"""Дескрипторы заданий стека: ``kind`` = ``native.*`` (docker compose / docker-py) или ``web.log_report.generate`` (Loki + LLM HTTP для сводки), либо legacy ``argv`` → ``bash ./slgpu``.
 
 Web UI ставит **``native.*``** и **``web.log_report.generate``** с пустым ``argv``; данные стека — из БД (см. ``stack_config`` / ``write_compose_service_env_file``).
 """

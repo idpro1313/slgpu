@@ -2488,6 +2488,26 @@
 - **Решение:** PATCH — охват ключей пресета и UX-подсказки; без смены контракта API пресетов.
 
 
+## Фаза 8.3.2 (UI «Настройки»: блок пробы GPU на хосте)
+
+### Подзаголовок в группе Web UI
+
+- **Что:** У **`HOST_GPU_DOCKER_PROBE`** и **`NVIDIA_SMI_DOCKER_IMAGE`** в реестре задан **`subgroup`** **`gpu_docker_probe`**; **`Settings.tsx`** рисует подблок «Опрос GPU на хосте через Docker» (как подзаголовки в мониторинге/прокси). Уточнён lead группы «2. Web UI». **VERSION** 8.3.2, **CONTRACT**, **GRACE** (версии артефактов).
+- **Почему:** Пользователь просил явно видеть настройку в «Настройки».
+- **Файлы:** `web/backend/app/services/stack_registry.py`, `web/frontend/src/pages/Settings.tsx`, `web/CONTRACT.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/plan/development-plan.xml`, `grace/verification/verification-plan.xml`, `VERSION`, `web/backend/pyproject.toml`, `web/frontend/package.json`, `web/frontend/package-lock.json`, `docs/HISTORY.md`.
+- **Решение:** PATCH (только UX/метаданные реестра).
+
+
+## Фаза 8.3.1 (отключение эфемерной пробы GPU на хосте)
+
+### HOST_GPU_DOCKER_PROBE и NVIDIA_SMI_DOCKER_IMAGE
+
+- **Что:** Ключи стека **`HOST_GPU_DOCKER_PROBE`** и **`NVIDIA_SMI_DOCKER_IMAGE`** (реестр, шаблон **`configs/main.env`**); **`host_gpu_docker_probe_enabled`** / **`nvidia_smi_docker_image_for_stack`** в **`stack_config.py`**; **`collect_host_info`**, **`gpu_state`** не запускают эфемерный **`docker run`** с GPU при `off`; образ пробы из БД или **`WEB_NVIDIA_SMI_DOCKER_IMAGE`** (дефолт **`nvidia/cuda:12.4.1-base-ubuntu22.04`**). Тесты расширены в **`test_monitoring_dcgm.py`**. Обновлены CONTRACT, AGENTS, README, GRACE, **`VERSION` 8.3.1**.
+- **Почему:** Запрос: опция не дергать GPU на сервере через CUDA-base контейнер; образ по умолчанию совпадает с **`Settings.nvidia_smi_docker_image`**.
+- **Файлы:** `web/backend/app/services/stack_config.py`, `stack_registry.py`, `host_info.py`, `gpu_state.py`, `configs/main.env` (в т.ч. синхронизация недостающих ключей реестра: SGLang MiMo/EAGLE + `LITELLM_*` в §8), `web/backend/tests/test_monitoring_dcgm.py`, `web/CONTRACT.md`, `docs/AGENTS.md`, `README.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/plan/development-plan.xml`, `grace/verification/verification-plan.xml`, `VERSION`, `web/backend/pyproject.toml`, `web/frontend/package.json`, `package-lock.json`, `docs/HISTORY.md`.
+- **Решение:** PATCH; **`MONITORING_DCGM=auto`** по-прежнему смотрит на **`collect_host_info`**: при отключённой пробе и отсутствии локального smi в web DCGM не включится автоматически.
+
+
 ## Фаза 8.3.0 (мониторинг без обязательной GPU)
 
 ### Мониторинг и LiteLLM на CPU-only
@@ -2496,3 +2516,13 @@
 - **Почему:** Пользовательский запуск: стек метрик/LiteLLM не должен зависеть от наличия GPU; ранее **`gpus: all`** у DCGM ломал весь `monitoring up`.
 - **Файлы:** `docker/docker-compose.monitoring.yml`, `web/backend/app/services/stack_config.py`, `stack_registry.py`, `native_jobs.py`, `monitoring.py`, `configs/monitoring/prometheus/prometheus.yml.tmpl`, `configs/main.env`, `README.md`, `configs/monitoring/README.md`, `docs/AGENTS.md`, `web/CONTRACT.md`, `grace/*`, `VERSION`, `web/backend/pyproject.toml`, `web/frontend/package.json`, `package-lock.json`, `docs/HISTORY.md`.
 - **Решение:** Режим `auto` совпадает с опросом NVIDIA в UI «Сервер» (`collect_host_info`); прокси-compose без изменений (LiteLLM уже без `gpus`).
+
+## Фаза 8.4.0 (Отчёты логов: отдельный LLM URL и ключ)
+
+### Параметры LOG_REPORT_LLM_* и GET llm-catalog-source
+
+- **Что:** Реестр/шаблон **`LOG_REPORT_LLM_API_BASE`**, **`LOG_REPORT_LLM_API_KEY`** (уже частично в предыдущей итерации); **`get_log_report_llm_api_key`**, выбор базы и ключа в **`log_report.call_litellm_chat`**, нейтральные тексты fallback; **`GET /api/v1/log-reports/llm-catalog-source`**; **`LogReports.tsx`** не вызывает **`/litellm/models`** при кастомной базе; тесты **`test_log_report.py`**. Синхронизированы **CONTRACT**, **AGENTS**, **GRACE**, **`slgpu_cli`** (формулировка job), **VERSION** MINOR.
+- **Почему:** План — вынести сводку отчётов на внешний OpenAI-compatible API, не ломая путь через внутренний LiteLLM по умолчанию.
+- **Файлы:** `web/backend/app/services/app_settings.py`, `web/backend/app/services/log_report.py`, `web/backend/app/api/v1/log_reports.py`, `web/backend/app/schemas/log_reports.py`, `web/backend/tests/test_log_report.py`, `web/backend/app/services/slgpu_cli.py`, `web/frontend/src/pages/LogReports.tsx`, `web/frontend/src/api/types.ts`, `web/CONTRACT.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/plan/development-plan.xml`, `grace/verification/verification-plan.xml`, `VERSION`, `web/backend/pyproject.toml`, `web/frontend/package.json`, `web/frontend/package-lock.json`, `docs/HISTORY.md`.
+- **Решение:** PATCH; контракт вызова остаётся **`POST {base}/v1/chat/completions`**.
+

@@ -1,5 +1,5 @@
 # GRACE[M-WEB][log_reports][BLOCK_LOG_REPORT_API]
-"""On-demand сводный отчёт по логам из Loki + текст от LiteLLM."""
+"""On-demand сводный отчёт по логам из Loki + LLM-сводка (LiteLLM или внешний OpenAI-compatible API)."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from app.models.log_report import LogReport, LogReportStatus
 from app.schemas.log_reports import (
     LogReportAccepted,
     LogReportCreate,
+    LogReportLlmCatalogSourceOut,
     LogReportOut,
     LogReportsListOut,
 )
@@ -56,6 +57,18 @@ async def list_log_reports(
     )
     rows = list(result.scalars().all())
     return LogReportsListOut(items=[_orm_to_out(r) for r in rows])
+
+
+@router.get(
+    "/llm-catalog-source",
+    response_model=LogReportLlmCatalogSourceOut,
+    tags=["log-reports"],
+)
+async def log_report_llm_catalog_source() -> LogReportLlmCatalogSourceOut:
+    merged = sync_merged_flat()
+    return LogReportLlmCatalogSourceOut(
+        use_litellm_model_catalog=log_report_service.use_litellm_model_catalog(merged),
+    )
 
 
 @router.get("/{report_id:int}", response_model=LogReportOut, tags=["log-reports"])

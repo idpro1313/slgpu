@@ -1,9 +1,13 @@
 # GRACE[M-LOG-REPORT][aggregate][BLOCK_LOG_REPORT_AGG]
-"""Сбор фактов из Loki и генерация Markdown через LiteLLM.
+"""Сбор фактов из Loki и LLM-сводка Markdown (OpenAI-compatible POST …/v1/chat/completions).
+
+По умолчанию базовый URL — внутренний LiteLLM (`litellm_http_base_sync`). При непустом
+`LOG_REPORT_LLM_API_BASE` запрос идёт на указанный origin; ключ — `LOG_REPORT_LLM_API_KEY`
+с fallback на `LITELLM_API_KEY`.
 
 CONTRACT:
   PURPOSE: Построить детерминированный JSON фактов и LLM/fallback-сводку для LogReport.
-  INPUTS: report row id, job id; ключи LiteLLM из настроек.
+  INPUTS: report row id, job id; ключи API из настроек (LiteLLM и/или log-report LLM).
   OUTPUTS: обновление LogReport и Job статусов.
 """
 
@@ -28,6 +32,27 @@ from app.services.loki_client import query_range as loki_query_range
 from app.services.stack_config import sync_merged_flat
 
 logger = logging.getLogger(__name__)
+
+
+def log_report_llm_custom_base_raw(merged: dict[str, Any]) -> str:
+    v = merged.get("LOG_REPORT_LLM_API_BASE")
+    if v is None:
+        return ""
+    return str(v).strip()
+
+
+def log_report_llm_http_base(merged: dict[str, Any]) -> str:
+    raw = log_report_llm_custom_base_raw(merged)
+    if raw:
+        return raw.rstrip("/")
+    return litellm_http_base_sync()
+
+
+def use_litellm_model_catalog(merged: dict[str, Any]) -> bool:
+    """True, если каталог моделей из `GET /litellm/models` актуален (внутренний LiteLLM)."""
+
+    return not bool(log_report_llm_custom_base_raw(merged))
+
 
 _LOGQL_SLGPU = '{job="docker-logs", container=~"slgpu-.*|slgpu-monitoring-.*|slgpu-proxy-.*"}'
 _LOGQL_ALL = '{job="docker-logs"}'
@@ -269,7 +294,7 @@ def _top_items(d: dict[str, Any], *, limit: int = 8) -> list[tuple[str, int]]:
 
 
 def render_fallback_markdown(facts: dict[str, Any], *, reason: str | None = None) -> str:
-    """Локальная Markdown-сводка, когда LiteLLM недоступен или вернул 5xx."""
+    """Локальная Markdown-сводка, когда LLM API недоступен или вернул ошибку/5xx."""
 
     meta = facts.get("meta") if isinstance(facts.get("meta"), dict) else {}
     containers = facts.get("by_container_total")
@@ -289,7 +314,7 @@ def render_fallback_markdown(facts: dict[str, Any], *, reason: str | None = None
     out = [
         "# Отчёт по логам",
         "",
-        "> LiteLLM-сводка недоступна; показан локальный отчёт по детерминированным фактам.",
+        "> LLM-сводка недоступна; показан локальный отчёт по детерминированным фактам.",
     ]
     if reason:
         out.extend(["", f"Причина: `{reason[:500]}`"])
@@ -341,7 +366,8 @@ def render_fallback_markdown(facts: dict[str, Any], *, reason: str | None = None
             "",
             "## Рекомендованные шаги",
             "- Откройте JSON фактов ниже и проверьте примеры строк в `samples_redacted`.",
-            "- Если нужен LLM-анализ, проверьте LiteLLM Proxy, выбранную модель и маршрут `/v1/chat/completions`.",
+            "- Если нужна LLM-сводка, проверьте в **Настройках** базу URL и ключ для отчётов логов "
+            "(или внутренний LiteLLM), выбранную модель и маршрут `POST /v1/chat/completions`.",
             "- При большом числе CUDA/OOM-событий сопоставьте контейнеры со слотами инференса и их GPU-масками.",
         ]
     )
@@ -365,11 +391,21 @@ async def call_litellm_chat(
     user_content: str,
     timeout_sec: float = 120.0,
 ) -> str:
-    key = await app_settings.get_litellm_api_key(session)
-    if not key:
-        raise RuntimeError("не задан LITELLM_API_KEY в настройках «8. Секреты приложения»")
+    merged = sync_merged_flat()
+    custom_base = log_report_llm_custom_base_raw(merged)
+    base = log_report_llm_http_base(merged)
+    if custom_base:
+        key = await app_settings.get_log_report_llm_api_key(session)
+        if not key:
+            raise RuntimeError(
+                "не задан API-ключ для сводки: укажите LOG_REPORT_LLM_API_KEY "
+                "или LITELLM_API_KEY в настройках «8. Секреты приложения»"
+            )
+    else:
+        key = await app_settings.get_litellm_api_key(session)
+        if not key:
+            raise RuntimeError("не задан LITELLM_API_KEY в настройках «8. Секреты приложения»")
 
-    base = litellm_http_base_sync()
     url = f"{base}/v1/chat/completions"
     headers = {"Authorization": f"Bearer {key}"}
     body = {
@@ -384,7 +420,7 @@ async def call_litellm_chat(
         r = await client.post(url, json=body)
         if r.status_code != 200:
             logger.warning(
-                "[log_report][litellm][BLOCK_LLM_HTTP] status=%s body=%s",
+                "[log_report][llm][BLOCK_LLM_HTTP] status=%s body=%s",
                 r.status_code,
                 (r.text or "")[:800],
             )
@@ -392,11 +428,11 @@ async def call_litellm_chat(
         data = r.json()
     choices = data.get("choices") or []
     if not choices:
-        raise RuntimeError("пустой ответ LiteLLM: нет choices")
+        raise RuntimeError("пустой ответ LLM API: нет choices")
     msg = (choices[0] or {}).get("message") or {}
     content = msg.get("content")
     if not content or not str(content).strip():
-        raise RuntimeError("пустое content от LiteLLM")
+        raise RuntimeError("пустое content от LLM API")
     return str(content).strip()
 
 
@@ -497,7 +533,7 @@ async def run_log_report_pipeline(job_id: int, report_id: int) -> None:
             r2.llm_markdown = markdown
             r2.status = LogReportStatus.SUCCEEDED
             r2.error_message = (
-                f"LiteLLM недоступен, показана локальная сводка: {llm_warning}"
+                f"LLM-сводка недоступна, показана локальная сводка: {llm_warning}"
                 if llm_warning
                 else None
             )

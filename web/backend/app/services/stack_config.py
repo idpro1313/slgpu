@@ -35,7 +35,7 @@ META_KEY = "cfg.meta"
 # См. ``app_settings.PUBLIC_ACCESS_KEY`` — дублируем строку, чтобы не импортировать app_settings (циклы).
 _PUBLIC_ACCESS_KEY = "public_access"
 _DERIVED_COMPOSE_ENV_KEYS = {"LITELLM_MASTER_KEY"}
-_NON_COMPOSE_ENV_KEYS = {"LITELLM_API_KEY"}
+_NON_COMPOSE_ENV_KEYS = {"LITELLM_API_KEY", "LOG_REPORT_LLM_API_KEY"}
 
 # Secret detection for upserts: ``stack_registry.is_secret_key`` (single source of truth).
 
