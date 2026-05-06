@@ -48,8 +48,9 @@ limits_config:
   reject_old_samples_max_age: 168h
   ingestion_rate_mb: 12
   ingestion_burst_size_mb: 24
-  retention_period: 720h
-  max_query_lookback: 720h
+  # 120 дней: хранение и глубина запросов больше 100 дней.
+  retention_period: 2880h
+  max_query_lookback: 2880h
   # Дефолт Loki — 5000; slgpu-web «Отчёты логов» запрашивает до max_lines API (до 20000).
   max_entries_limit_per_query: 25000
   metric_aggregation_enabled: true

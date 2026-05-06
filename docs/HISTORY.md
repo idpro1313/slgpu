@@ -2535,3 +2535,12 @@
 - **Файлы:** `web/frontend/src/lib/saveDownload.ts`, `web/frontend/src/pages/AppLogs.tsx`, `web/frontend/src/pages/Jobs.tsx`, `web/frontend/src/pages/Presets.tsx`, `web/CONTRACT.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/plan/development-plan.xml`, `grace/verification/verification-plan.xml`, `VERSION`, `web/backend/pyproject.toml`, `web/frontend/package.json`, `web/frontend/package-lock.json`, `docs/HISTORY.md`.
 - **Решение:** Только фронт + документация; выгрузка job — те же **tail** полей, что на экране.
 
+## Фаза 8.5.1 (Loki: хранение логов 120 дней)
+
+### Retention и query lookback больше 100 дней
+
+- **Что:** В `configs/monitoring/loki/loki-config.yaml.tmpl` срок хранения Loki и глубина запросов увеличены до **120 дней** (`retention_period: 2880h`, `max_query_lookback: 2880h`). Документация, CONTRACT, GRACE и версии синхронизированы с **VERSION 8.5.1**; сообщение `validate_period` для отчётов логов больше не привязано к `max_query_lookback`.
+- **Почему:** Запрос пользователя — хранить данные Loki более 100 дней; одной правки retention недостаточно без соответствующего `max_query_lookback`.
+- **Файлы:** `configs/monitoring/loki/loki-config.yaml.tmpl`, `configs/monitoring/README.md`, `configs/monitoring/LOGS.md`, `web/backend/app/services/log_report.py`, `README.md`, `web/CONTRACT.md`, `docs/AGENTS.md`, `grace/**/*.xml`, `VERSION`, `web/backend/pyproject.toml`, `web/frontend/package.json`, `web/frontend/package-lock.json`, `docs/HISTORY.md`.
+- **Решение:** PATCH. На стенде после обновления нужен перезапуск мониторинга из UI (`native.monitoring.restart/up`), чтобы backend перерендерил `${WEB_DATA_DIR}/.slgpu/monitoring/loki-config.yaml`.
+

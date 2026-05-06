@@ -1,5 +1,5 @@
 <KnowledgeGraph>
-  <Project NAME="slgpu" VERSION="8.5.0">
+  <Project NAME="slgpu" VERSION="8.5.1">
     <keywords>slgpu, vllm, sglang, llm-inference, benchmark, docker-compose, gpu, prometheus, grafana, sglang-dashboard-slgpu, sglangdash2-slgpu</keywords>
     <annotation>Стенд для сравнения движков LLM-инференса vLLM и SGLang на Linux-сервере с NVIDIA GPU.</annotation>
 
@@ -101,7 +101,7 @@
       <annotations>
         <export-monitoring_compose PURPOSE="полностью параметризованный compose: container_name/hostname/image/internal+external ports/network.name из stack_params snapshot" />
         <export-prometheus_tmpl PURPOSE="prometheus.yml.tmpl: scrape targets через ${SERVICE_NAME}:${INTERNAL_PORT}" />
-        <export-loki_tmpl PURPOSE="loki-config.yaml.tmpl: http_listen_port=${LOKI_INTERNAL_PORT}" />
+        <export-loki_tmpl PURPOSE="loki-config.yaml.tmpl: http_listen_port=${LOKI_INTERNAL_PORT}; retention_period и max_query_lookback 120 дней (2880h, 8.5.1)" />
         <export-promtail_tmpl PURPOSE="promtail-config.yml.tmpl: clients[].url=http://${LOKI_SERVICE_NAME}:${LOKI_INTERNAL_PORT}" />
         <export-grafana_datasource_tmpl PURPOSE="datasource.yml.tmpl: prometheus/loki URLs из stack_params" />
         <export-grafana-sglang-dashboard-slgpu PURPOSE="sglang-dashboard-slgpu.json (оф. SGLang, slgpu-адаптация)" />

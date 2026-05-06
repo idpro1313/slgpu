@@ -1,4 +1,4 @@
-<TechnologyStack VERSION="2.4.0">
+<TechnologyStack VERSION="2.4.1">
   <Runtime>Docker Engine + Docker Compose v2</Runtime>
   <Language>Bash 4+, Python 3.10+</Language>
   <Framework>None (standalone CLI scripts)</Framework>
@@ -57,6 +57,7 @@
     <required-fields>timestamp, engine (vllm/sglang), model, scenario</required-fields>
     <redaction>Never log HF_TOKEN, Grafana passwords, raw request payloads.</redaction>
     <metrics-source>Prometheus (vllm:8111/metrics, sglang:8222/metrics, dcgm-exporter:9400, node-exporter:9100)</metrics-source>
+    <logs-source>Loki 3 TSDB через Promtail; retention и max_query_lookback — 120 дней (2880h) в `configs/monitoring/loki/loki-config.yaml.tmpl`.</logs-source>
     <grafana-provisioning>
       <datasource-uid>prometheus</datasource-uid>
       <json-dir>configs/monitoring/grafana/provisioning/dashboards/json</json-dir>

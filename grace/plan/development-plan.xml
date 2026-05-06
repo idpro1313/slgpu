@@ -1,4 +1,4 @@
-<DevelopmentPlan VERSION="8.5.0">
+<DevelopmentPlan VERSION="8.5.1">
   <!--
     GRACE development plan — methodology: https://github.com/osovv/grace-marketplace
     Upstream ships Agent Skills + optional CLI (@osovv/grace-cli): grace lint | module find | module show | file show.
@@ -363,7 +363,7 @@
 
     <M-MONITOR NAME="Monitoring" TYPE="INTEGRATION" LAYER="1" ORDER="10" STATUS="implemented">
       <contract>
-        <purpose>Prometheus, Grafana, Loki, Promtail, Node Exporter — сбор метрик и логов; NVIDIA DCGM Exporter опционально (`MONITORING_DCGM`, compose profile `gpu`). Прокси LiteLLM/Langfuse — отдельный compose без GPU.</purpose>
+        <purpose>Prometheus, Grafana, Loki, Promtail, Node Exporter — сбор метрик и логов; Loki хранит данные 120 дней (`retention_period`/`max_query_lookback` 2880h). NVIDIA DCGM Exporter опционально (`MONITORING_DCGM`, compose profile `gpu`). Прокси LiteLLM/Langfuse — отдельный compose без GPU.</purpose>
         <inputs>
           <param name="engine" type="string" />
         </inputs>

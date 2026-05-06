@@ -105,9 +105,7 @@ def validate_period(dt_from: datetime, dt_to: datetime) -> tuple[datetime, datet
     b = dt_to if dt_to.tzinfo else dt_to.replace(tzinfo=timezone.utc)
     delta_h = (b - a).total_seconds() / 3600
     if delta_h > _MAX_PERIOD_HOURS:
-        raise ValueError(
-            f"интервал не более {_MAX_PERIOD_HOURS} ч (согласовано с max_query_lookback Loki)"
-        )
+        raise ValueError(f"интервал отчёта не более {_MAX_PERIOD_HOURS} ч")
     return a, b
 
 
