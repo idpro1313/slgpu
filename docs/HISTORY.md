@@ -2487,3 +2487,12 @@
 - **Файлы:** `web/backend/app/services/presets.py`, `web/backend/app/services/env_files.py`, `web/backend/app/services/stack_registry.py`, `web/frontend/src/pages/Presets.tsx`, `README.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/plan/development-plan.xml`, `VERSION`, `web/backend/pyproject.toml`, `web/frontend/package.json`, `web/frontend/package-lock.json`, `docs/HISTORY.md`.
 - **Решение:** PATCH — охват ключей пресета и UX-подсказки; без смены контракта API пресетов.
 
+
+## Фаза 8.3.0 (мониторинг без обязательной GPU)
+
+### Мониторинг и LiteLLM на CPU-only
+
+- **Что:** `dcgm-exporter` в [`docker/docker-compose.monitoring.yml`](docker/docker-compose.monitoring.yml) переведён в Compose **profile `gpu`**. Ключ стека **`MONITORING_DCGM`** (`auto`/`on`/`off`, `allow_empty`, в [`configs/main.env`](configs/main.env) дефолт `auto`): [`monitoring_dcgm_wanted()`](web/backend/app/services/stack_config.py) определяет, передавать ли `docker compose --profile gpu` при **`native.monitoring.up|restart`**, рендерить ли job `dcgm` в **`prometheus.yml`** (плейсхолдер **`${DCGM_SCRAPE_YAML}`**) и показывать ли пробу DCGM в **[`monitoring._settings_probes()`](web/backend/app/services/monitoring.py)**. Добавлены тесты [`web/backend/tests/test_monitoring_dcgm.py`](web/backend/tests/test_monitoring_dcgm.py). Обновлены README, CONTRACT, AGENTS, GRACE, **`VERSION` 8.3.0**.
+- **Почему:** Пользовательский запуск: стек метрик/LiteLLM не должен зависеть от наличия GPU; ранее **`gpus: all`** у DCGM ломал весь `monitoring up`.
+- **Файлы:** `docker/docker-compose.monitoring.yml`, `web/backend/app/services/stack_config.py`, `stack_registry.py`, `native_jobs.py`, `monitoring.py`, `configs/monitoring/prometheus/prometheus.yml.tmpl`, `configs/main.env`, `README.md`, `configs/monitoring/README.md`, `docs/AGENTS.md`, `web/CONTRACT.md`, `grace/*`, `VERSION`, `web/backend/pyproject.toml`, `web/frontend/package.json`, `package-lock.json`, `docs/HISTORY.md`.
+- **Решение:** Режим `auto` совпадает с опросом NVIDIA в UI «Сервер» (`collect_host_info`); прокси-compose без изменений (LiteLLM уже без `gpus`).

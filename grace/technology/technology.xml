@@ -12,7 +12,7 @@
     <dep name="lmsysorg/sglang" version="latest" purpose="Инференс-движок SGLang" />
     <dep name="prom/prometheus" version="latest" purpose="Сбор метрик" />
     <dep name="grafana/grafana" version="latest" purpose="Визуализация метрик" />
-    <dep name="nvidia/dcgm-exporter" version="latest" purpose="Метрики GPU (DCGM)" />
+    <dep name="nvidia/dcgm-exporter" version="latest" purpose="Метрики GPU (DCGM); compose profile gpu + ключ стека MONITORING_DCGM (8.3.0); без GPU стек Prometheus/Grafana/Loki поднимается без DCGM" />
     <dep name="prom/node-exporter" version="latest" purpose="Метрики хоста" />
   </Dependencies>
 

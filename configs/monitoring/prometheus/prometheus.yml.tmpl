@@ -2,6 +2,7 @@
 # в WEB_DATA_DIR/.slgpu/monitoring/prometheus.yml. Compose монтирует именно отрендеренную копию.
 # Жёстких имён сервисов / портов / IP здесь быть НЕ должно — все значения берутся из stack_params
 # по именам ключей через стандартные плейсхолдеры string.Template (см. ниже по файлу).
+# Плейсхолдер ${DCGM_SCRAPE_YAML} подставляет backend целиком (job dcgm или пусто) по MONITORING_DCGM.
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
@@ -61,10 +62,7 @@ scrape_configs:
         target_label: instance
         replacement: sglang:${LLM_API_PORT_SGLANG}
 
-  - job_name: dcgm
-    static_configs:
-      - targets: ["${DCGM_EXPORTER_SERVICE_NAME}:${DCGM_EXPORTER_INTERNAL_PORT}"]
-
+${DCGM_SCRAPE_YAML}
   # job=node-exporter — типичный фильтр Grafana «Node Exporter Full» (ID 1860).
   - job_name: node-exporter
     static_configs:

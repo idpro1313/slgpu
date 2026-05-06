@@ -91,9 +91,9 @@ Footer приложения показывает версию из `/healthz`; b
 |---|---|
 | `native.model.pull` | Скачать веса через `huggingface_hub.snapshot_download` (`HF_TOKEN` из слитого стека); зависшую запись можно снять через `POST /models/{id}/pull/force-stop` без удаления частичных файлов. |
 | `native.slot.up` / `down` / `restart` | Управление одним слотом: `args.slot_key`, `engine`, `preset` (имя в таблице `presets`), `gpu_indices` (list int), `host_api_port`, опционально `tp`. **Удалено в 4.0.0:** `native.llm.*`. **v5.0.0:** нет host `./slgpu` для LLM — только web/native jobs. |
-| `native.monitoring.up` / `down` / `restart` | Только стек метрик и логов: [`docker-compose.monitoring.yml`](../docker/docker-compose.monitoring.yml) (без proxy). |
+| `native.monitoring.up` / `down` / `restart` | Только стек метрик и логов: [`docker-compose.monitoring.yml`](../docker/docker-compose.monitoring.yml) (без proxy). **8.3.0:** `dcgm-exporter` в Compose profile `gpu`; при **`MONITORING_DCGM`** `auto`/`off` и отсутствии GPU — `docker compose` без `--profile gpu` (остальные сервисы поднимаются). |
 | `native.monitoring.fix-perms` | Права на data-dir через docker-py + helper-образ. |
-| `native.proxy.up` / `down` / `restart` | Только [`docker/docker-compose.proxy.yml`](../docker/docker-compose.proxy.yml) (Langfuse + LiteLLM + Postgres/…). Bootstrap MinIO/БД `litellm` выполняется в **`proxy.up`** (раньше вызывался из `monitoring.up`). Тот же lock, что и monitoring: `("monitoring", "stack")`. |
+| `native.proxy.up` / `down` / `restart` | Только [`docker/docker-compose.proxy.yml`](../docker/docker-compose.proxy.yml) (Langfuse + LiteLLM + Postgres/…; **без** требования GPU в compose). Bootstrap MinIO/БД `litellm` выполняется в **`proxy.up`** (раньше вызывался из `monitoring.up`). Тот же lock, что и monitoring: `("monitoring", "stack")`. |
 | `native.bench.scenario` / `native.bench.load` | Subprocess `scripts/bench_openai.py` / `bench_load.py`, вывод в `data/bench/results/`. |
 
 #### `jobs.kind` = `web.log_report.generate`

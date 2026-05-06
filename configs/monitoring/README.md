@@ -13,7 +13,7 @@
 
 **Что делать:** после смены портов в web перезапускайте затронутый стек **из UI (Задачи)** — **Мониторинг** или **LiteLLM Proxy** отдельно. `main.env` нужен для **`./slgpu web`**, одноразового **install** и ручного `docker compose` на хосте; для операций из UI источником остаётся **SQLite**.
 
-В [`docker/docker-compose.monitoring.yml`](../../docker/docker-compose.monitoring.yml) публикация на хост: **Grafana** — `${GRAFANA_PORT}`; **Prometheus** — `${PROMETHEUS_PORT}`; **Loki** — `${LOKI_PORT}` (и `${LOKI_BIND}`, по умолч. `127.0.0.1`).
+В [`docker/docker-compose.monitoring.yml`](../../docker/docker-compose.monitoring.yml) публикация на хост: **Grafana** — `${GRAFANA_PORT}`; **Prometheus** — `${PROMETHEUS_PORT}`; **Loki** — `${LOKI_PORT}` (и `${LOKI_BIND}`, по умолч. `127.0.0.1`). Сервис **`dcgm-exporter`** вынесен в Compose **profile `gpu`**: при **`MONITORING_DCGM=auto`** (по умолчанию в `main.env`) backend подставляет `--profile gpu` только если на хосте доступен NVIDIA (`collect_host_info`); **`off`** — не поднимать DCGM и не скрейпить job `dcgm`; **`on`** — всегда пробовать DCGM (на CPU-only compose может завершиться ошибкой). Прокси **LiteLLM** в отдельном compose **без** `gpus:`.
 
 **Grafana: provisioning.** Сервис `grafana` монтирует **отдельно** каталоги `configs/monitoring/grafana/provisioning/{dashboards,alerting,plugins}` и **файл** `${WEB_DATA_DIR}/.slgpu/monitoring/datasource.yml` → `…/datasources/datasource.yml`. Раньше весь `provisioning` с `:ro` и второй bind файла внутри дерева давал у runc «read-only file system» (нельзя создать mountpoint внутри read-only parent).
 

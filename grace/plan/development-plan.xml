@@ -1,4 +1,4 @@
-<DevelopmentPlan VERSION="8.2.15">
+<DevelopmentPlan VERSION="8.3.0">
   <!--
     GRACE development plan — methodology: https://github.com/osovv/grace-marketplace
     Upstream ships Agent Skills + optional CLI (@osovv/grace-cli): grace lint | module find | module show | file show.
@@ -248,7 +248,7 @@
 
     <M-WEB NAME="WebControlPlane" TYPE="ENTRY_POINT" LAYER="3" ORDER="9" STATUS="implemented">
       <contract>
-        <purpose>Single-container web control plane: FastAPI + React/Vite + SQLite. Стек LLM/monitoring: `docker compose` / docker-py из web (`native.*` jobs), не `./slgpu` subprocess. Плоский стек и секреты в БД (**таблица `stack_params`**, `cfg.meta`; legacy JSON в `settings` мигрируется при старте), импорт из `main.env` + опциональные secrets-файлы (`POST /app-config/install`); пробы мониторинга и публичные ссылки используют слитый стек. Реестр моделей, пресеты, Runtime/Dashboard, бенчмарк API (`/bench/*`, артефакты `data/bench/results/`). Репо bind-mount по `SLGPU_HOST_REPO`; `huggingface_hub` для pull в образе; `working_dir` в compose web не задаётся.</purpose>
+        <purpose>Single-container web control plane: FastAPI + React/Vite + SQLite. Стек LLM/monitoring: `docker compose` / docker-py из web (`native.*` jobs), не `./slgpu` subprocess. Плоский стек и секреты в БД (**таблица `stack_params`**, `cfg.meta`; legacy JSON в `settings` мигрируется при старте), импорт из `main.env` + опциональные secrets-файлы (`POST /app-config/install`); пробы мониторинга и публичные ссылки используют слитый стек (**8.3.0:** проба DCGM и `--profile gpu` для `native.monitoring.up` при `monitoring_dcgm_wanted`). Реестр моделей, пресеты, Runtime/Dashboard, бенчмарк API (`/bench/*`, артефакты `data/bench/results/`). Репо bind-mount по `SLGPU_HOST_REPO`; `huggingface_hub` для pull в образе; `working_dir` в compose web не задаётся.</purpose>
         <inputs>
           <param name="http_request" type="HTTP" />
           <param name="slgpu_root" type="path" />
@@ -363,7 +363,7 @@
 
     <M-MONITOR NAME="Monitoring" TYPE="INTEGRATION" LAYER="1" ORDER="10" STATUS="implemented">
       <contract>
-        <purpose>Prometheus, Grafana, DCGM Exporter, Node Exporter — сбор и визуализация метрик.</purpose>
+        <purpose>Prometheus, Grafana, Loki, Promtail, Node Exporter — сбор метрик и логов; NVIDIA DCGM Exporter опционально (`MONITORING_DCGM`, compose profile `gpu`). Прокси LiteLLM/Langfuse — отдельный compose без GPU.</purpose>
         <inputs>
           <param name="engine" type="string" />
         </inputs>
@@ -375,7 +375,7 @@
         </errors>
       </contract>
       <interface>
-        <export-monitoring_compose PURPOSE="docker/docker-compose.monitoring.yml (slgpu-monitoring-*) + docker/docker-compose.proxy.yml (slgpu-proxy-*: Langfuse, LiteLLM) + configs/monitoring/*; web-native значения портов/project-name только из stack_params snapshot, без YAML fallback" />
+        <export-monitoring_compose PURPOSE="docker/docker-compose.monitoring.yml (slgpu-monitoring-*; dcgm-exporter в profile gpu) + docker/docker-compose.proxy.yml (slgpu-proxy-*: Langfuse, LiteLLM) + configs/monitoring/*; web-native значения портов/project-name только из stack_params snapshot, без YAML fallback" />
         <export-prometheus_yml PURPOSE="Конфиг скрейпинга" />
         <export-grafana-sglang-dashboard-slgpu PURPOSE="sglang-dashboard-slgpu.json" />
         <export-grafana-sglangdash2-slgpu PURPOSE="sglangdash2-slgpu.json + _build_sglangdash2.py от vllmdash2" />

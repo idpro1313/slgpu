@@ -34,6 +34,7 @@ from app.services.slot_runtime import (
     stop_containers_for_slot_key_sync,
 )
 from app.services.stack_config import (
+    monitoring_dcgm_wanted,
     render_monitoring_configs,
     resolve_path_relative,
     sync_merged_flat,
@@ -605,6 +606,15 @@ async def _native_monitoring_up(log: list[str], log_lock: threading.Lock) -> int
         f"prometheus={merged.get('PROMETHEUS_BIND')}:{merged.get('PROMETHEUS_PORT')} "
         f"loki={merged.get('LOKI_BIND')}:{merged.get('LOKI_PORT')}",
     )
+    mode_raw = (merged.get("MONITORING_DCGM") or "auto").strip()
+    want_dcgm = monitoring_dcgm_wanted(merged, root)
+    append_job_log(
+        log,
+        log_lock,
+        f"[monitoring] dcgm-exporter (compose profile gpu): {want_dcgm} "
+        f"(MONITORING_DCGM={mode_raw!r})",
+    )
+    compose_extra: list[str] = ["--profile", "gpu"] if want_dcgm else []
     await compose_exec.ensure_slgpu_network(
         log,
         log_lock,
@@ -612,7 +622,15 @@ async def _native_monitoring_up(log: list[str], log_lock: threading.Lock) -> int
         project_label=str(merged.get("WEB_COMPOSE_PROJECT_MONITORING") or "slgpu-monitoring"),
     )
     c, o, e = await compose_exec.compose_monitoring(
-        root, env_file, "-f", _MON_YML, "up", "-d", "--force-recreate", "--remove-orphans"
+        root,
+        env_file,
+        *compose_extra,
+        "-f",
+        _MON_YML,
+        "up",
+        "-d",
+        "--force-recreate",
+        "--remove-orphans",
     )
     append_job_log(log, log_lock, o.strip())
     if e.strip():
@@ -640,6 +658,15 @@ async def _native_monitoring_restart(log: list[str], log_lock: threading.Lock) -
     rendered = render_monitoring_configs(root, merged)
     append_job_log(log, log_lock, f"[render] monitoring configs -> {rendered}")
     env_file = write_compose_service_env_file(root, merged)
+    mode_raw = (merged.get("MONITORING_DCGM") or "auto").strip()
+    want_dcgm = monitoring_dcgm_wanted(merged, root)
+    append_job_log(
+        log,
+        log_lock,
+        f"[monitoring] dcgm-exporter (compose profile gpu): {want_dcgm} "
+        f"(MONITORING_DCGM={mode_raw!r})",
+    )
+    compose_extra: list[str] = ["--profile", "gpu"] if want_dcgm else []
     await compose_exec.ensure_slgpu_network(
         log,
         log_lock,
@@ -647,7 +674,15 @@ async def _native_monitoring_restart(log: list[str], log_lock: threading.Lock) -
         project_label=str(merged.get("WEB_COMPOSE_PROJECT_MONITORING") or "slgpu-monitoring"),
     )
     c, o, e = await compose_exec.compose_monitoring(
-        root, env_file, "-f", _MON_YML, "up", "-d", "--force-recreate", "--remove-orphans"
+        root,
+        env_file,
+        *compose_extra,
+        "-f",
+        _MON_YML,
+        "up",
+        "-d",
+        "--force-recreate",
+        "--remove-orphans",
     )
     append_job_log(log, log_lock, o + e)
     return c

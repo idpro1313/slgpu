@@ -40,6 +40,36 @@ _NON_COMPOSE_ENV_KEYS = {"LITELLM_API_KEY"}
 # Secret detection for upserts: ``stack_registry.is_secret_key`` (single source of truth).
 
 
+def monitoring_dcgm_wanted(merged: dict[str, str], slgpu_root: Path) -> bool:
+    """Включить DCGM exporter (compose profile ``gpu``), scrape Prometheus, пробу в UI.
+
+    ``MONITORING_DCGM``: ``auto`` (по умолчанию при отсутствии ключа) | ``on`` | ``off``.
+    """
+    from app.services.host_info import collect_host_info
+
+    raw = (merged.get("MONITORING_DCGM") or "auto").strip().lower()
+    if raw in ("off", "false", "0", "no"):
+        return False
+    if raw in ("on", "true", "1", "yes"):
+        return True
+    info = collect_host_info(slgpu_root)
+    nv = info.get("nvidia") or {}
+    if not nv.get("smi_available"):
+        return False
+    gpus = nv.get("gpus")
+    return isinstance(gpus, list) and len(gpus) > 0
+
+
+def _prometheus_dcgm_scrape_yaml(merged: dict[str, str]) -> str:
+    svc = str(merged.get("DCGM_EXPORTER_SERVICE_NAME") or "").strip()
+    port = str(merged.get("DCGM_EXPORTER_INTERNAL_PORT") or "").strip()
+    return (
+        f'  - job_name: dcgm\n'
+        f'    static_configs:\n'
+        f'      - targets: ["{svc}:{port}"]\n'
+    )
+
+
 def sqlite_path_from_database_url(url: str) -> Path | None:
     """Сопоставить ``WEB_DATABASE_URL`` с путём к файлу SQLite (не ``:memory:``).
 
@@ -281,8 +311,14 @@ def render_monitoring_configs(root: Path, merged: dict[str, str]) -> Path:
             continue
         text = src.read_text(encoding="utf-8")
         if src.suffix == ".tmpl":
+            tmpl_mapping: dict[str, str] = dict(merged)
+            if src_rel == "configs/monitoring/prometheus/prometheus.yml.tmpl":
+                want_dcgm = monitoring_dcgm_wanted(merged, root)
+                tmpl_mapping["DCGM_SCRAPE_YAML"] = (
+                    _prometheus_dcgm_scrape_yaml(merged) if want_dcgm else ""
+                )
             try:
-                text = _render_template_strict(text, merged)
+                text = _render_template_strict(text, tmpl_mapping)
             except KeyError as exc:  # noqa: PERF203
                 missing = exc.args[0] if exc.args else "?"
                 raise MissingStackParams([str(missing)], "monitoring_up") from exc

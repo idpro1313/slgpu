@@ -83,7 +83,7 @@
     </M-BENCH>
 
     <M-DOCKER NAME="DockerCompose" TYPE="INTEGRATION" STATUS="implemented">
-      <purpose>5.2.0: docker/docker-compose.{web,monitoring,proxy}.yml — все image/container_name/hostname/internal+external ports/network.name параметризованы из stack_params; docker-compose.llm.yml удалён, слоты — через docker-py в slot_runtime.</purpose>
+      <purpose>5.2.0: docker/docker-compose.{web,monitoring,proxy}.yml — все image/container_name/hostname/internal+external ports/network.name параметризованы из stack_params; docker-compose.llm.yml удалён, слоты — через docker-py в slot_runtime. 8.3.0: в docker-compose.monitoring.yml сервис dcgm-exporter в profile gpu (подъём без GPU — остальные сервисы мониторинга).</purpose>
       <path>docker/docker-compose.web.yml, docker/docker-compose.monitoring.yml, docker/docker-compose.proxy.yml, scripts/serve.sh</path>
       <depends>none</depends>
       <verification-ref>V-M-DOCKER</verification-ref>
@@ -141,7 +141,8 @@
       <annotations>
         <fn-sync_merged_flat PURPOSE="Read-only SQLite snapshot всех ключей стека" />
         <fn-write_compose_service_env_file PURPOSE="Снимок env для docker compose monitoring/proxy в ${WEB_DATA_DIR}/.slgpu/compose-service.env" />
-        <fn-render_monitoring_configs PURPOSE="string.Template подстановка из БД в *.tmpl → ${WEB_DATA_DIR}/.slgpu/monitoring/{prometheus.yml,loki-config.yaml,promtail-config.yml,datasource.yml}; если отсутствует vllm-slots.json — создаёт его с host.docker.internal:8110..8130 (file_sd job vllm-slots, мультислот vLLM; константы VLLM_SLOTS_FILE_SD_PORT_* в stack_config.py); существующий vllm-slots.json не перезаписывается; в шаблонах НЕ должно быть буквальных ${VAR} в комментариях (substitute не различает комментарий и тело — упадёт KeyError)" />
+        <fn-monitoring_dcgm_wanted PURPOSE="8.3.0: MONITORING_DCGM auto|on|off + collect_host_info(nvidia) → включать ли compose profile gpu для dcgm-exporter, scrape job dcgm в prometheus.yml и пробу dcgm-exporter в monitoring._settings_probes" />
+        <fn-render_monitoring_configs PURPOSE="string.Template подстановка из БД в *.tmpl → ${WEB_DATA_DIR}/.slgpu/monitoring/{prometheus.yml,loki-config.yaml,promtail-config.yml,datasource.yml}; prometheus.yml.tmpl: плейсхолдер DCGM_SCRAPE_YAML (фрагмент job dcgm или пусто) по monitoring_dcgm_wanted; если отсутствует vllm-slots.json — создаёт его с host.docker.internal:8110..8130 (file_sd job vllm-slots, мультислот vLLM; константы VLLM_SLOTS_FILE_SD_PORT_* в stack_config.py); существующий vllm-slots.json не перезаписывается; в шаблонах НЕ должно быть буквальных ${VAR} в комментариях кроме явно подставляемых из mapping (substitute не различает комментарий и тело — упадёт KeyError)" />
         <fn-STACK_KEY_REGISTRY PURPOSE="Каноничный реестр ключей стека (group/required_for/allow_empty/is_secret/ui_hidden; subgroup monitoring/proxy — 6.0.5); scope fix_perms не входит в S_MON — только у ключей под _native_fix_perms и SLGPU_BENCH_CHOWN_IMAGE (6.1.3)" />
         <fn-validate_required PURPOSE="Возвращает missing keys для scope (web_up/monitoring_up/proxy_up/llm_slot/...)" />
         <fn-raise_if_missing PURPOSE="HTTP 409 missing_stack_params в API при недостающих ключах" />
@@ -207,7 +208,7 @@
         <fn-services_slot_runtime PURPOSE="app.services.slot_runtime: run_slot_docker, stream docker pull (decode) перед run, контейнер slgpu-{engine} или slgpu-{engine}-{slot_key}, сеть slgpu" />
         <fn-services_host_info PURPOSE="Снимок ОС/CPU/RAM/диска/NVIDIA для дашборда: docker run с bind /proc,/etc хоста (busybox) и nvidia-smi в GPU-контейнере; fallback — локальный /proc и nvidia-smi в namespace web" />
         <fn-services_compose_exec PURPOSE="async docker compose для LLM и monitoring стеков, subprocess logged" />
-        <fn-services_native_jobs PURPOSE="handle_native_job: native.slot.up|down|restart (docker-py); lock resource slot:{key}; native.model.pull, monitoring, native.proxy.*, bench; job runner также вызывает run_log_report_pipeline для kind web.log_report.generate (in-process, без subprocess); периодический flush stdout_tail/message во время RUNNING для native.*. Удалено в 4.0.0: native.llm.*" />
+        <fn-services_native_jobs PURPOSE="handle_native_job: native.slot.up|down|restart (docker-py); lock resource slot:{key}; native.model.pull, monitoring, native.proxy.*, bench; native.monitoring.up|restart передаёт docker compose --profile gpu только при monitoring_dcgm_wanted (dcgm-exporter в compose в profile gpu); job runner также вызывает run_log_report_pipeline для kind web.log_report.generate (in-process, без subprocess); периодический flush stdout_tail/message во время RUNNING для native.*. Удалено в 4.0.0: native.llm.*" />
         <fn-job_log PURPOSE="append_job_log: thread-safe строки лога native job; обновление UI по GET /jobs/{id}" />
         <fn-services_slgpu_cli PURPOSE="CliCommand kind=native.* или web.log_report.generate с пустым argv; resource slot:* / report:*; lock log_report/report:{id}; валидация slot_key/slug/engine/port/tp" />
         <fn-services_jobs PURPOSE="Job runner: native.* → native_jobs; lock по ключу (set discard); task registry; force_engine_slot_halt + POST /runtime/slots/{k}/down?force=1; force_model_pull_halt + POST /models/{id}/pull/force-stop для зависших native.model.pull; CancelledError → mark job cancelled" />
@@ -219,7 +220,7 @@
         <fn-api_runtime_slots PURPOSE="GET/POST /runtime/slots, POST /slots/{key}/down|restart, GET slots/{key}/logs; list EngineSlot; 8.1.5: при пустом payload.slot_key вызывается _suggest_slot_key_from_preset(session, preset_name) — кандидаты &lt;preset&gt; → &lt;preset&gt;-2 → ... → &lt;preset&gt;-99, fallback на короткий uuid; контейнер именуется slgpu-&lt;engine&gt;-&lt;preset&gt; вместо slgpu-&lt;engine&gt;-s&lt;hex8&gt;" />
         <fn-api_docker_logs PURPOSE="GET /docker/containers, …/logs, /docker/engine-events (Engine /events), /docker/daemon-log (journalctl docker); read-only, DockerInspector" />
         <fn-api_presets_clone PURPOSE="POST /presets/{id}/clone (PresetCloneRequest), flush перед ответом" />
-        <fn-services_monitoring PURPOSE="Probe: Docker + HTTP; порта и compose project monitoring из слитого стека (БД)" />
+        <fn-services_monitoring PURPOSE="Probe: Docker + HTTP; порта и compose project monitoring из слитого стека (БД); проба dcgm-exporter только при monitoring_dcgm_wanted" />
         <fn-services_litellm PURPOSE="LiteLLM: GET /v1/models и /health* с `Authorization: Bearer` при наличии `LITELLM_API_KEY` в stack secrets (legacy fallback public_access.litellm_api_key); порт — слитый стек; chat completions для отчётов логов — см. M-LOG-REPORT; public URLs — app_settings + ports_for_probes_sync" />
         <fn-services_app_settings PURPOSE="Persistent UI settings: /api/v1/settings/public-access — только `server_host`; LiteLLM-секреты живут в stack_params: `LITELLM_MASTER_KEY` для proxy Admin UI и `LITELLM_API_KEY` для backend Bearer-вызовов /v1 (legacy public_access читается только как fallback/миграция)" />
         <fn-core_logging PURPOSE="JSON: StreamHandler + DbLogHandler (очередь → app_log_event) + RotatingFileHandler при WEB_LOG_FILE_ENABLED; propagate; uvicorn.access → WARNING; startup/shutdown" />

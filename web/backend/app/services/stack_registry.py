@@ -384,6 +384,14 @@ _STACK_KEY_REGISTRY: dict[str, KeyMeta] = {
     "DCGM_BIND": _e(
         "DCGM_BIND", "monitoring", "Bind DCGM exporter (метрики GPU) на хосте.", *S_MON, subgroup="dcgm_exporter"
     ),
+    "MONITORING_DCGM": _e(
+        "MONITORING_DCGM",
+        "monitoring",
+        "Режим DCGM exporter: auto — поднимать при наличии GPU (опрос хоста); on — всегда (compose --profile gpu); off — без GPU-метрик.",
+        *S_MON,
+        allow_empty=True,
+        subgroup="dcgm_exporter",
+    ),
     "NODE_EXPORTER_BIND": _e(
         "NODE_EXPORTER_BIND", "monitoring", "Bind node-exporter (host-метрики) на хосте.", *S_MON, subgroup="node_exporter"
     ),

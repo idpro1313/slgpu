@@ -1,4 +1,5 @@
 # DCGM, node-exporter, Prometheus, Grafana, Loki, Promtail — поднимаются из `slgpu-web` через `native.monitoring.up`.
+# `dcgm-exporter` в profile `gpu` (см. MONITORING_DCGM в стеке БД): без GPU стек метрик поднимается без DCGM.
 # Langfuse + LiteLLM + Postgres/MinIO/… — `docker/docker-compose.proxy.yml` (проект `${WEB_COMPOSE_PROJECT_PROXY}`).
 # Внешняя сеть: `${SLGPU_NETWORK_NAME}`. env: `${WEB_DATA_DIR}/.slgpu/compose-service.env` (генерируется backend из БД).
 
@@ -9,6 +10,8 @@ services:
     container_name: ${DCGM_EXPORTER_CONTAINER_NAME}
     hostname: ${DCGM_EXPORTER_SERVICE_NAME}
     image: ${DCGM_EXPORTER_IMAGE}
+    profiles:
+      - gpu
     env_file:
       - ${WEB_DATA_DIR}/.slgpu/compose-service.env
     restart: unless-stopped

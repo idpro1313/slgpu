@@ -11,7 +11,7 @@ import httpx
 from app.core.config import get_settings
 from app.models.service import ServiceStatus
 from app.services.docker_client import ContainerSummary, get_docker_inspector
-from app.services.stack_config import ports_for_probes_sync, sync_merged_flat
+from app.services.stack_config import monitoring_dcgm_wanted, ports_for_probes_sync, sync_merged_flat
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,8 @@ def _settings_probes() -> list[ServiceProbe]:
     mflat = sync_merged_flat()
     lf_svc = str(mflat.get("LANGFUSE_WEB_SERVICE_NAME") or "").strip()
     ll_svc = str(mflat.get("LITELLM_SERVICE_NAME") or "").strip()
-    return [
+    want_dcgm = monitoring_dcgm_wanted(mflat, s.slgpu_root)
+    out: list[ServiceProbe] = [
         ServiceProbe(
             key="prometheus",
             display_name="Prometheus",
@@ -78,51 +79,59 @@ def _settings_probes() -> list[ServiceProbe]:
             health_url=None,
             web_url=None,
         ),
-        ServiceProbe(
-            key="dcgm-exporter",
-            display_name="NVIDIA DCGM Exporter",
-            category="monitoring",
-            project=mon,
-            service="dcgm-exporter",
-            health_url=None,
-            web_url=None,
-        ),
-        ServiceProbe(
-            key="node-exporter",
-            display_name="Node Exporter",
-            category="monitoring",
-            project=mon,
-            service="node-exporter",
-            health_url=None,
-            web_url=None,
-        ),
-        ServiceProbe(
-            key="langfuse",
-            display_name="Langfuse",
-            category="proxy",
-            project=pxy,
-            service="langfuse-web",
-            health_url=(
-                f"http://{lf_svc}:{lf_internal}/api/public/health"
-                if lf_svc
-                else f"http://{h}:{lf_host}/api/public/health"
-            ),
-            web_url=f"http://{h}:{lf_host}",
-        ),
-        ServiceProbe(
-            key="litellm",
-            display_name="LiteLLM Proxy",
-            category="gateway",
-            project=pxy,
-            service="litellm",
-            health_url=(
-                f"http://{ll_svc}:{llm}/health/liveliness"
-                if ll_svc
-                else f"http://{h}:{llm}/health/liveliness"
-            ),
-            web_url=f"http://{h}:{llm}/ui",
-        ),
     ]
+    if want_dcgm:
+        out.append(
+            ServiceProbe(
+                key="dcgm-exporter",
+                display_name="NVIDIA DCGM Exporter",
+                category="monitoring",
+                project=mon,
+                service="dcgm-exporter",
+                health_url=None,
+                web_url=None,
+            )
+        )
+    out.extend(
+        [
+            ServiceProbe(
+                key="node-exporter",
+                display_name="Node Exporter",
+                category="monitoring",
+                project=mon,
+                service="node-exporter",
+                health_url=None,
+                web_url=None,
+            ),
+            ServiceProbe(
+                key="langfuse",
+                display_name="Langfuse",
+                category="proxy",
+                project=pxy,
+                service="langfuse-web",
+                health_url=(
+                    f"http://{lf_svc}:{lf_internal}/api/public/health"
+                    if lf_svc
+                    else f"http://{h}:{lf_host}/api/public/health"
+                ),
+                web_url=f"http://{h}:{lf_host}",
+            ),
+            ServiceProbe(
+                key="litellm",
+                display_name="LiteLLM Proxy",
+                category="gateway",
+                project=pxy,
+                service="litellm",
+                health_url=(
+                    f"http://{ll_svc}:{llm}/health/liveliness"
+                    if ll_svc
+                    else f"http://{h}:{llm}/health/liveliness"
+                ),
+                web_url=f"http://{h}:{llm}/ui",
+            ),
+        ]
+    )
+    return out
 
 
 @dataclass
