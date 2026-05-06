@@ -1,5 +1,5 @@
 <KnowledgeGraph>
-  <Project NAME="slgpu" VERSION="8.4.0">
+  <Project NAME="slgpu" VERSION="8.5.0">
     <keywords>slgpu, vllm, sglang, llm-inference, benchmark, docker-compose, gpu, prometheus, grafana, sglang-dashboard-slgpu, sglangdash2-slgpu</keywords>
     <annotation>Стенд для сравнения движков LLM-инференса vLLM и SGLang на Linux-сервере с NVIDIA GPU.</annotation>
 
@@ -230,7 +230,7 @@
         <fn-services_app_log_sink PURPOSE="app.services.app_log_sink: classify_record, батч INSERT в app_log_event, start_writer/stop_writer" />
         <fn-api_app_logs PURPOSE="GET /app-logs/events — фильтры, курсор before_id, из SQLite" />
         <fn-middleware_request_log PURPOSE="AppHttpRequestLogMiddleware: X-Request-ID, extra, [app][http][BLOCK_API_*], пропуск /app-logs/events, /assets, /healthz" />
-        <fn-frontend_app PURPOSE="React SPA (globals.css — компактный макет): Dashboard, Presets, Inference (слоты), Логи (app-logs), **Отчёты логов** (`/log-reports`), Docker, Models, Monitoring, Jobs, Benchmarks, Settings (5.2.1: registry-driven форма со столбцом «Описание / для чего», красная подсветка незаполненных required; 5.2.2: порядок и группы строк строго совпадают с разделами configs/main.env 1..8 — network/web/paths/images/inference/monitoring/proxy/secrets — порядок ключей в группе = порядок _STACK_KEY_REGISTRY, без алфавитной сортировки; чекбокс «секрет» больше не вырывает строку в отдельную группу secrets; 8.3.2: подзаголовок в группе web для registry.subgroup gpu_docker_probe; 8.4.0: подзаголовок log_reports_llm для LOG_REPORT_LLM_*)" />
+        <fn-frontend_app PURPOSE="React SPA (globals.css — компактный макет): Dashboard, Presets, Inference (слоты), Логи (app-logs), **Отчёты логов** (`/log-reports`), Docker, Models, Monitoring, Jobs, Benchmarks, Settings (5.2.1: registry-driven форма со столбцом «Описание / для чего», красная подсветка незаполненных required; 5.2.2: порядок и группы строк строго совпадают с разделами configs/main.env 1..8 — network/web/paths/images/inference/monitoring/proxy/secrets — порядок ключей в группе = порядок _STACK_KEY_REGISTRY, без алфавитной сортировки; чекбокс «секрет» больше не вырывает строку в отдельную группу secrets; 8.3.2: подзаголовок в группе web для registry.subgroup gpu_docker_probe; 8.4.0: подзаголовок log_reports_llm для LOG_REPORT_LLM_*; 8.5.0: AppLogs.tsx / Jobs.tsx — выгрузка JSON в файл на ПК (без новых API)" />
         <export-web-image PURPOSE="slgpu-web:dev, подъём: ./slgpu web up; тома: repo root по тому же абсолютному хост-пути (SLGPU_HOST_REPO=$(pwd) в scripts/cmd_web.sh), ./data/web, ./data/models, docker.sock; entrypoint chown'ит /data и ${WEB_SLGPU_ROOT}/data/{models,presets,bench} под uid 10001 (bench — native.bench.* → data/bench/results); working_dir из compose НЕ задаётся (uvicorn стартует из WORKDIR /srv/app в Dockerfile.web); huggingface_hub[cli] + hf_transfer установлены для slgpu pull, HF_HOME=/data/huggingface и /home/slgpuweb writable; критично для команд из web → docker compose monitoring/llm с корректными bind-маунтами" />
         <export-contract PURPOSE="web/CONTRACT.md — границы CLI/Docker API/SQLite" />
       </annotations>

@@ -6,8 +6,13 @@ import type { AppLogEvent, AppLogEventsList } from "@/api/types";
 import { Modal } from "@/components/Modal";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
+import { saveTextFile } from "@/lib/saveDownload";
 
 const LIMIT = 200;
+/** Пагинация при «Сохранить в файл» (макс. на бэкенде 1000). */
+const EXPORT_PAGE_LIMIT = 1000;
+const MAX_EXPORT_ROWS = 20_000;
+const MAX_EXPORT_PAGES = 50;
 const KIND_OPTIONS = [
   "http_request",
   "http_error",
@@ -27,6 +32,7 @@ function sinceParam(preset: "5m" | "1h" | "24h" | "all"): string | undefined {
 }
 
 function buildAppLogsUrl(params: {
+  limit?: number;
   level?: string;
   eventKind?: string;
   pathPrefix?: string;
@@ -35,7 +41,7 @@ function buildAppLogsUrl(params: {
   beforeId?: number;
 }): string {
   const u = new URLSearchParams();
-  u.set("limit", String(LIMIT));
+  u.set("limit", String(params.limit ?? LIMIT));
   if (params.level?.trim()) u.set("level", params.level.trim());
   if (params.eventKind?.trim()) u.set("event_kind", params.eventKind.trim());
   if (params.pathPrefix?.trim()) u.set("path_prefix", params.pathPrefix.trim());
@@ -61,6 +67,8 @@ export function AppLogsPage() {
   /** Курсор следующей страницы (после первой — из ответа «ещё»). */
   const [loadCursor, setLoadCursor] = useState<number | null>(null);
   const [detail, setDetail] = useState<AppLogEvent | null>(null);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportWarning, setExportWarning] = useState<string | null>(null);
 
   const since = useMemo(() => sinceParam(timePreset), [timePreset]);
 
@@ -118,6 +126,72 @@ export function AppLogsPage() {
     }
     return (loadCursor ?? null) != null;
   }, [listQ.isLoading, listQ.data?.next_before_id, older.length, loadCursor]);
+
+  const exportAppLogsToFile = useCallback(async () => {
+    setExportBusy(true);
+    setExportWarning(null);
+    const items: AppLogEvent[] = [];
+    let beforeId: number | undefined;
+    let iterations = 0;
+    let truncated = false;
+    let truncationReason: string | null = null;
+    try {
+      while (true) {
+        if (iterations >= MAX_EXPORT_PAGES) {
+          truncated = true;
+          truncationReason = `Остановка: не более ${MAX_EXPORT_PAGES} запросов к API.`;
+          break;
+        }
+        const r = await api.get<AppLogEventsList>(
+          buildAppLogsUrl({
+            limit: EXPORT_PAGE_LIMIT,
+            level: level || undefined,
+            eventKind: eventKind || undefined,
+            pathPrefix: pathPrefix || undefined,
+            q: q || undefined,
+            since,
+            beforeId,
+          }),
+        );
+        items.push(...r.items);
+        iterations += 1;
+        if (items.length >= MAX_EXPORT_ROWS) {
+          truncated = true;
+          truncationReason = `Остановка: не более ${MAX_EXPORT_ROWS} строк.`;
+          break;
+        }
+        if (r.next_before_id == null) break;
+        beforeId = r.next_before_id;
+      }
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const payload = {
+        exported_at: new Date().toISOString(),
+        filters: {
+          time_preset: timePreset,
+          since: since ?? null,
+          level: level || null,
+          event_kind: eventKind || null,
+          path_prefix: pathPrefix || null,
+          q: q || null,
+        },
+        truncated,
+        truncation_reason: truncationReason,
+        item_count: items.length,
+        items,
+      };
+      saveTextFile(
+        `slgpu-app-logs-${stamp}.json`,
+        JSON.stringify(payload, null, 2),
+      );
+      if (truncationReason) {
+        setExportWarning(`${truncationReason} Файл сохранён с частью данных.`);
+      }
+    } catch (e) {
+      setExportWarning(e instanceof Error ? e.message : "Ошибка выгрузки");
+    } finally {
+      setExportBusy(false);
+    }
+  }, [level, eventKind, pathPrefix, q, since, timePreset]);
 
   return (
     <div>
@@ -199,6 +273,14 @@ export function AppLogsPage() {
             <button
               type="button"
               className="btn"
+              onClick={() => void exportAppLogsToFile()}
+              disabled={exportBusy || listQ.isFetching}
+            >
+              {exportBusy ? "Готовим…" : "Сохранить в файл"}
+            </button>
+            <button
+              type="button"
+              className="btn"
               onClick={() => onLoadMore()}
               disabled={!canLoadMore || listQ.isFetching}
             >
@@ -207,6 +289,11 @@ export function AppLogsPage() {
           </div>
         }
       >
+        {exportWarning ? (
+          <p className="section__subtitle" style={{ color: "var(--color-warning)" }}>
+            {exportWarning}
+          </p>
+        ) : null}
         {listQ.isLoading ? (
           <div className="empty-state">Загружаем…</div>
         ) : listQ.isError ? (

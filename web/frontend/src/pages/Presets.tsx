@@ -2,6 +2,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ApiError, api } from "@/api/client";
+import { saveBlobToClient } from "@/lib/saveDownload";
 import type { Preset, PresetCloneRequest, PresetParameterSchemaOut, PresetParameterSchemaRow } from "@/api/types";
 import { Modal } from "@/components/Modal";
 import { PageHeader } from "@/components/PageHeader";
@@ -137,17 +138,6 @@ function isPresetEditorDirty(editor: PresetEditorForm, preset: Preset): boolean 
 
 function newParameterRow(): ParameterRow {
   return { id: `${Date.now()}-${Math.random()}`, key: "", value: "" };
-}
-
-function saveBlobToClient(blob: Blob, filename: string) {
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => window.URL.revokeObjectURL(url), 0);
 }
 
 export function PresetsPage() {

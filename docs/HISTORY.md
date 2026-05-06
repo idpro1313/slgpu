@@ -2526,3 +2526,12 @@
 - **Файлы:** `web/backend/app/services/app_settings.py`, `web/backend/app/services/log_report.py`, `web/backend/app/api/v1/log_reports.py`, `web/backend/app/schemas/log_reports.py`, `web/backend/tests/test_log_report.py`, `web/backend/app/services/slgpu_cli.py`, `web/frontend/src/pages/LogReports.tsx`, `web/frontend/src/api/types.ts`, `web/CONTRACT.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/plan/development-plan.xml`, `grace/verification/verification-plan.xml`, `VERSION`, `web/backend/pyproject.toml`, `web/frontend/package.json`, `web/frontend/package-lock.json`, `docs/HISTORY.md`.
 - **Решение:** PATCH; контракт вызова остаётся **`POST {base}/v1/chat/completions`**.
 
+## Фаза 8.5.0 (Экспорт логов приложения и ленты задач в файл)
+
+### JSON на ПК без новых API
+
+- **Что:** Модуль **[`web/frontend/src/lib/saveDownload.ts`](web/frontend/src/lib/saveDownload.ts)** (`saveBlobToClient`, `saveTextFile`); **[`AppLogs.tsx`](web/frontend/src/pages/AppLogs.tsx)** — «Сохранить в файл»: пагинация `before_id`, `limit=1000`, потолки **20 000** строк / **50** запросов, предупреждение при обрезке; **[`Jobs.tsx`](web/frontend/src/pages/Jobs.tsx)** — «Сохранить ленту в файл» (`GET /activity?limit=500`) и в модалке задачи — «Сохранить задачу в файл»; **[`Presets.tsx`](web/frontend/src/pages/Presets.tsx)** использует общий **`saveBlobToClient`**. Обновлены **CONTRACT**, **AGENTS**, **GRACE**, **VERSION** 8.5.0.
+- **Почему:** Запрос пользователя — сохранять «Логи» и «Задачи» в файл из приложения.
+- **Файлы:** `web/frontend/src/lib/saveDownload.ts`, `web/frontend/src/pages/AppLogs.tsx`, `web/frontend/src/pages/Jobs.tsx`, `web/frontend/src/pages/Presets.tsx`, `web/CONTRACT.md`, `docs/AGENTS.md`, `grace/knowledge-graph/knowledge-graph.xml`, `grace/plan/development-plan.xml`, `grace/verification/verification-plan.xml`, `VERSION`, `web/backend/pyproject.toml`, `web/frontend/package.json`, `web/frontend/package-lock.json`, `docs/HISTORY.md`.
+- **Решение:** Только фронт + документация; выгрузка job — те же **tail** полей, что на экране.
+

@@ -1,4 +1,4 @@
-<VerificationPlan VERSION="8.4.0">
+<VerificationPlan VERSION="8.5.0">
   <GlobalPolicy>
     <log-format>[Module][function][BLOCK_NAME] message</log-format>
     <deterministic-first>true</deterministic-first>
@@ -281,6 +281,7 @@
         <scenario-47 kind="success">8.3.0: `MONITORING_DCGM` в реестре стека (`auto`|`on`|`off`, allow_empty — пусто трактуется как auto); `monitoring_dcgm_wanted()` согласует подъём `dcgm-exporter` (compose `--profile gpu`), job `dcgm` в отрендеренном `prometheus.yml` и пробу `dcgm-exporter` в `GET /monitoring/services`. Без GPU при `auto`/`off` стек метрик (Prometheus, Grafana, Loki, …) поднимается без DCGM. Юнит-тесты: `web/backend/tests/test_monitoring_dcgm.py`.</scenario-47>
         <scenario-48 kind="success">8.3.1: ключи **`HOST_GPU_DOCKER_PROBE`** и **`NVIDIA_SMI_DOCKER_IMAGE`** в реестре стека; при **`off`** эфемерный **`docker run`** с GPU для **`nvidia-smi`** не выполняется в **`collect_host_info`** и **`gpu_state`** (остаётся локальный smi в web при наличии); образ пробы — из стека или **`WEB_NVIDIA_SMI_DOCKER_IMAGE`** (дефолт **`nvidia/cuda:12.4.1-base-ubuntu22.04`**). Юнит-тесты: **`web/backend/tests/test_monitoring_dcgm.py`** (helpers + fallback образа).</scenario-48>
         <scenario-49 kind="success">8.3.2: UI «Настройки» — группа **`web`**: для **`registry[].subgroup`** **`gpu_docker_probe`** отображается подзаголовок «Опрос GPU на хосте через Docker» перед строками **`HOST_GPU_DOCKER_PROBE`** и **`NVIDIA_SMI_DOCKER_IMAGE`** (`Settings.tsx`, сортировка как у monitoring/proxy).</scenario-49>
+        <scenario-50 kind="success">8.5.0: SPA «Логи» и «Задачи» предлагают сохранить в файл JSON (события `app_log_event` по фильтрам с пагинацией на клиенте; лента `GET /activity?limit=500` и объект `job` из модалки). Новых эндпоинтов API нет.</scenario-50>
       </scenarios>
       <required-log-markers>
         <marker-1>[WEB][jobs][BLOCK_RUN_JOB]</marker-1>

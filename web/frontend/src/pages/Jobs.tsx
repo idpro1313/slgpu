@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent } from "react";
+import { useCallback, useState, type KeyboardEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
@@ -8,6 +8,7 @@ import { Modal } from "@/components/Modal";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
 import { StatusBadge } from "@/components/StatusBadge";
+import { saveTextFile } from "@/lib/saveDownload";
 
 type SelectedJob = { source: "job"; id: number };
 type SelectedUi = { source: "ui"; entry: ActivityEntry & { type: "ui" } };
@@ -15,6 +16,7 @@ type Selection = SelectedJob | SelectedUi | null;
 
 export function JobsPage() {
   const [selected, setSelected] = useState<Selection>(null);
+  const [exportActivityBusy, setExportActivityBusy] = useState(false);
 
   const activity = useQuery({
     queryKey: ["activity"],
@@ -57,6 +59,48 @@ export function JobsPage() {
         ? (selected.entry.note ?? selected.entry.action)
         : null;
 
+  const exportActivityToFile = useCallback(async () => {
+    setExportActivityBusy(true);
+    try {
+      const items = await api.get<ActivityEntry[]>("/activity?limit=500");
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+      saveTextFile(
+        `slgpu-activity-${stamp}.json`,
+        JSON.stringify(
+          {
+            exported_at: new Date().toISOString(),
+            limit_requested: 500,
+            note:
+              "До 500 последних записей объединённой ленты (jobs + UI audit).",
+            item_count: items.length,
+            items,
+          },
+          null,
+          2,
+        ),
+      );
+    } finally {
+      setExportActivityBusy(false);
+    }
+  }, []);
+
+  const saveSelectedJobToFile = useCallback((job: Job) => {
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    saveTextFile(
+      `slgpu-job-${job.id}-${stamp}.json`,
+      JSON.stringify(
+        {
+          exported_at: new Date().toISOString(),
+          note:
+            "stdout_tail / stderr_tail — хвост из БД, как на экране задачи.",
+          job,
+        },
+        null,
+        2,
+      ),
+    );
+  }, []);
+
   return (
     <>
       <PageHeader
@@ -64,7 +108,20 @@ export function JobsPage() {
         subtitle="Фоновые native-задачи (слоты, pull, мониторинг, бенчи) и действия в UI (модели, пресеты, настройки). Для running/queued лог в модалке подтягивается каждые ~2 с (docker pull / вывод). По строке или Enter/Space — подробности; Esc или фон — закрыть."
       />
 
-      <Section title="История" subtitle="Объединённая лента по времени, лимит 100.">
+      <Section
+        title="История"
+        subtitle="На экране до 100 последних записей; автообновление каждые 5 с. «Сохранить ленту в файл» — до 500 записей в JSON (то же объединение jobs + UI)."
+        actions={
+          <button
+            type="button"
+            className="btn"
+            disabled={exportActivityBusy || activity.isLoading}
+            onClick={() => void exportActivityToFile()}
+          >
+            {exportActivityBusy ? "Готовим…" : "Сохранить ленту в файл"}
+          </button>
+        }
+      >
         {activity.isLoading ? (
           <div className="empty-state">Загружаем…</div>
         ) : !activity.data || activity.data.length === 0 ? (
@@ -140,6 +197,20 @@ export function JobsPage() {
         onClose={() => setSelected(null)}
         title={modalTitle}
         subtitle={modalSubtitle}
+        actions={
+          selected?.source === "job" && jobDetail.data ? (
+            <button
+              type="button"
+              className="btn"
+              onClick={() => {
+                const j = jobDetail.data;
+                if (j) saveSelectedJobToFile(j);
+              }}
+            >
+              Сохранить задачу в файл
+            </button>
+          ) : null
+        }
       >
         {selected?.source === "job" ? (
           jobDetail.isLoading || !jobDetail.data ? (
